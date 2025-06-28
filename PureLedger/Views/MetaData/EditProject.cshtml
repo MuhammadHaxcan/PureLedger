@@ -1,0 +1,18 @@
+@model PureLedger.Models.Project
+@{
+    ViewData["Title"] = "Edit Project";
+}
+
+<div class="container py-4">
+    <h2>Edit Project</h2>
+    <form asp-action="EditProject" method="post">
+        <input type="hidden" asp-for="ProjectId" />
+        <div class="mb-3">
+            <label asp-for="ProjectName" class="form-label"></label>
+            <input asp-for="ProjectName" class="form-control" required />
+            <span asp-validation-for="ProjectName" class="text-danger"></span>
+        </div>
+        <button type="submit" class="btn btn-success">Save</button>
+        <a asp-action="Project" class="btn btn-secondary">Back</a>
+    </form>
+</div>

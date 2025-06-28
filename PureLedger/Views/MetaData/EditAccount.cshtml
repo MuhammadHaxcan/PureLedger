@@ -1,0 +1,70 @@
+@model PureLedger.Models.Account
+@{
+    ViewData["Title"] = "Edit Account";
+    var categories = ViewBag.Categories as List<PureLedger.Models.Category>;
+}
+
+<div class="container py-4">
+    <h2>Edit Account</h2>
+    <form asp-action="EditAccount" method="post">
+        <input type="hidden" asp-for="AccountId" />
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label asp-for="AccountGroup" class="form-label"></label>
+                <input asp-for="AccountGroup" class="form-control" required />
+                <span asp-validation-for="AccountGroup" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="CategoryId" class="form-label">Category</label>
+                <select asp-for="CategoryId" class="form-select" required>
+                    <option value="">Select Category</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c.CategoryId">@c.CategoryName (@c.Project?.ProjectName)</option>
+                    }
+                </select>
+                <span asp-validation-for="CategoryId" class="text-danger"></span>
+            </div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-md-2">
+                <label asp-for="PhoneNumber" class="form-label"></label>
+                <input asp-for="PhoneNumber" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Address" class="form-label"></label>
+                <input asp-for="Address" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Area" class="form-label"></label>
+                <input asp-for="Area" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="City" class="form-label"></label>
+                <input asp-for="City" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="PkgForm" class="form-label"></label>
+                <input asp-for="PkgForm" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Pkg" class="form-label"></label>
+                <input asp-for="Pkg" class="form-control" type="number" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="Type" class="form-label"></label>
+                <input asp-for="Type" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="SaleRate" class="form-label"></label>
+                <input asp-for="SaleRate" class="form-control" type="number" />
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success mt-3">Save</button>
+        <a asp-action="Account" class="btn btn-secondary mt-3">Back</a>
+    </form>
+</div>

@@ -1,0 +1,45 @@
+@model IEnumerable<PureLedger.Models.Project>
+@{
+    ViewData["Title"] = "Projects";
+    var newProject = new PureLedger.Models.Project();
+}
+
+<div class="container py-4">
+    <h2>Projects</h2>
+    <form asp-action="Project" method="post" class="mb-4">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label asp-for="@newProject.ProjectName" class="form-label">Project Name</label>
+                <input asp-for="@newProject.ProjectName" class="form-control" name="ProjectName" required />
+                <span asp-validation-for="@newProject.ProjectName" class="text-danger"></span>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-success">Add Project</button>
+            </div>
+        </div>
+    </form>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Edit</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var p in Model)
+        {
+            <tr>
+                <td>@p.ProjectId</td>
+                <td>@p.ProjectName</td>
+                <td>
+                    <a asp-action="EditProject" asp-route-id="@p.ProjectId" class="btn btn-sm btn-warning" title="Edit">
+                        <i class="bi bi-pencil-square"></i> Edit
+                    </a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

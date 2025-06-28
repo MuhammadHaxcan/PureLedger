@@ -1,0 +1,103 @@
+@model IEnumerable<PureLedger.Models.Account>
+@{
+    ViewData["Title"] = "Accounts";
+    var categories = ViewBag.Categories as List<PureLedger.Models.Category>;
+    var newAccount = new PureLedger.Models.Account();
+}
+
+<div class="container py-4">
+    <h2>Accounts</h2>
+    <form asp-action="Account" method="post" class="mb-4">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label asp-for="@newAccount.AccountGroup" class="form-label">Account Group</label>
+                <input asp-for="@newAccount.AccountGroup" class="form-control" name="AccountGroup" required />
+                <span asp-validation-for="@newAccount.AccountGroup" class="text-danger"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="@newAccount.CategoryId" class="form-label">Category</label>
+                <select asp-for="@newAccount.CategoryId" class="form-select" name="CategoryId" required>
+                    <option value="">Select Category</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c.CategoryId">@c.CategoryName (@c.Project?.ProjectName)</option>
+                    }
+                </select>
+                <span asp-validation-for="@newAccount.CategoryId" class="text-danger"></span>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.PhoneNumber" class="form-label">Phone</label>
+                <input asp-for="@newAccount.PhoneNumber" class="form-control" name="PhoneNumber" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.Email" class="form-label">Email</label>
+                <input asp-for="@newAccount.Email" class="form-control" name="Email" />
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-success">Add Account</button>
+            </div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-md-2">
+                <label asp-for="@newAccount.Address" class="form-label">Address</label>
+                <input asp-for="@newAccount.Address" class="form-control" name="Address" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.Area" class="form-label">Area</label>
+                <input asp-for="@newAccount.Area" class="form-control" name="Area" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.City" class="form-label">City</label>
+                <input asp-for="@newAccount.City" class="form-control" name="City" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.PkgForm" class="form-label">Pkg Form</label>
+                <input asp-for="@newAccount.PkgForm" class="form-control" name="PkgForm" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.Pkg" class="form-label">Pkg</label>
+                <input asp-for="@newAccount.Pkg" class="form-control" name="Pkg" type="number" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.Type" class="form-label">Type</label>
+                <input asp-for="@newAccount.Type" class="form-control" name="Type" />
+            </div>
+            <div class="col-md-2">
+                <label asp-for="@newAccount.SaleRate" class="form-label">Sale Rate</label>
+                <input asp-for="@newAccount.SaleRate" class="form-control" name="SaleRate" type="number" />
+            </div>
+        </div>
+    </form>
+
+    <table class="table table-bordered mt-4">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Account Group</th>
+                <th>Category</th>
+                <th>Project</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Edit</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var a in Model)
+        {
+            <tr>
+                <td>@a.AccountId</td>
+                <td>@a.AccountGroup</td>
+                <td>@a.Category?.CategoryName</td>
+                <td>@a.Category?.Project?.ProjectName</td>
+                <td>@a.PhoneNumber</td>
+                <td>@a.Email</td>
+                <td>
+                    <a asp-action="EditAccount" asp-route-id="@a.AccountId" class="btn btn-sm btn-warning" title="Edit">
+                        <i class="bi bi-pencil-square"></i> Edit
+                    </a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,141 @@
+﻿@page
+@model dynamic
+@{
+    // Format today as dd/MM/yyyy with slashes
+    var today = DateTime.Now.ToString("dd/MM/yyyy");
+}
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+<div class="container-fluid py-4 px-2">
+    <div class="mb-4">
+        <h2 class="fw-bold text-primary">Journal Entry</h2>
+    </div>
+    <form id="entryForm" method="post" autocomplete="off">
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3 mb-md-0">
+                <label class="form-label text-secondary">Date:</label>
+                <input class="form-control bg-white border-primary-subtle" type="text" value="@today" readonly tabindex="-1" style="pointer-events: none;" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label text-secondary">Select Project</label>
+                <input class="form-control bg-white border-primary-subtle" value="BERRY" readonly />
+            </div>
+        </div>
+
+        <div id="validationAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+            <span id="validationMessage"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
+        <div class="card shadow-sm border-primary-subtle mb-4">
+            <div class="card-header bg-primary-subtle d-flex justify-content-between align-items-center">
+                <span class="fw-semibold fs-5 text-primary">Entries</span>
+                <button id="addRowBtn" type="button" class="btn btn-outline-primary btn-sm">Add More</button>
+            </div>
+            <div class="card-body bg-light p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle mb-0">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>Category</th>
+                                <th>Account</th>
+                                <th>Type/PKG</th>
+                                <th>RBP</th>
+                                <th>Tags</th>
+                                <th>Des</th>
+                                <th>Qty</th>
+                                <th>Rate</th>
+                                <th>%</th>
+                                <th>Disc</th>
+                                <th>Debit</th>
+                                <th>Credit</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="entryRows">
+                            <tr>
+                                <td>
+                                    <select class="form-select form-select-sm" name="Entries[0].Category">
+                                        <option value="">Select Category</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" name="Entries[0].Account">
+                                        <option value="">Select Account</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="Entries[0].Type" />
+                                </td>
+                                <td>
+                                    <select class="form-select form-select-sm" name="Entries[0].Rbp">
+                                        <option value="Y" selected>Y</option>
+                                        <option value="N">N</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="Entries[0].Tags" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm" name="Entries[0].Des" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm qty-input" name="Entries[0].Qty" type="number" min="0" step="1" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm rate-input" name="Entries[0].Rate" type="number" min="0" step="0.01" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm percent-input" name="Entries[0].Percent" type="number" min="0" max="100" step="0.01" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm disc-input" name="Entries[0].Disc" type="number" min="0" step="1" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm debit-input" name="Entries[0].Debit" type="number" min="0" step="1" />
+                                </td>
+                                <td>
+                                    <input class="form-control form-control-sm credit-input" name="Entries[0].Credit" type="number" min="0" step="1" />
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn">X</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="10" class="text-end fw-bold text-primary">TOTAL</td>
+                                <td class="fw-bold text-primary" id="totalDebit">0</td>
+                                <td class="fw-bold text-primary" id="totalCredit">0</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3 mb-md-0">
+                <label class="form-label text-secondary">Credit Days</label>
+                <input class="form-control bg-white border-primary-subtle" name="CreditDays" />
+            </div>
+            <div class="col-md-4 mb-3 mb-md-0">
+                <label class="form-label text-secondary">Due Date</label>
+                <input class="form-control bg-white border-primary-subtle" name="DueDate" type="date" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label text-secondary">Booker</label>
+                <select class="form-select bg-white border-primary-subtle" name="Booker">
+                    <option>ghazi</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary px-4">Submit</button>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/js/entry.js"></script>
+}

@@ -1,0 +1,42 @@
+@model PureLedger.Models.Category
+@{
+    ViewData["Title"] = "Edit Category";
+    var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
+    var accountTypes = ViewBag.AccountTypes as List<PureLedger.Models.AccountType>;
+}
+
+<div class="container py-4">
+    <h2>Edit Category</h2>
+    <form asp-action="EditCategory" method="post">
+        <input type="hidden" asp-for="CategoryId" />
+        <div class="mb-3">
+            <label asp-for="CategoryName" class="form-label"></label>
+            <input asp-for="CategoryName" class="form-control" required />
+            <span asp-validation-for="CategoryName" class="text-danger"></span>
+        </div>
+        <div class="mb-3">
+            <label asp-for="ProjectId" class="form-label">Project</label>
+            <select asp-for="ProjectId" class="form-select" required>
+                <option value="">Select Project</option>
+                @foreach (var p in projects)
+                {
+                    <option value="@p.ProjectId">@p.ProjectName</option>
+                }
+            </select>
+            <span asp-validation-for="ProjectId" class="text-danger"></span>
+        </div>
+        <div class="mb-3">
+            <label asp-for="AccountTypeId" class="form-label">Account Type</label>
+            <select asp-for="AccountTypeId" class="form-select" required>
+                <option value="">Select Account Type</option>
+                @foreach (var at in accountTypes)
+                {
+                    <option value="@at.AccountTypeId">@at.AccountTypeName</option>
+                }
+            </select>
+            <span asp-validation-for="AccountTypeId" class="text-danger"></span>
+        </div>
+        <button type="submit" class="btn btn-success">Save</button>
+        <a asp-action="Category" class="btn btn-secondary">Back</a>
+    </form>
+</div>
