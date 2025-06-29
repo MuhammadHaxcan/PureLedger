@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Edit Account";
     var categories = ViewBag.Categories as List<PureLedger.Models.Category>;
+    var accountGroups = ViewBag.AccountGroups as List<PureLedger.Models.AccountGroup>;
 }
 
 <div class="container py-4">
@@ -10,9 +11,20 @@
         <input type="hidden" asp-for="AccountId" />
         <div class="row g-2">
             <div class="col-md-4">
-                <label asp-for="AccountGroup" class="form-label"></label>
-                <input asp-for="AccountGroup" class="form-control" required />
-                <span asp-validation-for="AccountGroup" class="text-danger"></span>
+                <label asp-for="AccountName" class="form-label"></label>
+                <input asp-for="AccountName" class="form-control" required />
+                <span asp-validation-for="AccountName" class="text-danger"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="AccountGroupId" class="form-label">Account Group</label>
+                <select asp-for="AccountGroupId" class="form-select" required>
+                    <option value="">Select Group</option>
+                    @foreach (var ag in accountGroups)
+                    {
+                        <option value="@ag.AccountGroupId">@ag.AccountGroupName</option>
+                    }
+                </select>
+                <span asp-validation-for="AccountGroupId" class="text-danger"></span>
             </div>
             <div class="col-md-4">
                 <label asp-for="CategoryId" class="form-label">Category</label>
@@ -27,41 +39,43 @@
             </div>
         </div>
         <div class="row g-2 mt-2">
+            <!-- Account Data Fields -->
             <div class="col-md-2">
-                <label asp-for="PhoneNumber" class="form-label"></label>
-                <input asp-for="PhoneNumber" class="form-control" />
+                <label asp-for="AccountData.PhoneNumber" class="form-label">Phone</label>
+                <input asp-for="AccountData.PhoneNumber" class="form-control" name="AccountData.PhoneNumber" />
             </div>
             <div class="col-md-2">
-                <label asp-for="Email" class="form-label"></label>
-                <input asp-for="Email" class="form-control" />
+                <label asp-for="AccountData.Email" class="form-label">Email</label>
+                <input asp-for="AccountData.Email" class="form-control" name="AccountData.Email" />
             </div>
             <div class="col-md-2">
-                <label asp-for="Address" class="form-label"></label>
-                <input asp-for="Address" class="form-control" />
+                <label asp-for="AccountData.Address" class="form-label">Address</label>
+                <input asp-for="AccountData.Address" class="form-control" name="AccountData.Address" />
             </div>
             <div class="col-md-2">
-                <label asp-for="Area" class="form-label"></label>
-                <input asp-for="Area" class="form-control" />
+                <label asp-for="AccountData.Area" class="form-label">Area</label>
+                <input asp-for="AccountData.Area" class="form-control" name="AccountData.Area" />
             </div>
             <div class="col-md-2">
-                <label asp-for="City" class="form-label"></label>
-                <input asp-for="City" class="form-control" />
+                <label asp-for="AccountData.City" class="form-label">City</label>
+                <input asp-for="AccountData.City" class="form-control" name="AccountData.City" />
+            </div>
+            <!-- Product Data Fields -->
+            <div class="col-md-2">
+                <label asp-for="ProductData.PkgForm" class="form-label">Pkg Form</label>
+                <input asp-for="ProductData.PkgForm" class="form-control" name="ProductData.PkgForm" />
             </div>
             <div class="col-md-2">
-                <label asp-for="PkgForm" class="form-label"></label>
-                <input asp-for="PkgForm" class="form-control" />
+                <label asp-for="ProductData.Pkg" class="form-label">Pkg</label>
+                <input asp-for="ProductData.Pkg" class="form-control" name="ProductData.Pkg" type="number" />
             </div>
             <div class="col-md-2">
-                <label asp-for="Pkg" class="form-label"></label>
-                <input asp-for="Pkg" class="form-control" type="number" />
+                <label asp-for="ProductData.Type" class="form-label">Type</label>
+                <input asp-for="ProductData.Type" class="form-control" name="ProductData.Type" />
             </div>
             <div class="col-md-2">
-                <label asp-for="Type" class="form-label"></label>
-                <input asp-for="Type" class="form-control" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="SaleRate" class="form-label"></label>
-                <input asp-for="SaleRate" class="form-control" type="number" />
+                <label asp-for="ProductData.SaleRate" class="form-label">Sale Rate</label>
+                <input asp-for="ProductData.SaleRate" class="form-control" name="ProductData.SaleRate" type="number" />
             </div>
         </div>
         <button type="submit" class="btn btn-success mt-3">Save</button>

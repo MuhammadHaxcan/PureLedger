@@ -1,5 +1,4 @@
-﻿// Helper to get all rows
-function getRows() {
+﻿function getRows() {
     return document.querySelectorAll("#entryRows tr");
 }
 
@@ -115,12 +114,23 @@ function updateDiscount(row) {
 
 // Calculate debit/credit for a row
 function calculateDebitCredit(row, focusField) {
+    const rbpValue = row.querySelector("select[name*='Rbp']").value;
     const qty = parseFloat(row.querySelector(".qty-input").value) || 0;
     const rate = parseFloat(row.querySelector(".rate-input").value) || 0;
     const percent = parseFloat(row.querySelector(".percent-input").value) || 0;
     const disc = parseFloat(row.querySelector(".disc-input").value) || 0;
 
-    let amount = qty * rate;
+    let amount;
+
+    // Check if RBP is "Y" and we have the pkg value stored
+    if (rbpValue === "Y" && row.hasAttribute("data-pkg")) {
+        const pkg = parseInt(row.getAttribute("data-pkg")) || 0;
+        amount = pkg * qty * rate;
+    } else {
+        amount = qty * rate;
+    }
+
+    // Apply discount
     let discount = disc;
     if (!disc && percent) {
         discount = (amount * percent) / 100;
@@ -167,19 +177,23 @@ if (creditDaysInput && dueDateInput) {
     });
 }
 
+
+// Modified validation function to skip certain fields
+function validateRow(row) {
+
+    return true;
+}
+
 // Validate empty rows and debit/credit match on submit
 document.getElementById("entryForm").addEventListener("submit", function (e) {
     let valid = true;
     let debit = 0, credit = 0;
+
     getRows().forEach(row => {
-        // Check if all required fields are filled
-        const requiredFields = ["select[name*='Category']", "select[name*='Account']", "input[name*='Type']", "select[name*='Rbp']", "input[name*='Tags']", "input[name*='Qty']", "input[name*='Rate']"];
-        requiredFields.forEach(sel => {
-            const el = row.querySelector(sel);
-            if (el && !el.value) {
-                valid = false;
-            }
-        });
+        if (!validateRow(row)) {
+            valid = false;
+        }
+
         debit += parseInt(row.querySelector(".debit-input").value) || 0;
         credit += parseInt(row.querySelector(".credit-input").value) || 0;
     });
@@ -200,4 +214,94 @@ document.getElementById("entryForm").addEventListener("submit", function (e) {
         return false;
     }
     alert.classList.add("d-none");
+});
+
+$(document).ready(function () {
+    // When project changes, reload all category selects in all rows
+    $('#ProjectId').on('change', function () {
+        var projectId = $(this).val();
+        $('#entryRows tr').each(function () {
+            var $row = $(this);
+            var $categorySelect = $row.find('.category-select');
+            var $accountSelect = $row.find('.account-select');
+            $categorySelect.empty().append('<option value="">Select Category</option>');
+            $accountSelect.empty().append('<option value="">Select Account</option>');
+            if (projectId) {
+                $.get('/Home/GetCategoriesByProject', { projectId: projectId }, function (categories) {
+                    $.each(categories, function (i, c) {
+                        $categorySelect.append($('<option>', { value: c.categoryId, text: c.categoryName }));
+                    });
+                });
+            }
+        });
+});
+
+// When category changes, load accounts for that row
+$(document).on('change', '.category-select', function () {
+    var $row = $(this).closest('tr');
+    var categoryId = $(this).val();
+    var $accountSelect = $row.find('.account-select');
+    $accountSelect.empty().append('<option value="">Select Account</option>');
+    if (categoryId) {
+        $.get('/Home/GetAccountsByCategory', { categoryId: categoryId }, function (accounts) {
+            $.each(accounts, function (i, a) {
+                $accountSelect.append($('<option>', {
+                    value: a.accountId,
+                    text: a.accountName,
+                    'data-type': a.type || '',
+                    'data-account-type': a.accountTypeName || ''
+                }));
+            });
+        });
+    }
+    // Clear the type field
+    $row.find('.type-input').val('');
+    // Remove any account type data attribute
+    $row[0].removeAttribute('data-account-type');
+});
+
+// When account changes, set the Type field and get product data
+$(document).on('change', '.account-select', function () {
+    var $row = $(this).closest('tr');
+    var accountId = $(this).val();
+    var selected = $(this).find('option:selected');
+    var type = selected.data('type') || '';
+    var accountType = selected.data('account-type') || '';
+
+    $row.find('.type-input').val(type);
+
+    // Store account type as data attribute on the row for validation
+    $row[0].setAttribute('data-account-type', accountType);
+
+    // Get product details for the selected account
+    if (accountId) {
+        $.get('/Home/GetProductDetails', { accountId: accountId }, function (product) {
+            if (product && product.saleRate) {
+                $row.find('.rate-input').val(product.saleRate);
+            }
+
+            // Store pkg value as data attribute on the row for later calculations
+            if (product && product.pkg) {
+                $row[0].setAttribute('data-pkg', product.pkg);
+            } else {
+                $row[0].removeAttribute('data-pkg');
+            }
+        });
+    }
+});
+
+
+
+// Remove row logic
+$(document).on('click', '.remove-row-btn', function () {
+    if ($('#entryRows tr').length > 1) {
+        $(this).closest('tr').remove();
+        updateTotals();
+    }
+});
+
+// On page load, if a project is selected, trigger change to load categories
+if ($('#ProjectId').val()) {
+    $('#ProjectId').trigger('change');
+}
 });

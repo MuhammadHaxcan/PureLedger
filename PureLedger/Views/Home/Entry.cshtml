@@ -1,8 +1,8 @@
-﻿@page
-@model dynamic
+﻿@model PureLedger.Controllers.JournalEntryViewModel
 @{
-    // Format today as dd/MM/yyyy with slashes
+    ViewData["Title"] = "Journal Entry";
     var today = DateTime.Now.ToString("dd/MM/yyyy");
+    var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
 }
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -11,15 +11,36 @@
     <div class="mb-4">
         <h2 class="fw-bold text-primary">Journal Entry</h2>
     </div>
-    <form id="entryForm" method="post" autocomplete="off">
+
+    @if (ViewBag.Error != null)
+    {
+        <div class="alert alert-danger">@ViewBag.Error</div>
+    }
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    <form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
         <div class="row mb-4">
             <div class="col-md-6 mb-3 mb-md-0">
                 <label class="form-label text-secondary">Date:</label>
-                <input class="form-control bg-white border-primary-subtle" type="text" value="@today" readonly tabindex="-1" style="pointer-events: none;" />
+                <input class="form-control bg-white border-primary-subtle" name="EntryDate" type="text" value="@today" readonly tabindex="-1" style="pointer-events: none;" />
             </div>
             <div class="col-md-6">
-                <label class="form-label text-secondary">Select Project</label>
-                <input class="form-control bg-white border-primary-subtle" value="BERRY" readonly />
+                <label class="form-label text-secondary" for="ProjectId">Select Project</label>
+                <select class="form-select bg-white border-primary-subtle" id="ProjectId" name="ProjectId" required>
+                    <option value="">Select Project</option>
+                    @if (projects != null)
+                    {
+                        foreach (var p in projects)
+                        {
+                            <option value="@p.ProjectId">@p.ProjectName</option>
+                        }
+                    }
+                </select>
+                <span asp-validation-for="ProjectId" class="text-danger"></span>
             </div>
         </div>
 
@@ -54,49 +75,49 @@
                             </tr>
                         </thead>
                         <tbody id="entryRows">
-                            <tr>
+                            <tr id="entryRow-0" class="entry-row">
                                 <td>
-                                    <select class="form-select form-select-sm" name="Entries[0].Category">
+                                    <select class="form-select form-select-sm category-select" id="Entries_0__CategoryId" name="Entries[0].CategoryId" required>
                                         <option value="">Select Category</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm" name="Entries[0].Account">
+                                    <select class="form-select form-select-sm account-select" id="Entries_0__AccountId" name="Entries[0].AccountId" required>
                                         <option value="">Select Account</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm" name="Entries[0].Type" />
+                                    <input class="form-control form-control-sm type-input" id="Entries_0__Type" name="Entries[0].Type" readonly />
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm" name="Entries[0].Rbp">
+                                    <select class="form-select form-select-sm rbp-select" id="Entries_0__Rbp" name="Entries[0].Rbp">
                                         <option value="Y" selected>Y</option>
                                         <option value="N">N</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm" name="Entries[0].Tags" />
+                                    <input class="form-control form-control-sm tags-input" id="Entries_0__Tags" name="Entries[0].Tags" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm" name="Entries[0].Des" />
+                                    <input class="form-control form-control-sm des-input" id="Entries_0__Des" name="Entries[0].Des" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm qty-input" name="Entries[0].Qty" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm qty-input" id="Entries_0__Qty" name="Entries[0].Qty" type="number" min="0" step="1" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm rate-input" name="Entries[0].Rate" type="number" min="0" step="0.01" />
+                                    <input class="form-control form-control-sm rate-input" id="Entries_0__Rate" name="Entries[0].Rate" type="number" min="0" step="0.01" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm percent-input" name="Entries[0].Percent" type="number" min="0" max="100" step="0.01" />
+                                    <input class="form-control form-control-sm percent-input" id="Entries_0__Percent" name="Entries[0].Percent" type="number" min="0" max="100" step="0.01" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm disc-input" name="Entries[0].Disc" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm disc-input" id="Entries_0__Disc" name="Entries[0].Disc" type="number" min="0" step="1" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm debit-input" name="Entries[0].Debit" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm debit-input" id="Entries_0__Debit" name="Entries[0].Debit" type="number" min="0" step="1" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm credit-input" name="Entries[0].Credit" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm credit-input" id="Entries_0__Credit" name="Entries[0].Credit" type="number" min="0" step="1" />
                                 </td>
                                 <td>
                                     <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn">X</button>
@@ -105,7 +126,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="10" class="text-end fw-bold text-primary">TOTAL</td>
+                                <td colspan="9" class="text-end fw-bold text-primary">TOTAL</td>
                                 <td class="fw-bold text-primary" id="totalDebit">0</td>
                                 <td class="fw-bold text-primary" id="totalCredit">0</td>
                                 <td></td>
@@ -118,17 +139,17 @@
 
         <div class="row mb-4">
             <div class="col-md-4 mb-3 mb-md-0">
-                <label class="form-label text-secondary">Credit Days</label>
-                <input class="form-control bg-white border-primary-subtle" name="CreditDays" />
+                <label class="form-label text-secondary" for="CreditDays">Credit Days</label>
+                <input class="form-control bg-white border-primary-subtle" id="CreditDays" name="CreditDays" type="number" min="0" value="0" />
             </div>
             <div class="col-md-4 mb-3 mb-md-0">
-                <label class="form-label text-secondary">Due Date</label>
-                <input class="form-control bg-white border-primary-subtle" name="DueDate" type="date" />
+                <label class="form-label text-secondary" for="DueDate">Due Date</label>
+                <input class="form-control bg-white border-primary-subtle" id="DueDate" name="DueDate" type="text" />
             </div>
             <div class="col-md-4">
-                <label class="form-label text-secondary">Booker</label>
-                <select class="form-select bg-white border-primary-subtle" name="Booker">
-                    <option>ghazi</option>
+                <label class="form-label text-secondary" for="Booker">Booker</label>
+                <select class="form-select bg-white border-primary-subtle" id="Booker" name="Booker">
+                    <option value="ghazi">ghazi</option>
                 </select>
             </div>
         </div>
@@ -138,4 +159,5 @@
 
 @section Scripts {
     <script src="~/js/entry.js"></script>
+
 }
