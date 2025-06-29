@@ -164,8 +164,9 @@ namespace PureLedger.Controllers
                 var journalVoucher = new JournalVoucher
                 {
                     ProjectId = model.ProjectId,
-                    EntryDate = DateTime.Now,
+                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
                     IsProcessed = false,
+                    CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
                 };
 
                 _context.JournalVouchers.Add(journalVoucher);
@@ -174,13 +175,6 @@ namespace PureLedger.Controllers
                 // Process each entry row
                 foreach (var entry  in model.Entries)
                 {
-                    // Parse the due date from string format (dd/MM/yyyy)
-                    DateTime dueDate;
-                    if (!DateTime.TryParse(model.DueDate, out dueDate))
-                    {
-                        dueDate = DateTime.Now.AddDays(model.CreditDays);
-                    }
-
                     var journalEntry = new JournalEntry
                     {
                         JournalVoucherId = journalVoucher.JvId,
@@ -241,7 +235,7 @@ namespace PureLedger.Controllers
         public int ProjectId { get; set; }
         public string? Booker { get; set; }
         public int CreditDays { get; set; }
-        public string DueDate { get; set; } = DateTime.Now.ToString("dd/MM/yyyy");
+        public DateOnly DueDate { get; set; }
         public List<JournalEntryRowModel> Entries { get; set; } = new List<JournalEntryRowModel>();
     }
 

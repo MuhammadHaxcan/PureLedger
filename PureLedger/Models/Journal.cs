@@ -15,7 +15,8 @@ namespace PureLedger.Models
         public int ProjectId { get; set; }
 
         [Required]
-        public DateTime EntryDate { get; set; } = DateTime.Today;
+        public DateOnly EntryDate { get; set; } = DateOnly.FromDateTime(DateTime.Now);
+        public DateOnly? CreditableDate { get; set; }
 
         public bool IsProcessed { get; set; }
 

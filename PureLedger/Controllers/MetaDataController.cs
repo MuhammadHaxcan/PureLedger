@@ -378,5 +378,65 @@ namespace PureLedger.Controllers
                 .ToListAsync();
             return Json(categories);
         }
+        // ---------------- TAG ----------------
+
+        // GET: /MetaData/Tag
+        [HttpGet]
+        public async Task<IActionResult> Tag()
+        {
+            var tags = await _context.Tags.ToListAsync();
+            return View(tags);
+        }
+
+        // POST: /MetaData/Tag
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Tag(Tag tag)
+        {
+            ModelState.Remove("TagId");
+
+            if (ModelState.IsValid)
+            {
+                // Check if tag with same name already exists (case insensitive)
+                var existingTag = await _context.Tags
+                    .FirstOrDefaultAsync(t => t.TagName.ToLower() == tag.TagName.ToLower());
+
+                if (existingTag != null)
+                {
+                    ModelState.AddModelError("TagName", "A tag with this name already exists.");
+                }
+                else
+                {
+                    _context.Tags.Add(tag);
+                    await _context.SaveChangesAsync();
+                    TempData["Success"] = "Tag added successfully.";
+                    return RedirectToAction(nameof(Tag));
+                }
+            }
+
+            var tags = await _context.Tags.ToListAsync();
+            return View(tags);
+        }
+
+        // AJAX: Delete Tag
+        [HttpPost]
+        public async Task<IActionResult> DeleteTag(int id)
+        {
+            var tag = await _context.Tags.FindAsync(id);
+            if (tag == null)
+                return NotFound();
+
+            // Check if tag is in use
+            var tagInUse = await _context.JournalEntries.AnyAsync(je => je.TagId == id);
+            if (tagInUse)
+            {
+                return Json(new { success = false, message = "This tag is in use and cannot be deleted." });
+            }
+
+            _context.Tags.Remove(tag);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
     }
 }

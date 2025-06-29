@@ -249,8 +249,11 @@ namespace PureLedger.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JvId"));
 
-                    b.Property<DateTime>("EntryDate")
-                        .HasColumnType("datetime2");
+                    b.Property<DateOnly?>("CreditableDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("EntryDate")
+                        .HasColumnType("date");
 
                     b.Property<bool>("IsProcessed")
                         .HasColumnType("bit");

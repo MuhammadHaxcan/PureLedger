@@ -10,13 +10,15 @@ function formatDateDDMMYYYY(date) {
     return `${d}/${m}/${y}`;
 }
 
-// Set default due date to today on page load in dd/MM/yyyy format
+// Set default due date to today on page load
 document.addEventListener("DOMContentLoaded", function () {
     const dueDateInput = document.querySelector("input[name='DueDate']");
     if (dueDateInput) {
-        const today = new Date();
-        dueDateInput.type = "text";
-        dueDateInput.value = formatDateDDMMYYYY(today);
+        // No need to set type or value as it's already set in the razor view
+        if (!dueDateInput.value) {
+            const today = new Date();
+            dueDateInput.value = formatDateDDMMYYYY(today);
+        }
     }
     updateTotals();
 });
@@ -172,11 +174,9 @@ if (creditDaysInput && dueDateInput) {
         const days = parseInt(this.value, 10) || 0;
         const today = new Date();
         today.setDate(today.getDate() + days);
-        dueDateInput.type = "text";
         dueDateInput.value = formatDateDDMMYYYY(today);
     });
 }
-
 
 // Modified validation function to skip certain fields
 function validateRow(row) {
