@@ -18,47 +18,53 @@ namespace PureLedger.Data
         public DbSet<Tag> Tags { get; set; }
         public DbSet<JournalVoucher> JournalVouchers { get; set; }
         public DbSet<JournalEntry> JournalEntries { get; set; }
+        public DbSet<JournalEntryTag> JournalEntryTags { get; set; } // Add this line
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Fix cascade delete issues
+            // Many-to-many: JournalEntry <-> Tag via JournalEntryTag
+            modelBuilder.Entity<JournalEntryTag>()
+                .HasKey(jet => new { jet.JournalEntryId, jet.JournalEntryTagId });
+
+            modelBuilder.Entity<JournalEntryTag>()
+                .HasOne(jet => jet.JournalEntry)
+                .WithMany(je => je.JournalEntryTags)
+                .HasForeignKey(jet => jet.JournalEntryId);
+
+            modelBuilder.Entity<JournalEntryTag>()
+                .HasOne(jet => jet.Tag)
+                .WithMany(t => t.JournalEntryTags)
+                .HasForeignKey(jet => jet.JournalEntryTagId);
 
             // JournalEntries to Category relationship - use NO ACTION to break cascade path
             modelBuilder.Entity<JournalEntry>()
                 .HasOne(je => je.Category)
                 .WithMany()
                 .HasForeignKey(je => je.CategoryId)
-                .OnDelete(DeleteBehavior.NoAction); // Changes Cascade to NoAction
+                .OnDelete(DeleteBehavior.NoAction);
 
             // JournalEntries to Account relationship
             modelBuilder.Entity<JournalEntry>()
                 .HasOne(je => je.Account)
                 .WithMany()
                 .HasForeignKey(je => je.AccountId)
-                .OnDelete(DeleteBehavior.NoAction); // Changes Cascade to NoAction
+                .OnDelete(DeleteBehavior.NoAction);
 
             // JournalVoucher to Project relationship
             modelBuilder.Entity<JournalVoucher>()
                 .HasOne(jv => jv.Project)
                 .WithMany()
                 .HasForeignKey(jv => jv.ProjectId)
-                .OnDelete(DeleteBehavior.Cascade); // Keep cascade delete here
+                .OnDelete(DeleteBehavior.Cascade);
 
             // JournalEntries to JournalVoucher relationship
             modelBuilder.Entity<JournalEntry>()
                 .HasOne(je => je.JournalVoucher)
                 .WithMany(jv => jv.JournalEntries)
                 .HasForeignKey(je => je.JournalVoucherId)
-                .OnDelete(DeleteBehavior.Cascade); // Keep cascade delete here
-
-            // JournalEntries to Tag relationship
-            modelBuilder.Entity<JournalEntry>()
-                .HasOne(je => je.Tag)
-                .WithMany()
-                .HasForeignKey(je => je.TagId)
-                .OnDelete(DeleteBehavior.SetNull); // If a tag is deleted, just set the FK to null
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Existing Account to AccountData and ProductData relationships
             modelBuilder.Entity<Account>()

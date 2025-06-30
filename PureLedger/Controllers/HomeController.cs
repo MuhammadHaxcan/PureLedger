@@ -34,11 +34,12 @@ namespace PureLedger.Controllers
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
         }
 
-        // GET: /Home/Entry
         [HttpGet]
-        public async Task<IActionResult> Entry()
+        [ActionName("Entry")]
+        public async Task<IActionResult> Entry(int? projectId = null)
         {
             ViewBag.Projects = await _context.Projects.ToListAsync();
+            ViewBag.SelectedProjectId = projectId;
             return View();
         }
 
@@ -65,7 +66,8 @@ namespace PureLedger.Controllers
 
                 var accounts = await _context.Accounts
                     .Where(a => a.CategoryId == categoryId)
-                    .Select(a => new {
+                    .Select(a => new
+                    {
                         a.AccountId,
                         a.AccountName,
                         a.ProductData.Type,
@@ -88,7 +90,8 @@ namespace PureLedger.Controllers
         {
             var productData = await _context.Accounts
                 .Where(a => a.AccountId == accountId)
-                .Select(a => new {
+                .Select(a => new
+                {
                     a.ProductData.SaleRate,
                     a.ProductData.Pkg,
                     a.ProductData.PkgForm,
@@ -170,10 +173,9 @@ namespace PureLedger.Controllers
                 };
 
                 _context.JournalVouchers.Add(journalVoucher);
-                await _context.SaveChangesAsync(); // Save to get the JvId
+                await _context.SaveChangesAsync();
 
-                // Process each entry row
-                foreach (var entry  in model.Entries)
+                foreach (var entry in model.Entries)
                 {
                     var journalEntry = new JournalEntry
                     {
@@ -190,34 +192,32 @@ namespace PureLedger.Controllers
                         Rbp = entry.Rbp
                     };
 
-                    // Process tags if provided
-                    if (!string.IsNullOrWhiteSpace(entry.Tags))
-                    {
-                        // Check if tag exists, if not create it
-                        var tagName = entry.Tags.Trim();
-                        var existingTag = await _context.Tags
-                            .FirstOrDefaultAsync(t => t.TagName == tagName);
+                    _context.JournalEntries.Add(journalEntry);
+                    await _context.SaveChangesAsync(); // Save to get EntryId for the join table
 
-                        if (existingTag != null)
+                    // Process tags by ID only
+                    if (entry.Tags != null && entry.Tags.Any())
+                    {
+                        foreach (var tagId in entry.Tags)
                         {
-                            journalEntry.TagId = existingTag.TagId;
-                        }
-                        else
-                        {
-                            var newTag = new Tag { TagName = tagName };
-                            _context.Tags.Add(newTag);
-                            await _context.SaveChangesAsync();
-                            journalEntry.TagId = newTag.TagId;
+                            // Only process if tagId is a valid positive integer
+                            if (tagId > 0)
+                            {
+                                var journalEntryTag = new JournalEntryTag
+                                {
+                                    JournalEntryTagId = tagId,
+                                    JournalEntryId = journalEntry.EntryId
+                                };
+                                _context.JournalEntryTags.Add(journalEntryTag);
+                            }
                         }
                     }
-
-                    _context.JournalEntries.Add(journalEntry);
                 }
 
                 await _context.SaveChangesAsync();
 
-                TempData["Success"] = "Journal entries created successfully.";
-                return RedirectToAction(nameof(Entry));
+                TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JvId}";
+                return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
             }
             catch (Exception ex)
             {
@@ -245,7 +245,7 @@ namespace PureLedger.Controllers
         public int AccountId { get; set; }
         public string? Type { get; set; }
         public string? Rbp { get; set; } = "Y";
-        public string? Tags { get; set; }
+        public List<int>? Tags { get; set; } // Now a list of tag IDs
         public string? Des { get; set; }
         public int Qty { get; set; }
         public decimal Rate { get; set; }

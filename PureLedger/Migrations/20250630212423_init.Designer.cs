@@ -12,8 +12,8 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20250629212343_addedcorrectdatesalsocreditabledate")]
-    partial class addedcorrectdatesalsocreditabledate
+    [Migration("20250630212423_init")]
+    partial class init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -228,9 +228,6 @@ namespace PureLedger.Migrations
                         .HasMaxLength(1)
                         .HasColumnType("nvarchar(1)");
 
-                    b.Property<int?>("TagId")
-                        .HasColumnType("int");
-
                     b.HasKey("EntryId");
 
                     b.HasIndex("AccountId");
@@ -239,9 +236,22 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("JournalVoucherId");
 
-                    b.HasIndex("TagId");
-
                     b.ToTable("JournalEntries");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>
+                {
+                    b.Property<int>("JournalEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JournalEntryTagId")
+                        .HasColumnType("int");
+
+                    b.HasKey("JournalEntryId", "JournalEntryTagId");
+
+                    b.HasIndex("JournalEntryTagId");
+
+                    b.ToTable("JournalEntryTags");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
@@ -405,16 +415,28 @@ namespace PureLedger.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PureLedger.Models.Tag", "Tag")
-                        .WithMany()
-                        .HasForeignKey("TagId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("Account");
 
                     b.Navigation("Category");
 
                     b.Navigation("JournalVoucher");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>
+                {
+                    b.HasOne("PureLedger.Models.JournalEntry", "JournalEntry")
+                        .WithMany("JournalEntryTags")
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.Tag", "Tag")
+                        .WithMany("JournalEntryTags")
+                        .HasForeignKey("JournalEntryTagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("JournalEntry");
 
                     b.Navigation("Tag");
                 });
@@ -453,6 +475,11 @@ namespace PureLedger.Migrations
                     b.Navigation("Accounts");
                 });
 
+            modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>
+                {
+                    b.Navigation("JournalEntryTags");
+                });
+
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
                 {
                     b.Navigation("JournalEntries");
@@ -461,6 +488,11 @@ namespace PureLedger.Migrations
             modelBuilder.Entity("PureLedger.Models.Project", b =>
                 {
                     b.Navigation("Categories");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.Tag", b =>
+                {
+                    b.Navigation("JournalEntryTags");
                 });
 #pragma warning restore 612, 618
         }

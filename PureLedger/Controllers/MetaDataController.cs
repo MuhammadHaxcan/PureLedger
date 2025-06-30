@@ -426,8 +426,8 @@ namespace PureLedger.Controllers
             if (tag == null)
                 return NotFound();
 
-            // Check if tag is in use
-            var tagInUse = await _context.JournalEntries.AnyAsync(je => je.TagId == id);
+            // Check if tag is in use in any JournalEntry
+            var tagInUse = await _context.JournalEntryTags.AnyAsync(jet => jet.JournalEntryTagId == id);
             if (tagInUse)
             {
                 return Json(new { success = false, message = "This tag is in use and cannot be deleted." });
@@ -437,6 +437,18 @@ namespace PureLedger.Controllers
             await _context.SaveChangesAsync();
 
             return Json(new { success = true });
+        }
+        [HttpGet]
+        public async Task<IActionResult> SearchTags(string term)
+        {
+            var tags = await _context.Tags
+                .Where(t => t.TagName.Contains(term))
+                .OrderBy(t => t.TagName)
+                .Select(t => new { id = t.TagId, text = t.TagName })
+                .Take(20)
+                .ToListAsync();
+
+            return Json(tags);
         }
     }
 }

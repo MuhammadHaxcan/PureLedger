@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace PureLedger.Models
 {
@@ -8,5 +9,8 @@ namespace PureLedger.Models
         public int TagId { get; set; }
         [Required]
         public string TagName { get; set; }
+
+        // Many-to-many navigation property
+        public virtual ICollection<JournalEntryTag> JournalEntryTags { get; set; } = new List<JournalEntryTag>();
     }
 }
