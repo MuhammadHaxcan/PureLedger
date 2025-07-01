@@ -227,6 +227,140 @@ namespace PureLedger.Controllers
                 return View(model);
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> VoucherEntry(int? jvId = null)
+        {
+            // Get all projects for dropdown
+            ViewBag.Projects = await _context.Projects.ToListAsync();
+
+            // If jvId is provided, load that voucher and its entries for summary
+            JournalVoucher? voucher = null;
+            List<JournalEntry>? entries = null;
+            if (jvId != null)
+            {
+                voucher = await _context.JournalVouchers
+                    .Include(jv => jv.JournalEntries)
+                        .ThenInclude(e => e.Account)
+                    .FirstOrDefaultAsync(jv => jv.JvId == jvId);
+
+                entries = voucher?.JournalEntries.ToList();
+            }
+
+            // For new entry, just show empty form and no summary
+            var model = new JournalEntryViewModel();
+
+            ViewBag.Voucher = voucher;
+            ViewBag.Entries = entries;
+
+            return View(model);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> VoucherSummary()
+        {
+            var vouchers = await _context.JournalVouchers
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .OrderByDescending(jv => jv.EntryDate)
+                .ToListAsync();
+
+            return View(vouchers);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> EditVoucher(int jvId)
+        {
+            var voucher = await _context.JournalVouchers
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.Category)
+                .FirstOrDefaultAsync(jv => jv.JvId == jvId);
+
+            if (voucher == null)
+                return NotFound();
+
+            var model = new JournalEntryViewModel
+            {
+                ProjectId = voucher.ProjectId,
+                CreditDays = voucher.CreditableDate.HasValue ? (voucher.CreditableDate.Value.DayNumber - voucher.EntryDate.DayNumber) : 0,
+                DueDate = voucher.CreditableDate ?? DateOnly.FromDateTime(DateTime.Now),
+                Booker = "", // Set if you have this info
+                Entries = voucher.JournalEntries.Select(e => new JournalEntryRowModel
+                {
+                    CategoryId = e.CategoryId,
+                    AccountId = e.AccountId,
+                    Des = e.Description,
+                    Qty = e.Quantity,
+                    Rate = e.Rate,
+                    Percent = e.DiscountPercent ?? 0,
+                    Disc = e.Discount,
+                    Debit = e.Debit,
+                    Credit = e.Credit,
+                    Rbp = e.Rbp,
+                    // Tags: If you have tags, load and map them here
+                }).ToList()
+            };
+
+            ViewBag.Projects = await _context.Projects.ToListAsync();
+            ViewBag.SelectedProjectId = voucher.ProjectId;
+            return View("Entry", model);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetVoucherSummary(int voucherId)
+        {
+            var voucher = await _context.JournalVouchers
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .FirstOrDefaultAsync(jv => jv.JvId == voucherId);
+
+            if (voucher == null)
+                return Json(new { entries = new List<object>(), jvId = voucherId });
+
+            var entries = voucher.JournalEntries.Select(e => new {
+                entryId = e.EntryId,
+                accountName = e.Account?.AccountName,
+                debit = e.Debit,
+                credit = e.Credit
+            }).ToList();
+
+            return Json(new { entries, jvId = voucher.JvId });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetJournalEntry(int entryId)
+        {
+            var entry = await _context.JournalEntries
+                .Include(e => e.Account)
+                .Include(e => e.Category)
+                .Include(e => e.JournalVoucher)
+                .FirstOrDefaultAsync(e => e.EntryId == entryId);
+
+            if (entry == null)
+                return NotFound();
+
+            return Json(new
+            {
+                entryId = entry.EntryId,
+                accountName = entry.Account?.AccountName,
+                debit = entry.Debit,
+                credit = entry.Credit
+            });
+        }
+        [HttpPost]
+        public async Task<IActionResult> UpdateJournalEntry([FromForm] int EntryId, [FromForm] decimal Debit, [FromForm] decimal Credit)
+        {
+            var entry = await _context.JournalEntries.FindAsync(EntryId);
+            if (entry == null)
+                return Json(new { success = false });
+
+            entry.Debit = Debit;
+            entry.Credit = Credit;
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
     }
 
     // View models for the Entry form
