@@ -18,16 +18,6 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
-        public IActionResult Index()
-        {
-            return View();
-        }
-
-        public IActionResult Privacy()
-        {
-            return View();
-        }
-
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {
@@ -345,19 +335,32 @@ namespace PureLedger.Controllers
             {
                 entryId = entry.EntryId,
                 accountName = entry.Account?.AccountName,
+                description = entry.Description,
+                quantity = entry.Quantity,
+                rate = entry.Rate,
+                discount = entry.Discount,
+                discountPercent = entry.DiscountPercent,
                 debit = entry.Debit,
                 credit = entry.Credit
             });
         }
         [HttpPost]
-        public async Task<IActionResult> UpdateJournalEntry([FromForm] int EntryId, [FromForm] decimal Debit, [FromForm] decimal Credit)
+        public async Task<IActionResult> UpdateJournalEntry([FromForm] int EntryId, [FromForm] string Description,
+            [FromForm] int Quantity, [FromForm] decimal Rate, [FromForm] decimal Discount, [FromForm] decimal DiscountPercent,
+            [FromForm] decimal Debit, [FromForm] decimal Credit)
         {
             var entry = await _context.JournalEntries.FindAsync(EntryId);
             if (entry == null)
                 return Json(new { success = false });
 
+            entry.Description = Description;
+            entry.Quantity = Quantity;
+            entry.Rate = Rate;
+            entry.Discount = Discount;
+            entry.DiscountPercent = DiscountPercent;
             entry.Debit = Debit;
             entry.Credit = Credit;
+
             await _context.SaveChangesAsync();
             return Json(new { success = true });
         }
