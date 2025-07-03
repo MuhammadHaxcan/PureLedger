@@ -288,6 +288,51 @@ document.addEventListener("DOMContentLoaded", () => {
             alert.classList.remove("d-none");
         }
     });
+
+    // Initialize datepickers
+    $('.datepicker').datepicker({
+        dateFormat: 'dd/mm/yy',
+        changeMonth: true,
+        changeYear: true,
+        showButtonPanel: true,
+        maxDate: new Date(), // Restrict future dates if needed
+        beforeShow: function(input, inst) {
+            // Position the datepicker correctly
+            setTimeout(function () {
+                inst.dpDiv.css({
+                    top: $(input).offset().top + $(input).outerHeight(),
+                    left: $(input).offset().left
+                });
+            }, 0);
+        }
+    });
+
+    // Make the calendar icon clickable to open the datepicker
+    $('.calendar-icon').on('click', function() {
+        $(this).siblings('input.datepicker').focus();
+    });
+
+    // Ensure utils.formatDateDDMMYYYY is available for consistent date formatting
+    if (utils && utils.formatDateDDMMYYYY) {
+        $('.datepicker').on('change', function() {
+            // Optional: Additional validation or reformatting if needed
+            // This is useful if you want to ensure consistent date format
+            try {
+                const dateArr = this.value.split('/');
+                if (dateArr.length === 3) {
+                    const day = parseInt(dateArr[0], 10);
+                    const month = parseInt(dateArr[1], 10) - 1; // JavaScript months are 0-based
+                    const year = parseInt(dateArr[2], 10);
+                    const date = new Date(year, month, day);
+                    if (!isNaN(date.getTime())) {
+                        this.value = utils.formatDateDDMMYYYY(date);
+                    }
+                }
+            } catch (e) {
+                console.error('Date format error', e);
+            }
+        });
+    }
 });
 
 // Project and Category handling
