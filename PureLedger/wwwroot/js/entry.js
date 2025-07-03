@@ -1,307 +1,365 @@
-﻿function getRows() {
-    return document.querySelectorAll("#entryRows tr");
+﻿// Utility functions
+const utils = {
+    formatDateDDMMYYYY: (date) => {
+        const d = date.getDate().toString().padStart(2, "0");
+        const m = (date.getMonth() + 1).toString().padStart(2, "0");
+        return `${d}/${m}/${date.getFullYear()}`;
+    },
+    getRows: () => document.querySelectorAll("#entryRows tr"),
+    parseFloatOrZero: (value) => parseFloat(value) || 0,
+    parseIntOrZero: (value) => parseInt(value) || 0
+};
+
+// Row management
+class RowManager {
+    static getNextIndex() {
+        return utils.getRows().length;
+    }
+
+    static createNewRow() {
+        // Clone the first row
+        const templateRow = utils.getRows()[0];
+        const newRow = templateRow.cloneNode(true);
+        const newIndex = this.getNextIndex();
+
+        // Update row ID
+        newRow.id = `entryRow-${newIndex}`;
+
+        // First destroy Select2 on template row to prevent data copying
+        const templateTagsSelect = templateRow.querySelector('.tags-input');
+        if ($(templateTagsSelect).data('select2')) {
+            $(templateTagsSelect).select2('destroy');
+        }
+
+        // Reset elements and update indices
+        this.resetRowElements(newRow, newIndex);
+
+        // Clean up Select2 remnants
+        newRow.querySelectorAll('.select2, .select2-container').forEach(el => el.remove());
+
+        // Reset the tags select specifically
+        const tagsSelect = newRow.querySelector('.tags-input');
+        $(tagsSelect)
+            .empty()
+            .removeAttr('data-select2-id')
+            .removeAttr('aria-hidden')
+            .removeData()
+            .removeClass('select2-hidden-accessible')
+            .off();
+
+        // Clean any select2 data attributes from the row and all its children
+        newRow.querySelectorAll('*').forEach(el => {
+            const attrs = Array.from(el.attributes);
+            attrs.forEach(attr => {
+                if (attr.name.startsWith('data-select2') || attr.name.startsWith('aria-')) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        // Return the row first, then initialize Select2
+        return newRow;
+    }
+
+    static resetRowElements(row, index) {
+        row.querySelectorAll("input, select").forEach(el => {
+            if (el.tagName === "SELECT") {
+                if (el.classList.contains("tags-input")) {
+                    // Complete reset for tags select
+                    $(el)
+                        .empty()
+                        .removeData()
+                        .removeAttr('data-select2-id')
+                        .removeAttr('aria-hidden')
+                        .removeClass('select2-hidden-accessible')
+                        .off();
+                } else {
+                    // Reset other selects
+                    el.selectedIndex = 0;
+                }
+            } else {
+                // Reset inputs
+                el.value = "";
+            }
+
+            // Update IDs and names
+            if (el.id) el.id = el.id.replace(/_\d+_/, `_${index}_`);
+            if (el.name) el.name = el.name.replace(/\[\d+\]/, `[${index}]`);
+        });
+
+        // Remove all select2 containers
+        row.querySelectorAll('.select2-container').forEach(el => el.remove());
+    }
+
+    static attachRowEvents(row) {
+        // Remove existing event listeners
+        row.querySelectorAll("input, select, button").forEach(el => {
+            const newEl = el.cloneNode(true);
+            el.parentNode.replaceChild(newEl, el);
+        });
+
+        // Attach new events
+        this.attachCalculationEvents(row);
+        this.attachRemoveEvent(row);
+    }
+
+    static initializeTagsSelect2(index) {
+        const selector = `#Entries_${index}__Tags`;
+        const $element = $(selector);
+        
+        // Destroy if exists
+        if ($element.hasClass("select2-hidden-accessible")) {
+            $element.select2('destroy');
+        }
+        
+        // Remove all select2 related elements and data
+        $element.removeData()
+            .find('option').remove();
+        
+        // Initialize fresh Select2
+        $element.select2({
+            placeholder: 'Search tags',
+            tags: false,
+            minimumInputLength: 1,
+            width: '100%',
+            ajax: {
+                url: '/MetaData/SearchTags',
+                dataType: 'json',
+                delay: 250,
+                data: params => ({ term: params.term }),
+                processResults: data => ({ results: data })
+            }
+        }).val(null).trigger('change');
+    }
+
+    static attachCalculationEvents(row) {
+        const inputs = {
+            percent: row.querySelector(".percent-input"),
+            qty: row.querySelector(".qty-input"),
+            rate: row.querySelector(".rate-input"),
+            disc: row.querySelector(".disc-input"),
+            debit: row.querySelector(".debit-input"),
+            credit: row.querySelector(".credit-input")
+        };
+
+        // Attach events
+        inputs.percent.addEventListener("input", () => Calculator.updateRowCalculations(row));
+        ["input", "blur"].forEach(evt => {
+            inputs.qty.addEventListener(evt, () => Calculator.updateRowCalculations(row));
+            inputs.rate.addEventListener(evt, () => Calculator.updateRowCalculations(row));
+            inputs.disc.addEventListener(evt, () => Calculator.updateTotalsOnly(row));
+        });
+
+        // Focus events for debit/credit
+        inputs.debit.addEventListener("focus", () => {
+            if (!inputs.debit.value) Calculator.updateRowCalculations(row, "debit");
+        });
+        inputs.credit.addEventListener("focus", () => {
+            if (!inputs.credit.value) Calculator.updateRowCalculations(row, "credit");
+        });
+
+        // Update totals on any debit/credit change
+        inputs.debit.addEventListener("input", Calculator.updateTotals);
+        inputs.credit.addEventListener("input", Calculator.updateTotals);
+    }
+
+    static attachRemoveEvent(row) {
+        row.querySelector(".remove-row-btn").addEventListener("click", function () {
+            if (utils.getRows().length > 1) {
+                this.closest("tr").remove();
+                Calculator.updateTotals();
+            }
+        });
+    }
 }
 
-// Format date as dd/MM/yyyy
-function formatDateDDMMYYYY(date) {
-    const d = date.getDate().toString().padStart(2, "0");
-    const m = (date.getMonth() + 1).toString().padStart(2, "0");
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
+// Calculator class
+class Calculator {
+    static updateRowCalculations(row, focusField = null) {
+        this.updateDiscount(row);
+        this.calculateDebitCredit(row, focusField);
+        this.updateTotals();
+    }
+
+    static updateTotalsOnly() {
+        this.updateTotals();
+    }
+
+    static updateDiscount(row) {
+        const inputs = {
+            percent: utils.parseFloatOrZero(row.querySelector(".percent-input").value),
+            qty: utils.parseFloatOrZero(row.querySelector(".qty-input").value),
+            rate: utils.parseFloatOrZero(row.querySelector(".rate-input").value)
+        };
+
+        const disc = ((inputs.qty * inputs.rate) * inputs.percent) / 100;
+        row.querySelector(".disc-input").value = Math.round(disc);
+    }
+
+    static calculateDebitCredit(row, focusField) {
+        const rbpValue = row.querySelector("select[name*='Rbp']").value;
+        const inputs = {
+            qty: utils.parseFloatOrZero(row.querySelector(".qty-input").value),
+            rate: utils.parseFloatOrZero(row.querySelector(".rate-input").value),
+            disc: utils.parseFloatOrZero(row.querySelector(".disc-input").value)
+        };
+
+        let amount = rbpValue === "Y" && row.hasAttribute("data-pkg")
+            ? (parseInt(row.getAttribute("data-pkg")) || 0) * inputs.qty * inputs.rate
+            : inputs.qty * inputs.rate;
+
+        amount = Math.round(amount - inputs.disc);
+
+        if (amount > 0) {
+            if (focusField === "debit") row.querySelector(".debit-input").value = amount;
+            if (focusField === "credit") row.querySelector(".credit-input").value = amount;
+        }
+    }
+
+    static updateTotals() {
+        let totals = { debit: 0, credit: 0 };
+        utils.getRows().forEach(row => {
+            totals.debit += utils.parseIntOrZero(row.querySelector(".debit-input").value);
+            totals.credit += utils.parseIntOrZero(row.querySelector(".credit-input").value);
+        });
+
+        document.getElementById("totalDebit").textContent = totals.debit;
+        document.getElementById("totalCredit").textContent = totals.credit;
+    }
 }
 
-// Set default due date to today on page load
-document.addEventListener("DOMContentLoaded", function () {
+// Document ready handlers
+document.addEventListener("DOMContentLoaded", () => {
+    // Initialize first row
+    RowManager.initializeTagsSelect2(0);
+    RowManager.attachRowEvents(utils.getRows()[0]);
+    Calculator.updateTotals();
+
+    // Set default due date
     const dueDateInput = document.querySelector("input[name='DueDate']");
-    if (dueDateInput) {
-        // No need to set type or value as it's already set in the razor view
-        if (!dueDateInput.value) {
-            const today = new Date();
-            dueDateInput.value = formatDateDDMMYYYY(today);
-        }
+    if (dueDateInput && !dueDateInput.value) {
+        dueDateInput.value = utils.formatDateDDMMYYYY(new Date());
     }
-    updateTotals();
-});
 
-// Add new row
-document.getElementById("addRowBtn").addEventListener("click", function () {
-    const rows = getRows();
-    const idx = rows.length;
-    const template = rows[0].cloneNode(true);
-
-    // Clear all input/select values in the cloned row and update names
-    template.querySelectorAll("input,select").forEach(function (el) {
-        if (el.tagName === "SELECT") {
-            el.selectedIndex = 0;
-        } else {
-            el.value = "";
-        }
-        // Update name attribute for model binding
-        if (el.name) {
-            el.name = el.name.replace(/\[\d+\]/, `[${idx}]`);
-        }
-    });
-
-    // Attach remove event
-    template.querySelector(".remove-row-btn").addEventListener("click", function () {
-        this.closest("tr").remove();
-        updateTotals();
-    });
-
-    // Attach calculation events
-    attachCalculationEvents(template);
-
-    document.getElementById("entryRows").appendChild(template);
-    updateTotals();
-});
-
-// Remove row event for initial row
-document.querySelectorAll(".remove-row-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-        if (getRows().length > 1) {
-            this.closest("tr").remove();
-            updateTotals();
-        }
-    });
-});
-
-// Attach calculation and validation events to all rows
-function attachCalculationEvents(row) {
-    // Discount calculation on % change
-    row.querySelector(".percent-input").addEventListener("input", function () {
-        updateDiscount(row);
-        calculateDebitCredit(row);
-    });
-
-    // When qty, rate, or disc changes, recalculate discount and debit/credit
-    ["input", "blur"].forEach(evt => {
-        row.querySelector(".qty-input").addEventListener(evt, function () {
-            updateDiscount(row);
-            calculateDebitCredit(row);
+    // Modified Add row button handler
+    document.getElementById("addRowBtn").addEventListener("click", () => {
+        const newRow = RowManager.createNewRow();
+        
+        // First append the row
+        document.getElementById("entryRows").appendChild(newRow);
+        
+        // Then initialize Select2 after the row is in the DOM
+        const index = utils.getRows().length - 1;
+        
+        // Wait for next tick to ensure DOM is updated
+        requestAnimationFrame(() => {
+            const tagsSelect = newRow.querySelector('.tags-input');
+            $(tagsSelect).select2({
+                placeholder: 'Search tags',
+                tags: false,
+                minimumInputLength: 1,
+                width: '100%',
+                ajax: {
+                    url: '/MetaData/SearchTags',
+                    dataType: 'json',
+                    delay: 250,
+                    data: params => ({ term: params.term }),
+                    processResults: data => ({ results: data })
+                }
+            }).val(null).trigger('change');
         });
-        row.querySelector(".rate-input").addEventListener(evt, function () {
-            updateDiscount(row);
-            calculateDebitCredit(row);
-        });
-        row.querySelector(".disc-input").addEventListener(evt, function () {
-            calculateDebitCredit(row);
-        });
+        
+        // Attach other events
+        RowManager.attachRowEvents(newRow);
     });
 
-    // When debit/credit is focused, fill only if empty
-    row.querySelector(".debit-input").addEventListener("focus", function () {
-        if (!this.value) calculateDebitCredit(row, "debit");
-    });
-    row.querySelector(".credit-input").addEventListener("focus", function () {
-        if (!this.value) calculateDebitCredit(row, "credit");
-    });
+    // Form submission handler
+    document.getElementById("entryForm").addEventListener("submit", function (e) {
+        const totals = {
+            debit: utils.parseIntOrZero(document.getElementById("totalDebit").textContent),
+            credit: utils.parseIntOrZero(document.getElementById("totalCredit").textContent)
+        };
 
-    // When debit/credit is changed by user, update totals
-    row.querySelector(".debit-input").addEventListener("input", function () { updateTotals(); });
-    row.querySelector(".credit-input").addEventListener("input", function () { updateTotals(); });
-}
-
-// Attach to initial row
-attachCalculationEvents(document.querySelector("#entryRows tr"));
-
-// Update discount field based on qty, rate, percent
-function updateDiscount(row) {
-    const percent = parseFloat(row.querySelector(".percent-input").value) || 0;
-    const qty = parseFloat(row.querySelector(".qty-input").value) || 0;
-    const rate = parseFloat(row.querySelector(".rate-input").value) || 0;
-    const discInput = row.querySelector(".disc-input");
-    const disc = ((qty * rate) * percent) / 100;
-    discInput.value = Math.round(disc);
-}
-
-// Calculate debit/credit for a row
-function calculateDebitCredit(row, focusField) {
-    const rbpValue = row.querySelector("select[name*='Rbp']").value;
-    const qty = parseFloat(row.querySelector(".qty-input").value) || 0;
-    const rate = parseFloat(row.querySelector(".rate-input").value) || 0;
-    const percent = parseFloat(row.querySelector(".percent-input").value) || 0;
-    const disc = parseFloat(row.querySelector(".disc-input").value) || 0;
-
-    let amount;
-
-    // Check if RBP is "Y" and we have the pkg value stored
-    if (rbpValue === "Y" && row.hasAttribute("data-pkg")) {
-        const pkg = parseInt(row.getAttribute("data-pkg")) || 0;
-        amount = pkg * qty * rate;
-    } else {
-        amount = qty * rate;
-    }
-
-    // Apply discount
-    let discount = disc;
-    if (!disc && percent) {
-        discount = (amount * percent) / 100;
-    }
-    amount = amount - discount;
-    amount = Math.round(amount); // Ensure integer
-
-    if (focusField === "debit") {
-        const debitInput = row.querySelector(".debit-input");
-        if (!debitInput.value) {
-            debitInput.value = amount > 0 ? amount : "";
+        if (totals.debit !== totals.credit) {
+            e.preventDefault();
+            const alert = document.getElementById("validationAlert");
+            document.getElementById("validationMessage").textContent =
+                `Total Debit (${totals.debit}) and Credit (${totals.credit}) do not match.`;
+            alert.classList.remove("d-none");
         }
-    } else if (focusField === "credit") {
-        const creditInput = row.querySelector(".credit-input");
-        if (!creditInput.value) {
-            creditInput.value = amount > 0 ? amount : "";
-        }
-    }
-    updateTotals();
-}
-
-// Update total debit and credit in the table footer
-function updateTotals() {
-    let debit = 0, credit = 0;
-    getRows().forEach(row => {
-        debit += parseInt(row.querySelector(".debit-input").value) || 0;
-        credit += parseInt(row.querySelector(".credit-input").value) || 0;
     });
-    document.getElementById("totalDebit").textContent = debit;
-    document.getElementById("totalCredit").textContent = credit;
-}
-
-// --- Credit Days to Due Date logic ---
-const creditDaysInput = document.querySelector("input[name='CreditDays']");
-const dueDateInput = document.querySelector("input[name='DueDate']");
-
-if (creditDaysInput && dueDateInput) {
-    creditDaysInput.addEventListener("input", function () {
-        const days = parseInt(this.value, 10) || 0;
-        const today = new Date();
-        today.setDate(today.getDate() + days);
-        dueDateInput.value = formatDateDDMMYYYY(today);
-    });
-}
-
-// Modified validation function to skip certain fields
-function validateRow(row) {
-
-    return true;
-}
-
-// Validate empty rows and debit/credit match on submit
-document.getElementById("entryForm").addEventListener("submit", function (e) {
-    let valid = true;
-    let debit = 0, credit = 0;
-
-    getRows().forEach(row => {
-        if (!validateRow(row)) {
-            valid = false;
-        }
-
-        debit += parseInt(row.querySelector(".debit-input").value) || 0;
-        credit += parseInt(row.querySelector(".credit-input").value) || 0;
-    });
-
-    const alert = document.getElementById("validationAlert");
-    const msg = document.getElementById("validationMessage");
-
-    if (!valid) {
-        e.preventDefault();
-        msg.textContent = "Please fill all required fields in each entry row.";
-        alert.classList.remove("d-none");
-        return false;
-    }
-    if (debit !== credit) {
-        e.preventDefault();
-        msg.textContent = `Total Debit (${debit}) and Credit (${credit}) do not match.`;
-        alert.classList.remove("d-none");
-        return false;
-    }
-    alert.classList.add("d-none");
 });
 
+// Project and Category handling
 $(document).ready(function () {
-    // When project changes, reload all category selects in all rows
+    // Project change handler
     $('#ProjectId').on('change', function () {
-        var projectId = $(this).val();
+        const projectId = $(this).val();
         $('#entryRows tr').each(function () {
-            var $row = $(this);
-            var $categorySelect = $row.find('.category-select');
-            var $accountSelect = $row.find('.account-select');
+            const $row = $(this);
+            const $categorySelect = $row.find('.category-select');
+            const $accountSelect = $row.find('.account-select');
+
             $categorySelect.empty().append('<option value="">Select Category</option>');
             $accountSelect.empty().append('<option value="">Select Account</option>');
+
             if (projectId) {
-                $.get('/Home/GetCategoriesByProject', { projectId: projectId }, function (categories) {
-                    $.each(categories, function (i, c) {
-                        $categorySelect.append($('<option>', { value: c.categoryId, text: c.categoryName }));
+                $.get('/Home/GetCategoriesByProject', { projectId }, function (categories) {
+                    categories.forEach(c => {
+                        $categorySelect.append(new Option(c.categoryName, c.categoryId));
                     });
                 });
             }
         });
-});
+    });
 
-// When category changes, load accounts for that row
-$(document).on('change', '.category-select', function () {
-    var $row = $(this).closest('tr');
-    var categoryId = $(this).val();
-    var $accountSelect = $row.find('.account-select');
-    $accountSelect.empty().append('<option value="">Select Account</option>');
-    if (categoryId) {
-        $.get('/Home/GetAccountsByCategory', { categoryId: categoryId }, function (accounts) {
-            $.each(accounts, function (i, a) {
-                $accountSelect.append($('<option>', {
-                    value: a.accountId,
-                    text: a.accountName,
-                    'data-type': a.type || '',
-                    'data-account-type': a.accountTypeName || ''
-                }));
+    // Category change handler
+    $(document).on('change', '.category-select', function () {
+        const $row = $(this).closest('tr');
+        const categoryId = $(this).val();
+        const $accountSelect = $row.find('.account-select');
+
+        $accountSelect.empty().append('<option value="">Select Account</option>');
+        $row.find('.type-input').val('');
+        $row[0].removeAttribute('data-account-type');
+
+        if (categoryId) {
+            $.get('/Home/GetAccountsByCategory', { categoryId }, function (accounts) {
+                accounts.forEach(a => {
+                    const $option = $(new Option(a.accountName, a.accountId));
+                    $option.data('type', a.type || '');
+                    $option.data('account-type', a.accountTypeName || '');
+                    $accountSelect.append($option);
+                });
             });
-        });
+        }
+    });
+
+    // Account change handler
+    $(document).on('change', '.account-select', function () {
+        const $row = $(this).closest('tr');
+        const accountId = $(this).val();
+        const $selected = $(this).find('option:selected');
+
+        $row.find('.type-input').val($selected.data('type') || '');
+        $row[0].setAttribute('data-account-type', $selected.data('account-type') || '');
+
+        if (accountId) {
+            $.get('/Home/GetProductDetails', { accountId }, function (product) {
+                if (product?.saleRate) {
+                    $row.find('.rate-input').val(product.saleRate);
+                }
+                if (product?.pkg) {
+                    $row[0].setAttribute('data-pkg', product.pkg);
+                } else {
+                    $row[0].removeAttribute('data-pkg');
+                }
+            });
+        }
+    });
+
+    // Initial project load
+    if ($('#ProjectId').val()) {
+        $('#ProjectId').trigger('change');
     }
-    // Clear the type field
-    $row.find('.type-input').val('');
-    // Remove any account type data attribute
-    $row[0].removeAttribute('data-account-type');
-});
-
-// When account changes, set the Type field and get product data
-$(document).on('change', '.account-select', function () {
-    var $row = $(this).closest('tr');
-    var accountId = $(this).val();
-    var selected = $(this).find('option:selected');
-    var type = selected.data('type') || '';
-    var accountType = selected.data('account-type') || '';
-
-    $row.find('.type-input').val(type);
-
-    // Store account type as data attribute on the row for validation
-    $row[0].setAttribute('data-account-type', accountType);
-
-    // Get product details for the selected account
-    if (accountId) {
-        $.get('/Home/GetProductDetails', { accountId: accountId }, function (product) {
-            if (product && product.saleRate) {
-                $row.find('.rate-input').val(product.saleRate);
-            }
-
-            // Store pkg value as data attribute on the row for later calculations
-            if (product && product.pkg) {
-                $row[0].setAttribute('data-pkg', product.pkg);
-            } else {
-                $row[0].removeAttribute('data-pkg');
-            }
-        });
-    }
-});
-
-
-
-// Remove row logic
-$(document).on('click', '.remove-row-btn', function () {
-    if ($('#entryRows tr').length > 1) {
-        $(this).closest('tr').remove();
-        updateTotals();
-    }
-});
-
-// On page load, if a project is selected, trigger change to load categories
-if ($('#ProjectId').val()) {
-    $('#ProjectId').trigger('change');
-}
 });

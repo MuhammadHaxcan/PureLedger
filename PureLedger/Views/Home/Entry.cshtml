@@ -79,26 +79,42 @@
                         <tbody id="entryRows">
                             <tr id="entryRow-0" class="entry-row">
                                 <td>
-                                    <select class="form-select form-select-sm category-select" id="Entries_0__CategoryId" name="Entries[0].CategoryId" required>
+                                    <select class="form-select form-select-sm category-select" 
+                                            id="Entries_0__CategoryId" 
+                                            name="Entries[0].CategoryId" 
+                                            required>
                                         <option value="">Select Category</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm account-select" id="Entries_0__AccountId" name="Entries[0].AccountId" required>
+                                    <select class="form-select form-select-sm account-select" 
+                                            id="Entries_0__AccountId" 
+                                            name="Entries[0].AccountId" 
+                                            required>
                                         <option value="">Select Account</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm type-input" id="Entries_0__Type" name="Entries[0].Type" readonly />
+                                    <input class="form-control form-control-sm type-input" 
+                                           id="Entries_0__Type" 
+                                           name="Entries[0].Type" 
+                                           readonly />
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm rbp-select" id="Entries_0__Rbp" name="Entries[0].Rbp">
+                                    <select class="form-select form-select-sm rbp-select" 
+                                            id="Entries_0__Rbp" 
+                                            name="Entries[0].Rbp">
                                         <option value="Y" selected>Y</option>
                                         <option value="N">N</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <select class="form-control form-control-sm tags-input" id="Entries_0__Tags" name="Entries[0].Tags" multiple="multiple" style="width: 100%;"></select>
+                                    <select class="form-control form-control-sm tags-input" 
+                                            id="Entries_0__Tags" 
+                                            name="Entries[0].Tags" 
+                                            multiple="multiple" 
+                                            style="width: 100%;">
+                                    </select>
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm des-input" id="Entries_0__Des" name="Entries[0].Des" />
@@ -162,40 +178,5 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="~/js/entry.js"></script>
-    <script>
-        // Initialize Select2 for a tags input by row index
-        function initTagsSelect2(rowIndex) {
-            $('#Entries_' + rowIndex + '__Tags').select2({
-                placeholder: 'Search tags',
-                tags: false, // Only allow existing tags
-                minimumInputLength: 1,
-                ajax: {
-                    url: '/MetaData/SearchTags',
-                    dataType: 'json',
-                    delay: 250,
-                    data: function (params) {
-                        return { term: params.term };
-                    },
-                    processResults: function (data) {
-                        return { results: data };
-                    }
-                }
-            });
-        }
-
-        // Add new row logic (example, you may need to adapt to your row-adding code)
-        $(document).ready(function () {
-            initTagsSelect2(0);
-
-            // Dynamic row addition: call initTagsSelect2 for each new row
-            $('#addRowBtn').on('click', function () {
-                // Your logic to add a new row (not shown here)
-                var rowIndex = $('#entryRows tr').length;
-                setTimeout(function () {
-                    initTagsSelect2(rowIndex - 1);
-                }, 100);
-            });
-        });
-    </script>
+    <script src="~/js/entry.js" asp-append-version="true"></script>
 }
