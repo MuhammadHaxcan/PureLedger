@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
+using PureLedger.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddScoped<JournalEntryValidationService>();
 
 // Add LedgerDbContext with SQL Server and Windows Authentication
 builder.Services.AddDbContext<LedgerDbContext>(options =>

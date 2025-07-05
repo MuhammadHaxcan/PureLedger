@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Models;
+using PureLedger.Services;
+using PureLedger.ViewModels;
+using PureLedger.ViewModels.PureLedger.ViewModels;
 using System.Diagnostics;
 
 namespace PureLedger.Controllers
@@ -10,12 +13,13 @@ namespace PureLedger.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         private readonly LedgerDbContext _context;
+        private readonly JournalEntryValidationService _validator;
 
-
-        public HomeController(LedgerDbContext context, ILogger<HomeController> logger)
+        public HomeController(LedgerDbContext context, ILogger<HomeController> logger, JournalEntryValidationService validator)
         {
             _context = context;
             _logger = logger;
+            _validator = validator;
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
@@ -95,59 +99,12 @@ namespace PureLedger.Controllers
         [HttpPost]
         public async Task<IActionResult> Entry(JournalEntryViewModel model)
         {
-            // Remove unnecessary validations for optional fields
-            foreach (var entry in model.Entries)
-            {
-                // Optional fields in JournalEntryRowModel that may trigger validation errors
-                ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Type");
-                ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Tags");
-                ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Des");
-                ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Rbp");
+            var errors = await _validator.ValidateAsync(model);
 
-                // Get the account to determine its group
-                var account = await _context.Accounts
-                    .Include(a => a.AccountGroup)
-                    .FirstOrDefaultAsync(a => a.AccountId == entry.AccountId);
-
-                if (account != null)
-                {
-                    // If the account group is customer, remove rate, discount, and quantity validations
-                    if (account.AccountGroup?.AccountGroupName?.ToLower() == "account")
-                    {
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Rate");
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Disc");
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Percent");
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Qty");
-                    }
-                    // If the account group is product, only remove discount validation as it's optional
-                    else if (account.AccountGroup?.AccountGroupName?.ToLower() == "product")
-                    {
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Percent");
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Disc");
-                    }
-                }
-
-                // Remove validation for fields that might be conditionally required
-                // (e.g., if only one of Debit or Credit should be filled)
-                if (entry.Debit > 0 || entry.Credit > 0)
-                {
-                    if (entry.Debit > 0)
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Credit");
-                    else if (entry.Credit > 0)
-                        ModelState.Remove($"Entries[{model.Entries.IndexOf(entry)}].Debit");
-                }
-            }
-
-            // Remove validations for optional parent fields
-            ModelState.Remove("Booker");
-            ModelState.Remove("DueDate");
-            ModelState.Remove("CreditDays");
-
-
-            if (!ModelState.IsValid)
+            if (errors.Any())
             {
                 ViewBag.Projects = await _context.Projects.ToListAsync();
-                ViewBag.Error = "Please correct the validation errors.";
+                ViewBag.Error = string.Join("<br/>", errors);
                 return View(model);
             }
 
@@ -190,7 +147,6 @@ namespace PureLedger.Controllers
                     {
                         foreach (var tagId in entry.Tags)
                         {
-                            // Only process if tagId is a valid positive integer
                             if (tagId > 0)
                             {
                                 var journalEntryTag = new JournalEntryTag
@@ -212,8 +168,8 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving journal entries");
-                ModelState.AddModelError("", "An error occurred while saving. Please try again.");
                 ViewBag.Projects = await _context.Projects.ToListAsync();
+                ViewBag.Error = "An error occurred while saving. Please try again.";
                 return View(model);
             }
         }
@@ -331,64 +287,60 @@ namespace PureLedger.Controllers
             if (entry == null)
                 return NotFound();
 
-            return Json(new
+            var model = new JournalEntryUpdateViewModel
             {
-                entryId = entry.EntryId,
-                accountName = entry.Account?.AccountName,
-                description = entry.Description,
-                quantity = entry.Quantity,
-                rate = entry.Rate,
-                discount = entry.Discount,
-                discountPercent = entry.DiscountPercent,
-                debit = entry.Debit,
-                credit = entry.Credit
-            });
+                EntryId = entry.EntryId,
+                AccountName = entry.Account?.AccountName,
+                Description = entry.Description,
+                Quantity = entry.Quantity,
+                Rate = entry.Rate,
+                Discount = entry.Discount,
+                DiscountPercent = entry.DiscountPercent ?? 0,
+                Debit = entry.Debit,
+                Credit = entry.Credit
+            };
+
+            return Json(model);
         }
+
         [HttpPost]
-        public async Task<IActionResult> UpdateJournalEntry([FromForm] int EntryId, [FromForm] string Description,
-            [FromForm] int Quantity, [FromForm] decimal Rate, [FromForm] decimal Discount, [FromForm] decimal DiscountPercent,
-            [FromForm] decimal Debit, [FromForm] decimal Credit)
+        public async Task<IActionResult> UpdateJournalEntry([FromForm] JournalEntryUpdateViewModel model)
         {
-            var entry = await _context.JournalEntries.FindAsync(EntryId);
+            if (!ModelState.IsValid)
+            {
+                return Json(new
+                {
+                    success = false,
+                    errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .ToList()
+                });
+            }
+
+            var entry = await _context.JournalEntries.FindAsync(model.EntryId);
             if (entry == null)
-                return Json(new { success = false });
+                return Json(new { success = false, message = "Entry not found" });
 
-            entry.Description = Description;
-            entry.Quantity = Quantity;
-            entry.Rate = Rate;
-            entry.Discount = Discount;
-            entry.DiscountPercent = DiscountPercent;
-            entry.Debit = Debit;
-            entry.Credit = Credit;
+            // Map view model to entity
+            entry.Description = model.Description;
+            entry.Quantity = model.Quantity;
+            entry.Rate = model.Rate;
+            entry.Discount = model.Discount;
+            entry.DiscountPercent = model.DiscountPercent;
+            entry.Debit = model.Debit;
+            entry.Credit = model.Credit;
 
-            await _context.SaveChangesAsync();
-            return Json(new { success = true });
+            try
+            {
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
+                return Json(new { success = false, message = "Error saving changes" });
+            }
         }
-    }
-
-    // View models for the Entry form
-    public class JournalEntryViewModel
-    {
-        public int ProjectId { get; set; }
-        public string? Booker { get; set; }
-        public int CreditDays { get; set; }
-        public DateOnly DueDate { get; set; }
-        public List<JournalEntryRowModel> Entries { get; set; } = new List<JournalEntryRowModel>();
-    }
-
-    public class JournalEntryRowModel
-    {
-        public int CategoryId { get; set; }
-        public int AccountId { get; set; }
-        public string? Type { get; set; }
-        public string? Rbp { get; set; } = "Y";
-        public List<int>? Tags { get; set; } // Now a list of tag IDs
-        public string? Des { get; set; }
-        public int Qty { get; set; }
-        public decimal Rate { get; set; }
-        public decimal Percent { get; set; }
-        public decimal Disc { get; set; }
-        public decimal Debit { get; set; }
-        public decimal Credit { get; set; }
     }
 }

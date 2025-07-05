@@ -273,22 +273,6 @@ document.addEventListener("DOMContentLoaded", () => {
         RowManager.attachRowEvents(newRow);
     });
 
-    // Form submission handler
-    document.getElementById("entryForm").addEventListener("submit", function (e) {
-        const totals = {
-            debit: utils.parseIntOrZero(document.getElementById("totalDebit").textContent),
-            credit: utils.parseIntOrZero(document.getElementById("totalCredit").textContent)
-        };
-
-        if (totals.debit !== totals.credit) {
-            e.preventDefault();
-            const alert = document.getElementById("validationAlert");
-            document.getElementById("validationMessage").textContent =
-                `Total Debit (${totals.debit}) and Credit (${totals.credit}) do not match.`;
-            alert.classList.remove("d-none");
-        }
-    });
-
     // Initialize datepickers
     $('.datepicker').datepicker({
         dateFormat: 'dd/mm/yy',
