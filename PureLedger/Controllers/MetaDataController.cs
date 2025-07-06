@@ -1,19 +1,24 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using PureLedger.Data;
 using PureLedger.Models;
-using System.Threading.Tasks;
-using System.Linq;
+using PureLedger.Services;
 
 namespace PureLedger.Controllers
 {
     public class MetaDataController : Controller
     {
-        private readonly LedgerDbContext _context;
+        private readonly MetaDataValidationService _validationService;
+        private readonly IMetaDataService _metaDataService;
+        private readonly ILogger<MetaDataController> _logger;
 
-        public MetaDataController(LedgerDbContext context)
+        public MetaDataController(
+            MetaDataValidationService validationService,
+            IMetaDataService metaDataService,
+            ILogger<MetaDataController> logger)
         {
-            _context = context;
+            _validationService = validationService;
+            _metaDataService = metaDataService;
+            _logger = logger;
         }
 
         // ---------------- PROJECT ----------------
@@ -22,7 +27,7 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> Project()
         {
-            var projects = await _context.Projects.ToListAsync();
+            var projects = await _metaDataService.GetAllProjectsAsync();
             return View(projects);
         }
 
@@ -31,16 +36,20 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Project(Project project)
         {
-            ModelState.Remove("ProjectId");
-            ModelState.Remove("Categories");
-
-            if (ModelState.IsValid)
+            var errors = await _validationService.ValidateProjectAsync(project);
+            if (errors.Count == 0)
             {
-                _context.Projects.Add(project);
-                await _context.SaveChangesAsync();
+                await _metaDataService.CreateProjectAsync(project);
                 return RedirectToAction(nameof(Project));
             }
-            var projects = await _context.Projects.ToListAsync();
+
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            var projects = await _metaDataService.GetAllProjectsAsync();
             return View(projects);
         }
 
@@ -48,7 +57,7 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> EditProject(int id)
         {
-            var project = await _context.Projects.FindAsync(id);
+            var project = await _metaDataService.GetProjectByIdAsync(id);
             if (project == null) return NotFound();
             return View(project);
         }
@@ -58,12 +67,19 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditProject(Project project)
         {
-            if (ModelState.IsValid)
+            var errors = await _validationService.ValidateProjectAsync(project);
+            if (errors.Count == 0)
             {
-                _context.Projects.Update(project);
-                await _context.SaveChangesAsync();
+                await _metaDataService.UpdateProjectAsync(project);
                 return RedirectToAction(nameof(Project));
             }
+
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
             return View(project);
         }
 
@@ -73,12 +89,10 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> Category()
         {
-            var categories = await _context.Categories
-                .Include(c => c.Project)
-                .Include(c => c.AccountType)
-                .ToListAsync();
-            ViewBag.Projects = await _context.Projects.ToListAsync();
-            ViewBag.AccountTypes = await _context.AccountTypes.ToListAsync();
+            var categories = await _metaDataService.GetAllCategoriesAsync();
+            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
+            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(categories);
         }
 
@@ -87,23 +101,24 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Category(Category category)
         {
-            ModelState.Remove("CategoryId");
-            ModelState.Remove("Accounts");
-            ModelState.Remove("Project");
-            ModelState.Remove("AccountType");
-
-            if (ModelState.IsValid)
+            var errors = await _validationService.ValidateCategoryAsync(category);
+            if (errors.Count == 0)
             {
-                _context.Categories.Add(category);
-                await _context.SaveChangesAsync();
+                await _metaDataService.CreateCategoryAsync(category);
                 return RedirectToAction(nameof(Category));
             }
-            var categories = await _context.Categories
-                .Include(c => c.Project)
-                .Include(c => c.AccountType)
-                .ToListAsync();
-            ViewBag.Projects = await _context.Projects.ToListAsync();
-            ViewBag.AccountTypes = await _context.AccountTypes.ToListAsync();
+
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            // Get fresh data for the view
+            var categories = await _metaDataService.GetAllCategoriesAsync();
+            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
+            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(categories);
         }
 
@@ -111,10 +126,12 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> EditCategory(int id)
         {
-            var category = await _context.Categories.FindAsync(id);
+            var category = await _metaDataService.GetCategoryByIdAsync(id);
             if (category == null) return NotFound();
-            ViewBag.Projects = await _context.Projects.ToListAsync();
-            ViewBag.AccountTypes = await _context.AccountTypes.ToListAsync();
+
+            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
+            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(category);
         }
 
@@ -123,17 +140,22 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditCategory(Category category)
         {
-            ModelState.Remove("Accounttype");
-            ModelState.Remove("Project");
-            ModelState.Remove("Accounts");
-            if (ModelState.IsValid)
+            var errors = await _validationService.ValidateCategoryAsync(category);
+            if (errors.Count == 0)
             {
-                _context.Categories.Update(category);
-                await _context.SaveChangesAsync();
+                await _metaDataService.UpdateCategoryAsync(category);
                 return RedirectToAction(nameof(Category));
             }
-            ViewBag.Projects = await _context.Projects.ToListAsync();
-            ViewBag.AccountTypes = await _context.AccountTypes.ToListAsync();
+
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
+            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(category);
         }
 
@@ -143,18 +165,11 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> Account()
         {
-            var accounts = await _context.Accounts
-                .Include(a => a.AccountData)
-                .Include(a => a.ProductData)
-                .Include(a => a.Category)
-                .ThenInclude(c => c.Project)
-                .Include(a => a.AccountGroup)
-                .ToListAsync();
-            ViewBag.Categories = await _context.Categories
-                .Include(c => c.Project)
-                .ToListAsync();
-            ViewBag.AccountGroups = await _context.AccountGroups.ToListAsync();
-            ViewBag.Projects = await _context.Projects.ToListAsync();
+            var accounts = await _metaDataService.GetAllAccountsAsync();
+            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
+            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+            ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
             return View(accounts);
         }
 
@@ -163,83 +178,25 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Account(Account account)
         {
-            // Remove navigation properties from validation
-            ModelState.Remove("Category");
-            ModelState.Remove("AccountGroup");
-            ModelState.Remove("AccountData.Account");
-            ModelState.Remove("ProductData.Account");
-
-            // Get the selected AccountGroup
-            var accountGroup = await _context.AccountGroups
-                .FirstOrDefaultAsync(g => g.AccountGroupId == account.AccountGroupId);
-
-            if (accountGroup == null)
+            var errors = await _validationService.ValidateAccountAsync(account);
+            if (errors.Count == 0)
             {
-                ModelState.AddModelError("AccountGroupId", "A valid account group must be selected.");
-            }
-            else
-            {
-                var groupName = accountGroup.AccountGroupName?.Trim().ToLower();
-
-                if (groupName == "account")
-                {
-                    // Validate only account data fields
-                    if (string.IsNullOrWhiteSpace(account.AccountName))
-                        ModelState.AddModelError("AccountName", "Account Name is required.");
-                    if (account.AccountData == null)
-                        ModelState.AddModelError("", "Account data is required.");
-                    // Optionally validate other account fields as needed
-
-                    // Remove product data if present
-                    account.ProductData = null;
-                }
-                else if (groupName == "product")
-                {
-                    // Validate only product data fields
-                    if (account.ProductData == null)
-                        ModelState.AddModelError("", "Product data is required.");
-                    else
-                    {
-                        if (string.IsNullOrWhiteSpace(account.ProductData.PkgForm))
-                            ModelState.AddModelError("ProductData.PkgForm", "Pkg Form is required.");
-                        if (account.ProductData.Pkg == null)
-                            ModelState.AddModelError("ProductData.Pkg", "Pkg is required.");
-                        if (string.IsNullOrWhiteSpace(account.ProductData.Type))
-                            ModelState.AddModelError("ProductData.Type", "Type is required.");
-                    }
-
-                    // Remove account data if present
-                    account.AccountData = null;
-                }
-            }
-
-            if (ModelState.IsValid)
-            {
-                // Attach nested data if present
-                if (account.AccountData != null)
-                    account.AccountData.Account = account;
-                if (account.ProductData != null)
-
-                    account.ProductData.Account = account;
-
-                _context.Accounts.Add(account);
-                await _context.SaveChangesAsync();
+                await _metaDataService.CreateAccountAsync(account);
                 return RedirectToAction(nameof(Account));
             }
 
-            // Repopulate ViewBags for the view
-            var accounts = await _context.Accounts
-                .Include(a => a.AccountData)
-                .Include(a => a.ProductData)
-                .Include(a => a.Category)
-                .ThenInclude(c => c.Project)
-                .Include(a => a.AccountGroup)
-                .ToListAsync();
-            ViewBag.Categories = await _context.Categories
-                .Include(c => c.Project)
-                .ToListAsync();
-            ViewBag.AccountGroups = await _context.AccountGroups.ToListAsync();
-            ViewBag.Projects = await _context.Projects.ToListAsync();
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            // Get fresh data for the view
+            var accounts = await _metaDataService.GetAllAccountsAsync();
+            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
+            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+            ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
             return View(accounts);
         }
 
@@ -247,15 +204,12 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> EditAccount(int id)
         {
-            var account = await _context.Accounts
-                .Include(a => a.AccountData)
-                .Include(a => a.ProductData)
-                .FirstOrDefaultAsync(a => a.AccountId == id);
+            var account = await _metaDataService.GetAccountByIdAsync(id);
             if (account == null) return NotFound();
-            ViewBag.Categories = await _context.Categories
-                .Include(c => c.Project)
-                .ToListAsync();
-            ViewBag.AccountGroups = await _context.AccountGroups.ToListAsync();
+
+            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
+            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+
             return View(account);
         }
 
@@ -264,127 +218,32 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditAccount(Account account)
         {
-            ModelState.Remove("Category");
-            ModelState.Remove("AccountGroup");
-            ModelState.Remove("AccountData.Account");
-            ModelState.Remove("ProductData.Account");
-
-            var accountGroup = await _context.AccountGroups
-                .FirstOrDefaultAsync(g => g.AccountGroupId == account.AccountGroupId);
-
-            if (accountGroup == null)
+            var errors = await _validationService.ValidateAccountAsync(account);
+            if (errors.Count == 0)
             {
-                ModelState.AddModelError("AccountGroupId", "A valid account group must be selected.");
-            }
-            else
-            {
-                var groupName = accountGroup.AccountGroupName?.Trim().ToLower();
-
-                if (groupName == "account")
-                {
-                    if (string.IsNullOrWhiteSpace(account.AccountName))
-                        ModelState.AddModelError("AccountName", "Account Name is required.");
-                    if (account.AccountData == null)
-                        ModelState.AddModelError("", "Account data is required.");
-                    account.ProductData = null;
-                }
-                else if (groupName == "product")
-                {
-                    if (account.ProductData == null)
-                        ModelState.AddModelError("", "Product data is required.");
-                    else
-                    {
-                        if (string.IsNullOrWhiteSpace(account.ProductData.PkgForm))
-                            ModelState.AddModelError("ProductData.PkgForm", "Pkg Form is required.");
-                        if (account.ProductData.Pkg == null)
-                            ModelState.AddModelError("ProductData.Pkg", "Pkg is required.");
-                        if (string.IsNullOrWhiteSpace(account.ProductData.Type))
-                            ModelState.AddModelError("ProductData.Type", "Type is required.");
-                    }
-                    account.AccountData = null;
-                }
-            }
-
-            if (ModelState.IsValid)
-            {
-                // Fetch the existing account and its data
-                var existingAccount = await _context.Accounts
-                    .Include(a => a.AccountData)
-                    .Include(a => a.ProductData)
-                    .FirstOrDefaultAsync(a => a.AccountId == account.AccountId);
-
-                if (existingAccount == null)
-                    return NotFound();
-
-                // Update scalar properties
-                existingAccount.AccountName = account.AccountName;
-                existingAccount.AccountGroupId = account.AccountGroupId;
-                existingAccount.CategoryId = account.CategoryId;
-
-                // Update AccountData or ProductData as appropriate
-                if (account.AccountData != null)
-                {
-                    if (existingAccount.AccountData == null)
-                    {
-                        existingAccount.AccountData = account.AccountData;
-                    }
-                    else
-                    {
-                        existingAccount.AccountData.PhoneNumber = account.AccountData.PhoneNumber;
-                        existingAccount.AccountData.Email = account.AccountData.Email;
-                        existingAccount.AccountData.Address = account.AccountData.Address;
-                        existingAccount.AccountData.Area = account.AccountData.Area;
-                        existingAccount.AccountData.City = account.AccountData.City;
-                    }
-                    // Remove ProductData if switching from product to account
-                    if (existingAccount.ProductData != null)
-                        _context.ProductDatas.Remove(existingAccount.ProductData);
-                }
-                else if (account.ProductData != null)
-                {
-                    if (existingAccount.ProductData == null)
-                    {
-                        existingAccount.ProductData = account.ProductData;
-                    }
-                    else
-                    {
-                        existingAccount.ProductData.PkgForm = account.ProductData.PkgForm;
-                        existingAccount.ProductData.Pkg = account.ProductData.Pkg;
-                        existingAccount.ProductData.Type = account.ProductData.Type;
-                        existingAccount.ProductData.SaleRate = account.ProductData.SaleRate;
-                    }
-                    // Remove AccountData if switching from account to product
-                    if (existingAccount.AccountData != null)
-                        _context.AccountDatas.Remove(existingAccount.AccountData);
-                }
-
-                await _context.SaveChangesAsync();
+                await _metaDataService.UpdateAccountAsync(account);
                 return RedirectToAction(nameof(Account));
             }
 
-            ViewBag.Categories = await _context.Categories
-                .Include(c => c.Project)
-                .ToListAsync();
-            ViewBag.AccountGroups = await _context.AccountGroups.ToListAsync();
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
+            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+
             return View(account);
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetCategoriesByProject(int projectId)
-        {
-            var categories = await _context.Categories
-                .Where(c => c.ProjectId == projectId)
-                .Select(c => new { categoryId = c.CategoryId, categoryName = c.CategoryName })
-                .ToListAsync();
-            return Json(categories);
-        }
         // ---------------- TAG ----------------
 
         // GET: /MetaData/Tag
         [HttpGet]
         public async Task<IActionResult> Tag()
         {
-            var tags = await _context.Tags.ToListAsync();
+            var tags = await _metaDataService.GetAllTagsAsync();
             return View(tags);
         }
 
@@ -393,28 +252,21 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Tag(Tag tag)
         {
-            ModelState.Remove("TagId");
-
-            if (ModelState.IsValid)
+            var errors = await _validationService.ValidateTagAsync(tag);
+            if (errors.Count == 0)
             {
-                // Check if tag with same name already exists (case insensitive)
-                var existingTag = await _context.Tags
-                    .FirstOrDefaultAsync(t => t.TagName.ToLower() == tag.TagName.ToLower());
-
-                if (existingTag != null)
-                {
-                    ModelState.AddModelError("TagName", "A tag with this name already exists.");
-                }
-                else
-                {
-                    _context.Tags.Add(tag);
-                    await _context.SaveChangesAsync();
-                    TempData["Success"] = "Tag added successfully.";
-                    return RedirectToAction(nameof(Tag));
-                }
+                await _metaDataService.CreateTagAsync(tag);
+                TempData["Success"] = "Tag added successfully.";
+                return RedirectToAction(nameof(Tag));
             }
 
-            var tags = await _context.Tags.ToListAsync();
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            var tags = await _metaDataService.GetAllTagsAsync();
             return View(tags);
         }
 
@@ -422,33 +274,27 @@ namespace PureLedger.Controllers
         [HttpPost]
         public async Task<IActionResult> DeleteTag(int id)
         {
-            var tag = await _context.Tags.FindAsync(id);
-            if (tag == null)
-                return NotFound();
-
-            // Check if tag is in use in any JournalEntry
-            var tagInUse = await _context.JournalEntryTags.AnyAsync(jet => jet.JournalEntryTagId == id);
-            if (tagInUse)
+            if (await _metaDataService.IsTagInUseAsync(id))
             {
                 return Json(new { success = false, message = "This tag is in use and cannot be deleted." });
             }
 
-            _context.Tags.Remove(tag);
-            await _context.SaveChangesAsync();
-
-            return Json(new { success = true });
+            var success = await _metaDataService.DeleteTagAsync(id);
+            return Json(new { success });
         }
+
         [HttpGet]
         public async Task<IActionResult> SearchTags(string term)
         {
-            var tags = await _context.Tags
-                .Where(t => t.TagName.Contains(term))
-                .OrderBy(t => t.TagName)
-                .Select(t => new { id = t.TagId, text = t.TagName })
-                .Take(20)
-                .ToListAsync();
-
+            var tags = await _metaDataService.SearchTagsAsync(term);
             return Json(tags);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProject(int projectId)
+        {
+            var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
+            return Json(categories);
         }
     }
 }

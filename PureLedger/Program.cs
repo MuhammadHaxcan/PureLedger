@@ -1,12 +1,31 @@
 using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Services;
-
+using PureLedger.Repositories;
+using PureLedger.Repositories.Interfaces;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<JournalEntryValidationService>();
+builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<IJournalVoucherRepository, JournalVoucherRepository>();
+builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
+
+// Register repositories
+builder.Services.AddScoped<ITagRepository, TagRepository>();
+builder.Services.AddScoped<IAccountGroupRepository, AccountGroupRepository>();
+builder.Services.AddScoped<IAccountDataRepository, AccountDataRepository>();
+builder.Services.AddScoped<IProductDataRepository, ProductDataRepository>();
+builder.Services.AddScoped<IAccountTypeRepository, AccountTypeRepository>();
+
+// Register services
+builder.Services.AddScoped<MetaDataValidationService>();
+builder.Services.AddScoped<IMetaDataService, MetaDataService>();
 
 // Add LedgerDbContext with SQL Server and Windows Authentication
 builder.Services.AddDbContext<LedgerDbContext>(options =>

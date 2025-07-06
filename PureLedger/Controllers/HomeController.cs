@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Services;
@@ -12,14 +11,17 @@ namespace PureLedger.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        private readonly LedgerDbContext _context;
+        private readonly IJournalEntryService _journalService;
         private readonly JournalEntryValidationService _validator;
 
-        public HomeController(LedgerDbContext context, ILogger<HomeController> logger, JournalEntryValidationService validator)
+        public HomeController(
+            IJournalEntryService journalService,
+            JournalEntryValidationService validator,
+            ILogger<HomeController> logger)
         {
-            _context = context;
-            _logger = logger;
+            _journalService = journalService;
             _validator = validator;
+            _logger = logger;
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
@@ -32,7 +34,8 @@ namespace PureLedger.Controllers
         [ActionName("Entry")]
         public async Task<IActionResult> Entry(int? projectId = null)
         {
-            ViewBag.Projects = await _context.Projects.ToListAsync();
+            var projects = await _journalService.GetAllProjectsAsync();
+            ViewBag.Projects = projects;
             ViewBag.SelectedProjectId = projectId;
             return View();
         }
@@ -41,10 +44,7 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> GetCategoriesByProject(int projectId)
         {
-            var categories = await _context.Categories
-                .Where(c => c.ProjectId == projectId)
-                .Select(c => new { c.CategoryId, c.CategoryName })
-                .ToListAsync();
+            var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
             return Json(categories);
         }
 
@@ -52,47 +52,15 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAccountsByCategory(int categoryId)
         {
-            try
-            {
-                var category = await _context.Categories
-                    .Include(c => c.AccountType)
-                    .FirstOrDefaultAsync(c => c.CategoryId == categoryId);
-
-                var accounts = await _context.Accounts
-                    .Where(a => a.CategoryId == categoryId)
-                    .Select(a => new
-                    {
-                        a.AccountId,
-                        a.AccountName,
-                        a.ProductData.Type,
-                        AccountTypeName = category != null ? category.AccountType.AccountTypeName : null
-                    })
-                    .ToListAsync();
-
-                return Json(accounts);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
-                return Json(new List<object>());
-            }
+            var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
+            return Json(accounts);
         }
 
         // AJAX: Get product details for an account
         [HttpGet]
         public async Task<IActionResult> GetProductDetails(int accountId)
         {
-            var productData = await _context.Accounts
-                .Where(a => a.AccountId == accountId)
-                .Select(a => new
-                {
-                    a.ProductData.SaleRate,
-                    a.ProductData.Pkg,
-                    a.ProductData.PkgForm,
-                    a.ProductData.Type
-                })
-                .FirstOrDefaultAsync();
-
+            var productData = await _journalService.GetProductDetailsAsync(accountId);
             return Json(productData);
         }
 
@@ -103,72 +71,23 @@ namespace PureLedger.Controllers
 
             if (errors.Any())
             {
-                ViewBag.Projects = await _context.Projects.ToListAsync();
+                var projects = await _journalService.GetAllProjectsAsync();
+                ViewBag.Projects = projects;
                 ViewBag.Error = string.Join("<br/>", errors);
                 return View(model);
             }
 
             try
             {
-                // Create journal voucher
-                var journalVoucher = new JournalVoucher
-                {
-                    ProjectId = model.ProjectId,
-                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                    IsProcessed = false,
-                    CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
-                };
-
-                _context.JournalVouchers.Add(journalVoucher);
-                await _context.SaveChangesAsync();
-
-                foreach (var entry in model.Entries)
-                {
-                    var journalEntry = new JournalEntry
-                    {
-                        JournalVoucherId = journalVoucher.JvId,
-                        AccountId = entry.AccountId,
-                        CategoryId = entry.CategoryId,
-                        Description = entry.Des,
-                        Quantity = entry.Qty,
-                        Rate = entry.Rate,
-                        DiscountPercent = entry.Percent,
-                        Discount = entry.Disc,
-                        Debit = entry.Debit,
-                        Credit = entry.Credit,
-                        Rbp = entry.Rbp
-                    };
-
-                    _context.JournalEntries.Add(journalEntry);
-                    await _context.SaveChangesAsync(); // Save to get EntryId for the join table
-
-                    // Process tags by ID only
-                    if (entry.Tags != null && entry.Tags.Any())
-                    {
-                        foreach (var tagId in entry.Tags)
-                        {
-                            if (tagId > 0)
-                            {
-                                var journalEntryTag = new JournalEntryTag
-                                {
-                                    JournalEntryTagId = tagId,
-                                    JournalEntryId = journalEntry.EntryId
-                                };
-                                _context.JournalEntryTags.Add(journalEntryTag);
-                            }
-                        }
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-
+                var journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
                 TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JvId}";
                 return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving journal entries");
-                ViewBag.Projects = await _context.Projects.ToListAsync();
+                var projects = await _journalService.GetAllProjectsAsync();
+                ViewBag.Projects = projects;
                 ViewBag.Error = "An error occurred while saving. Please try again.";
                 return View(model);
             }
@@ -178,78 +97,43 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> VoucherEntry(int? jvId = null)
         {
             // Get all projects for dropdown
-            ViewBag.Projects = await _context.Projects.ToListAsync();
+            var projects = await _journalService.GetAllProjectsAsync();
+            ViewBag.Projects = projects;
 
             // If jvId is provided, load that voucher and its entries for summary
-            JournalVoucher? voucher = null;
-            List<JournalEntry>? entries = null;
-            if (jvId != null)
+            if (jvId.HasValue)
             {
-                voucher = await _context.JournalVouchers
-                    .Include(jv => jv.JournalEntries)
-                        .ThenInclude(e => e.Account)
-                    .FirstOrDefaultAsync(jv => jv.JvId == jvId);
-
-                entries = voucher?.JournalEntries.ToList();
+                var voucher = await _journalService.GetVoucherWithEntriesAsync(jvId.Value);
+                if (voucher != null)
+                {
+                    ViewBag.Voucher = voucher;
+                    ViewBag.Entries = voucher.JournalEntries.ToList();
+                }
             }
 
             // For new entry, just show empty form and no summary
             var model = new JournalEntryViewModel();
-
-            ViewBag.Voucher = voucher;
-            ViewBag.Entries = entries;
-
             return View(model);
         }
 
         [HttpGet]
         public async Task<IActionResult> VoucherSummary()
         {
-            var vouchers = await _context.JournalVouchers
-                .Include(jv => jv.JournalEntries)
-                    .ThenInclude(e => e.Account)
-                .OrderByDescending(jv => jv.EntryDate)
-                .ToListAsync();
-
+            var vouchers = await _journalService.GetAllVouchersAsync();
             return View(vouchers);
         }
 
         [HttpGet]
         public async Task<IActionResult> EditVoucher(int jvId)
         {
-            var voucher = await _context.JournalVouchers
-                .Include(jv => jv.JournalEntries)
-                    .ThenInclude(e => e.Account)
-                .Include(jv => jv.JournalEntries)
-                    .ThenInclude(e => e.Category)
-                .FirstOrDefaultAsync(jv => jv.JvId == jvId);
-
+            var voucher = await _journalService.GetVoucherWithEntriesAsync(jvId);
             if (voucher == null)
                 return NotFound();
 
-            var model = new JournalEntryViewModel
-            {
-                ProjectId = voucher.ProjectId,
-                CreditDays = voucher.CreditableDate.HasValue ? (voucher.CreditableDate.Value.DayNumber - voucher.EntryDate.DayNumber) : 0,
-                DueDate = voucher.CreditableDate ?? DateOnly.FromDateTime(DateTime.Now),
-                Booker = "", // Set if you have this info
-                Entries = voucher.JournalEntries.Select(e => new JournalEntryRowModel
-                {
-                    CategoryId = e.CategoryId,
-                    AccountId = e.AccountId,
-                    Des = e.Description,
-                    Qty = e.Quantity,
-                    Rate = e.Rate,
-                    Percent = e.DiscountPercent ?? 0,
-                    Disc = e.Discount,
-                    Debit = e.Debit,
-                    Credit = e.Credit,
-                    Rbp = e.Rbp,
-                    // Tags: If you have tags, load and map them here
-                }).ToList()
-            };
+            var model = await _journalService.MapVoucherToViewModelAsync(voucher);
 
-            ViewBag.Projects = await _context.Projects.ToListAsync();
+            var projects = await _journalService.GetAllProjectsAsync();
+            ViewBag.Projects = projects;
             ViewBag.SelectedProjectId = voucher.ProjectId;
             return View("Entry", model);
         }
@@ -257,48 +141,16 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> GetVoucherSummary(int voucherId)
         {
-            var voucher = await _context.JournalVouchers
-                .Include(jv => jv.JournalEntries)
-                    .ThenInclude(e => e.Account)
-                .FirstOrDefaultAsync(jv => jv.JvId == voucherId);
-
-            if (voucher == null)
-                return Json(new { entries = new List<object>(), jvId = voucherId });
-
-            var entries = voucher.JournalEntries.Select(e => new {
-                entryId = e.EntryId,
-                accountName = e.Account?.AccountName,
-                debit = e.Debit,
-                credit = e.Credit
-            }).ToList();
-
-            return Json(new { entries, jvId = voucher.JvId });
+            var summary = await _journalService.GetVoucherSummaryAsync(voucherId);
+            return Json(summary);
         }
 
         [HttpGet]
         public async Task<IActionResult> GetJournalEntry(int entryId)
         {
-            var entry = await _context.JournalEntries
-                .Include(e => e.Account)
-                .Include(e => e.Category)
-                .Include(e => e.JournalVoucher)
-                .FirstOrDefaultAsync(e => e.EntryId == entryId);
-
-            if (entry == null)
+            var model = await _journalService.GetJournalEntryForEditAsync(entryId);
+            if (model == null)
                 return NotFound();
-
-            var model = new JournalEntryUpdateViewModel
-            {
-                EntryId = entry.EntryId,
-                AccountName = entry.Account?.AccountName,
-                Description = entry.Description,
-                Quantity = entry.Quantity,
-                Rate = entry.Rate,
-                Discount = entry.Discount,
-                DiscountPercent = entry.DiscountPercent ?? 0,
-                Debit = entry.Debit,
-                Credit = entry.Credit
-            };
 
             return Json(model);
         }
@@ -318,28 +170,14 @@ namespace PureLedger.Controllers
                 });
             }
 
-            var entry = await _context.JournalEntries.FindAsync(model.EntryId);
-            if (entry == null)
-                return Json(new { success = false, message = "Entry not found" });
-
-            // Map view model to entity
-            entry.Description = model.Description;
-            entry.Quantity = model.Quantity;
-            entry.Rate = model.Rate;
-            entry.Discount = model.Discount;
-            entry.DiscountPercent = model.DiscountPercent;
-            entry.Debit = model.Debit;
-            entry.Credit = model.Credit;
-
-            try
+            var success = await _journalService.UpdateJournalEntryAsync(model);
+            if (success)
             {
-                await _context.SaveChangesAsync();
                 return Json(new { success = true });
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
-                return Json(new { success = false, message = "Error saving changes" });
+                return Json(new { success = false, message = "Error updating entry" });
             }
         }
     }
