@@ -257,5 +257,25 @@ namespace PureLedger.Services
                 .ToList();
         }
         #endregion
+
+        #region Location Operations
+        public async Task<List<Location>> GetAllLocationsAsync()
+        {
+            return await _unitOfWork.Locations.GetAllAsync();
+        }
+
+        public async Task<Location?> GetLocationByIdAsync(int id)
+        {
+            return await _unitOfWork.Locations.GetByIdAsync(id);
+        }
+
+        public async Task<Location> CreateLocationAsync(Location location)
+        {
+            await _unitOfWork.Locations.AddAsync(location);
+            await _unitOfWork.SaveChangesAsync();
+            return location;
+        }
+
+        #endregion
     }
 }

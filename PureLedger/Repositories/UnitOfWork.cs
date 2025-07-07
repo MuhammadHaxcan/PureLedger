@@ -17,6 +17,7 @@ namespace PureLedger.Repositories
         public IAccountDataRepository AccountDatas { get; }
         public IProductDataRepository ProductDatas { get; }
         public IAccountTypeRepository AccountTypes { get; }
+        public ILocationRepository Locations { get; }
 
         public UnitOfWork(
             LedgerDbContext context,
@@ -29,7 +30,8 @@ namespace PureLedger.Repositories
             IAccountGroupRepository accountGroupRepository,
             IAccountDataRepository accountDataRepository,
             IProductDataRepository productDataRepository,
-            IAccountTypeRepository accountTypeRepository)
+            IAccountTypeRepository accountTypeRepository,
+            ILocationRepository locationRepository)
         {
             _context = context;
             Projects = projectRepository;
@@ -42,6 +44,7 @@ namespace PureLedger.Repositories
             AccountDatas = accountDataRepository;
             ProductDatas = productDataRepository;
             AccountTypes = accountTypeRepository;
+            Locations = locationRepository;
         }
 
         public async Task<int> SaveChangesAsync()

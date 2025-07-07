@@ -296,5 +296,73 @@ namespace PureLedger.Controllers
             var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
             return Json(categories);
         }
+
+        // ---------------- LOCATION ----------------
+
+        // GET: /MetaData/Location
+        [HttpGet]
+        public async Task<IActionResult> Location()
+        {
+            var locations = await _metaDataService.GetAllLocationsAsync();
+            return View(locations);
+        }
+
+        // POST: /MetaData/Location
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Location(Location location)
+        {
+            var errors = await _validationService.ValidateLocationAsync(location);
+            if (errors.Count == 0)
+            {
+                await _metaDataService.CreateLocationAsync(location);
+                
+                // Check if the request is AJAX
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                {
+                    return Json(new { 
+                        success = true, 
+                        location = location, // Return the created location for UI update
+                        message = "Location added successfully."
+                    });
+                }
+                
+                TempData["Success"] = "Location added successfully.";
+                return RedirectToAction(nameof(Location));
+            }
+
+            // Add validation errors to ModelState
+            foreach (var error in errors)
+            {
+                ModelState.AddModelError("", error);
+            }
+
+            // If AJAX request, return validation errors
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            {
+                var modelErrors = ModelState
+                    .Where(x => x.Value.Errors.Count > 0)
+                    .ToDictionary(
+                        k => k.Key,
+                        v => v.Value.Errors.Select(e => e.ErrorMessage).ToArray()
+                    );
+                    
+                return Json(new { 
+                    success = false, 
+                    errors = modelErrors
+                });
+            }
+
+            var locations = await _metaDataService.GetAllLocationsAsync();
+            return View(locations);
+        }
+
+        // GET: /MetaData/GetAllLocations - AJAX Endpoint
+        [HttpGet]
+        public async Task<IActionResult> GetAllLocations()
+        {
+            var locations = await _metaDataService.GetAllLocationsAsync();
+            return Json(locations);
+        }
     }
 }

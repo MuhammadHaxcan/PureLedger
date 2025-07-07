@@ -34,5 +34,10 @@ namespace PureLedger.Services
         Task<bool> DeleteTagAsync(int tagId);
         Task<bool> IsTagInUseAsync(int tagId);
         Task<List<object>> SearchTagsAsync(string term, int take = 20);
+
+        // Location operations
+        Task<List<Location>> GetAllLocationsAsync();
+        Task<Location?> GetLocationByIdAsync(int id);
+        Task<Location> CreateLocationAsync(Location location);
     }
 }

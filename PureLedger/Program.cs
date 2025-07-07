@@ -22,6 +22,7 @@ builder.Services.AddScoped<IAccountGroupRepository, AccountGroupRepository>();
 builder.Services.AddScoped<IAccountDataRepository, AccountDataRepository>();
 builder.Services.AddScoped<IProductDataRepository, ProductDataRepository>();
 builder.Services.AddScoped<IAccountTypeRepository, AccountTypeRepository>();
+builder.Services.AddScoped<ILocationRepository, LocationRepository>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();

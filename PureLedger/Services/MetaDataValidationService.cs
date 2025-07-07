@@ -118,5 +118,24 @@ namespace PureLedger.Services
 
             return errors;
         }
+
+        public async Task<List<string>> ValidateLocationAsync(Location location)
+        {
+            var errors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(location.Name))
+                errors.Add("Location name is required.");
+
+            if (location.Name?.Length > 100)
+                errors.Add("Location name must be at most 100 characters.");
+
+            if (location.Phone?.Length > 20)
+                errors.Add("Phone number must be at most 20 characters.");
+
+            if (location.Region?.Length > 100)
+                errors.Add("Region must be at most 100 characters.");
+
+            return errors;
+        }
     }
 }

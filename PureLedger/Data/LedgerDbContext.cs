@@ -18,7 +18,8 @@ namespace PureLedger.Data
         public DbSet<Tag> Tags { get; set; }
         public DbSet<JournalVoucher> JournalVouchers { get; set; }
         public DbSet<JournalEntry> JournalEntries { get; set; }
-        public DbSet<JournalEntryTag> JournalEntryTags { get; set; } // Add this line
+        public DbSet<JournalEntryTag> JournalEntryTags { get; set; }
+        public DbSet<Location> Locations { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

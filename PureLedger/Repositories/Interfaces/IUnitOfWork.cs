@@ -14,7 +14,8 @@ namespace PureLedger.Repositories.Interfaces
         IAccountDataRepository AccountDatas { get; }
         IProductDataRepository ProductDatas { get; }
         IAccountTypeRepository AccountTypes { get; }
-        
+        ILocationRepository Locations { get; }
+
         Task<int> SaveChangesAsync();
     }
 }
