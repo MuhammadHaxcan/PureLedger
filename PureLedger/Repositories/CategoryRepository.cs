@@ -57,5 +57,10 @@ namespace PureLedger.Repositories
             await _context.SaveChangesAsync();
             return category;
         }
+
+        public async Task<List<Category>> GetAllAsync()
+        {
+            return await _context.Categories.ToListAsync();
+        }
     }
 }

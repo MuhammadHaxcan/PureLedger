@@ -74,5 +74,10 @@ namespace PureLedger.Repositories
                 })
                 .FirstOrDefaultAsync();
         }
+
+        public async Task<List<Account>> GetAllAsync()
+        {
+            return await _context.Accounts.ToListAsync();
+        }
     }
 }

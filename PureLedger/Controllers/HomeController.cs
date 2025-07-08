@@ -180,5 +180,23 @@ namespace PureLedger.Controllers
                 return Json(new { success = false, message = "Error updating entry" });
             }
         }
+
+        [HttpGet("/api/common/categories")]
+        public async Task<IActionResult> GetCategories()
+        {
+            var categories = await _journalService.GetAllCategoriesAsync();
+            var list = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }).ToList();
+            return Json(list);
+        }
+
+        [HttpGet("/api/common/accounts")]
+        public async Task<IActionResult> GetAccounts()
+        {
+            var accounts = await _journalService.GetAllAccountsAsync();
+            var list = accounts.Select(a => new { id = a.AccountId, name = a.AccountName }).ToList();
+            return Json(list);
+        }
+
+
     }
 }

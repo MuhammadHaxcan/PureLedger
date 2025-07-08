@@ -11,5 +11,6 @@ namespace PureLedger.Repositories.Interfaces
         Task<Account> AddAsync(Account account);
         Task<Account> UpdateAsync(Account account);
         Task<object?> GetProductDetailsAsync(int accountId);
+        Task<List<Account>> GetAllAsync();
     }
 }

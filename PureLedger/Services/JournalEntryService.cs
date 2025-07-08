@@ -120,7 +120,9 @@ namespace PureLedger.Services
                 Discount = entry.Discount,
                 DiscountPercent = entry.DiscountPercent ?? 0,
                 Debit = entry.Debit,
-                Credit = entry.Credit
+                Credit = entry.Credit,
+                AccountId = entry.AccountId,      
+                CategoryId = entry.CategoryId
             };
         }
 
@@ -210,5 +212,16 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.Accounts.GetProductDetailsAsync(accountId);
         }
+
+        public async Task<List<Category>> GetAllCategoriesAsync()
+        {
+            return await _unitOfWork.Categories.GetAllAsync();
+        }
+
+        public async Task<List<Account>> GetAllAccountsAsync()
+        {
+            return await _unitOfWork.Accounts.GetAllAsync();
+        }
+
     }
 }

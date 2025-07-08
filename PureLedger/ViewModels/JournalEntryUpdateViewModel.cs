@@ -31,6 +31,9 @@ namespace PureLedger.ViewModels
 
             // Read-only properties for display purposes
             public string? AccountName { get; set; }
+
+            public int CategoryId { get; set; }
+            public int AccountId { get; set; }
         }
     }
 }
