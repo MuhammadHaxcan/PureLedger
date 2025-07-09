@@ -12,7 +12,7 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20250630212423_init")]
+    [Migration("20250709212119_init")]
     partial class init
     {
         /// <inheritdoc />
@@ -215,7 +215,13 @@ namespace PureLedger.Migrations
                     b.Property<decimal?>("DiscountPercent")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("IsProcessed")
+                        .HasColumnType("bit");
+
                     b.Property<int>("JournalVoucherId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LocationId")
                         .HasColumnType("int");
 
                     b.Property<int>("Quantity")
@@ -235,6 +241,8 @@ namespace PureLedger.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("JournalVoucherId");
+
+                    b.HasIndex("LocationId");
 
                     b.ToTable("JournalEntries");
                 });
@@ -279,6 +287,32 @@ namespace PureLedger.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("JournalVouchers");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.Location", b =>
+                {
+                    b.Property<int>("LocationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LocationId"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("LocationId");
+
+                    b.ToTable("Locations");
                 });
 
             modelBuilder.Entity("PureLedger.Models.ProductData", b =>
@@ -415,11 +449,17 @@ namespace PureLedger.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PureLedger.Models.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId");
+
                     b.Navigation("Account");
 
                     b.Navigation("Category");
 
                     b.Navigation("JournalVoucher");
+
+                    b.Navigation("Location");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>

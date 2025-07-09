@@ -40,6 +40,21 @@ namespace PureLedger.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Locations",
+                columns: table => new
+                {
+                    LocationId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Phone = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    Region = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Locations", x => x.LocationId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Projects",
                 columns: table => new
                 {
@@ -174,6 +189,8 @@ namespace PureLedger.Migrations
                     JournalVoucherId = table.Column<int>(type: "int", nullable: false),
                     AccountId = table.Column<int>(type: "int", nullable: false),
                     CategoryId = table.Column<int>(type: "int", nullable: false),
+                    LocationId = table.Column<int>(type: "int", nullable: true),
+                    IsProcessed = table.Column<bool>(type: "bit", nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     Quantity = table.Column<int>(type: "int", nullable: false),
                     Rate = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
@@ -202,6 +219,11 @@ namespace PureLedger.Migrations
                         principalTable: "JournalVouchers",
                         principalColumn: "JvId",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_JournalEntries_Locations_LocationId",
+                        column: x => x.LocationId,
+                        principalTable: "Locations",
+                        principalColumn: "LocationId");
                 });
 
             migrationBuilder.CreateTable(
@@ -314,6 +336,11 @@ namespace PureLedger.Migrations
                 column: "JournalVoucherId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_JournalEntries_LocationId",
+                table: "JournalEntries",
+                column: "LocationId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_JournalEntryTags_JournalEntryTagId",
                 table: "JournalEntryTags",
                 column: "JournalEntryTagId");
@@ -353,6 +380,9 @@ namespace PureLedger.Migrations
 
             migrationBuilder.DropTable(
                 name: "JournalVouchers");
+
+            migrationBuilder.DropTable(
+                name: "Locations");
 
             migrationBuilder.DropTable(
                 name: "AccountGroups");

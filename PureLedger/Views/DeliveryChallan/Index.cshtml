@@ -1,0 +1,183 @@
+@model  PureLedger.ViewModels.DeliveryChallanFilterViewModel
+@{
+    ViewData["Title"] = "Delivery Challan";
+}
+
+<div class="container-fluid">
+    <!-- Filter section -->
+    <div class="filter-section mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <label>Since:</label>
+                <input type="date" id="sinceDate" class="form-control" value="@(Model?.SinceDate?.ToString("yyyy-MM-dd"))">
+            </div>
+            <div class="col">
+                <label>To:</label>
+                <input type="date" id="toDate" class="form-control" value="@(Model?.ToDate?.ToString("yyyy-MM-dd"))">
+            </div>
+            <div class="col">
+                <label>Project</label>
+                <select id="projectSelect" class="form-select">
+                    <option value="">Select Project</option>
+                    @if (ViewBag.Projects != null)
+                    {
+                        foreach (var project in ViewBag.Projects)
+                        {
+                            <option value="@project.ProjectId">@project.ProjectName</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col">
+                <label>Category</label>
+                <select id="categorySelect" class="form-select" disabled>
+                    <option value="">Select Category</option>
+                </select>
+            </div>
+            <div class="col">
+                <label>Account</label>
+                <select id="accountSelect" class="form-select" disabled>
+                    <option value="">Select Account</option>
+                </select>
+            </div>
+            <div class="col">
+                <label>&nbsp;</label>
+                <button id="goButton" class="btn btn-primary w-100">Go</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search box -->
+    <div class="mb-3">
+        <input type="text" id="searchInput" class="form-control" placeholder="Search...">
+    </div>
+
+    <!-- Results table -->
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Account</th>
+                    <th>Qty</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="resultsTable">
+                <!-- Data will be loaded here via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Delivery Challan Modal -->
+    <div class="modal fade" id="deliveryChallanModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="deliveryChallanModalTitle">Create Delivery Challan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-none" id="existingChallanMessage">
+                        This voucher already has a delivery challan. Adding entries will update the existing challan.
+                    </div>
+                    
+                    <form id="deliveryChallanForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" id="dcJournalVoucherId" name="JournalVoucherId" />
+                        <input type="hidden" id="dcJournalEntryId" name="JournalEntryId" />
+                        <input type="hidden" id="dcChallanId" name="ChallanId" />
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="dcDate" class="form-label">DC Date</label>
+                                <input type="date" class="form-control" id="dcDate" name="ChallanDate" required />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="dcRemarks" class="form-label">DC Remarks</label>
+                                <input type="text" class="form-control" id="dcRemarks" name="Remarks" />
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="dcLocation" class="form-label">Select Location</label>
+                                <select class="form-select" id="dcLocation" name="LocationId" required>
+                                    <!-- Options will be populated dynamically -->
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="dcStation" class="form-label">Station</label>
+                                <input type="text" class="form-control" id="dcStation" name="Station" />
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="dcOtherRef" class="form-label">Other Ref</label>
+                                <input type="text" class="form-control" id="dcOtherRef" name="OtherRef" />
+                            </div>
+                        </div>
+                        
+                        <!-- Single Entry View -->
+                        <div id="singleEntryView" class="d-none">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6>Entry Details</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Account</label>
+                                        <p id="dcEntryAccount" class="form-control-plaintext"></p>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Description</label>
+                                        <p id="dcEntryDescription" class="form-control-plaintext"></p>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="dcQuantity" class="form-label">Quantity</label>
+                                        <input type="number" class="form-control" id="dcQuantity" name="Quantity" min="1" required />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- All Entries View -->
+                        <div id="allEntriesView">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h6>Select Entries to Process</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Account</th>
+                                                    <th>Description</th>
+                                                    <th>Quantity</th>
+                                                    <th>Select</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="dcEntriesTable">
+                                                <!-- Entries will be populated dynamically -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="postSingleBtn">Post Single</button>
+                    <button type="button" class="btn btn-success" id="postAllBtn">Post All</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/delivery-challan.js"></script>
+}

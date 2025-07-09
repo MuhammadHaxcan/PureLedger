@@ -8,5 +8,10 @@ namespace PureLedger.Repositories.Interfaces
         Task<JournalVoucher?> GetWithEntriesAsync(int id);
         Task<JournalVoucher> AddAsync(JournalVoucher voucher);
         Task<JournalVoucher> UpdateAsync(JournalVoucher voucher);
+        Task<List<JournalVoucher>> GetFilteredVouchersAsync(
+            DateOnly? sinceDate,
+            DateOnly? toDate,
+            int? projectId,
+            bool includeEntries);
     }
 }

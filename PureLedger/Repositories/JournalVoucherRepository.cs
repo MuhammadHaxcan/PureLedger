@@ -46,5 +46,38 @@ namespace PureLedger.Repositories
             await _context.SaveChangesAsync();
             return voucher;
         }
+
+        public async Task<List<JournalVoucher>> GetFilteredVouchersAsync(
+            DateOnly? sinceDate,
+            DateOnly? toDate,
+            int? projectId,
+            bool includeEntries)
+        {
+            IQueryable<JournalVoucher> query = _context.JournalVouchers
+                .Include(jv => jv.Project);
+                
+            if (includeEntries)
+            {
+                query = query.Include(jv => jv.JournalEntries)
+                    .ThenInclude(je => je.Account);
+            }
+            
+            if (sinceDate.HasValue)
+            {
+                query = query.Where(jv => jv.EntryDate >= sinceDate.Value);
+            }
+            
+            if (toDate.HasValue)
+            {
+                query = query.Where(jv => jv.EntryDate <= toDate.Value);
+            }
+            
+            if (projectId.HasValue)
+            {
+                query = query.Where(jv => jv.ProjectId == projectId.Value);
+            }
+            
+            return await query.OrderByDescending(jv => jv.EntryDate).ToListAsync();
+        }
     }
 }

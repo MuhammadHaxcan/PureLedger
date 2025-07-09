@@ -50,5 +50,27 @@ namespace PureLedger.Repositories
             }
             await _context.SaveChangesAsync();
         }
+        // Add this to your existing repository implementation
+        public async Task<List<JournalEntry>> GetEntriesByVoucherIdAsync(
+            int voucherId,
+            int? categoryId,
+            int? accountId)
+        {
+            IQueryable<JournalEntry> query = _context.JournalEntries
+                .Include(je => je.Account)
+                .Where(je => je.JournalVoucherId == voucherId);
+
+            if (categoryId.HasValue)
+            {
+                query = query.Where(je => je.CategoryId == categoryId.Value);
+            }
+
+            if (accountId.HasValue)
+            {
+                query = query.Where(je => je.AccountId == accountId.Value);
+            }
+
+            return await query.ToListAsync();
+        }
     }
 }

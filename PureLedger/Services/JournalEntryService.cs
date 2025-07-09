@@ -226,5 +226,80 @@ namespace PureLedger.Services
             return await _unitOfWork.Accounts.GetAllAsync();
         }
 
+        public async Task<List<Models.Location>> GetAllLocationsAsync()
+        {
+            return await _unitOfWork.Locations.GetAllAsync();
+        }
+
+        public async Task<DeliveryChallanFilterViewModel> GetFilteredEntriesForDeliveryChallanAsync(
+            DateOnly? sinceDate,
+            DateOnly? toDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId)
+        {
+            var result = new DeliveryChallanFilterViewModel
+            {
+                SinceDate = sinceDate,
+                ToDate = toDate,
+                ProjectId = projectId,
+                CategoryId = categoryId,
+                AccountId = accountId
+            };
+            
+            try
+            {
+                // Get journal vouchers based on filters
+                var vouchers = await _unitOfWork.JournalVouchers.GetFilteredVouchersAsync(
+                    sinceDate, toDate, projectId, !accountId.HasValue && !categoryId.HasValue);
+                    
+                foreach (var voucher in vouchers)
+                {
+                    // Skip vouchers that are fully processed
+                    if (voucher.IsProcessed)
+                        continue;
+                        
+                    var voucherViewModel = new JournalVoucherViewModel
+                    {
+                        JvId = voucher.JvId,
+                        ProjectName = voucher.Project?.ProjectName,
+                        EntryDate = voucher.EntryDate,
+                        IsProcessed = voucher.IsProcessed
+                    };
+                    
+                    // Get entries for this voucher
+                    var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
+                        voucher.JvId, categoryId, accountId);
+                        
+                    // Skip entries that are already processed and entries with 0 quantity
+                    foreach (var entry in entries.Where(e => !e.IsProcessed && e.Quantity > 0))
+                    {
+                        voucherViewModel.Entries.Add(new JournalEntryDetailViewModel
+                        {
+                            EntryId = entry.EntryId,
+                            JournalVoucherId = entry.JournalVoucherId,
+                            AccountId = entry.AccountId,
+                            AccountName = entry.Account?.AccountName,
+                            Description = entry.Description,
+                            Quantity = entry.Quantity,
+                            Rate = entry.Rate,
+                            IsProcessed = entry.IsProcessed
+                        });
+                    }
+                    
+                    // Only add vouchers that have at least one entry
+                    if (voucherViewModel.Entries.Any())
+                    {
+                        result.Vouchers.Add(voucherViewModel);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting filtered entries for delivery challan");
+            }
+            
+            return result;
+        }
     }
 }
