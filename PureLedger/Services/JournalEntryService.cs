@@ -110,6 +110,8 @@ namespace PureLedger.Services
             if (entry == null)
                 return null;
 
+            var projectId = entry.JournalVoucher?.ProjectId ?? 0;
+
             return new JournalEntryUpdateViewModel
             {
                 EntryId = entry.EntryId,
@@ -122,7 +124,8 @@ namespace PureLedger.Services
                 Debit = entry.Debit,
                 Credit = entry.Credit,
                 AccountId = entry.AccountId,      
-                CategoryId = entry.CategoryId
+                CategoryId = entry.CategoryId,
+                ProjectId = projectId
             };
         }
 

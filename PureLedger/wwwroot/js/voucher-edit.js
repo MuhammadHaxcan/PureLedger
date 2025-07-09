@@ -92,7 +92,7 @@
                 $('#editDebit').val(data.debit || 0);
                 $('#editCredit').val(data.credit || 0);
 
-                loadDropdowns(data.categoryId, data.accountId);
+                loadDropdowns(data.projectId, data.categoryId, data.accountId);
                 // Show modal
                 if (editModal) {
                     editModal.show();
@@ -152,25 +152,45 @@
     }
 
     //Load Drop Downs for the combo boxes
-    function loadDropdowns(selectedCategoryId, selectedAccountId) {
-        $.get('/api/common/categories', function (categories) {
+    function loadDropdowns(projectId, selectedCategoryId, selectedAccountId) {
+        // Load Categories by ProjectId
+        $.get('/Home/GetCategoriesByProject', { projectId }, function (categories) {
             const $category = $('#editCategory');
             $category.empty().append('<option value="">Select Category</option>');
             categories.forEach(c => {
-                const selected = c.id === selectedCategoryId ? 'selected' : '';
-                $category.append(`<option value="${c.id}" ${selected}>${c.name}</option>`);
+                const selected = c.categoryId == selectedCategoryId ? 'selected' : '';
+                $category.append(`<option value="${c.categoryId}" ${selected}>${c.categoryName}</option>`);
             });
-        });
 
-        $.get('/api/common/accounts', function (accounts) {
-            const $account = $('#editAccount');
-            $account.empty().append('<option value="">Select Account</option>');
-            accounts.forEach(a => {
-                const selected = a.id === selectedAccountId ? 'selected' : '';
-                $account.append(`<option value="${a.id}" ${selected}>${a.name}</option>`);
-            });
+            // Now load accounts based on selected category
+            if (selectedCategoryId) {
+                $.get('/Home/GetAccountsByCategory', { categoryId: selectedCategoryId }, function (accounts) {
+                    const $account = $('#editAccount');
+                    $account.empty().append('<option value="">Select Account</option>');
+                    accounts.forEach(a => {
+                        const selected = a.accountId == selectedAccountId ? 'selected' : '';
+                        $account.append(`<option value="${a.accountId}" ${selected}>${a.accountName}</option>`);
+                    });
+                });
+            }
         });
     }
+
+
+    $('#editCategory').on('change', function () {
+        const categoryId = $(this).val();
+        const $account = $('#editAccount');
+        $account.empty().append('<option value="">Select Account</option>');
+
+        if (categoryId) {
+            $.get('/Home/GetAccountsByCategory', { categoryId }, function (accounts) {
+                accounts.forEach(a => {
+                    $account.append(`<option value="${a.accountId}">${a.accountName}</option>`);
+                });
+            });
+        }
+    });
+
 
 
 

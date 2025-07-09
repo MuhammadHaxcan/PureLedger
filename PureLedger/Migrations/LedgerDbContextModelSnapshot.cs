@@ -212,7 +212,13 @@ namespace PureLedger.Migrations
                     b.Property<decimal?>("DiscountPercent")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("IsProcessed")
+                        .HasColumnType("bit");
+
                     b.Property<int>("JournalVoucherId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LocationId")
                         .HasColumnType("int");
 
                     b.Property<int>("Quantity")
@@ -232,6 +238,8 @@ namespace PureLedger.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("JournalVoucherId");
+
+                    b.HasIndex("LocationId");
 
                     b.ToTable("JournalEntries");
                 });
@@ -438,11 +446,17 @@ namespace PureLedger.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PureLedger.Models.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId");
+
                     b.Navigation("Account");
 
                     b.Navigation("Category");
 
                     b.Navigation("JournalVoucher");
+
+                    b.Navigation("Location");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>

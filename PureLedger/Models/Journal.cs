@@ -45,6 +45,9 @@ namespace PureLedger.Models
 
         [Required]
         public int CategoryId { get; set; }
+        public int? LocationId { get; set; } 
+
+        public bool IsProcessed { get; set; } = false;
 
         [StringLength(500)]
         public string? Description { get; set; }
@@ -77,6 +80,8 @@ namespace PureLedger.Models
 
         [ForeignKey("JournalVoucherId")]
         public virtual JournalVoucher? JournalVoucher { get; set; }
+        [ForeignKey("LocationId")]
+        public virtual Location? Location { get; set; }
 
         // Many-to-many navigation property
         public virtual ICollection<JournalEntryTag> JournalEntryTags { get; set; } = new List<JournalEntryTag>();
