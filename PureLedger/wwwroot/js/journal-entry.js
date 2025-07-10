@@ -241,6 +241,65 @@ document.addEventListener("DOMContentLoaded", () => {
         dueDateInput.value = utils.formatDateDDMMYYYY(new Date());
     }
 
+    // Add credit days change handler
+    document.getElementById("CreditDays").addEventListener("input", updateDueDate);
+    document.getElementById("CreditDays").addEventListener("change", updateDueDate);
+
+    // Function to update due date based on credit days
+    function updateDueDate() {
+        const creditDays = utils.parseIntOrZero(this.value);
+        const entryDate = document.getElementById("EntryDate").value;
+        
+        if (entryDate) {
+            try {
+                // Parse date in DD/MM/YYYY format
+                const parts = entryDate.split('/');
+                if (parts.length === 3) {
+                    const day = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1; // JS months are 0-based
+                    const year = parseInt(parts[2], 10);
+                    
+                    const date = new Date(year, month, day);
+                    if (!isNaN(date.getTime())) {
+                        // Add credit days
+                        date.setDate(date.getDate() + creditDays);
+                        
+                        // Update due date field
+                        document.getElementById("DueDate").value = utils.formatDateDDMMYYYY(date);
+                    }
+                }
+            } catch (e) {
+                console.error('Error calculating due date:', e);
+            }
+        }
+    }
+
+    // Also update due date when entry date changes
+    $('.datepicker').on('change', function() {
+        if (this.id === "EntryDate") {
+            const creditDaysInput = document.getElementById("CreditDays");
+            if (creditDaysInput) {
+                creditDaysInput.dispatchEvent(new Event('input'));
+            }
+        }
+        
+        // Existing date format validation code...
+        try {
+            const dateArr = this.value.split('/');
+            if (dateArr.length === 3) {
+                const day = parseInt(dateArr[0], 10);
+                const month = parseInt(dateArr[1], 10) - 1; // JavaScript months are 0-based
+                const year = parseInt(dateArr[2], 10);
+                const date = new Date(year, month, day);
+                if (!isNaN(date.getTime())) {
+                    this.value = utils.formatDateDDMMYYYY(date);
+                }
+            }
+        } catch (e) {
+            console.error('Date format error', e);
+        }
+    });
+
     // Modified Add row button handler
     document.getElementById("addRowBtn").addEventListener("click", () => {
         const newRow = RowManager.createNewRow();
