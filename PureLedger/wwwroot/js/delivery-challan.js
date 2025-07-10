@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Event handlers for dropdowns
-    projectSelect.addEventListener('change', function() {
+    projectSelect.addEventListener('change', function () {
         // Reset category and account dropdowns
         categorySelect.innerHTML = '<option value="">Select Category</option>';
         accountSelect.innerHTML = '<option value="">Select Account</option>';
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    categorySelect.addEventListener('change', function() {
+    categorySelect.addEventListener('change', function () {
         // Reset account dropdown
         accountSelect.innerHTML = '<option value="">Select Account</option>';
         accountSelect.disabled = true;
@@ -47,13 +47,19 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Event handler for search
-    searchInput.addEventListener('keyup', function() {
+    searchInput.addEventListener('keyup', function () {
         filterResults(this.value);
     });
 
     // Event handler for Go button
-    goButton.addEventListener('click', function() {
+    goButton.addEventListener('click', function () {
         loadFilteredEntries();
+    });
+
+    // Transfer button handler
+    document.getElementById('transferBtn').addEventListener('click', function () {
+        // This is a placeholder for future functionality
+        alert('Transfer functionality will be implemented in the future.');
     });
 
     // Functions
@@ -62,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => response.json())
             .then(data => {
                 categorySelect.disabled = false;
-                
+
                 data.forEach(category => {
                     const option = document.createElement('option');
                     option.value = category.categoryId;
@@ -78,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => response.json())
             .then(data => {
                 accountSelect.disabled = false;
-                
+
                 data.forEach(account => {
                     const option = document.createElement('option');
                     option.value = account.accountId;
@@ -117,7 +123,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderResults(data) {
         resultsTable.innerHTML = '';
-        
+
         if (!data.vouchers || data.vouchers.length === 0) {
             const row = document.createElement('tr');
             row.innerHTML = `<td colspan="6" class="text-center">No entries found matching the criteria</td>`;
@@ -131,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const row = document.createElement('tr');
                 row.dataset.voucherId = voucher.jvId;
                 row.dataset.entryId = entry.entryId;
-                
+
                 row.innerHTML = `
                     <td>
                         JV${voucher.jvId}<br>
@@ -148,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         </button>
                     </td>
                 `;
-                
+
                 resultsTable.appendChild(row);
             });
         });
@@ -157,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function filterResults(searchTerm) {
         const rows = resultsTable.querySelectorAll('tr');
         searchTerm = searchTerm.toLowerCase();
-        
+
         rows.forEach(row => {
             const text = row.textContent.toLowerCase();
             if (text.includes(searchTerm)) {
@@ -170,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formatDate(dateString) {
         if (!dateString) return '';
-        
+
         // Handle different date formats
         let date;
         if (typeof dateString === 'string' && dateString.includes('-')) {
@@ -186,9 +192,9 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             date = new Date(dateString);
         }
-        
+
         if (isNaN(date.getTime())) return dateString;
-        
+
         return `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`;
     }
 
@@ -199,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(locations => {
                 const locationSelect = document.getElementById('dcLocation');
                 locationSelect.innerHTML = '<option value="">Select Location</option>';
-                
+
                 locations.forEach(location => {
                     const option = document.createElement('option');
                     option.value = location.locationId;
@@ -214,60 +220,48 @@ document.addEventListener('DOMContentLoaded', function () {
     loadLocations();
 
     // Expose functions to global scope
-    window.openDeliveryChallanModal = function(voucherId, entryId) {
+    window.openDeliveryChallanModal = function (voucherId, entryId) {
         // Set up the modal for creating a delivery challan
         document.getElementById('dcJournalVoucherId').value = voucherId;
-        
+
         if (entryId) {
-            // Single entry mode
+            // Single entry mode - We keep this logic but remove the UI elements
             document.getElementById('dcJournalEntryId').value = entryId;
-            document.getElementById('singleEntryView').classList.remove('d-none');
-            document.getElementById('allEntriesView').classList.add('d-none');
-            
-            // Fetch entry details
-            fetch(`/DeliveryChallan/GetJournalEntry?entryId=${entryId}`)
-                .then(response => response.json())
-                .then(entry => {
-                    document.getElementById('dcEntryAccount').textContent = entry.accountName;
-                    document.getElementById('dcEntryDescription').textContent = entry.description || '';
-                    document.getElementById('dcQuantity').value = entry.quantity;
-                    document.getElementById('dcQuantity').max = entry.quantity;
-                })
-                .catch(error => console.error('Error loading entry details:', error));
         } else {
             // All entries mode
             document.getElementById('dcJournalEntryId').value = '';
-            document.getElementById('singleEntryView').classList.add('d-none');
-            document.getElementById('allEntriesView').classList.remove('d-none');
-            
-            // Fetch all entries for voucher
-            fetch(`/DeliveryChallan/GetVoucherEntries?voucherId=${voucherId}`)
-                .then(response => response.json())
-                .then(entries => {
-                    const entriesTable = document.getElementById('dcEntriesTable');
-                    entriesTable.innerHTML = '';
-                    
-                    entries.forEach(entry => {
-                        if (entry.quantity > 0 && !entry.isProcessed) {
-                            const row = document.createElement('tr');
-                            row.innerHTML = `
-                                <td>${entry.accountName}</td>
-                                <td>${entry.description || ''}</td>
-                                <td>${entry.quantity}</td>
-                                <td>
-                                    <div class="form-check">
-                                        <input type="checkbox" class="form-check-input entry-checkbox" 
-                                               value="${entry.entryId}" name="selectedEntries">
-                                    </div>
-                                </td>
-                            `;
-                            entriesTable.appendChild(row);
-                        }
-                    });
-                })
-                .catch(error => console.error('Error loading voucher entries:', error));
         }
-        
+
+        // Always show all entries view now
+        document.getElementById('allEntriesView').classList.remove('d-none');
+
+        // Fetch all entries for voucher
+        fetch(`/DeliveryChallan/GetVoucherEntries?voucherId=${voucherId}`)
+            .then(response => response.json())
+            .then(entries => {
+                const entriesTable = document.getElementById('dcEntriesTable');
+                entriesTable.innerHTML = '';
+
+                entries.forEach(entry => {
+                    if (entry.quantity > 0 && !entry.isProcessed) {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${entry.accountName}</td>
+                            <td>${entry.description || ''}</td>
+                            <td>${entry.quantity}</td>
+                            <td>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input entry-checkbox" 
+                                           value="${entry.entryId}" name="selectedEntries">
+                                </div>
+                            </td>
+                        `;
+                        entriesTable.appendChild(row);
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading voucher entries:', error));
+
         // Check if challan already exists for this voucher
         fetch(`/DeliveryChallan/CheckExistingChallan?voucherId=${voucherId}`)
             .then(response => response.json())
@@ -275,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (data.exists) {
                     document.getElementById('existingChallanMessage').classList.remove('d-none');
                     document.getElementById('dcChallanId').value = data.challanId;
-                    
+
                     // Pre-fill data if available
                     if (data.challan) {
                         document.getElementById('dcDate').value = formatDateForInput(data.challan.challanDate);
@@ -287,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     document.getElementById('existingChallanMessage').classList.add('d-none');
                     document.getElementById('dcChallanId').value = '';
-                    
+
                     // Set default date to today
                     document.getElementById('dcDate').value = new Date().toISOString().split('T')[0];
                     document.getElementById('dcRemarks').value = '';
@@ -296,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             })
             .catch(error => console.error('Error checking existing challan:', error));
-        
+
         // Show the modal
         const modal = new bootstrap.Modal(document.getElementById('deliveryChallanModal'));
         modal.show();
@@ -304,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formatDateForInput(dateString) {
         if (!dateString) return '';
-        
+
         // Convert dd-MM-yyyy to yyyy-MM-dd for input[type="date"]
         if (typeof dateString === 'string' && dateString.includes('-')) {
             const parts = dateString.split('-');
@@ -312,94 +306,94 @@ document.addEventListener('DOMContentLoaded', function () {
                 return `${parts[2]}-${parts[1]}-${parts[0]}`;
             }
         }
-        
+
         return dateString;
     }
 
     // Post Single button handler
-    document.getElementById('postSingleBtn').addEventListener('click', function() {
+    document.getElementById('postSingleBtn').addEventListener('click', function () {
         const form = document.getElementById('deliveryChallanForm');
         const formData = new FormData(form);
-        
+
         fetch('/DeliveryChallan/CreateSingle', {
             method: 'POST',
             body: formData
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                // Close modal
-                bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-                
-                // Refresh data
-                loadFilteredEntries();
-                
-                // Show success message
-                alert('Entry processed successfully');
-            } else {
-                alert(data.message || 'Error processing entry');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error processing entry');
-        });
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+
+                    // Refresh data
+                    loadFilteredEntries();
+
+                    // Show success message
+                    alert('Entry processed successfully');
+                } else {
+                    alert(data.message || 'Error processing entry');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error processing entry');
+            });
     });
 
     // Post All button handler
-    document.getElementById('postAllBtn').addEventListener('click', function() {
+    document.getElementById('postAllBtn').addEventListener('click', function () {
         const form = document.getElementById('deliveryChallanForm');
         const formData = new FormData(form);
-        
+
         // Get selected entries
         const selectedEntries = [];
         document.querySelectorAll('.entry-checkbox:checked').forEach(checkbox => {
             selectedEntries.push(checkbox.value);
         });
-        
+
         // Add selected entries to form data
         selectedEntries.forEach(entryId => {
             formData.append('selectedEntries', entryId);
         });
-        
+
         if (selectedEntries.length === 0) {
             alert('Please select at least one entry');
             return;
         }
-        
+
         fetch('/DeliveryChallan/ProcessAll', {
             method: 'POST',
             body: formData
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                // Close modal
-                bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-                
-                // Refresh data
-                loadFilteredEntries();
-                
-                // Show success message
-                alert('Entries processed successfully');
-            } else {
-                alert(data.message || 'Error processing entries');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error processing entries');
-        });
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+
+                    // Refresh data
+                    loadFilteredEntries();
+
+                    // Show success message
+                    alert('Entries processed successfully');
+                } else {
+                    alert(data.message || 'Error processing entries');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error processing entries');
+            });
     });
 
     // Load initial data
