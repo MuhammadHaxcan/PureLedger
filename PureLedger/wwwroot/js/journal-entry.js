@@ -87,6 +87,11 @@ class RowManager {
             if (el.name) el.name = el.name.replace(/\[\d+\]/, `[${index}]`);
         });
 
+        // Remove any data attributes we set
+        row.removeAttribute('data-pkg');
+        row.removeAttribute('data-total-amount');
+        row.removeAttribute('data-account-type');
+
         // Remove all select2 containers
         row.querySelectorAll('.select2-container').forEach(el => el.remove());
     }
@@ -139,7 +144,8 @@ class RowManager {
             rate: row.querySelector(".rate-input"),
             disc: row.querySelector(".disc-input"),
             debit: row.querySelector(".debit-input"),
-            credit: row.querySelector(".credit-input")
+            credit: row.querySelector(".credit-input"),
+            pkg: row.querySelector(".pkg-input") // Add this line
         };
 
         // Attach events
@@ -148,6 +154,16 @@ class RowManager {
             inputs.qty.addEventListener(evt, () => Calculator.updateRowCalculations(row));
             inputs.rate.addEventListener(evt, () => Calculator.updateRowCalculations(row));
             inputs.disc.addEventListener(evt, () => Calculator.updateTotalsOnly(row));
+            
+            // Add event for pkg input
+            if (inputs.pkg) {
+                inputs.pkg.addEventListener(evt, () => {
+                    // Update the data attribute
+                    const pkgValue = utils.parseIntOrZero(inputs.pkg.value);
+                    row.setAttribute("data-pkg", pkgValue);
+                    Calculator.updateRowCalculations(row);
+                });
+            }
         });
 
         // Focus events for debit/credit
@@ -176,6 +192,7 @@ class RowManager {
 // Calculator class
 class Calculator {
     static updateRowCalculations(row, focusField = null) {
+        this.calculateAmountWithPkg(row);
         this.updateDiscount(row);
         this.calculateDebitCredit(row, focusField);
         this.updateTotals();
@@ -185,30 +202,52 @@ class Calculator {
         this.updateTotals();
     }
 
-    static updateDiscount(row) {
+    // New method to calculate amount with package
+    static calculateAmountWithPkg(row) {
+        const rbpValue = row.querySelector("select[name*='Rbp']").value;
         const inputs = {
-            percent: utils.parseFloatOrZero(row.querySelector(".percent-input").value),
             qty: utils.parseFloatOrZero(row.querySelector(".qty-input").value),
             rate: utils.parseFloatOrZero(row.querySelector(".rate-input").value)
         };
 
-        const disc = ((inputs.qty * inputs.rate) * inputs.percent) / 100;
+        // Get package value from the pkg-input or data-pkg attribute
+        const pkgInput = row.querySelector(".pkg-input");
+        let pkg = 0;
+        
+        if (pkgInput && pkgInput.value) {
+            pkg = utils.parseIntOrZero(pkgInput.value);
+            // Also update the data attribute for consistency
+            row.setAttribute("data-pkg", pkg);
+        } else if (row.hasAttribute("data-pkg")) {
+            pkg = utils.parseIntOrZero(row.getAttribute("data-pkg"));
+            // Update the input field if it exists
+            if (pkgInput) pkgInput.value = pkg;
+        }
+
+        // Calculate total amount based on RBP, qty, rate, and pkg
+        let totalAmount = rbpValue === "Y" && pkg > 0
+            ? pkg * inputs.qty * inputs.rate
+            : inputs.qty * inputs.rate;
+        
+        // Store the amount for discount calculation
+        row.setAttribute("data-total-amount", totalAmount);
+    }
+
+    static updateDiscount(row) {
+        const percent = utils.parseFloatOrZero(row.querySelector(".percent-input").value);
+        const totalAmount = utils.parseFloatOrZero(row.getAttribute("data-total-amount") || "0");
+
+        // Calculate discount based on total amount (with package considered)
+        const disc = (totalAmount * percent) / 100;
         row.querySelector(".disc-input").value = Math.round(disc);
     }
 
     static calculateDebitCredit(row, focusField) {
-        const rbpValue = row.querySelector("select[name*='Rbp']").value;
-        const inputs = {
-            qty: utils.parseFloatOrZero(row.querySelector(".qty-input").value),
-            rate: utils.parseFloatOrZero(row.querySelector(".rate-input").value),
-            disc: utils.parseFloatOrZero(row.querySelector(".disc-input").value)
-        };
+        const totalAmount = utils.parseFloatOrZero(row.getAttribute("data-total-amount") || "0");
+        const disc = utils.parseFloatOrZero(row.querySelector(".disc-input").value);
 
-        let amount = rbpValue === "Y" && row.hasAttribute("data-pkg")
-            ? (parseInt(row.getAttribute("data-pkg")) || 0) * inputs.qty * inputs.rate
-            : inputs.qty * inputs.rate;
-
-        amount = Math.round(amount - inputs.disc);
+        // Calculate net amount after discount
+        let amount = Math.round(totalAmount - disc);
 
         if (amount > 0) {
             if (focusField === "debit") row.querySelector(".debit-input").value = amount;
@@ -438,9 +477,16 @@ $(document).ready(function () {
                     $row.find('.rate-input').val(product.saleRate);
                 }
                 if (product?.pkg) {
+                    // Update both the data attribute and the new pkg input field
                     $row[0].setAttribute('data-pkg', product.pkg);
+                    $row.find('.pkg-input').val(product.pkg);
+                    
+                    // Recalculate values based on the new package
+                    const row = $row[0];
+                    Calculator.updateRowCalculations(row);
                 } else {
                     $row[0].removeAttribute('data-pkg');
+                    $row.find('.pkg-input').val('');
                 }
             });
         }

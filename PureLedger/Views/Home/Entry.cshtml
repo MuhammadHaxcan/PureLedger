@@ -103,10 +103,15 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm type-input" 
-                                           id="Entries_0__Type" 
-                                           name="Entries[0].Type" 
-                                           readonly />
+                                    <div class="input-group input-group-sm">
+                                        <input class="form-control form-control-sm pkg-input"
+                                               id="Entries_0__Pkg"
+                                               name="Entries[0].Pkg"
+                                               type="number"
+                                               min="0"
+                                               step="1"
+                                               placeholder="PKG" />
+                                    </div>
                                 </td>
                                 <td>
                                     <select class="form-select form-select-sm rbp-select" 
@@ -152,7 +157,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="9" class="text-end fw-bold text-primary">TOTAL</td>
+                                <td colspan="10" class="text-end fw-bold text-primary">TOTAL</td>
                                 <td class="fw-bold text-primary" id="totalDebit">0</td>
                                 <td class="fw-bold text-primary" id="totalCredit">0</td>
                                 <td></td>
