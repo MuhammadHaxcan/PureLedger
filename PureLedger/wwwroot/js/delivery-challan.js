@@ -97,20 +97,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function loadFilteredEntries() {
         const params = new URLSearchParams({
-            sinceDate: sinceDate.value,
-            toDate: toDate.value
+            SinceDate: sinceDate.value,
+            ToDate: toDate.value
         });
 
         if (projectSelect.value) {
-            params.append('projectId', projectSelect.value);
+            params.append('ProjectId', projectSelect.value);
         }
 
         if (categorySelect.value) {
-            params.append('categoryId', categorySelect.value);
+            params.append('CategoryId', categorySelect.value);
         }
 
         if (accountSelect.value) {
-            params.append('accountId', accountSelect.value);
+            params.append('AccountId', accountSelect.value);
         }
 
         fetch(`/DeliveryChallan/GetFilteredEntries?${params.toString()}`)

@@ -44,17 +44,12 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetFilteredEntries(
-            [FromQuery] DateOnly? sinceDate,
-            [FromQuery] DateOnly? toDate,
-            [FromQuery] int? projectId,
-            [FromQuery] int? categoryId,
-            [FromQuery] int? accountId)
+        public async Task<IActionResult> GetFilteredEntries([FromQuery] DeliveryChallanFilterViewModel filter)
         {
             try
             {
                 var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
-                    sinceDate, toDate, projectId, categoryId, accountId);
+                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
 
                 return Json(result);
             }
