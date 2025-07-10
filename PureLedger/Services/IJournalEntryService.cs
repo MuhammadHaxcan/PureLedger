@@ -28,16 +28,5 @@ namespace PureLedger.Services
         Task<List<object>> GetCategoriesByProjectAsync(int projectId);
         Task<List<object>> GetAccountsByCategoryAsync(int categoryId);
         Task<object?> GetProductDetailsAsync(int accountId);
-
-        // Add this method to your existing interface
-        Task<DeliveryChallanFilterViewModel> GetFilteredEntriesForDeliveryChallanAsync(
-            DateOnly? sinceDate,
-            DateOnly? toDate,
-            int? projectId,
-            int? categoryId,
-            int? accountId);
-
-        // Add this method if it doesn't already exist
-        Task<List<Models.Location>> GetAllLocationsAsync();
     }
 }

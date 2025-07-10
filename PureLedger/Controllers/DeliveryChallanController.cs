@@ -8,14 +8,14 @@ namespace PureLedger.Controllers
 {
     public class DeliveryChallanController : Controller
     {
-        private readonly IJournalEntryService _journalService;
+        private readonly IDeliveryChallanService _deliveryChallanService;
         private readonly ILogger<DeliveryChallanController> _logger;
 
         public DeliveryChallanController(
-            IJournalEntryService journalService,
+            IDeliveryChallanService deliveryChallanService,
             ILogger<DeliveryChallanController> logger)
         {
-            _journalService = journalService;
+            _deliveryChallanService = deliveryChallanService;
             _logger = logger;
         }
 
@@ -24,7 +24,7 @@ namespace PureLedger.Controllers
             try
             {
                 // Load projects for dropdown
-                var projects = await _journalService.GetAllProjectsAsync();
+                var projects = await _deliveryChallanService.GetAllProjectsAsync();
                 ViewBag.Projects = projects;
 
                 // Initialize empty view model
@@ -53,7 +53,7 @@ namespace PureLedger.Controllers
         {
             try
             {
-                var result = await _journalService.GetFilteredEntriesForDeliveryChallanAsync(
+                var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
                     sinceDate, toDate, projectId, categoryId, accountId);
 
                 return Json(result);
@@ -70,7 +70,7 @@ namespace PureLedger.Controllers
         {
             try
             {
-                var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
+                var categories = await _deliveryChallanService.GetCategoriesByProjectAsync(projectId);
                 return Json(categories);
             }
             catch (Exception ex)
@@ -85,7 +85,7 @@ namespace PureLedger.Controllers
         {
             try
             {
-                var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
+                var accounts = await _deliveryChallanService.GetAccountsByCategoryAsync(categoryId);
                 return Json(accounts);
             }
             catch (Exception ex)
@@ -100,9 +100,7 @@ namespace PureLedger.Controllers
         {
             try
             {
-                // Since we don't have IDeliveryChallanService, we need to handle locations differently
-                // Let's assume we can get locations from the journal service or another available service
-                var locations = await _journalService.GetAllLocationsAsync(); // Assuming this method exists
+                var locations = await _deliveryChallanService.GetAllLocationsAsync();
                 return Json(locations);
             }
             catch (Exception ex)

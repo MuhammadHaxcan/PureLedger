@@ -87,7 +87,9 @@ namespace PureLedger.Services
                     Discount = entryModel.Disc,
                     Debit = entryModel.Debit,
                     Credit = entryModel.Credit,
-                    Rbp = entryModel.Rbp
+                    Rbp = entryModel.Rbp,
+                    LocationId = null, // Default LocationId is null
+                    IsProcessed = entryModel.Qty == 0 // Set IsProcessed to true if quantity is 0
                 };
 
                 // Add entry using repository
@@ -99,6 +101,9 @@ namespace PureLedger.Services
                     await _unitOfWork.JournalEntries.AddTagsAsync(journalEntry.EntryId, entryModel.Tags);
                 }
             }
+
+            // Update voucher processed status
+            await UpdateVoucherProcessedStatusAsync(journalVoucher.JvId);
 
             return journalVoucher;
         }
@@ -143,10 +148,28 @@ namespace PureLedger.Services
             entry.DiscountPercent = model.DiscountPercent;
             entry.Debit = model.Debit;
             entry.Credit = model.Credit;
+            
+            // Update account and category if they were changed
+            if (model.AccountId > 0 && model.AccountId != entry.AccountId)
+            {
+                entry.AccountId = model.AccountId;
+            }
+            
+            if (model.CategoryId > 0 && model.CategoryId != entry.CategoryId)
+            {
+                entry.CategoryId = model.CategoryId;
+            }
+
+            // Set IsProcessed to true if quantity is 0
+            entry.IsProcessed = entry.Quantity == 0;
 
             try
             {
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                
+                // Update voucher processed status
+                await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
+                
                 return true;
             }
             catch (Exception ex)
@@ -225,81 +248,22 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.Accounts.GetAllAsync();
         }
-
-        public async Task<List<Models.Location>> GetAllLocationsAsync()
+        
+        // Helper method to update the voucher processed status
+        private async Task UpdateVoucherProcessedStatusAsync(int voucherId)
         {
-            return await _unitOfWork.Locations.GetAllAsync();
-        }
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+            if (voucher == null) return;
 
-        public async Task<DeliveryChallanFilterViewModel> GetFilteredEntriesForDeliveryChallanAsync(
-            DateOnly? sinceDate,
-            DateOnly? toDate,
-            int? projectId,
-            int? categoryId,
-            int? accountId)
-        {
-            var result = new DeliveryChallanFilterViewModel
+            // Check if all entries with quantity > 0 are processed
+            var entriesWithQuantity = voucher.JournalEntries.Where(e => e.Quantity > 0).ToList();
+            var allProcessed = entriesWithQuantity.Count == 0 || entriesWithQuantity.All(e => e.IsProcessed);
+
+            if (voucher.IsProcessed != allProcessed)
             {
-                SinceDate = sinceDate,
-                ToDate = toDate,
-                ProjectId = projectId,
-                CategoryId = categoryId,
-                AccountId = accountId
-            };
-            
-            try
-            {
-                // Get journal vouchers based on filters
-                var vouchers = await _unitOfWork.JournalVouchers.GetFilteredVouchersAsync(
-                    sinceDate, toDate, projectId, !accountId.HasValue && !categoryId.HasValue);
-                    
-                foreach (var voucher in vouchers)
-                {
-                    // Skip vouchers that are fully processed
-                    if (voucher.IsProcessed)
-                        continue;
-                        
-                    var voucherViewModel = new JournalVoucherViewModel
-                    {
-                        JvId = voucher.JvId,
-                        ProjectName = voucher.Project?.ProjectName,
-                        EntryDate = voucher.EntryDate,
-                        IsProcessed = voucher.IsProcessed
-                    };
-                    
-                    // Get entries for this voucher
-                    var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                        voucher.JvId, categoryId, accountId);
-                        
-                    // Skip entries that are already processed and entries with 0 quantity
-                    foreach (var entry in entries.Where(e => !e.IsProcessed && e.Quantity > 0))
-                    {
-                        voucherViewModel.Entries.Add(new JournalEntryDetailViewModel
-                        {
-                            EntryId = entry.EntryId,
-                            JournalVoucherId = entry.JournalVoucherId,
-                            AccountId = entry.AccountId,
-                            AccountName = entry.Account?.AccountName,
-                            Description = entry.Description,
-                            Quantity = entry.Quantity,
-                            Rate = entry.Rate,
-                            IsProcessed = entry.IsProcessed
-                        });
-                    }
-                    
-                    // Only add vouchers that have at least one entry
-                    if (voucherViewModel.Entries.Any())
-                    {
-                        result.Vouchers.Add(voucherViewModel);
-                    }
-                }
+                voucher.IsProcessed = allProcessed;
+                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting filtered entries for delivery challan");
-            }
-            
-            return result;
         }
     }
 }

@@ -170,14 +170,22 @@ namespace PureLedger.Controllers
                 });
             }
 
-            var success = await _journalService.UpdateJournalEntryAsync(model);
-            if (success)
+            try
             {
-                return Json(new { success = true });
+                var success = await _journalService.UpdateJournalEntryAsync(model);
+                if (success)
+                {
+                    return Json(new { success = true });
+                }
+                else
+                {
+                    return Json(new { success = false, message = "Error updating entry" });
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return Json(new { success = false, message = "Error updating entry" });
+                _logger.LogError(ex, "Error in UpdateJournalEntry: {Message}", ex.Message);
+                return Json(new { success = false, message = "An unexpected error occurred" });
             }
         }
 

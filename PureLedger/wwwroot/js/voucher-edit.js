@@ -84,6 +84,7 @@
             .done(function (data) {
                 // Populate modal
                 $('#editEntryId').val(data.entryId);
+                $('#editProjectId').val(data.projectId);
                 $('#editDescription').val(data.description || '');
                 $('#editQuantity').val(data.quantity || 0);
                 $('#editRate').val(data.rate || 0);
@@ -107,15 +108,19 @@
 
     // Handle form submission
     $('#editEntryForm').on('submit', function (e) {
-        debugger
         e.preventDefault();
-
+        
         // Get form data
-        const formData = $(this).serialize();
-
-        // Submit data
-        $.post('/Home/UpdateJournalEntry', formData)
-            .done(function (result) {
+        const formData = new FormData(this);
+        
+        // Submit data using AJAX with FormData
+        $.ajax({
+            url: '/Home/UpdateJournalEntry',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(result) {
                 if (result.success) {
                     // Hide modal
                     bootstrap.Modal.getInstance(document.getElementById('editEntryModal')).hide();
@@ -132,10 +137,11 @@
                         alert('An error occurred while saving changes.');
                     }
                 }
-            })
-            .fail(function () {
+            },
+            error: function() {
                 alert('An error occurred while saving changes.');
-            });
+            }
+        });
     });
 
     // Format currency
