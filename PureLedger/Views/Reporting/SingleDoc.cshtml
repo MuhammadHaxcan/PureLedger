@@ -1,0 +1,33 @@
+﻿
+@{
+    ViewBag.Title = "SingleDoc Printing";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<div class="container mt-4">
+    <h3 class="mb-4">Single Document Printing</h3>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Journal Voucher ID</label>
+            <input type="number" class="form-control" id="voucherId" placeholder="Enter JV ID" min="1" required />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Voucher Type</label>
+            <select class="form-select" id="voucherType" required>
+                <option value="">-- Select Type --</option>
+                <option value="JV">Journal Voucher (JV)</option>
+                <option value="DC">Delivery Challan (DC)</option>
+            </select>
+        </div>
+
+        <div class="col-md-4 d-flex align-items-end">
+            <button class="btn btn-primary w-100" id="btnGo">Go</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/SingleDoc.js"></script>
+}
