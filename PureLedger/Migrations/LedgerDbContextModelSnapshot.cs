@@ -182,6 +182,76 @@ namespace PureLedger.Migrations
                     b.ToTable("Categories");
                 });
 
+            modelBuilder.Entity("PureLedger.Models.DeliveryChallanEntry", b =>
+                {
+                    b.Property<int>("DCEntryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DCEntryId"));
+
+                    b.Property<int>("DeliveryChallanId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("EntryDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("JournalEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OtherReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("DCEntryId");
+
+                    b.HasIndex("DeliveryChallanId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("DeliveryChallanEntries");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
+                {
+                    b.Property<int>("DeliveryChallanId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DeliveryChallanId"));
+
+                    b.Property<DateOnly>("DCDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("FinalDeliveryDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JournalVoucherId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReferenceNumber")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("DeliveryChallanId");
+
+                    b.HasIndex("JournalVoucherId");
+
+                    b.ToTable("DeliveryChallanVouchers");
+                });
+
             modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>
                 {
                     b.Property<int>("EntryId")
@@ -426,6 +496,44 @@ namespace PureLedger.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("PureLedger.Models.DeliveryChallanEntry", b =>
+                {
+                    b.HasOne("PureLedger.Models.DeliveryChallanVoucher", "DeliveryChallanVoucher")
+                        .WithMany("DeliveryChallanEntries")
+                        .HasForeignKey("DeliveryChallanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.JournalEntry", "JournalEntry")
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("DeliveryChallanVoucher");
+
+                    b.Navigation("JournalEntry");
+
+                    b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
+                {
+                    b.HasOne("PureLedger.Models.JournalVoucher", "JournalVoucher")
+                        .WithMany()
+                        .HasForeignKey("JournalVoucherId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("JournalVoucher");
+                });
+
             modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>
                 {
                     b.HasOne("PureLedger.Models.Account", "Account")
@@ -510,6 +618,11 @@ namespace PureLedger.Migrations
             modelBuilder.Entity("PureLedger.Models.Category", b =>
                 {
                     b.Navigation("Accounts");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
+                {
+                    b.Navigation("DeliveryChallanEntries");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>

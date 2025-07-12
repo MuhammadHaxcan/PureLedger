@@ -24,6 +24,8 @@ builder.Services.AddScoped<IAccountDataRepository, AccountDataRepository>();
 builder.Services.AddScoped<IProductDataRepository, ProductDataRepository>();
 builder.Services.AddScoped<IAccountTypeRepository, AccountTypeRepository>();
 builder.Services.AddScoped<ILocationRepository, LocationRepository>();
+builder.Services.AddScoped<IDeliveryChallanVoucherRepository, DeliveryChallanVoucherRepository>();
+builder.Services.AddScoped<IDeliveryChallanEntryRepository, DeliveryChallanEntryRepository>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();

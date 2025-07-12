@@ -15,6 +15,8 @@ namespace PureLedger.Repositories.Interfaces
         IProductDataRepository ProductDatas { get; }
         IAccountTypeRepository AccountTypes { get; }
         ILocationRepository Locations { get; }
+        IDeliveryChallanVoucherRepository DeliveryChallanVouchers { get; }
+        IDeliveryChallanEntryRepository DeliveryChallanEntries { get; }
 
         Task<int> SaveChangesAsync();
     }

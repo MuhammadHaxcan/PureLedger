@@ -20,6 +20,8 @@ namespace PureLedger.Data
         public DbSet<JournalEntry> JournalEntries { get; set; }
         public DbSet<JournalEntryTag> JournalEntryTags { get; set; }
         public DbSet<Location> Locations { get; set; }
+        public DbSet<DeliveryChallanVoucher> DeliveryChallanVouchers { get; set; }
+        public DbSet<DeliveryChallanEntry> DeliveryChallanEntries { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -79,6 +81,35 @@ namespace PureLedger.Data
                 .WithOne(pd => pd.Account)
                 .HasForeignKey<ProductData>(pd => pd.AccountId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // New relationships for Delivery Challan
+            // DeliveryChallanVoucher to JournalVoucher relationship
+            modelBuilder.Entity<DeliveryChallanVoucher>()
+                .HasOne(dc => dc.JournalVoucher)
+                .WithMany()
+                .HasForeignKey(dc => dc.JournalVoucherId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // DeliveryChallanEntry to DeliveryChallanVoucher relationship
+            modelBuilder.Entity<DeliveryChallanEntry>()
+                .HasOne(dce => dce.DeliveryChallanVoucher)
+                .WithMany(dcv => dcv.DeliveryChallanEntries)
+                .HasForeignKey(dce => dce.DeliveryChallanId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // DeliveryChallanEntry to JournalEntry relationship
+            modelBuilder.Entity<DeliveryChallanEntry>()
+                .HasOne(dce => dce.JournalEntry)
+                .WithMany()
+                .HasForeignKey(dce => dce.JournalEntryId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // DeliveryChallanEntry to Location relationship
+            modelBuilder.Entity<DeliveryChallanEntry>()
+                .HasOne(dce => dce.Location)
+                .WithMany()
+                .HasForeignKey(dce => dce.LocationId)
+                .OnDelete(DeleteBehavior.NoAction);
 
             // Seed AccountType data
             modelBuilder.Entity<AccountType>().HasData(
