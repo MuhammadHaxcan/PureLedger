@@ -160,9 +160,34 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('dcJournalVoucherId').value = voucherId;
         document.getElementById('dcJournalEntryId').value = entryId || '';
 
-        document.getElementById('allEntriesView').classList.remove('d-none');
+        // Show the all entries view and create the table structure
+        const allEntriesView = document.getElementById('allEntriesView');
+        allEntriesView.classList.remove('d-none');
+
+        // Create the entries table structure if it doesn't exist
+        if (!document.getElementById('dcEntriesTable')) {
+            allEntriesView.innerHTML = `
+                <h6>Available Entries:</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Account</th>
+                                <th>Description</th>
+                                <th>Quantity</th>
+                                <th>Select</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dcEntriesTable">
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
         loadLocations();
 
+        // Load voucher entries
         fetch(`/DeliveryChallan/GetVoucherEntries?voucherId=${voucherId}`)
             .then(res => res.json())
             .then(entries => {
@@ -175,13 +200,21 @@ document.addEventListener('DOMContentLoaded', function () {
                             <td>${entry.accountName}</td>
                             <td>${entry.description || ''}</td>
                             <td>${entry.quantity}</td>
-                            <td><input type="checkbox" class="entry-checkbox" value="${entry.entryId}" ${entry.entryId == entryId ? 'checked' : ''}></td>
+                            <td>
+                                <input type="checkbox" class="entry-checkbox" value="${entry.entryId}" 
+                                       ${entry.entryId == entryId ? 'checked' : ''}>
+                            </td>
                         `;
                         entriesTable.appendChild(row);
                     }
                 });
+            })
+            .catch(error => {
+                console.error('Error loading voucher entries:', error);
+                alert('Error loading voucher entries: ' + error.message);
             });
 
+        // Check for existing challan
         fetch(`/DeliveryChallan/CheckExistingChallan?voucherId=${voucherId}`)
             .then(res => res.json())
             .then(data => {
@@ -200,6 +233,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('dcRemarks').value = '';
                     document.getElementById('dcOtherRef').value = '';
                 }
+            })
+            .catch(error => {
+                console.error('Error checking existing challan:', error);
             });
 
         const modal = new bootstrap.Modal(document.getElementById('deliveryChallanModal'));
@@ -218,6 +254,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     opt.textContent = loc.name;
                     locationSelect.appendChild(opt);
                 });
+            })
+            .catch(error => {
+                console.error('Error loading locations:', error);
             });
     }
 
@@ -228,7 +267,10 @@ document.addEventListener('DOMContentLoaded', function () {
             let entryId = document.getElementById('dcJournalEntryId').value;
             if (!entryId) {
                 const selected = document.querySelector('.entry-checkbox:checked');
-                if (!selected) return alert('Select an entry to process');
+                if (!selected) {
+                    alert('Please select an entry to process');
+                    return;
+                }
                 entryId = selected.value;
             }
 
@@ -237,7 +279,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const remarks = document.getElementById('dcRemarks').value;
             const otherRef = document.getElementById('dcOtherRef').value;
 
-            if (!locationId) return alert('Please select a location');
+            if (!locationId) {
+                alert('Please select a location');
+                return;
+            }
 
             const data = {
                 JournalEntryId: parseInt(entryId),
@@ -273,55 +318,64 @@ document.addEventListener('DOMContentLoaded', function () {
     const postAllBtn = document.getElementById('postAllBtn');
     if (postAllBtn) {
         postAllBtn.addEventListener('click', function () {
-            // Get all checked entries
-            const checkedBoxes = document.querySelectorAll('.entry-checkbox:checked');
-            const selectedEntries = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
-            if (selectedEntries.length === 0) {
-                alert('Please select at least one entry');
+            const voucherId = document.getElementById('dcJournalVoucherId').value;
+            if (!voucherId) {
+                alert('No voucher selected');
                 return;
             }
 
-            const voucherId = document.getElementById('dcJournalVoucherId').value;
             const locationId = document.getElementById('dcLocation').value;
-            const dcDate = document.getElementById('dcDate').value;
-            const remarks = document.getElementById('dcRemarks').value;
-            const otherRef = document.getElementById('dcOtherRef').value;
-
             if (!locationId) {
                 alert('Please select a location');
                 return;
             }
 
+            const dcDate = document.getElementById('dcDate').value;
+            const remarks = document.getElementById('dcRemarks').value;
+            const otherRef = document.getElementById('dcOtherRef').value;
+
+            // Prepare data for sending
             const data = {
                 JournalVoucherId: parseInt(voucherId),
                 LocationId: parseInt(locationId),
                 DCDate: dcDate,
                 Remarks: remarks,
-                OtherReference: otherRef,
-                SelectedEntries: selectedEntries
+                OtherReference: otherRef
             };
 
+            // Send request
             fetch('/DeliveryChallan/ProcessAll', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-                        loadFilteredEntries();
-                        alert(data.message || 'Entries processed successfully');
-                    } else {
-                        alert(data.message || 'Error processing entries');
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    alert('Error: ' + err.message);
-                });
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('Server returned ' + response.status + ': ' + text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                    // Refresh data
+                    loadFilteredEntries();
+                    // Show success message
+                    alert(data.message || 'Entries processed successfully');
+                } else {
+                    alert(data.message || 'Error processing entries');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error processing entries: ' + error.message);
+            });
         });
     }
 
+    // Initialize the page
     loadFilteredEntries();
 });

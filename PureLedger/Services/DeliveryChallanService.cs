@@ -377,5 +377,34 @@ namespace PureLedger.Services
             await _unitOfWork.SaveChangesAsync();
             return result;
         }
+
+        public async Task<List<JournalEntry>> GetUnprocessedEntriesByVoucherIdAsync(int voucherId)
+        {
+            try
+            {
+                // Get entries for the voucher that haven't been processed and have quantity > 0
+                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
+                return entries.Where(e => !e.IsProcessed && e.Quantity > 0).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting unprocessed entries for voucher {VoucherId}", voucherId);
+                throw;
+            }
+        }
+        public async Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId)
+        {
+            var unprocessed = await GetUnprocessedEntriesByVoucherIdAsync(journalVoucherId);
+            if (unprocessed.Count == 0)
+            {
+                var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+                if (voucher != null && !voucher.IsProcessed)
+                {
+                    voucher.IsProcessed = true;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+            }
+        }
     }
 }

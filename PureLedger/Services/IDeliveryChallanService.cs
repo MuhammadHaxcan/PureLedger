@@ -29,5 +29,7 @@ namespace PureLedger.Services
         Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
         Task<List<JournalEntryDetailViewModel>> GetEntriesByVoucherIdAsync(int voucherId);
         Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
+        Task<List<JournalEntry>> GetUnprocessedEntriesByVoucherIdAsync(int voucherId);
+        Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
     }
 }

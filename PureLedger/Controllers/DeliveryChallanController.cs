@@ -193,6 +193,8 @@ namespace PureLedger.Controllers
                     model.Remarks,
                     model.OtherReference);
 
+                await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalEntry.JournalVoucherId);
+
                 return Json(new
                 {
                     success = true,
@@ -213,9 +215,9 @@ namespace PureLedger.Controllers
         [HttpPost]
         public async Task<IActionResult> ProcessAll([FromBody] DeliveryChallanBatchViewModel model)
         {
-            if (!ModelState.IsValid || model.SelectedEntries == null || !model.SelectedEntries.Any())
+            if (!ModelState.IsValid)
             {
-                return BadRequest(new { success = false, message = "Invalid data submitted or no entries selected." });
+                return BadRequest(new { success = false, message = "Invalid data submitted." });
             }
 
             try
@@ -223,7 +225,18 @@ namespace PureLedger.Controllers
                 var results = new List<object>();
                 int journalVoucherId = model.JournalVoucherId;
 
-                // Create or get the delivery challan voucher
+                // Get all unprocessed entries for this voucher
+                var unprocessedEntries = await _deliveryChallanService.GetUnprocessedEntriesByVoucherIdAsync(journalVoucherId);
+                
+                if (!unprocessedEntries.Any())
+                {
+                    return Json(new { 
+                        success = false, 
+                        message = "No unprocessed entries found for this voucher." 
+                    });
+                }
+
+                // Get or create delivery challan voucher
                 var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalVoucherId);
 
                 // If no delivery challan voucher exists, create one
@@ -244,41 +257,43 @@ namespace PureLedger.Controllers
                     }
                 }
 
-                // Process each selected entry
-                foreach (var entryId in model.SelectedEntries)
+                // Process each unprocessed entry
+                foreach (var entry in unprocessedEntries)
                 {
                     try
                     {
                         // Create delivery challan entry
                         var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                             deliveryChallanVoucher.DeliveryChallanId,
-                            entryId,
+                            entry.EntryId,
                             model.LocationId,
                             model.Remarks,
                             model.OtherReference);
 
                         results.Add(new
                         {
-                            entryId,
+                            entryId = entry.EntryId,
                             success = true
                         });
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error processing entry {EntryId}", entryId);
+                        _logger.LogError(ex, "Error processing entry {EntryId}", entry.EntryId);
                         results.Add(new
                         {
-                            entryId,
+                            entryId = entry.EntryId,
                             success = false,
                             message = ex.Message
                         });
                     }
                 }
 
+                await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
+
                 return Json(new
                 {
                     success = true,
-                    message = $"Processed {results.Count(r => ((dynamic)r).success == true)} out of {model.SelectedEntries.Count} entries.",
+                    message = $"Processed {results.Count(r => ((dynamic)r).success == true)} out of {unprocessedEntries.Count} entries.",
                     results
                 });
             }

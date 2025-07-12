@@ -105,7 +105,7 @@
                             <div class="col-md-4 mb-3">
                                 <label for="dcLocation" class="form-label">Select Location</label>
                                 <select class="form-select" id="dcLocation" name="LocationId" required>
-                                    <!-- Options will be populated dynamically -->
+                                    <option value="">Select Location</option>
                                 </select>
                             </div>
                             <div class="col-md-4 mb-3">
@@ -118,9 +118,9 @@
                             </div>
                         </div>
 
-                        <!-- All Entries View -->
-                        <div id="allEntriesView">
-
+                        <!-- All Entries View - This will be populated dynamically -->
+                        <div id="allEntriesView" class="d-none">
+                            <!-- Dynamic content will be inserted here -->
                         </div>
                     </form>
                 </div>
