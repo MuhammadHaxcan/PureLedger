@@ -1,0 +1,69 @@
+@model PureLedger.ViewModels.AgingReportPageViewModel
+
+@{
+    ViewData["Title"] = "Aging Report";
+}
+
+<div class="container mt-4">
+    <h2>Aging Report</h2>
+    <div class="card mb-4">
+        <div class="card-body">
+            <form id="agingReportForm">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="referenceDate">Reference Date</label>
+                            <input type="date" class="form-control" id="referenceDate" required>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="projectId">Project</label>
+                            <select class="form-control" id="projectId">
+                                <option value="">All Projects</option>
+                                @foreach (var project in Model.Projects)
+                                {
+                                    <option value="@project.Id">@project.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="categoryId">Category</label>
+                            <select class="form-control" id="categoryId" required>
+                                <option value="">Select Category</option>
+                                @foreach (var category in Model.Categories)
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Generate Report</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="reportResults" style="display: none;">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th class="text-right">Total Debit</th>
+                        <th class="text-right">Total Credit</th>
+                        <th class="text-right">Net Balance</th>
+                    </tr>
+                </thead>
+                <tbody id="reportData">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/agingReport.js"></script>
+}

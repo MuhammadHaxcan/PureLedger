@@ -1,6 +1,7 @@
 ﻿// Controllers/ReportingController.cs
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Services;
+using PureLedger.ViewModels;
 using System.Threading.Tasks;
 
 namespace PureLedger.Controllers
@@ -39,6 +40,29 @@ namespace PureLedger.Controllers
         {
             bool exists = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type) != null;
             return Json(new { exists });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> AgingReport()
+        {
+            // Fetch projects and categories from your services/repositories
+            var projects = await _reportingService.GetAllProjectsAsync();
+            var categories = await _reportingService.GetAllCategoriesAsync();
+
+            var viewModel = new AgingReportPageViewModel
+            {
+                Projects = projects.Select(p => new ProjectViewModel { Id = p.ProjectId.ToString(), Name = p.ProjectName }).ToList(),
+                Categories = categories.Select(c => new CategoryViewModel { Id = c.CategoryId.ToString(), Name = c.CategoryName }).ToList()
+            };
+
+            return View(viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAgingReportData([FromQuery] AgingReportRequest request)
+        {
+            var report = await _reportingService.GetAgingReportAsync(request);
+            return Json(report);
         }
 
         // --- Helpers ---

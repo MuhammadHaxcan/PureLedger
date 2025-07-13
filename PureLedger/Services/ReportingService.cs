@@ -1,8 +1,10 @@
 ﻿// Services/ReportingService.cs
+using Microsoft.EntityFrameworkCore;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.ViewModels;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -13,15 +15,21 @@ namespace PureLedger.Services
         private readonly IJournalVoucherRepository _journalVoucherRepository;
         private readonly IDeliveryChallanVoucherRepository _deliveryChallanVoucherRepository;
         private readonly IProjectRepository _projectRepository;
+        private readonly IAccountRepository _accountRepository;
+        private readonly ICategoryRepository _categoryRepository;
 
         public ReportingService(
             IJournalVoucherRepository journalVoucherRepository,
             IDeliveryChallanVoucherRepository deliveryChallanVoucherRepository,
-            IProjectRepository projectRepository)
+            IProjectRepository projectRepository,
+            IAccountRepository accountRepository,
+            ICategoryRepository categoryRepository)
         {
             _journalVoucherRepository = journalVoucherRepository;
             _deliveryChallanVoucherRepository = deliveryChallanVoucherRepository;
             _projectRepository = projectRepository;
+            _accountRepository = accountRepository;
+            _categoryRepository = categoryRepository;
         }
 
         public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType)
@@ -117,6 +125,69 @@ namespace PureLedger.Services
                 ReceivedBy = "",
                 IsPartial = isPartial
             };
+        }
+
+        public async Task<List<AgingReportViewModel>> GetAgingReportAsync(AgingReportRequest request)
+        {
+            if (!int.TryParse(request.CategoryId, out int categoryId))
+                return new List<AgingReportViewModel>();
+
+            int? projectId = null;
+            if (!string.IsNullOrWhiteSpace(request.ProjectId) && int.TryParse(request.ProjectId, out int pid))
+                projectId = pid;
+
+            // 1. Fetch all accounts for the selected category
+            var accounts = await _accountRepository.GetByCategoryIdAsync(categoryId);
+
+            var result = new List<AgingReportViewModel>();
+
+            // 2. Fetch all vouchers (with entries) for the selected project (if any)
+            var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
+            var filteredVouchers = vouchers
+                .Where(v =>
+                    (!projectId.HasValue || v.ProjectId == projectId.Value) &&
+                    // Use CreditableDate if present, otherwise EntryDate
+                    ((v.CreditableDate ?? v.EntryDate) <= request.ReferenceDate)
+                )
+                .ToList();
+
+            // 3. For each account, filter entries and calculate totals
+            foreach (var account in accounts)
+            {
+                var entries = filteredVouchers
+                    .SelectMany(v => v.JournalEntries
+                        .Where(e => e.AccountId == account.AccountId && e.CategoryId == categoryId))
+                    .ToList();
+
+                if (entries.Count == 0)
+                    continue;
+
+                decimal totalDebit = entries.Sum(e => e.Debit);
+                decimal totalCredit = entries.Sum(e => e.Credit);
+
+                result.Add(new AgingReportViewModel
+                {
+                    AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
+                    AccountName = account.AccountName ?? "",
+                    TotalDebit = totalDebit,
+                    TotalCredit = totalCredit,
+                    NetBalance = totalDebit - totalCredit
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<List<Project>> GetAllProjectsAsync()
+        {
+            // Assuming your IProjectRepository has GetAllAsync()
+            return await _projectRepository.GetAllAsync();
+        }
+
+        public async Task<List<Category>> GetAllCategoriesAsync()
+        {
+            // Use the provided method from ICategoryRepository
+            return await _categoryRepository.GetAllAsync();
         }
     }
 }
