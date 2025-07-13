@@ -1,33 +1,37 @@
-﻿
-@{
+﻿@{
     ViewBag.Title = "SingleDoc Printing";
     Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger" role="alert">
+        @TempData["Error"]
+    </div>
 }
 
 <div class="container mt-4">
     <h3 class="mb-4">Single Document Printing</h3>
 
-    <div class="row g-3">
-        <div class="col-md-4">
-            <label class="form-label">Journal Voucher ID</label>
-            <input type="number" class="form-control" id="voucherId" placeholder="Enter JV ID" min="1" required />
-        </div>
+    <form method="get" action="/Reporting/PrintVoucher">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Voucher ID</label>
+                <input type="number" class="form-control" name="journalVoucherId" placeholder="Enter Voucher ID" min="1" required />
+            </div>
 
-        <div class="col-md-4">
-            <label class="form-label">Voucher Type</label>
-            <select class="form-select" id="voucherType" required>
-                <option value="">-- Select Type --</option>
-                <option value="JV">Journal Voucher (JV)</option>
-                <option value="DC">Delivery Challan (DC)</option>
-            </select>
-        </div>
+            <div class="col-md-4">
+                <label class="form-label">Voucher Type</label>
+                <select class="form-select" name="type" required>
+                    <option value="">-- Select Type --</option>
+                    <option value="JV">Journal Voucher (JV)</option>
+                    <option value="DC">Delivery Challan (DC)</option>
+                </select>
+            </div>
 
-        <div class="col-md-4 d-flex align-items-end">
-            <button class="btn btn-primary w-100" id="btnGo">Go</button>
+            <div class="col-md-4 d-flex align-items-end">
+                <button class="btn btn-primary w-100" type="submit">Go</button>
+            </div>
         </div>
-    </div>
+    </form>
 </div>
-
-@section Scripts {
-    <script src="~/js/SingleDoc.js"></script>
-}

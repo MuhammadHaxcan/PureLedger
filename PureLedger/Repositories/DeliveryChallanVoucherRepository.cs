@@ -31,6 +31,8 @@ namespace PureLedger.Repositories
         {
             return await _context.DeliveryChallanVouchers
                 .Include(dc => dc.JournalVoucher)
+                    .ThenInclude(jv => jv.JournalEntries)
+                        .ThenInclude(je => je.Account)
                 .Include(dc => dc.DeliveryChallanEntries)
                     .ThenInclude(dce => dce.JournalEntry)
                 .Include(dc => dc.DeliveryChallanEntries)
