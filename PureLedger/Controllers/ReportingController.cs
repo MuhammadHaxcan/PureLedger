@@ -25,14 +25,16 @@ namespace PureLedger.Controllers
             if (string.IsNullOrEmpty(type) || journalVoucherId <= 0)
             {
                 TempData["Error"] = "Invalid input.";
-                return RedirectToAction("SingleDocView");
+                return RedirectToAction("SingleDoc");
             }
 
             var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type);
             if (report == null)
             {
-                TempData["Error"] = "Voucher not found.";
-                return RedirectToAction("SingleDocView");
+                TempData["Error"] = type == "DC"
+                    ? "No Delivery Challan exists for this Voucher ID."
+                    : "Voucher not found.";
+                return RedirectToAction("SingleDoc");
             }
 
             ViewBag.Type = type;

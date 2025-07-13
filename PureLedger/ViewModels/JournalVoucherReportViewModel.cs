@@ -19,6 +19,6 @@
             public string? AccountName { get; set; }
             public string? AuthorizedBy { get; set; }
             public string? ReceivedBy { get; set; }
-        }
+    }
 
 }

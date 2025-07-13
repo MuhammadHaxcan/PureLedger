@@ -11,8 +11,9 @@
     <title>Journal Voucher Report</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/PrintVoucher.css" rel="stylesheet" />
+    <script src="~/js/PrintVoucher.js"></script>
 </head>
-<body>
+<body data-voucher-type="@Model.VoucherType" data-voucher-id="@Model.JvId">
 
     <div class="header-section mb-3">
         <div>
@@ -80,6 +81,11 @@
             <div class="footer-label">Received By:</div>
             <p>@Model.ReceivedBy</p>
         </div>
+    </div>
+
+    <div class="d-print-none text-end mb-3">
+        <button class="btn btn-success no-print" onclick="window.print()">🖨️ Print</button>
+
     </div>
 
 </body>
