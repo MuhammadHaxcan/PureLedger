@@ -31,13 +31,28 @@ namespace PureLedger.Controllers
             var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type);
             if (report == null)
             {
-                TempData["Error"] = "Voucher not found.";
-                return RedirectToAction("SingleDocView");
+                TempData["Error"] = type == "DC"
+            ? $"No Delivery Challan exists for Voucher ID {journalVoucherId}."
+            : $"No Journal Voucher exists for Voucher ID {journalVoucherId}.";
+                return RedirectToAction("SingleDoc");
             }
 
             ViewBag.Type = type;
             return View("PrintVoucher", report); // This must match the .cshtml file name
         }
+
+        [HttpGet]
+        public async Task<IActionResult> ValidateVoucher(int journalVoucherId, string type)
+        {
+            var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type);
+            if (report == null)
+            {
+                return Json(new { exists = false });
+            }
+
+            return Json(new { exists = true });
+        }
+
 
     }
 }

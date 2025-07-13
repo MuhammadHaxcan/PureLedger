@@ -42,3 +42,7 @@ input[type=number] {
     -moz-appearance: textfield; /* Firefox */
     appearance: textfield;
 }
+
+.alert {
+    margin-top: 1rem;
+}
