@@ -1,6 +1,8 @@
-﻿using PureLedger.Models;
+﻿// Services/ReportingService.cs
+using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.ViewModels;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -24,153 +26,97 @@ namespace PureLedger.Services
 
         public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType)
         {
-            if (voucherType == "DC")
-            {
-                // Get Delivery Challan by JournalVoucherId
-                var dcVoucher = await _deliveryChallanVoucherRepository.GetByJournalVoucherIdAsync(journalVoucherId);
-                if (dcVoucher == null) return null;
+            return voucherType == "DC"
+                ? await GetDeliveryChallanReportAsync(journalVoucherId)
+                : await GetJournalVoucherReportAsync(journalVoucherId, voucherType);
+        }
 
-                var project = await _projectRepository.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
-                if (project == null) return null;
-                var jv = dcVoucher.JournalVoucher;
-                if (jv == null) return null;
+        private async Task<JournalVoucherReportViewModel?> GetDeliveryChallanReportAsync(int journalVoucherId)
+        {
+            var dcVoucher = await _deliveryChallanVoucherRepository.GetByJournalVoucherIdAsync(journalVoucherId);
+            if (dcVoucher?.JournalVoucher == null) return null;
 
-                bool isPartialDC = !jv.IsProcessed;
+            var project = await _projectRepository.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
+            if (project == null) return null;
 
-                var processedEntries = dcVoucher.DeliveryChallanEntries
-                    .Where(e => e.JournalEntry != null && e.JournalEntry.IsProcessed)
-                    .Select(e => new JournalVoucherEntryReportModel
-                    {
-                        AccountName = e.JournalEntry.Account?.AccountName ?? "",
-                        Description = e.JournalEntry.Description ?? "",
-                        Quantity = e.JournalEntry.Quantity,
-                        Rate = e.JournalEntry.Rate,
-                        Debit = e.JournalEntry.Debit,
-                        Credit = e.JournalEntry.Credit
-                    }).ToList();
+            var entries = GetProcessedEntries(dcVoucher.DeliveryChallanEntries);
+            var customerAccountName = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-                // Find the customer account where Quantity == 0
-                var customerEntry = dcVoucher.JournalVoucher.JournalEntries.FirstOrDefault(e => e.Quantity == 0);
-                var customerAccountName = customerEntry?.Account?.AccountName ?? "";
+            return CreateVoucherViewModel(dcVoucher.JournalVoucherId, "DC", project.ProjectName, dcVoucher.DCDate,
+                entries, customerAccountName, !dcVoucher.JournalVoucher.IsProcessed);
+        }
 
-                return new JournalVoucherReportViewModel
-                {
-                    JvId = dcVoucher.JournalVoucherId,
-                    VoucherType = voucherType,
-                    ProjectName = project.ProjectName,
-                    BookerName = "", // Set as needed
-                    CreatedDate = dcVoucher.DCDate,
-                    Entries = processedEntries,
-                    TotalQuantity = processedEntries.Sum(e => e.Quantity),
-                    TotalActualAmount = processedEntries.Sum(e => e.LineTotal),
-                    TotalAmount = processedEntries.Sum(e => e.Debit),
-                    AccountName = customerAccountName,
-                    AuthorizedBy = "",
-                    ReceivedBy = "",
-                    IsPartial = isPartialDC
-                };
-            }
-
-            // Normal Journal Voucher logic...
+        private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, string voucherType)
+        {
             var voucher = await _journalVoucherRepository.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null) return null;
 
-            var jvProject = await _projectRepository.GetByIdAsync(voucher.ProjectId);
-            if (jvProject == null) return null;
+            var project = await _projectRepository.GetByIdAsync(voucher.ProjectId);
+            if (project == null) return null;
 
-            if (voucherType == "DC")
+            var isPartial = voucherType == "DC" && !voucher.IsProcessed;
+            var entries = GetJournalVoucherEntries(voucher.JournalEntries, isPartial);
+            var customerAccountName = GetCustomerAccountName(voucher);
+            var typeLabel = isPartial ? "DC - Partial" : voucherType;
+
+            return CreateVoucherViewModel(voucher.JvId, typeLabel, project.ProjectName, voucher.EntryDate,
+                entries, customerAccountName, isPartial);
+        }
+
+        private List<JournalVoucherEntryReportModel> GetProcessedEntries(IEnumerable<DeliveryChallanEntry> entries)
+        {
+            return entries
+                .Where(e => e.JournalEntry?.IsProcessed == true)
+                .Select(e => MapToEntryReportModel(e.JournalEntry!))
+                .ToList();
+        }
+
+        private List<JournalVoucherEntryReportModel> GetJournalVoucherEntries(IEnumerable<JournalEntry> entries, bool isPartial)
+        {
+            return entries
+                .Where(e => !isPartial || e.IsProcessed)
+                .Select(MapToEntryReportModel)
+                .ToList();
+        }
+
+        private JournalVoucherEntryReportModel MapToEntryReportModel(JournalEntry entry)
+        {
+            return new JournalVoucherEntryReportModel
             {
-                var dcVoucher = await _deliveryChallanVoucherRepository.GetByJournalVoucherIdAsync(journalVoucherId);
+                AccountName = entry.Account?.AccountName ?? "",
+                Description = entry.Description ?? "",
+                Quantity = entry.Quantity,
+                Rate = entry.Rate,
+                Debit = entry.Debit,
+                Credit = entry.Credit
+            };
+        }
 
-                if (dcVoucher == null)
-                {
-                    // DC not created yet for this JV
-                    return null;
-                }
+        private string GetCustomerAccountName(JournalVoucher voucher)
+        {
+            return voucher.JournalEntries.FirstOrDefault(e => e.Quantity == 0)?.Account?.AccountName ?? "";
+        }
 
-                var isPartial = !voucher.IsProcessed;
-                var filteredEntries = voucher.JournalEntries
-                    .Where(e => e.IsProcessed)
-                    .Select(e => new JournalVoucherEntryReportModel
-                    {
-                        AccountName = e.Account?.AccountName ?? "",
-                        Description = e.Description ?? "",
-                        Quantity = e.Quantity,
-                        Rate = e.Rate,
-                        Debit = e.Debit,
-                        Credit = e.Credit
-                    }).ToList();
-
-                // If normal DC, use all entries
-                if (!isPartial)
-                {
-                    filteredEntries = voucher.JournalEntries
-                        .Select(e => new JournalVoucherEntryReportModel
-                        {
-                            AccountName = e.Account?.AccountName ?? "",
-                            Description = e.Description ?? "",
-                            Quantity = e.Quantity,
-                            Rate = e.Rate,
-                            Debit = e.Debit,
-                            Credit = e.Credit
-                        }).ToList();
-                }
-
-                var report = new JournalVoucherReportViewModel
-                {
-                    JvId = voucher.JvId,
-                    VoucherType = voucherType,
-                    ProjectName = jvProject.ProjectName,
-                    BookerName = "",
-                    CreatedDate = voucher.EntryDate,
-                    Entries = filteredEntries,
-                    TotalQuantity = filteredEntries.Sum(e => e.Quantity),
-                    TotalActualAmount = filteredEntries.Sum(e => e.Quantity * e.Rate),
-                    TotalAmount = filteredEntries.Sum(e => e.Debit),
-                    AccountName = "",
-                    AuthorizedBy = "",
-                    ReceivedBy = "",
-                };
-
-                if (isPartial)
-                {
-                    report.VoucherType += " - Partial";
-                }
-
-                return report;
-            }
-            else // Normal JV print
+        private JournalVoucherReportViewModel CreateVoucherViewModel(
+            int jvId, string type, string projectName, DateOnly date,
+            List<JournalVoucherEntryReportModel> entries, string accountName, bool isPartial)
+        {
+            return new JournalVoucherReportViewModel
             {
-                var entries = voucher.JournalEntries.Select(e => new JournalVoucherEntryReportModel
-                {
-                    AccountName = e.Account?.AccountName ?? "",
-                    Description = e.Description ?? "",
-                    Quantity = e.Quantity,
-                    Rate = e.Rate,
-                    Debit = e.Debit,
-                    Credit = e.Credit
-                }).ToList();
-
-                var customerAccount = voucher.JournalEntries.FirstOrDefault(e => e.Quantity == 0);
-                var customerName = customerAccount?.Account?.AccountName ?? "";
-
-                return new JournalVoucherReportViewModel
-                {
-                    JvId = voucher.JvId,
-                    VoucherType = voucherType,
-                    ProjectName = jvProject.ProjectName,
-                    BookerName = "",
-                    CreatedDate = voucher.EntryDate,
-                    Entries = entries,
-                    TotalQuantity = entries.Sum(e => e.Quantity),
-                    TotalActualAmount = entries.Sum(e => e.LineTotal),
-                    TotalAmount = entries.Sum(e => e.Debit),
-                    AccountName = "",
-                    AuthorizedBy = "",
-                    ReceivedBy = "",
-                    IsPartial = false
-                };
-            }
+                JvId = jvId,
+                VoucherType = type,
+                ProjectName = projectName,
+                BookerName = "",
+                CreatedDate = date,
+                Entries = entries,
+                TotalQuantity = entries.Sum(e => e.Quantity),
+                TotalActualAmount = entries.Sum(e => e.LineTotal),
+                TotalAmount = entries.Sum(e => e.Debit),
+                AccountName = accountName,
+                AuthorizedBy = "",
+                ReceivedBy = "",
+                IsPartial = isPartial
+            };
         }
     }
 }

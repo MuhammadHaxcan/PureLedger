@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿// Controllers/ReportingController.cs
+using Microsoft.AspNetCore.Mvc;
 using PureLedger.Services;
 using System.Threading.Tasks;
 
@@ -22,37 +23,44 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> PrintVoucher(int journalVoucherId, string type)
         {
-            if (string.IsNullOrEmpty(type) || journalVoucherId <= 0)
-            {
-                TempData["Error"] = "Invalid input.";
-                return RedirectToAction("SingleDoc");
-            }
+            if (!IsValidInput(journalVoucherId, type, out IActionResult errorResult))
+                return errorResult;
 
             var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type);
             if (report == null)
-            {
-                TempData["Error"] = type == "DC"
-            ? $"No Delivery Challan exists for Voucher ID {journalVoucherId}."
-            : $"No Journal Voucher exists for Voucher ID {journalVoucherId}.";
-                return RedirectToAction("SingleDoc");
-            }
+                return HandleVoucherNotFound(journalVoucherId, type);
 
             ViewBag.Type = type;
-            return View("PrintVoucher", report); // This must match the .cshtml file name
+            return View("PrintVoucher", report);
         }
 
         [HttpGet]
         public async Task<IActionResult> ValidateVoucher(int journalVoucherId, string type)
         {
-            var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type);
-            if (report == null)
-            {
-                return Json(new { exists = false });
-            }
-
-            return Json(new { exists = true });
+            bool exists = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type) != null;
+            return Json(new { exists });
         }
 
+        // --- Helpers ---
 
+        private bool IsValidInput(int journalVoucherId, string type, out IActionResult errorResult)
+        {
+            errorResult = null;
+            if (string.IsNullOrWhiteSpace(type) || journalVoucherId <= 0)
+            {
+                TempData["Error"] = "Invalid input.";
+                errorResult = RedirectToAction("SingleDoc");
+                return false;
+            }
+            return true;
+        }
+
+        private IActionResult HandleVoucherNotFound(int journalVoucherId, string type)
+        {
+            TempData["Error"] = type == "DC"
+                ? $"No Delivery Challan exists for Voucher ID {journalVoucherId}."
+                : $"No Journal Voucher exists for Voucher ID {journalVoucherId}.";
+            return RedirectToAction("SingleDoc");
+        }
     }
 }
