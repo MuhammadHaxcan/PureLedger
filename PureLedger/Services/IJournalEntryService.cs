@@ -28,5 +28,7 @@ namespace PureLedger.Services
         Task<List<object>> GetCategoriesByProjectAsync(int projectId);
         Task<List<object>> GetAccountsByCategoryAsync(int categoryId);
         Task<object?> GetProductDetailsAsync(int accountId);
+
+        Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync();
     }
 }

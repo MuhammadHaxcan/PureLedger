@@ -13,5 +13,6 @@ namespace PureLedger.Repositories.Interfaces
             DateOnly? toDate,
             int? projectId,
             bool includeEntries);
+        Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync();
     }
 }

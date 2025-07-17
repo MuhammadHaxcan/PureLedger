@@ -162,6 +162,7 @@ namespace PureLedger.Services
 
             // Set IsProcessed to true if quantity is 0
             entry.IsProcessed = entry.Quantity == 0;
+            entry.IsEdited = true;
 
             try
             {
@@ -264,6 +265,10 @@ namespace PureLedger.Services
                 voucher.IsProcessed = allProcessed;
                 await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
             }
+        }
+        public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
+        {
+            return await _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync();
         }
     }
 }

@@ -205,6 +205,49 @@ namespace PureLedger.Controllers
             return Json(list);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ModifiedEntries()
+        {
+            // Get vouchers that have modified entries
+            var vouchersWithModifiedEntries = await _journalService.GetVouchersWithModifiedEntriesAsync();
+            
+            // Project to summary view model
+            var modifiedEntriesSummary = vouchersWithModifiedEntries.Select(v => new ModifiedEntriesSummaryViewModel
+            {
+                JvId = v.JvId,
+                TotalDebit = v.TotalDebit,
+                TotalCredit = v.TotalCredit,
+                HasModifiedEntries = v.JournalEntries.Any(e => e.IsEdited)
+            }).ToList();
 
+            return View(modifiedEntriesSummary);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> VoucherModifiedEntries(int jvId)
+        {
+            var voucher = await _journalService.GetVoucherWithEntriesAsync(jvId);
+            if (voucher == null)
+                return NotFound();
+
+            var model = new VoucherModifiedEntriesViewModel
+            {
+                JvId = voucher.JvId,
+                Entries = voucher.JournalEntries.Select(e => new VoucherEntryDetailViewModel
+                {
+                    EntryId = e.EntryId,
+                    ModifyTime = e.IsEdited ? DateTime.Now : null, // Replace with actual modify time from your data
+                    Category = e.Category?.CategoryName ?? "",
+                    Account = e.Account?.AccountName ?? "",
+                    Quantity = e.Quantity,
+                    Rate = e.Rate,
+                    Debit = e.Debit,
+                    Credit = e.Credit,
+                    IsModified = e.IsEdited
+                }).ToList()
+            };
+
+            return View(model);
+        }
     }
 }

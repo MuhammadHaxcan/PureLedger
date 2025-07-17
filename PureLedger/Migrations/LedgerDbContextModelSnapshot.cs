@@ -282,6 +282,9 @@ namespace PureLedger.Migrations
                     b.Property<decimal?>("DiscountPercent")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("IsEdited")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsProcessed")
                         .HasColumnType("bit");
 

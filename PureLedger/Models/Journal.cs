@@ -49,6 +49,7 @@ namespace PureLedger.Models
 
         public bool IsProcessed { get; set; } = false;
 
+        public bool IsEdited { get; set; } = false;
         [StringLength(500)]
         public string? Description { get; set; }
 

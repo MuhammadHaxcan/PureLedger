@@ -1,0 +1,49 @@
+@model VoucherModifiedEntriesViewModel
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Voucher Details - JV-@Model.JvId</h2>
+        <a asp-action="ModifiedEntries" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to List
+        </a>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Modify Time</th>
+                    <th>Entry Id</th>
+                    <th>Category</th>
+                    <th>Account</th>
+                    <th>Qty</th>
+                    <th>Rate</th>
+                    <th>Debit</th>
+                    <th>Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in Model.Entries)
+                {
+                    <tr class="@(entry.IsModified ? "table-warning" : "")">
+                        <td>
+                            @if (entry.IsModified)
+                            {
+                                <span class="text-danger">Modified</span>
+                                <br/>
+                                @entry.ModifyTime?.ToString("dd-MM-yyyy HH:mm:ss")
+                            }
+                        </td>
+                        <td>@entry.EntryId</td>
+                        <td>@entry.Category</td>
+                        <td>@entry.Account</td>
+                        <td>@entry.Quantity</td>
+                        <td>@entry.Rate.ToString("N2")</td>
+                        <td>@entry.Debit.ToString("N2")</td>
+                        <td>@entry.Credit.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

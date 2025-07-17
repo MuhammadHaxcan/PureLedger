@@ -1,0 +1,35 @@
+@model List<ModifiedEntriesSummaryViewModel>
+
+<div class="container-fluid py-4">
+    <h2 class="mb-4">Modified Entries</h2>
+    
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Jv Id</th>
+                    <th>Debit</th>
+                    <th>Credit</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>@item.JvId</td>
+                        <td>@item.TotalDebit.ToString("N2")</td>
+                        <td>@item.TotalCredit.ToString("N2")</td>
+                        <td>
+                            <a asp-action="VoucherModifiedEntries" 
+                               asp-route-jvId="@item.JvId"
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-eye me-1"></i>Show Modified Entries
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -79,5 +79,16 @@ namespace PureLedger.Repositories
             
             return await query.OrderByDescending(jv => jv.EntryDate).ToListAsync();
         }
+
+        public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
+        {
+            return await _context.Set<JournalVoucher>()
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Category)
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .Where(v => v.JournalEntries.Any(e => e.IsEdited))
+                .ToListAsync();
+        }
     }
 }
