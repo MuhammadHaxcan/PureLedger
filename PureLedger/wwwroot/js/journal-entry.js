@@ -431,9 +431,9 @@ $(document).ready(function () {
             $accountSelect.empty().append('<option value="">Select Account</option>');
 
             if (projectId) {
-                $.get('/Home/GetCategoriesByProject', { projectId }, function (categories) {
+                $.get(`/api/common/categories/${projectId}`, function (categories) {
                     categories.forEach(c => {
-                        $categorySelect.append(new Option(c.categoryName, c.categoryId));
+                        $categorySelect.append(new Option(c.name, c.id));
                     });
                 });
             }
@@ -451,9 +451,9 @@ $(document).ready(function () {
         $row[0].removeAttribute('data-account-type');
 
         if (categoryId) {
-            $.get('/Home/GetAccountsByCategory', { categoryId }, function (accounts) {
+            $.get(`/api/common/accounts/${categoryId}`, function (accounts) {
                 accounts.forEach(a => {
-                    const $option = $(new Option(a.accountName, a.accountId));
+                    const $option = $(new Option(a.name, a.id));
                     $option.data('type', a.type || '');
                     $option.data('account-type', a.accountTypeName || '');
                     $accountSelect.append($option);

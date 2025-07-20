@@ -202,52 +202,9 @@ namespace PureLedger.Services
             return new { entries, jvId = voucher.JvId };
         }
 
-        public async Task<List<object>> GetCategoriesByProjectAsync(int projectId)
-        {
-            var categories = await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
-
-            return categories.Select(c => new { c.CategoryId, c.CategoryName })
-                .Cast<object>()
-                .ToList();
-        }
-
-        public async Task<List<object>> GetAccountsByCategoryAsync(int categoryId)
-        {
-            try
-            {
-                var category = await _unitOfWork.Categories.GetByIdWithAccountTypeAsync(categoryId);
-                var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
-
-                return accounts.Select(a => new
-                {
-                    a.AccountId,
-                    a.AccountName,
-                    a.ProductData?.Type,
-                    AccountTypeName = category?.AccountType?.AccountTypeName
-                })
-                .Cast<object>()
-                .ToList();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
-                return new List<object>();
-            }
-        }
-
         public async Task<object?> GetProductDetailsAsync(int accountId)
         {
             return await _unitOfWork.Accounts.GetProductDetailsAsync(accountId);
-        }
-
-        public async Task<List<Category>> GetAllCategoriesAsync()
-        {
-            return await _unitOfWork.Categories.GetAllAsync();
-        }
-
-        public async Task<List<Account>> GetAllAccountsAsync()
-        {
-            return await _unitOfWork.Accounts.GetAllAsync();
         }
         
         // Helper method to update the voucher processed status

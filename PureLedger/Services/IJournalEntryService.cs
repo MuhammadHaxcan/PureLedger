@@ -17,8 +17,6 @@ namespace PureLedger.Services
         Task<JournalEntryUpdateViewModel?> GetJournalEntryForEditAsync(int entryId);
         Task<bool> UpdateJournalEntryAsync(JournalEntryUpdateViewModel model);
 
-        Task<List<Category>> GetAllCategoriesAsync();
-        Task<List<Account>> GetAllAccountsAsync();
         Task<bool> DeleteJournalEntryAsync(int entryId);
 
         // Voucher summaries and mapping
@@ -26,8 +24,6 @@ namespace PureLedger.Services
         Task<object> GetVoucherSummaryAsync(int voucherId);
 
         // Lookup operations
-        Task<List<object>> GetCategoriesByProjectAsync(int projectId);
-        Task<List<object>> GetAccountsByCategoryAsync(int categoryId);
         Task<object?> GetProductDetailsAsync(int accountId);
 
         Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync();

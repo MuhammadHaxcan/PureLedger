@@ -40,21 +40,6 @@ namespace PureLedger.Controllers
             return View();
         }
 
-        // AJAX: Get categories for a project
-        [HttpGet]
-        public async Task<IActionResult> GetCategoriesByProject(int projectId)
-        {
-            var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
-            return Json(categories);
-        }
-
-        // AJAX: Get accounts for a category
-        [HttpGet]
-        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
-        {
-            var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
-            return Json(accounts);
-        }
 
         // AJAX: Get product details for an account
         [HttpGet]
@@ -96,11 +81,9 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> VoucherEntry(int? jvId = null)
         {
-            // Get all projects for dropdown
             var projects = await _journalService.GetAllProjectsAsync();
             ViewBag.Projects = projects;
 
-            // If jvId is provided, load that voucher and its entries for summary
             if (jvId.HasValue)
             {
                 var voucher = await _journalService.GetVoucherWithEntriesAsync(jvId.Value);
@@ -111,7 +94,6 @@ namespace PureLedger.Controllers
                 }
             }
 
-            // For new entry, just show empty form and no summary
             var model = new JournalEntryViewModel();
             return View(model);
         }
@@ -189,29 +171,11 @@ namespace PureLedger.Controllers
             }
         }
 
-        [HttpGet("/api/common/categories")]
-        public async Task<IActionResult> GetCategories()
-        {
-            var categories = await _journalService.GetAllCategoriesAsync();
-            var list = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }).ToList();
-            return Json(list);
-        }
-
-        [HttpGet("/api/common/accounts")]
-        public async Task<IActionResult> GetAccounts()
-        {
-            var accounts = await _journalService.GetAllAccountsAsync();
-            var list = accounts.Select(a => new { id = a.AccountId, name = a.AccountName }).ToList();
-            return Json(list);
-        }
 
         [HttpGet]
         public async Task<IActionResult> ModifiedEntries()
         {
-            // Get vouchers that have modified entries
             var vouchersWithModifiedEntries = await _journalService.GetVouchersWithModifiedEntriesAsync();
-            
-            // Project to summary view model
             var modifiedEntriesSummary = vouchersWithModifiedEntries.Select(v => new ModifiedEntriesSummaryViewModel
             {
                 JvId = v.JvId,
@@ -222,6 +186,7 @@ namespace PureLedger.Controllers
 
             return View(modifiedEntriesSummary);
         }
+
         [HttpPost]
         public async Task<IActionResult> DeleteJournalEntry(int entryId)
         {
@@ -231,7 +196,6 @@ namespace PureLedger.Controllers
             else
                 return Json(new { success = false, message = "Invalid entry." });
         }
-
 
         [HttpGet]
         public async Task<IActionResult> VoucherModifiedEntries(int jvId)
@@ -246,7 +210,7 @@ namespace PureLedger.Controllers
                 Entries = voucher.JournalEntries.Select(e => new VoucherEntryDetailViewModel
                 {
                     EntryId = e.EntryId,
-                    ModifyTime = e.IsEdited ? DateTime.Now : null, // Replace with actual modify time from your data
+                    ModifyTime = e.IsEdited ? DateTime.Now : null,
                     Category = e.Category?.CategoryName ?? "",
                     Account = e.Account?.AccountName ?? "",
                     Quantity = e.Quantity,
