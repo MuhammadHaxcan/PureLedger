@@ -3,6 +3,7 @@ using PureLedger.Data;
 using PureLedger.Services;
 using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -31,6 +32,7 @@ builder.Services.AddScoped<IDeliveryChallanEntryRepository, DeliveryChallanEntry
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
 builder.Services.AddScoped<IMetaDataService, MetaDataService>();
+builder.Services.AddScoped<ICommonApiService, CommonApiService>();
 
 // Add LedgerDbContext with SQL Server and Windows Authentication
 builder.Services.AddDbContext<LedgerDbContext>(options =>
