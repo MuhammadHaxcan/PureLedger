@@ -266,6 +266,23 @@ namespace PureLedger.Services
                 await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
             }
         }
+
+        public async Task<bool> DeleteJournalEntryAsync(int entryId)
+        {
+            var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
+            if (entry == null)
+                return false;
+
+            var success = await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+
+            if (success)
+            {
+                await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
+            }
+
+            return success;
+        }
+
         public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
         {
             return await _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync();

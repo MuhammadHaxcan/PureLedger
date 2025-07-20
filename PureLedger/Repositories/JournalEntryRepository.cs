@@ -72,5 +72,17 @@ namespace PureLedger.Repositories
 
             return await query.ToListAsync();
         }
+
+        public async Task<bool> DeleteAsync(int entryId)
+        {
+            var entry = await _context.JournalEntries.FindAsync(entryId);
+            if (entry == null)
+                return false;
+
+            _context.JournalEntries.Remove(entry);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
     }
 }

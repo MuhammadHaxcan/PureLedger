@@ -61,6 +61,10 @@
                     $('<button>')
                         .addClass('btn btn-primary btn-sm btn-edit-entry')
                         .text('Edit')
+                        .data('entry-id', entry.entryId),
+                    $('<button>')
+                        .addClass('btn btn-danger btn-sm btn-delete-entry')
+                        .text('Delete')
                         .data('entry-id', entry.entryId)
                 )
             );
@@ -200,4 +204,40 @@
 
 
 
+});
+
+$(document).on('click', '.btn-delete-entry', function () {
+    const entryId = $(this).data('entry-id');
+
+    Swal.fire({
+        title: 'Are you sure?',
+        text: "Do you really want to delete this entry?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.post('/Home/DeleteJournalEntry', { entryId })
+                .done(function (response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Deleted!',
+                            text: 'The entry has been deleted.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        fetchVoucherSummary(currentVoucherId);
+                    } else {
+                        Swal.fire('Error', response.message || 'Could not delete the entry.', 'error');
+                    }
+                })
+                .fail(function () {
+                    Swal.fire('Error', 'An error occurred while deleting the entry.', 'error');
+                });
+        }
+    });
 });

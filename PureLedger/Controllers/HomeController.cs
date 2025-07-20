@@ -222,6 +222,16 @@ namespace PureLedger.Controllers
 
             return View(modifiedEntriesSummary);
         }
+        [HttpPost]
+        public async Task<IActionResult> DeleteJournalEntry(int entryId)
+        {
+            var success = await _journalService.DeleteJournalEntryAsync(entryId);
+            if (success)
+                return Json(new { success = true });
+            else
+                return Json(new { success = false, message = "Invalid entry." });
+        }
+
 
         [HttpGet]
         public async Task<IActionResult> VoucherModifiedEntries(int jvId)

@@ -12,5 +12,7 @@ namespace PureLedger.Repositories.Interfaces
             int voucherId,
             int? categoryId,
             int? accountId);
+        Task<bool> DeleteAsync(int entryId);
+
     }
 }

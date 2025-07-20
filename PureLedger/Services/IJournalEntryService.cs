@@ -19,6 +19,7 @@ namespace PureLedger.Services
 
         Task<List<Category>> GetAllCategoriesAsync();
         Task<List<Account>> GetAllAccountsAsync();
+        Task<bool> DeleteJournalEntryAsync(int entryId);
 
         // Voucher summaries and mapping
         Task<JournalEntryViewModel> MapVoucherToViewModelAsync(JournalVoucher voucher);
