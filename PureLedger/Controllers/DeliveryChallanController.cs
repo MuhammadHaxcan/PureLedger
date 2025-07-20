@@ -268,5 +268,38 @@ namespace PureLedger.Controllers
                 return Json(new { success = false, message = $"An error occurred: {ex.Message}" });
             }
         }
+
+        [HttpPost]
+        public async Task<IActionResult> AddCartage([FromBody] CartageViewModel model)
+        {
+            ModelState.Remove(model.Referece);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { success = false, message = "Invalid data submitted." });
+            }
+
+            try
+            {
+                var result = await _deliveryChallanService.ProcessCartageAndDeliveryAsync(
+                    model.JournalVoucherId,
+                    model.EntryId,
+                    model.TransporterId,
+                    model.Amount,
+                    model.PostToCustomer,
+                    model.Referece);
+
+                return Json(new
+                {
+                    success = true,
+                    message = "Cartage added and delivery challan processed successfully",
+                    deliveryChallanId = result.DeliveryChallanId
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing cartage");
+                return Json(new { success = false, message = $"An error occurred: {ex.Message}" });
+            }
+        }
     }
 }

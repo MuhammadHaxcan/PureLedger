@@ -238,9 +238,50 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error checking existing challan:', error);
             });
 
+        // Add cartage button to modal footer
+        const modalFooter = document.querySelector('#deliveryChallanModal .modal-footer');
+        if (!document.getElementById('openCartageBtn')) {
+            const cartageBtn = document.createElement('button');
+            cartageBtn.id = 'openCartageBtn';
+            cartageBtn.className = 'btn btn-info';
+            cartageBtn.textContent = 'Add Cartage';
+            cartageBtn.onclick = () => openCartageModal(voucherId, entryId);
+            modalFooter.insertBefore(cartageBtn, modalFooter.firstChild);
+        }
+
         const modal = new bootstrap.Modal(document.getElementById('deliveryChallanModal'));
         modal.show();
     };
+
+    function openCartageModal(voucherId, entryId) {
+        document.getElementById('cartageJournalVoucherId').value = voucherId;
+        document.getElementById('cartageEntryId').value = entryId;
+
+        // Load transporters (from transporter category)
+        loadTransporters();
+
+        // Show cartage modal
+        const cartageModal = new bootstrap.Modal(document.getElementById('cartageModal'));
+        cartageModal.show();
+    }
+
+    function loadTransporters() {
+        const transporterSelect = document.getElementById('transporterAccount');
+        transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
+
+        // Fetch transporter accounts from categoryId 4
+        fetch('/api/common/accounts/4')
+            .then(response => response.json())
+            .then(transporters => {
+                transporters.forEach(t => {
+                    const option = document.createElement('option');
+                    option.value = t.id;
+                    option.textContent = t.name;
+                    transporterSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error loading transporters:', error));
+    }
 
     function loadLocations() {
         fetch('/DeliveryChallan/GetLocations')
@@ -259,6 +300,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error loading locations:', error);
             });
     }
+
+
 
     // Post Single button handler
     const postSingleBtn = document.getElementById('postSingleBtn');
@@ -376,6 +419,62 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // Add cartage button handler
+    document.getElementById('addCartageBtn').addEventListener('click', function() {
+        const voucherId = document.getElementById('cartageJournalVoucherId').value;
+        const entryId = document.getElementById('cartageEntryId').value;
+        const transporterId = document.getElementById('transporterAccount').value;
+        const amount = document.getElementById('cartageAmount').value;
+        const postToCustomer = document.getElementById('postToCustomer').checked;
+
+        if (!transporterId || !amount) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        const data = {
+            journalVoucherId: parseInt(voucherId),
+            entryId: parseInt(entryId),
+            transporterId: parseInt(transporterId),
+            amount: parseFloat(amount),
+            postToCustomer: postToCustomer
+        };
+
+        fetch('/DeliveryChallan/AddCartage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                // Close both modals
+                bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
+                bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+
+                // Refresh the entries
+                loadFilteredEntries();
+
+                // Show success message
+                alert('Cartage added and delivery challan processed successfully');
+            } else {
+                alert(result.message || 'Error processing cartage');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error processing cartage: ' + error.message);
+        });
+    });
+
     // Initialize the page
     loadFilteredEntries();
+
+    // Initialize tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
 });

@@ -21,7 +21,7 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
-        #region Project
+        // ---------------- PROJECT ----------------
 
         // GET: /MetaData/Project
         [HttpGet]
@@ -42,10 +42,13 @@ namespace PureLedger.Controllers
                 await _metaDataService.CreateProjectAsync(project);
                 return RedirectToAction(nameof(Project));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
             var projects = await _metaDataService.GetAllProjectsAsync();
             return View(projects);
         }
@@ -70,16 +73,17 @@ namespace PureLedger.Controllers
                 await _metaDataService.UpdateProjectAsync(project);
                 return RedirectToAction(nameof(Project));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
             return View(project);
         }
 
-        #endregion
-
-        #region Category
+        // ---------------- CATEGORY ----------------
 
         // GET: /MetaData/Category
         [HttpGet]
@@ -88,6 +92,7 @@ namespace PureLedger.Controllers
             var categories = await _metaDataService.GetAllCategoriesAsync();
             ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
             ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(categories);
         }
 
@@ -102,13 +107,18 @@ namespace PureLedger.Controllers
                 await _metaDataService.CreateCategoryAsync(category);
                 return RedirectToAction(nameof(Category));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
+            // Get fresh data for the view
             var categories = await _metaDataService.GetAllCategoriesAsync();
             ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
             ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(categories);
         }
 
@@ -118,8 +128,10 @@ namespace PureLedger.Controllers
         {
             var category = await _metaDataService.GetCategoryByIdAsync(id);
             if (category == null) return NotFound();
+
             ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
             ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(category);
         }
 
@@ -134,18 +146,20 @@ namespace PureLedger.Controllers
                 await _metaDataService.UpdateCategoryAsync(category);
                 return RedirectToAction(nameof(Category));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
             ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
             ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+
             return View(category);
         }
 
-        #endregion
-
-        #region Account
+        // ---------------- ACCOUNT ----------------
 
         // GET: /MetaData/Account
         [HttpGet]
@@ -155,6 +169,7 @@ namespace PureLedger.Controllers
             ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
             ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
             ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
             return View(accounts);
         }
 
@@ -169,14 +184,19 @@ namespace PureLedger.Controllers
                 await _metaDataService.CreateAccountAsync(account);
                 return RedirectToAction(nameof(Account));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
+            // Get fresh data for the view
             var accounts = await _metaDataService.GetAllAccountsAsync();
             ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
             ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
             ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
             return View(accounts);
         }
 
@@ -186,8 +206,10 @@ namespace PureLedger.Controllers
         {
             var account = await _metaDataService.GetAccountByIdAsync(id);
             if (account == null) return NotFound();
+
             ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
             ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+
             return View(account);
         }
 
@@ -202,18 +224,20 @@ namespace PureLedger.Controllers
                 await _metaDataService.UpdateAccountAsync(account);
                 return RedirectToAction(nameof(Account));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
             ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
             ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+
             return View(account);
         }
 
-        #endregion
-
-        #region Tag
+        // ---------------- TAG ----------------
 
         // GET: /MetaData/Tag
         [HttpGet]
@@ -235,10 +259,13 @@ namespace PureLedger.Controllers
                 TempData["Success"] = "Tag added successfully.";
                 return RedirectToAction(nameof(Tag));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
             var tags = await _metaDataService.GetAllTagsAsync();
             return View(tags);
         }
@@ -251,6 +278,7 @@ namespace PureLedger.Controllers
             {
                 return Json(new { success = false, message = "This tag is in use and cannot be deleted." });
             }
+
             var success = await _metaDataService.DeleteTagAsync(id);
             return Json(new { success });
         }
@@ -262,9 +290,14 @@ namespace PureLedger.Controllers
             return Json(tags);
         }
 
-        #endregion
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProject(int projectId)
+        {
+            var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
+            return Json(categories);
+        }
 
-        #region Location
+        // ---------------- LOCATION ----------------
 
         // GET: /MetaData/Location
         [HttpGet]
@@ -283,22 +316,29 @@ namespace PureLedger.Controllers
             if (errors.Count == 0)
             {
                 await _metaDataService.CreateLocationAsync(location);
+
+                // Check if the request is AJAX
                 if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                 {
                     return Json(new
                     {
                         success = true,
-                        location = location,
+                        location = location, // Return the created location for UI update
                         message = "Location added successfully."
                     });
                 }
+
                 TempData["Success"] = "Location added successfully.";
                 return RedirectToAction(nameof(Location));
             }
+
+            // Add validation errors to ModelState
             foreach (var error in errors)
             {
                 ModelState.AddModelError("", error);
             }
+
+            // If AJAX request, return validation errors
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
             {
                 var modelErrors = ModelState
@@ -307,12 +347,14 @@ namespace PureLedger.Controllers
                         k => k.Key,
                         v => v.Value.Errors.Select(e => e.ErrorMessage).ToArray()
                     );
+
                 return Json(new
                 {
                     success = false,
                     errors = modelErrors
                 });
             }
+
             var locations = await _metaDataService.GetAllLocationsAsync();
             return View(locations);
         }
@@ -324,7 +366,5 @@ namespace PureLedger.Controllers
             var locations = await _metaDataService.GetAllLocationsAsync();
             return Json(locations);
         }
-
-        #endregion
     }
 }

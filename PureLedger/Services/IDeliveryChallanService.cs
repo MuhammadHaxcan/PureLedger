@@ -29,5 +29,12 @@ namespace PureLedger.Services
         Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
         Task<List<JournalEntry>> GetUnprocessedEntriesByVoucherIdAsync(int voucherId);
         Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
+        Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(
+            int journalVoucherId,
+            int entryId,
+            int transporterId,
+            decimal amount,
+            bool postToCustomer,
+            string reference);
     }
 }

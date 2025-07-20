@@ -133,6 +133,50 @@
             </div>
         </div>
     </div>
+
+    <!-- Cartage Modal -->
+    <div class="modal fade" id="cartageModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Add Cartage</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="cartageForm">
+                        <input type="hidden" id="cartageJournalVoucherId" />
+                        <input type="hidden" id="cartageEntryId" />
+                        
+                        <div class="mb-3">
+                            <label for="transporterAccount" class="form-label">Transporter</label>
+                            <select id="transporterAccount" class="form-select" required>
+                                <option value="">Select Transporter</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="cartageAmount" class="form-label">Amount</label>
+                            <input type="number" class="form-control" id="cartageAmount" required min="0" step="0.01">
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="postToCustomer" checked>
+                                <label class="form-check-label" for="postToCustomer" data-bs-toggle="tooltip" 
+                                       title="If checked, cartage will be debited from customer account. If unchecked, it will be debited from delivery item account.">
+                                    Post to Customer Account
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="addCartageBtn">Add Cartage & Process</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @section Scripts {
