@@ -17,4 +17,11 @@ public class CartageViewModel
     
     public bool PostToCustomer { get; set; }
     public string Referece { get; set; }
+
+    // Add these fields
+    public string DcDate { get; set; }
+    public string DcRemarks { get; set; }
+    public string DcStation { get; set; }
+    public string DcOtherRef { get; set; }
+    public int DcLocation { get; set; }
 }

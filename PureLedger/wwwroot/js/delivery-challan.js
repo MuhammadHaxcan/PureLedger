@@ -427,6 +427,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const amount = document.getElementById('cartageAmount').value;
         const postToCustomer = document.getElementById('postToCustomer').checked;
 
+        // Collect DC fields from the main modal
+        const dcDate = document.getElementById('dcDate').value;
+        const dcRemarks = document.getElementById('dcRemarks').value;
+        const dcStation = document.getElementById('dcStation').value;
+        const dcOtherRef = document.getElementById('dcOtherRef').value;
+        const dcLocation = document.getElementById('dcLocation').value;
+
         if (!transporterId || !amount) {
             alert('Please fill in all required fields');
             return;
@@ -437,7 +444,12 @@ document.addEventListener('DOMContentLoaded', function () {
             entryId: parseInt(entryId),
             transporterId: parseInt(transporterId),
             amount: parseFloat(amount),
-            postToCustomer: postToCustomer
+            postToCustomer: postToCustomer,
+            dcDate: dcDate,
+            dcRemarks: dcRemarks,
+            dcStation: dcStation,
+            dcOtherRef: dcOtherRef,
+            dcLocation: dcLocation
         };
 
         fetch('/DeliveryChallan/AddCartage', {
@@ -448,14 +460,9 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(result => {
             if (result.success) {
-                // Close both modals
                 bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
                 bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-
-                // Refresh the entries
                 loadFilteredEntries();
-
-                // Show success message
                 alert('Cartage added and delivery challan processed successfully');
             } else {
                 alert(result.message || 'Error processing cartage');

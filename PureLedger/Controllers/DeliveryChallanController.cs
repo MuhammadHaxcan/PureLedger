@@ -272,7 +272,6 @@ namespace PureLedger.Controllers
         [HttpPost]
         public async Task<IActionResult> AddCartage([FromBody] CartageViewModel model)
         {
-            ModelState.Remove(model.Referece);
             if (!ModelState.IsValid)
             {
                 return BadRequest(new { success = false, message = "Invalid data submitted." });
@@ -286,7 +285,13 @@ namespace PureLedger.Controllers
                     model.TransporterId,
                     model.Amount,
                     model.PostToCustomer,
-                    model.Referece);
+                    model.Referece,
+                    model.DcDate,
+                    model.DcRemarks,
+                    model.DcStation,
+                    model.DcOtherRef,
+                    model.DcLocation
+                );
 
                 return Json(new
                 {

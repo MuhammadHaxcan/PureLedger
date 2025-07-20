@@ -35,6 +35,12 @@ namespace PureLedger.Services
             int transporterId,
             decimal amount,
             bool postToCustomer,
-            string reference);
+            string reference,
+            string dcDate,
+            string dcRemarks,
+            string dcStation,
+            string dcOtherRef,
+            int dcLocation
+);
     }
 }
