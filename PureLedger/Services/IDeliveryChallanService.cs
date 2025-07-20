@@ -7,8 +7,6 @@ namespace PureLedger.Services
     {
         Task<List<Project>> GetAllProjectsAsync();
         Task<List<Models.Location>> GetAllLocationsAsync();
-        Task<List<object>> GetCategoriesByProjectAsync(int projectId);
-        Task<List<object>> GetAccountsByCategoryAsync(int categoryId);
         Task<DeliveryChallanFilterViewModel> GetFilteredEntriesForDeliveryChallanAsync(
             DateOnly? sinceDate,
             DateOnly? toDate,

@@ -24,11 +24,9 @@ namespace PureLedger.Controllers
         {
             try
             {
-                // Load projects for dropdown
                 var projects = await _deliveryChallanService.GetAllProjectsAsync();
                 ViewBag.Projects = projects;
 
-                // Initialize empty view model
                 var model = new DeliveryChallanFilterViewModel
                 {
                     SinceDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-30)),
@@ -61,35 +59,8 @@ namespace PureLedger.Controllers
             }
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetCategoriesByProject(int projectId)
-        {
-            try
-            {
-                var categories = await _deliveryChallanService.GetCategoriesByProjectAsync(projectId);
-                return Json(categories);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
-                return Json(new { success = false, message = "An error occurred while retrieving categories." });
-            }
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
-        {
-            try
-            {
-                var accounts = await _deliveryChallanService.GetAccountsByCategoryAsync(categoryId);
-                return Json(accounts);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
-                return Json(new { success = false, message = "An error occurred while retrieving accounts." });
-            }
-        }
+        // REMOVED: GetCategoriesByProject
+        // REMOVED: GetAccountsByCategory
 
         [HttpGet]
         public async Task<IActionResult> GetLocations()
@@ -151,6 +122,7 @@ namespace PureLedger.Controllers
                 return Json(new { exists = false, success = false, message = "An error occurred while checking for existing challan." });
             }
         }
+
         [HttpPost]
         public async Task<IActionResult> PostSingleEntry([FromBody] CreateDeliveryChallanEntryViewModel model)
         {
@@ -210,8 +182,6 @@ namespace PureLedger.Controllers
             }
         }
 
-
-
         [HttpPost]
         public async Task<IActionResult> ProcessAll([FromBody] DeliveryChallanBatchViewModel model)
         {
@@ -225,21 +195,19 @@ namespace PureLedger.Controllers
                 var results = new List<object>();
                 int journalVoucherId = model.JournalVoucherId;
 
-                // Get all unprocessed entries for this voucher
                 var unprocessedEntries = await _deliveryChallanService.GetUnprocessedEntriesByVoucherIdAsync(journalVoucherId);
-                
+
                 if (!unprocessedEntries.Any())
                 {
-                    return Json(new { 
-                        success = false, 
-                        message = "No unprocessed entries found for this voucher." 
+                    return Json(new
+                    {
+                        success = false,
+                        message = "No unprocessed entries found for this voucher."
                     });
                 }
 
-                // Get or create delivery challan voucher
                 var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalVoucherId);
 
-                // If no delivery challan voucher exists, create one
                 if (deliveryChallanVoucher == null)
                 {
                     var dcDate = string.IsNullOrEmpty(model.DCDate)
@@ -249,7 +217,6 @@ namespace PureLedger.Controllers
                     deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                         journalVoucherId, dcDate);
 
-                    // Set reference if provided
                     if (!string.IsNullOrEmpty(model.OtherReference))
                     {
                         deliveryChallanVoucher.ReferenceNumber = model.OtherReference;
@@ -257,12 +224,10 @@ namespace PureLedger.Controllers
                     }
                 }
 
-                // Process each unprocessed entry
                 foreach (var entry in unprocessedEntries)
                 {
                     try
                     {
-                        // Create delivery challan entry
                         var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                             deliveryChallanVoucher.DeliveryChallanId,
                             entry.EntryId,

@@ -53,14 +53,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function fetchCategories(projectId) {
-        fetch(`/DeliveryChallan/GetCategoriesByProject?projectId=${projectId}`)
+        fetch(`/api/common/categories/${projectId}`)
             .then(response => response.json())
             .then(data => {
                 categorySelect.disabled = false;
                 data.forEach(category => {
                     const option = document.createElement('option');
-                    option.value = category.categoryId;
-                    option.textContent = category.name || category.categoryName;
+                    option.value = category.id;
+                    option.textContent = category.name;
                     categorySelect.appendChild(option);
                 });
             })
@@ -68,14 +68,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchAccounts(categoryId) {
-        fetch(`/DeliveryChallan/GetAccountsByCategory?categoryId=${categoryId}`)
+        fetch(`/api/common/accounts/${categoryId}`)
             .then(response => response.json())
             .then(data => {
                 accountSelect.disabled = false;
                 data.forEach(account => {
                     const option = document.createElement('option');
-                    option.value = account.accountId;
-                    option.textContent = account.name || account.accountName;
+                    option.value = account.id;
+                    option.textContent = account.name;
                     accountSelect.appendChild(option);
                 });
             })
