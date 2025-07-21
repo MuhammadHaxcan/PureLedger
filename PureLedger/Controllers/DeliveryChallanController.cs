@@ -20,6 +20,8 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
+        #region View Pages
+
         public async Task<IActionResult> Index()
         {
             try
@@ -42,25 +44,43 @@ namespace PureLedger.Controllers
             }
         }
 
+        #endregion
+
+        #region API Methods - GET
+
         [HttpGet]
         public async Task<IActionResult> GetFilteredEntries([FromQuery] DeliveryChallanFilterViewModel filter)
         {
             try
             {
+                _logger.LogInformation("GetFilteredEntries called with parameters: SinceDate={SinceDate}, ToDate={ToDate}, ProjectId={ProjectId}, CategoryId={CategoryId}, AccountId={AccountId}", 
+                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
+                
+                // Set default dates if not provided
+                if (!filter.SinceDate.HasValue)
+                {
+                    filter.SinceDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-30));
+                }
+                
+                if (!filter.ToDate.HasValue)
+                {
+                    filter.ToDate = DateOnly.FromDateTime(DateTime.Now);
+                }
+                
                 var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
 
+                _logger.LogInformation("GetFilteredEntries returning {VoucherCount} vouchers", 
+                    result.Vouchers?.Count ?? 0);
+                    
                 return Json(result);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting filtered entries");
-                return Json(new { success = false, message = "An error occurred while retrieving data." });
+                return Json(new { success = false, message = "An error occurred while retrieving data: " + ex.Message });
             }
         }
-
-        // REMOVED: GetCategoriesByProject
-        // REMOVED: GetAccountsByCategory
 
         [HttpGet]
         public async Task<IActionResult> GetLocations()
@@ -101,6 +121,8 @@ namespace PureLedger.Controllers
 
                 if (deliveryChallanVoucher != null)
                 {
+                    var firstEntry = deliveryChallanVoucher.DeliveryChallanEntries.FirstOrDefault();
+
                     return Json(new
                     {
                         exists = true,
@@ -108,8 +130,9 @@ namespace PureLedger.Controllers
                         challan = new
                         {
                             challanDate = deliveryChallanVoucher.DCDate,
-                            locationId = deliveryChallanVoucher.DeliveryChallanEntries.FirstOrDefault()?.LocationId,
-                            remarks = deliveryChallanVoucher.ReferenceNumber
+                            locationId = firstEntry?.LocationId,
+                            remarks = deliveryChallanVoucher.ReferenceNumber,
+                            otherRef = firstEntry?.OtherReference
                         }
                     });
                 }
@@ -122,6 +145,10 @@ namespace PureLedger.Controllers
                 return Json(new { exists = false, success = false, message = "An error occurred while checking for existing challan." });
             }
         }
+
+        #endregion
+
+        #region API Methods - POST
 
         [HttpPost]
         public async Task<IActionResult> PostSingleEntry([FromBody] CreateDeliveryChallanEntryViewModel model)
@@ -140,24 +167,11 @@ namespace PureLedger.Controllers
                     return NotFound(new { success = false, message = $"Journal entry with ID {model.JournalEntryId} not found." });
                 }
 
-                var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalEntry.JournalVoucherId);
+                // Get or create delivery challan voucher
+                var deliveryChallanVoucher = await GetOrCreateDeliveryChallanVoucherAsync(
+                    journalEntry.JournalVoucherId, model.DCDate, model.OtherReference);
 
-                if (deliveryChallanVoucher == null)
-                {
-                    var dcDate = string.IsNullOrEmpty(model.DCDate)
-                        ? DateOnly.FromDateTime(DateTime.Now)
-                        : DateOnly.Parse(model.DCDate);
-
-                    deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
-                        journalEntry.JournalVoucherId, dcDate);
-
-                    if (!string.IsNullOrEmpty(model.OtherReference))
-                    {
-                        deliveryChallanVoucher.ReferenceNumber = model.OtherReference;
-                        await _deliveryChallanService.UpdateDeliveryChallanVoucherAsync(deliveryChallanVoucher);
-                    }
-                }
-
+                // Create delivery challan entry
                 var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                     deliveryChallanVoucher.DeliveryChallanId,
                     model.JournalEntryId,
@@ -165,6 +179,7 @@ namespace PureLedger.Controllers
                     model.Remarks,
                     model.OtherReference);
 
+                // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalEntry.JournalVoucherId);
 
                 return Json(new
@@ -192,9 +207,9 @@ namespace PureLedger.Controllers
 
             try
             {
-                var results = new List<object>();
                 int journalVoucherId = model.JournalVoucherId;
 
+                // Get unprocessed entries
                 var unprocessedEntries = await _deliveryChallanService.GetUnprocessedEntriesByVoucherIdAsync(journalVoucherId);
 
                 if (!unprocessedEntries.Any())
@@ -206,59 +221,25 @@ namespace PureLedger.Controllers
                     });
                 }
 
-                var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalVoucherId);
+                // Get or create delivery challan voucher
+                var deliveryChallanVoucher = await GetOrCreateDeliveryChallanVoucherAsync(
+                    journalVoucherId, model.DCDate, model.OtherReference);
 
-                if (deliveryChallanVoucher == null)
-                {
-                    var dcDate = string.IsNullOrEmpty(model.DCDate)
-                        ? DateOnly.FromDateTime(DateTime.Now)
-                        : DateOnly.Parse(model.DCDate);
+                // Process all entries
+                var results = await ProcessEntriesBatchAsync(
+                    deliveryChallanVoucher.DeliveryChallanId,
+                    unprocessedEntries,
+                    model.LocationId,
+                    model.Remarks,
+                    model.OtherReference);
 
-                    deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
-                        journalVoucherId, dcDate);
-
-                    if (!string.IsNullOrEmpty(model.OtherReference))
-                    {
-                        deliveryChallanVoucher.ReferenceNumber = model.OtherReference;
-                        await _deliveryChallanService.UpdateDeliveryChallanVoucherAsync(deliveryChallanVoucher);
-                    }
-                }
-
-                foreach (var entry in unprocessedEntries)
-                {
-                    try
-                    {
-                        var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
-                            deliveryChallanVoucher.DeliveryChallanId,
-                            entry.EntryId,
-                            model.LocationId,
-                            model.Remarks,
-                            model.OtherReference);
-
-                        results.Add(new
-                        {
-                            entryId = entry.EntryId,
-                            success = true
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error processing entry {EntryId}", entry.EntryId);
-                        results.Add(new
-                        {
-                            entryId = entry.EntryId,
-                            success = false,
-                            message = ex.Message
-                        });
-                    }
-                }
-
+                // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
 
                 return Json(new
                 {
                     success = true,
-                    message = $"Processed {results.Count(r => ((dynamic)r).success == true)} out of {unprocessedEntries.Count} entries.",
+                    message = $"Processed {results.Count(r => r.Success)} out of {unprocessedEntries.Count} entries.",
                     results
                 });
             }
@@ -306,5 +287,88 @@ namespace PureLedger.Controllers
                 return Json(new { success = false, message = $"An error occurred: {ex.Message}" });
             }
         }
+
+        #endregion
+
+        #region Helper Methods
+
+        private async Task<DeliveryChallanVoucher> GetOrCreateDeliveryChallanVoucherAsync(
+            int journalVoucherId, string dcDate, string otherReference)
+        {
+            var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalVoucherId);
+
+            if (deliveryChallanVoucher == null)
+            {
+                var parsedDcDate = string.IsNullOrEmpty(dcDate)
+                    ? DateOnly.FromDateTime(DateTime.Now)
+                    : DateOnly.Parse(dcDate);
+
+                deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
+                    journalVoucherId, parsedDcDate);
+
+                if (!string.IsNullOrEmpty(otherReference))
+                {
+                    deliveryChallanVoucher.ReferenceNumber = otherReference;
+                    await _deliveryChallanService.UpdateDeliveryChallanVoucherAsync(deliveryChallanVoucher);
+                }
+            }
+
+            return deliveryChallanVoucher;
+        }
+
+        private async Task<List<EntryProcessResult>> ProcessEntriesBatchAsync(
+            int deliveryChallanId, List<JournalEntry> entries, int locationId, string remarks, string otherReference)
+        {
+            var processResults = new List<EntryProcessResult>();
+
+            // Process entries in parallel for better performance
+            var tasks = entries.Select(async entry =>
+            {
+                try
+                {
+                    var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
+                        deliveryChallanId,
+                        entry.EntryId,
+                        locationId,
+                        remarks,
+                        otherReference);
+
+                    return new EntryProcessResult
+                    {
+                        EntryId = entry.EntryId,
+                        Success = true
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing entry {EntryId}", entry.EntryId);
+                    
+                    return new EntryProcessResult
+                    {
+                        EntryId = entry.EntryId,
+                        Success = false,
+                        Message = ex.Message
+                    };
+                }
+            });
+
+            // Wait for all tasks to complete
+            var taskResults = await Task.WhenAll(tasks);
+            
+            return taskResults.ToList();
+        }
+
+        #endregion
+
+        #region Helper Classes
+
+        private class EntryProcessResult
+        {
+            public int EntryId { get; set; }
+            public bool Success { get; set; }
+            public string Message { get; set; }
+        }
+
+        #endregion
     }
 }

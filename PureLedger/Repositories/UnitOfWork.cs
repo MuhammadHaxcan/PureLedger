@@ -1,3 +1,6 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using PureLedger.Data;
 using PureLedger.Repositories.Interfaces;
 
@@ -56,6 +59,11 @@ namespace PureLedger.Repositories
         public async Task<int> SaveChangesAsync()
         {
             return await _context.SaveChangesAsync();
+        }
+        
+        public async Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
+        {
+            return await _context.Database.BeginTransactionAsync(isolationLevel);
         }
     }
 }

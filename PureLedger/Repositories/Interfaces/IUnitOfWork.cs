@@ -1,4 +1,6 @@
+using System.Data;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace PureLedger.Repositories.Interfaces
 {
@@ -19,5 +21,8 @@ namespace PureLedger.Repositories.Interfaces
         IDeliveryChallanEntryRepository DeliveryChallanEntries { get; }
 
         Task<int> SaveChangesAsync();
+        
+        // Add transaction support
+        Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
     }
 }

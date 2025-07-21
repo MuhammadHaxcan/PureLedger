@@ -47,6 +47,16 @@
         </div>
     </div>
 
+    <!-- Debug info -->
+    <div class="debug-info mb-3 d-none">
+        <div class="alert alert-info">
+            <strong>Debug Info:</strong>
+            <p>Model SinceDate: @(Model?.SinceDate?.ToString("yyyy-MM-dd"))</p>
+            <p>Model ToDate: @(Model?.ToDate?.ToString("yyyy-MM-dd"))</p>
+            <p>Projects Count: @(ViewBag.Projects?.Count ?? 0)</p>
+        </div>
+    </div>
+
     <!-- Search box -->
     <div class="mb-3">
         <input type="text" id="searchInput" class="form-control" placeholder="Search...">
@@ -67,6 +77,13 @@
             </thead>
             <tbody id="resultsTable">
                 <!-- Data will be loaded here via JavaScript -->
+                <tr>
+                    <td colspan="6" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -181,4 +198,13 @@
 
 @section Scripts {
     <script src="~/js/delivery-challan.js"></script>
+    <script>
+        // Enable this line to show debug info if needed
+        // document.querySelector('.debug-info').classList.remove('d-none');
+        
+        // Log any JavaScript errors
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript error:', e.error);
+        });
+    </script>
 }
