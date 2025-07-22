@@ -33,6 +33,7 @@ namespace PureLedger.Repositories
                 .Include(dc => dc.JournalVoucher)
                     .ThenInclude(jv => jv.JournalEntries)
                         .ThenInclude(je => je.Account)
+                            .ThenInclude(ad => ad.AccountData)
                 .Include(dc => dc.DeliveryChallanEntries)
                     .ThenInclude(dce => dce.JournalEntry)
                 .Include(dc => dc.DeliveryChallanEntries)

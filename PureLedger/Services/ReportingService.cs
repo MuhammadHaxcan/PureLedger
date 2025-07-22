@@ -136,9 +136,10 @@ namespace PureLedger.Services
                 ProjectName = projectName,
                 BookerName = "",
                 CreatedDate = date,
+                Builty = jvId,
 
                 //Customer Info
-                CustomerAccountName = accountName,
+                CustomerAccountName = name,
                 CustomerAddress = address,
                 CustomerCity= city,
                 CustomerPhone = phone,
@@ -146,7 +147,7 @@ namespace PureLedger.Services
                 Entries = entries,
                 TotalQuantity = entries.Sum(e => e.Quantity),
                 TotalActualAmount = entries.Sum(e => e.LineTotal),
-                TotalAmount = entries.Sum(e => e.Debit),
+                TotalAmount = entries.Sum(e => e.Credit),
                 
                 AuthorizedBy = "",
                 ReceivedBy = "",

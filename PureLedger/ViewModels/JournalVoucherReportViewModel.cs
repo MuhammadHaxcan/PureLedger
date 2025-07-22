@@ -23,7 +23,7 @@
         //Particular Document Detail
         public DateOnly? DueDate { get; set; }
         public string? Adda { get; set; }
-        public string? Builty { get; set; }
+        public int? Builty { get; set; }
         public string? Remarks { get; set; }
 
 
