@@ -17,15 +17,15 @@ public class CartageViewModel
     public decimal Amount { get; set; }
     
     public bool PostToCustomer { get; set; }
-    public string Referece { get; set; }
-
-    // Date fields changed to DateTimeOnly and made required
+    
+    public string? Reference { get; set; } // Fixed the typo from "Referece"
+    
     [Required]
     public DateOnly DcDate { get; set; }
     
-    public string DcRemarks { get; set; }
-    public string DcStation { get; set; }
-    public string DcOtherRef { get; set; }
+    public string? DcRemarks { get; set; }
+    public string? DcStation { get; set; }
+    public string? DcOtherRef { get; set; }
     
     [Required]
     public int DcLocation { get; set; }

@@ -5,42 +5,60 @@ namespace PureLedger.Services
 {
     public interface IDeliveryChallanService
     {
+        #region Entity Retrieval
         Task<List<Project>> GetAllProjectsAsync();
         Task<List<Models.Location>> GetAllLocationsAsync();
+        Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
+        
+        // Entry retrieval methods
+        Task<List<JournalEntryDetailViewModel>> GetEntriesByVoucherIdAsync(int voucherId);
+        Task<List<JournalEntry>> GetUnprocessedEntriesByVoucherIdAsync(int voucherId);
+        
+        // DeliveryChallan retrieval methods with overloads
+        Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByIdAsync(int deliveryChallanId);
+        Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByJournalVoucherIdAsync(int journalVoucherId);
+        Task<List<DeliveryChallanVoucher>> GetDeliveryChallanVouchersByDateRangeAsync(DateOnly startDate, DateOnly endDate);
+        Task<List<DeliveryChallanEntry>> GetDeliveryChallanEntriesByVoucherIdAsync(int deliveryChallanId);
+        
+        // Filtered entries retrieval
         Task<DeliveryChallanFilterViewModel> GetFilteredEntriesForDeliveryChallanAsync(
             DateOnly? sinceDate,
             DateOnly? toDate,
-            int? projectId,
-            int? categoryId,
-            int? accountId);
+            int? projectId = null,
+            int? categoryId = null,
+            int? accountId = null);
+        #endregion
 
-        // Methods for delivery challan operations
+        #region DeliveryChallan Operations
+        // Create operations
         Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate);
-        Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string remarks, string otherReference);
-        Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByJournalVoucherIdAsync(int journalVoucherId);
-        Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByIdAsync(int deliveryChallanId);
-        Task<List<DeliveryChallanVoucher>> GetDeliveryChallanVouchersByDateRangeAsync(DateOnly startDate, DateOnly endDate);
-        Task<List<DeliveryChallanEntry>> GetDeliveryChallanEntriesByVoucherIdAsync(int deliveryChallanId);
-        Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
+        Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate, string reference);
+        
+        // Entry operations with overloads
+        Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference);
+        Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate);
+        #endregion
 
-        // Additional methods
-        Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
-        Task<List<JournalEntryDetailViewModel>> GetEntriesByVoucherIdAsync(int voucherId);
+        #region DeliveryChallan Update and Processing
+        // Update operations
         Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
-        Task<List<JournalEntry>> GetUnprocessedEntriesByVoucherIdAsync(int voucherId);
+        Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
         Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
+        
+        // Cartage processing
+        Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(CartageViewModel model);
         Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(
             int journalVoucherId,
             int entryId,
             int transporterId,
             decimal amount,
             bool postToCustomer,
-            string reference,
+            string? reference,
             DateOnly dcDate,
-            string dcRemarks,
-            string dcStation,
-            string dcOtherRef,
-            int dcLocation
-        );
+            string? dcRemarks,
+            string? dcStation,
+            string? dcOtherRef,
+            int dcLocation);
+        #endregion
     }
 }

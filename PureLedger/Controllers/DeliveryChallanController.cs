@@ -2,8 +2,6 @@
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.ViewModels;
-using System;
-using System.Threading.Tasks;
 
 namespace PureLedger.Controllers
 {
@@ -57,28 +55,20 @@ namespace PureLedger.Controllers
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
 
                 // Set default dates if not provided
-                if (!filter.SinceDate.HasValue)
-                {
-                    filter.SinceDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-30));
-                }
-
-                if (!filter.ToDate.HasValue)
-                {
-                    filter.ToDate = DateOnly.FromDateTime(DateTime.Now);
-                }
+                filter.SinceDate ??= DateOnly.FromDateTime(DateTime.Now.AddDays(-30));
+                filter.ToDate ??= DateOnly.FromDateTime(DateTime.Now);
 
                 var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
 
-                _logger.LogInformation("GetFilteredEntries returning {VoucherCount} vouchers",
-                    result.Vouchers.Count);
+                _logger.LogInformation("GetFilteredEntries returning {VoucherCount} vouchers", result.Vouchers.Count);
 
                 return Json(result);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting filtered entries");
-                return Json(new { success = false, message = "An error occurred while retrieving data: " + ex.Message });
+                return JsonError("An error occurred while retrieving data", ex);
             }
         }
 
@@ -93,7 +83,7 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting locations");
-                return Json(new { success = false, message = "An error occurred while retrieving locations." });
+                return JsonError("An error occurred while retrieving locations", ex);
             }
         }
 
@@ -108,7 +98,7 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting entries for voucher {VoucherId}", voucherId);
-                return Json(new { success = false, message = "An error occurred while retrieving entries." });
+                return JsonError("An error occurred while retrieving entries", ex);
             }
         }
 
@@ -142,7 +132,7 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking existing challan for voucher {VoucherId}", voucherId);
-                return Json(new { exists = false, success = false, message = "An error occurred while checking for existing challan." });
+                return JsonError("An error occurred while checking for existing challan", ex, new { exists = false });
             }
         }
 
@@ -167,25 +157,23 @@ namespace PureLedger.Controllers
                     return NotFound(new { success = false, message = $"Journal entry with ID {model.JournalEntryId} not found." });
                 }
 
-                // Get or create delivery challan voucher
-                var deliveryChallanVoucher = await GetOrCreateDeliveryChallanVoucherAsync(
+                // Get or create delivery challan voucher with reference
+                var deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                     journalEntry.JournalVoucherId, model.DCDate, model.OtherReference);
 
                 // Create delivery challan entry
                 var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                     deliveryChallanVoucher.DeliveryChallanId,
                     model.JournalEntryId,
-                    model.LocationId,
+                    model.LocationId,  // Explicitly pass the LocationId from the model
                     model.Remarks,
                     model.OtherReference);
 
                 // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalEntry.JournalVoucherId);
 
-                return Json(new
+                return JsonSuccess("Entry successfully added to delivery challan.", new
                 {
-                    success = true,
-                    message = "Entry successfully added to delivery challan.",
                     deliveryChallanId = deliveryChallanVoucher.DeliveryChallanId,
                     dcEntryId = deliveryChallanEntry.DCEntryId
                 });
@@ -193,7 +181,7 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating delivery challan entry");
-                return Json(new { success = false, message = $"An error occurred: {ex.Message}" });
+                return JsonError($"An error occurred", ex);
             }
         }
 
@@ -207,6 +195,9 @@ namespace PureLedger.Controllers
 
             try
             {
+                _logger.LogInformation("ProcessAll called with JournalVoucherId={JournalVoucherId}, DCDate={DCDate}, LocationId={LocationId}", 
+                    model.JournalVoucherId, model.DCDate, model.LocationId);
+                    
                 int journalVoucherId = model.JournalVoucherId;
 
                 // Get unprocessed entries
@@ -214,45 +205,37 @@ namespace PureLedger.Controllers
 
                 if (!unprocessedEntries.Any())
                 {
-                    return Json(new
-                    {
-                        success = false,
-                        message = "No unprocessed entries found for this voucher."
-                    });
+                    return JsonError("No unprocessed entries found for this voucher.");
                 }
 
                 // Get or create delivery challan voucher
-                var deliveryChallanVoucher = await GetOrCreateDeliveryChallanVoucherAsync(
+                var deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                     journalVoucherId, model.DCDate, model.OtherReference);
 
-                // Process all entries
+                // Process all entries and pass the date from the model
                 var results = await ProcessEntriesBatchAsync(
                     deliveryChallanVoucher.DeliveryChallanId,
                     unprocessedEntries,
                     model.LocationId,
                     model.Remarks,
-                    model.OtherReference);
+                    model.OtherReference,
+                    model.DCDate);  // Pass the date from the model
 
                 // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
 
-                return Json(new
-                {
-                    success = true,
-                    message = $"Processed {results.Count(r => r.Success)} out of {unprocessedEntries.Count} entries.",
-                    results
-                });
+                return JsonSuccess($"Processed {results.Count(r => r.Success)} out of {unprocessedEntries.Count} entries.", new { results });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing multiple entries");
-                return Json(new { success = false, message = $"An error occurred: {ex.Message}" });
+                return JsonError($"An error occurred", ex);
             }
         }
 
         [HttpPost]
         public async Task<IActionResult> AddCartage([FromBody] CartageViewModel model)
-            {
+        {
             if (!ModelState.IsValid)
             {
                 return BadRequest(new { success = false, message = "Invalid data submitted." });
@@ -260,31 +243,17 @@ namespace PureLedger.Controllers
 
             try
             {
-                var result = await _deliveryChallanService.ProcessCartageAndDeliveryAsync(
-                    model.JournalVoucherId,
-                    model.EntryId,
-                    model.TransporterId,
-                    model.Amount,
-                    model.PostToCustomer,
-                    model.Referece,
-                    model.DcDate,
-                    model.DcRemarks,
-                    model.DcStation,
-                    model.DcOtherRef,
-                    model.DcLocation
-                );
+                var result = await _deliveryChallanService.ProcessCartageAndDeliveryAsync(model);
 
-                return Json(new
+                return JsonSuccess("Cartage added and delivery challan processed successfully", new
                 {
-                    success = true,
-                    message = "Cartage added and delivery challan processed successfully",
                     deliveryChallanId = result.DeliveryChallanId
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing cartage");
-                return Json(new { success = false, message = $"An error occurred: {ex.Message}" });
+                return JsonError($"An error occurred", ex);
             }
         }
 
@@ -292,69 +261,136 @@ namespace PureLedger.Controllers
 
         #region Helper Methods
 
-        private async Task<DeliveryChallanVoucher> GetOrCreateDeliveryChallanVoucherAsync(
-            int journalVoucherId, DateOnly dcDate, string otherReference)
-        {
-            var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalVoucherId);
-
-            if (deliveryChallanVoucher == null)
-            {
-                // Convert DateTimeOnly to DateOnly
-                var parsedDcDate = DateOnly.FromDateTime(dcDate.ToDateTime(TimeOnly.MinValue));
-
-                deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
-                    journalVoucherId, parsedDcDate);
-
-                if (!string.IsNullOrEmpty(otherReference))
-                {
-                    deliveryChallanVoucher.ReferenceNumber = otherReference;
-                    await _deliveryChallanService.UpdateDeliveryChallanVoucherAsync(deliveryChallanVoucher);
-                }
-            }
-
-            return deliveryChallanVoucher;
-        }
-
         private async Task<List<EntryProcessResult>> ProcessEntriesBatchAsync(
-            int deliveryChallanId, List<JournalEntry> entries, int locationId, string remarks, string otherReference)
+            int deliveryChallanId, List<JournalEntry> entries, int locationId, string? remarks, string? otherReference, DateOnly entryDate)
         {
-            var processResults = new List<EntryProcessResult>();
+            var results = new List<EntryProcessResult>();
 
-            // Process entries in parallel for better performance
-            var tasks = entries.Select(async entry =>
+            // Add detailed logging to trace execution
+            _logger.LogInformation("Starting to process {Count} entries for delivery challan ID {DeliveryChallanId} with date {EntryDate}",
+                entries.Count, deliveryChallanId, entryDate);
+
+            // Process entries sequentially to avoid EF Core concurrency issues
+            foreach (var entry in entries)
             {
                 try
                 {
+                    _logger.LogInformation("Processing entry ID {EntryId} for delivery challan ID {DeliveryChallanId}",
+                        entry.EntryId, deliveryChallanId);
+
+                    // Make sure this entry isn't already processed
+                    if (entry.IsProcessed)
+                    {
+                        _logger.LogWarning("Entry ID {EntryId} is already marked as processed - skipping",
+                            entry.EntryId);
+                        
+                        results.Add(new EntryProcessResult
+                        {
+                            EntryId = entry.EntryId,
+                            Success = true,
+                            Message = "Entry was already processed"
+                        });
+                        
+                        continue;
+                    }
+
+                    // Create delivery challan entry with the specified date
                     var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                         deliveryChallanId,
                         entry.EntryId,
                         locationId,
                         remarks,
-                        otherReference);
+                        otherReference,
+                        entryDate);  // Pass the entry date from the batch model
 
-                    return new EntryProcessResult
+                    _logger.LogInformation("Successfully processed entry ID {EntryId}, created DC entry ID {DCEntryId} with date {EntryDate}",
+                        entry.EntryId, deliveryChallanEntry.DCEntryId, entryDate);
+
+                    results.Add(new EntryProcessResult
                     {
                         EntryId = entry.EntryId,
                         Success = true
-                    };
+                    });
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing entry {EntryId}", entry.EntryId);
+                    _logger.LogError(ex, "Error processing entry {EntryId} for delivery challan {DeliveryChallanId}: {ErrorMessage}",
+                        entry.EntryId, deliveryChallanId, ex.Message);
 
-                    return new EntryProcessResult
+                    results.Add(new EntryProcessResult
                     {
                         EntryId = entry.EntryId,
                         Success = false,
                         Message = ex.Message
-                    };
+                    });
+
+                    // Continue processing other entries even if one fails
                 }
-            });
+            }
 
-            // Wait for all tasks to complete
-            var taskResults = await Task.WhenAll(tasks);
+            _logger.LogInformation("Completed processing entries for delivery challan ID {DeliveryChallanId}. " +
+                "Success: {SuccessCount}/{TotalCount}",
+                deliveryChallanId, results.Count(r => r.Success), entries.Count);
+            
+            return results;
+        }
 
-            return taskResults.ToList();
+        private IActionResult JsonSuccess(string message, object? data = null)
+        {
+            var response = new
+            {
+                success = true,
+                message
+            };
+
+            if (data != null)
+            {
+                // Combine response with data using reflection
+                var dataProps = data.GetType().GetProperties();
+                var combinedProps = response.GetType().GetProperties().ToList();
+                combinedProps.AddRange(dataProps);
+
+                // Create a dynamic object with all properties
+                var expando = new System.Dynamic.ExpandoObject();
+                var expandoDict = expando as IDictionary<string, object>;
+
+                expandoDict["success"] = true;
+                expandoDict["message"] = message;
+
+                foreach (var prop in dataProps)
+                {
+                    expandoDict[prop.Name] = prop.GetValue(data);
+                }
+
+                return Json(expando);
+            }
+
+            return Json(response);
+        }
+
+        private IActionResult JsonError(string message, Exception? ex = null, object? additionalData = null)
+        {
+            var errorMessage = ex != null ? $"{message}: {ex.Message}" : message;
+
+            if (additionalData != null)
+            {
+                // Combine error response with additional data
+                var expando = new System.Dynamic.ExpandoObject();
+                var expandoDict = expando as IDictionary<string, object>;
+
+                expandoDict["success"] = false;
+                expandoDict["message"] = errorMessage;
+
+                // Add all properties from additionalData
+                foreach (var prop in additionalData.GetType().GetProperties())
+                {
+                    expandoDict[prop.Name] = prop.GetValue(additionalData);
+                }
+
+                return Json(expando);
+            }
+
+            return Json(new { success = false, message = errorMessage });
         }
 
         #endregion
@@ -365,7 +401,7 @@ namespace PureLedger.Controllers
         {
             public int EntryId { get; set; }
             public bool Success { get; set; }
-            public string Message { get; set; } = string.Empty;
+            public string? Message { get; set; }
         }
 
         #endregion
