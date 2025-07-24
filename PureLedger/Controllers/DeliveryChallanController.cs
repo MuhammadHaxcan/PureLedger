@@ -252,7 +252,7 @@ namespace PureLedger.Controllers
 
         [HttpPost]
         public async Task<IActionResult> AddCartage([FromBody] CartageViewModel model)
-        {
+            {
             if (!ModelState.IsValid)
             {
                 return BadRequest(new { success = false, message = "Invalid data submitted." });

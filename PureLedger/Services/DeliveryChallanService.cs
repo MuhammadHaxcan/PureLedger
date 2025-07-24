@@ -395,15 +395,11 @@ namespace PureLedger.Services
                 // Get debit account ID based on postToCustomer flag
                 int debitAccountId = await GetDebitAccountIdAsync(originalJV, entry, postToCustomer);
 
-                // Create cartage journal voucher and entries
-                var cartageJV = await CreateCartageJournalVoucherAsync(
-                    originalJV.ProjectId, debitAccountId, transporterId, entry, amount);
-
-                // Update the original entry
+                // Update the original entry first
                 entry.LocationId = dcLocation;
                 entry.IsProcessed = true;
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
-
+                
                 // Create or get delivery challan voucher
                 var deliveryChallanVoucher = await CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDate);
 
@@ -414,6 +410,10 @@ namespace PureLedger.Services
                     dcLocation,
                     dcRemarks,
                     dcOtherRef);
+
+                // Create cartage journal voucher and entries as the last step
+                await CreateCartageJournalVoucherAsync(
+                    originalJV.ProjectId, debitAccountId, transporterId, entry, amount);
 
                 // Update journal voucher processed status
                 await UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
@@ -428,6 +428,79 @@ namespace PureLedger.Services
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error processing cartage and delivery for journal voucher {JournalVoucherId}, entry {EntryId}",
                     journalVoucherId, entryId);
+                throw;
+            }
+        }
+
+        private async Task<JournalVoucher> CreateCartageJournalVoucherAsync(
+            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, decimal amount)
+        {
+            try
+            {
+                // Create cartage journal voucher
+                var cartageJV = new JournalVoucher
+                {
+                    ProjectId = projectId,
+                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
+                    IsProcessed = true,
+                    CreditableDate = DateOnly.FromDateTime(DateTime.Now)
+                };
+                
+                // Save the voucher first
+                cartageJV = await _unitOfWork.JournalVouchers.AddAsync(cartageJV);
+                await _unitOfWork.SaveChangesAsync();
+
+                // Create both entries at once to avoid gaps
+                var entries = new List<JournalEntry>
+                {
+                    // Debit entry
+                    new JournalEntry
+                    {
+                        JournalVoucherId = cartageJV.JvId,
+                        AccountId = debitAccountId,
+                        CategoryId = originalEntry.CategoryId,
+                        Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}",
+                        Quantity = 1,
+                        Rate = amount,
+                        Debit = amount,
+                        Credit = 0,
+                        Discount = 0,
+                        DiscountPercent = 0,
+                        Rbp = "N",
+                        LocationId = null,
+                        IsProcessed = true
+                    },
+                    // Credit entry
+                    new JournalEntry
+                    {
+                        JournalVoucherId = cartageJV.JvId,
+                        AccountId = transporterId,
+                        CategoryId = 2, // Transporter category
+                        Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}",
+                        Quantity = 1,
+                        Rate = amount,
+                        Debit = 0,
+                        Credit = amount,
+                        Discount = 0,
+                        DiscountPercent = 0,
+                        Rbp = "N",
+                        LocationId = null,
+                        IsProcessed = true
+                    }
+                };
+
+                // Add entries in batch
+                foreach (var entry in entries)
+                {
+                    await _unitOfWork.JournalEntries.AddAsync(entry);
+                }
+                
+                await _unitOfWork.SaveChangesAsync();
+                return cartageJV;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating cartage journal voucher for project ID {ProjectId}", projectId);
                 throw;
             }
         }
@@ -483,61 +556,6 @@ namespace PureLedger.Services
             }
 
             throw new InvalidOperationException("No customer account found in the journal voucher");
-        }
-
-        private async Task<JournalVoucher> CreateCartageJournalVoucherAsync(
-            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, decimal amount)
-        {
-            // Create cartage journal voucher
-            var cartageJV = new JournalVoucher
-            {
-                ProjectId = projectId,
-                EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                IsProcessed = true,
-                CreditableDate = DateOnly.FromDateTime(DateTime.Now)
-            };
-            cartageJV = await _unitOfWork.JournalVouchers.AddAsync(cartageJV);
-
-            // Create debit entry
-            var debitEntry = new JournalEntry
-            {
-                JournalVoucherId = cartageJV.JvId,
-                AccountId = debitAccountId,
-                CategoryId = originalEntry.CategoryId,
-                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}",
-                Quantity = 1,
-                Rate = amount,
-                Debit = amount,
-                Credit = 0,
-                Discount = 0,
-                DiscountPercent = 0,
-                Rbp = "N",
-                LocationId = null,
-                IsProcessed = true
-            };
-            await _unitOfWork.JournalEntries.AddAsync(debitEntry);
-
-            // Create credit entry
-            var creditEntry = new JournalEntry
-            {
-                JournalVoucherId = cartageJV.JvId,
-                AccountId = transporterId,
-                CategoryId = 2, // Transporter category
-                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}",
-                Quantity = 1,
-                Rate = amount,
-                Debit = 0,
-                Credit = amount,
-                Discount = 0,
-                DiscountPercent = 0,
-                Rbp = "N",
-                LocationId = null,
-                IsProcessed = true
-            };
-            await _unitOfWork.JournalEntries.AddAsync(creditEntry);
-
-            await _unitOfWork.SaveChangesAsync();
-            return cartageJV;
         }
 
         #endregion

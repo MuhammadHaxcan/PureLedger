@@ -9,6 +9,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('searchInput');
     const resultsTable = document.getElementById('resultsTable');
 
+    // Track the currently open modal data
+    let currentModalData = {
+        voucherId: null,
+        entryId: null
+    };
+
     // Set default dates if not already set
     if (!sinceDate.value) {
         const thirtyDaysAgo = new Date();
@@ -53,6 +59,22 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('transferBtn')?.addEventListener('click', function () {
         alert('Transfer functionality will be implemented in the future.');
     });
+
+    // Listen for modal close events to clean up
+    const deliveryChallanModal = document.getElementById('deliveryChallanModal');
+    if (deliveryChallanModal) {
+        deliveryChallanModal.addEventListener('hidden.bs.modal', function () {
+            // Reset form and state when modal is closed
+            document.getElementById('dcJournalVoucherId').value = '';
+            document.getElementById('dcJournalEntryId').value = '';
+            document.getElementById('dcChallanId').value = '';
+            currentModalData = { voucherId: null, entryId: null };
+
+            // Clear any selected checkboxes
+            const checkboxes = document.querySelectorAll('.entry-checkbox:not([disabled])');
+            checkboxes.forEach(cb => cb.checked = false);
+        });
+    }
 
     function fetchCategories(projectId) {
         fetch(`/api/common/categories/${projectId}`)
@@ -157,13 +179,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${entry.quantity}</td>
                     <td>
                         <button class="btn btn-sm ${entry.isProcessed ? 'btn-success' : 'btn-primary'} create-dc-btn" 
-                                onclick="openDeliveryChallanModal(${voucher.jvId}, ${entry.entryId})">
+                                data-voucher-id="${voucher.jvId}" 
+                                data-entry-id="${entry.entryId}">
                             <i class="bi bi-${entry.isProcessed ? 'check-circle' : 'pencil'}"></i> 
                             ${entry.isProcessed ? 'Processed' : 'Edit'}
                         </button>
                     </td>
                 `;
                 resultsTable.appendChild(row);
+            });
+        });
+
+        // Add event listeners to all create-dc-btn buttons
+        document.querySelectorAll('.create-dc-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const voucherId = this.dataset.voucherId;
+                const entryId = this.dataset.entryId;
+                openDeliveryChallanModal(parseInt(voucherId), parseInt(entryId));
             });
         });
     }
@@ -208,6 +240,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function loadVoucherEntries(voucherId, entryId) {
+        console.log(`Loading voucher entries for voucher: ${voucherId}, selected entry: ${entryId}`);
+
         // Load voucher entries
         fetch(`/DeliveryChallan/GetVoucherEntries?voucherId=${voucherId}`)
             .then(res => {
@@ -228,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 entries.forEach(entry => {
                     if (entry.quantity > 0) {
                         const row = document.createElement('tr');
+                        row.dataset.entryId = entry.entryId;
 
                         // Mark rows differently if they're already processed
                         if (entry.isProcessed) {
@@ -236,19 +271,56 @@ document.addEventListener('DOMContentLoaded', function () {
                             unprocessedCount++;
                         }
 
+                        // Check if this is the selected entry
+                        const isSelected = entry.entryId == entryId && !entry.isProcessed;
+
                         row.innerHTML = `
                             <td>${entry.accountName || ''}</td>
                             <td>${entry.description || ''}</td>
                             <td>${entry.quantity}</td>
                             <td>
-                                <input type="checkbox" class="entry-checkbox" value="${entry.entryId}" 
+                                <input type="checkbox" class="entry-checkbox" data-entry-id="${entry.entryId}" 
                                        ${entry.isProcessed ? 'disabled checked' : ''}
-                                       ${entry.entryId == entryId && !entry.isProcessed ? 'checked' : ''}>
+                                       ${isSelected ? 'checked' : ''}>
                             </td>
                         `;
                         entriesTable.appendChild(row);
                     }
                 });
+
+                // Add event listeners to checkboxes after they're created
+                document.querySelectorAll('.entry-checkbox:not([disabled])').forEach(checkbox => {
+                    checkbox.addEventListener('change', function () {
+                        const entryId = this.dataset.entryId;
+
+                        // Uncheck all other checkboxes
+                        document.querySelectorAll('.entry-checkbox:not([disabled])').forEach(cb => {
+                            if (cb !== this) {
+                                cb.checked = false;
+                            }
+                        });
+
+                        // Update hidden form field
+                        if (this.checked) {
+                            document.getElementById('dcJournalEntryId').value = entryId;
+                            console.log(`Selected entry ID updated to: ${entryId}`);
+                        } else {
+                            document.getElementById('dcJournalEntryId').value = '';
+                            console.log('Entry selection cleared');
+                        }
+                    });
+                });
+
+                // If an entry was specified but no checkbox is checked, make sure form field is updated
+                const checkedBox = document.querySelector('.entry-checkbox:checked:not([disabled])');
+                if (checkedBox) {
+                    document.getElementById('dcJournalEntryId').value = checkedBox.dataset.entryId;
+                    console.log(`Initial entry ID set to: ${checkedBox.dataset.entryId}`);
+                } else if (entryId && !document.querySelector(`.entry-checkbox[data-entry-id="${entryId}"]:disabled`)) {
+                    // If the specified entry isn't checked (and isn't disabled), make sure it's not in the form
+                    document.getElementById('dcJournalEntryId').value = '';
+                    console.log('No entry selected');
+                }
 
                 // Update UI based on process status
                 const postAllBtn = document.getElementById('postAllBtn');
@@ -269,8 +341,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     window.openDeliveryChallanModal = function (voucherId, entryId) {
-        document.getElementById('dcJournalVoucherId').value = voucherId;
-        document.getElementById('dcJournalEntryId').value = entryId || '';
+        console.log(`Opening modal for voucher: ${voucherId}, entry: ${entryId}`);
+
+        // Store current modal data
+        currentModalData = {
+            voucherId: voucherId,
+            entryId: entryId
+        };
+
+        // Reset and set form values
+        const voucherIdField = document.getElementById('dcJournalVoucherId');
+        const entryIdField = document.getElementById('dcJournalEntryId');
+
+        // Clear previous values
+        voucherIdField.value = '';
+        entryIdField.value = '';
+
+        // Set new values
+        voucherIdField.value = voucherId;
+        if (entryId) {
+            entryIdField.value = entryId;
+        }
 
         // Show the all entries view and create the table structure
         const allEntriesView = document.getElementById('allEntriesView');
@@ -299,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         loadLocations();
 
-        // Load voucher entries using our refactored function
+        // Load voucher entries
         loadVoucherEntries(voucherId, entryId);
 
         // Check for existing challan
@@ -347,8 +438,16 @@ document.addEventListener('DOMContentLoaded', function () {
             cartageBtn.id = 'openCartageBtn';
             cartageBtn.className = 'btn btn-info';
             cartageBtn.textContent = 'Add Cartage';
-            cartageBtn.onclick = () => openCartageModal(voucherId, entryId);
+            cartageBtn.onclick = function () {
+                // Use the current modal data when opening cartage
+                openCartageModal(currentModalData.voucherId, currentModalData.entryId);
+            };
             modalFooter.insertBefore(cartageBtn, modalFooter.firstChild);
+        } else {
+            // Update the existing cartage button
+            document.getElementById('openCartageBtn').onclick = function () {
+                openCartageModal(currentModalData.voucherId, currentModalData.entryId);
+            };
         }
 
         const modal = new bootstrap.Modal(document.getElementById('deliveryChallanModal'));
@@ -356,8 +455,24 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     function openCartageModal(voucherId, entryId) {
-        document.getElementById('cartageJournalVoucherId').value = voucherId;
-        document.getElementById('cartageEntryId').value = entryId;
+        console.log(`Opening cartage modal for voucher: ${voucherId}, entry: ${entryId}`);
+
+        // Get fresh values from current modal
+        const cartageVoucherId = document.getElementById('cartageJournalVoucherId');
+        const cartageEntryId = document.getElementById('cartageEntryId');
+
+        // Clear previous values
+        cartageVoucherId.value = '';
+        cartageEntryId.value = '';
+
+        // Set new values
+        cartageVoucherId.value = voucherId;
+
+        // Get the currently selected entry ID (could be different from the original)
+        const selectedEntryId = document.getElementById('dcJournalEntryId').value || entryId;
+        if (selectedEntryId) {
+            cartageEntryId.value = selectedEntryId;
+        }
 
         // Load transporters (from transporter category)
         loadTransporters();
@@ -425,14 +540,23 @@ document.addEventListener('DOMContentLoaded', function () {
     const postSingleBtn = document.getElementById('postSingleBtn');
     if (postSingleBtn) {
         postSingleBtn.addEventListener('click', function () {
+            // Get the current voucher ID
+            const voucherId = document.getElementById('dcJournalVoucherId').value;
+
+            // Get the specific entry ID either from the form or from the selected checkbox
             let entryId = document.getElementById('dcJournalEntryId').value;
+
+            console.log(`Posting entry - Current form entryId: ${entryId}`);
+
+            // If no entry ID is set in the form field, check for a selected checkbox
             if (!entryId) {
                 const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
                 if (!selected) {
                     alert('Please select an unprocessed entry to process');
                     return;
                 }
-                entryId = selected.value;
+                entryId = selected.dataset.entryId;
+                console.log(`Selected checkbox entryId: ${entryId}`);
             }
 
             const locationId = document.getElementById('dcLocation').value;
@@ -453,6 +577,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 OtherReference: otherRef
             };
 
+            // For debugging
+            console.log('Posting entry with data:', data);
+
             fetch('/DeliveryChallan/PostSingleEntry', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -468,7 +595,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .then(data => {
                     if (data.success) {
+                        // Close the modal
                         bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+
+                        // Reset form field and state
+                        document.getElementById('dcJournalEntryId').value = '';
+                        document.getElementById('dcJournalVoucherId').value = '';
+                        currentModalData = { voucherId: null, entryId: null };
+
+                        // Refresh data
                         loadFilteredEntries();
                         alert('Entry processed successfully');
                     } else {
@@ -529,8 +664,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (data.success) {
                         // Close modal
                         bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+
+                        // Reset form field and state
+                        document.getElementById('dcJournalEntryId').value = '';
+                        document.getElementById('dcJournalVoucherId').value = '';
+                        currentModalData = { voucherId: null, entryId: null };
+
                         // Refresh data
                         loadFilteredEntries();
+
                         // Show success message
                         alert(data.message || 'Entries processed successfully');
                     } else {
@@ -553,6 +695,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const transporterId = document.getElementById('transporterAccount').value;
             const amount = document.getElementById('cartageAmount').value;
             const postToCustomer = document.getElementById('postToCustomer').checked;
+
+            console.log(`Adding cartage for voucher: ${voucherId}, entry: ${entryId}`);
 
             // Collect DC fields from the main modal
             const dcDate = document.getElementById('dcDate').value;
@@ -584,6 +728,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 dcLocation: parseInt(dcLocation)
             };
 
+            // For debugging
+            console.log('Posting cartage with data:', data);
+
             fetch('/DeliveryChallan/AddCartage', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -599,9 +746,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .then(result => {
                     if (result.success) {
+                        // Close both modals
                         bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
                         bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+
+                        // Reset form field and state
+                        document.getElementById('dcJournalEntryId').value = '';
+                        document.getElementById('dcJournalVoucherId').value = '';
+                        document.getElementById('cartageJournalVoucherId').value = '';
+                        document.getElementById('cartageEntryId').value = '';
+                        currentModalData = { voucherId: null, entryId: null };
+
+                        // Refresh data
                         loadFilteredEntries();
+
                         alert('Cartage added and delivery challan processed successfully');
                     } else {
                         alert(result.message || 'Error processing cartage');
