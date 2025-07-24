@@ -1,5 +1,6 @@
 namespace PureLedger.ViewModels;
 using System.ComponentModel.DataAnnotations;
+
 public class CartageViewModel
 {
     [Required]
@@ -18,10 +19,14 @@ public class CartageViewModel
     public bool PostToCustomer { get; set; }
     public string Referece { get; set; }
 
-    // Add these fields
-    public string DcDate { get; set; }
+    // Date fields changed to DateTimeOnly and made required
+    [Required]
+    public DateOnly DcDate { get; set; }
+    
     public string DcRemarks { get; set; }
     public string DcStation { get; set; }
     public string DcOtherRef { get; set; }
+    
+    [Required]
     public int DcLocation { get; set; }
 }

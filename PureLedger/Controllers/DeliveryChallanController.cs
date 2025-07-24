@@ -53,26 +53,26 @@ namespace PureLedger.Controllers
         {
             try
             {
-                _logger.LogInformation("GetFilteredEntries called with parameters: SinceDate={SinceDate}, ToDate={ToDate}, ProjectId={ProjectId}, CategoryId={CategoryId}, AccountId={AccountId}", 
+                _logger.LogInformation("GetFilteredEntries called with parameters: SinceDate={SinceDate}, ToDate={ToDate}, ProjectId={ProjectId}, CategoryId={CategoryId}, AccountId={AccountId}",
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
-                
+
                 // Set default dates if not provided
                 if (!filter.SinceDate.HasValue)
                 {
                     filter.SinceDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-30));
                 }
-                
+
                 if (!filter.ToDate.HasValue)
                 {
                     filter.ToDate = DateOnly.FromDateTime(DateTime.Now);
                 }
-                
+
                 var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
 
-                _logger.LogInformation("GetFilteredEntries returning {VoucherCount} vouchers", 
-                    result.Vouchers?.Count ?? 0);
-                    
+                _logger.LogInformation("GetFilteredEntries returning {VoucherCount} vouchers",
+                    result.Vouchers.Count);
+
                 return Json(result);
             }
             catch (Exception ex)
@@ -293,15 +293,14 @@ namespace PureLedger.Controllers
         #region Helper Methods
 
         private async Task<DeliveryChallanVoucher> GetOrCreateDeliveryChallanVoucherAsync(
-            int journalVoucherId, string dcDate, string otherReference)
+            int journalVoucherId, DateOnly dcDate, string otherReference)
         {
             var deliveryChallanVoucher = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(journalVoucherId);
 
             if (deliveryChallanVoucher == null)
             {
-                var parsedDcDate = string.IsNullOrEmpty(dcDate)
-                    ? DateOnly.FromDateTime(DateTime.Now)
-                    : DateOnly.Parse(dcDate);
+                // Convert DateTimeOnly to DateOnly
+                var parsedDcDate = DateOnly.FromDateTime(dcDate.ToDateTime(TimeOnly.MinValue));
 
                 deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                     journalVoucherId, parsedDcDate);
@@ -342,7 +341,7 @@ namespace PureLedger.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing entry {EntryId}", entry.EntryId);
-                    
+
                     return new EntryProcessResult
                     {
                         EntryId = entry.EntryId,
@@ -354,7 +353,7 @@ namespace PureLedger.Controllers
 
             // Wait for all tasks to complete
             var taskResults = await Task.WhenAll(tasks);
-            
+
             return taskResults.ToList();
         }
 
@@ -366,7 +365,7 @@ namespace PureLedger.Controllers
         {
             public int EntryId { get; set; }
             public bool Success { get; set; }
-            public string Message { get; set; }
+            public string Message { get; set; } = string.Empty;
         }
 
         #endregion

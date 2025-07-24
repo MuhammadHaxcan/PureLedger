@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace PureLedger.ViewModels
@@ -16,6 +17,7 @@ namespace PureLedger.ViewModels
         [StringLength(200)]
         public string? OtherReference { get; set; }
         
-        public string? DCDate { get; set; }
+        [Required]
+        public DateOnly DCDate { get; set; }
     }
 }

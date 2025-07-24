@@ -183,7 +183,7 @@ namespace PureLedger.Services
 
         #region Create & Update Operations
 
-        public async Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly? dcDate = null)
+        public async Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate)
         {
             try
             {
@@ -206,7 +206,7 @@ namespace PureLedger.Services
                 var deliveryChallanVoucher = new DeliveryChallanVoucher
                 {
                     JournalVoucherId = journalVoucherId,
-                    DCDate = dcDate ?? DateOnly.FromDateTime(DateTime.Now),
+                    DCDate = dcDate,
                     IsCompleted = false
                 };
 
@@ -226,7 +226,7 @@ namespace PureLedger.Services
         }
 
         public async Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(
-            int deliveryChallanId, int journalEntryId, int locationId, string remarks = null, string otherReference = null)
+            int deliveryChallanId, int journalEntryId, int locationId, string remarks, string otherReference)
         {
             try
             {
@@ -374,7 +374,7 @@ namespace PureLedger.Services
             decimal amount,
             bool postToCustomer,
             string reference,
-            string dcDate,
+            DateOnly dcDate,
             string dcRemarks,
             string dcStation,
             string dcOtherRef,
@@ -382,7 +382,7 @@ namespace PureLedger.Services
         {
             // Begin a transaction with default isolation level
             using var transaction = await _unitOfWork.BeginTransactionAsync();
-            
+
             try
             {
                 // Get required data
@@ -404,14 +404,9 @@ namespace PureLedger.Services
                 entry.IsProcessed = true;
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
 
-                // Parse DC date
-                var dcDateValue = !string.IsNullOrEmpty(dcDate)
-                    ? DateOnly.Parse(dcDate)
-                    : DateOnly.FromDateTime(DateTime.Now);
-
                 // Create or get delivery challan voucher
-                var deliveryChallanVoucher = await CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDateValue);
-                
+                var deliveryChallanVoucher = await CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDate);
+
                 // Create delivery challan entry
                 await CreateDeliveryChallanEntryAsync(
                     deliveryChallanVoucher.DeliveryChallanId,
@@ -425,13 +420,13 @@ namespace PureLedger.Services
 
                 // Commit transaction
                 await transaction.CommitAsync();
-                
+
                 return deliveryChallanVoucher;
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Error processing cartage and delivery for journal voucher {JournalVoucherId}, entry {EntryId}", 
+                _logger.LogError(ex, "Error processing cartage and delivery for journal voucher {JournalVoucherId}, entry {EntryId}",
                     journalVoucherId, entryId);
                 throw;
             }
@@ -509,7 +504,7 @@ namespace PureLedger.Services
                 JournalVoucherId = cartageJV.JvId,
                 AccountId = debitAccountId,
                 CategoryId = originalEntry.CategoryId,
-                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}, EID-{originalEntry.EntryId}",
+                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}",
                 Quantity = 1,
                 Rate = amount,
                 Debit = amount,
@@ -527,8 +522,8 @@ namespace PureLedger.Services
             {
                 JournalVoucherId = cartageJV.JvId,
                 AccountId = transporterId,
-                CategoryId = 4, // Transporter category
-                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}, EID-{originalEntry.EntryId}",
+                CategoryId = 2, // Transporter category
+                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}",
                 Quantity = 1,
                 Rate = amount,
                 Debit = 0,

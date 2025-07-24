@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', function () {
         transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
 
         // Fetch transporter accounts from categoryId 4
-        fetch('/api/common/accounts/4')
+        fetch('/api/common/accounts/2')
             .then(response => {
                 if (!response.ok) {
                     return response.text().then(text => {

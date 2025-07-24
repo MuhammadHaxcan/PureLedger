@@ -13,16 +13,16 @@ namespace PureLedger.Services
             int? projectId,
             int? categoryId,
             int? accountId);
-            
+
         // Methods for delivery challan operations
-        Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly? dcDate = null);
-        Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string remarks = null, string otherReference = null);
+        Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate);
+        Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string remarks, string otherReference);
         Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByJournalVoucherIdAsync(int journalVoucherId);
         Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByIdAsync(int deliveryChallanId);
         Task<List<DeliveryChallanVoucher>> GetDeliveryChallanVouchersByDateRangeAsync(DateOnly startDate, DateOnly endDate);
         Task<List<DeliveryChallanEntry>> GetDeliveryChallanEntriesByVoucherIdAsync(int deliveryChallanId);
         Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
-        
+
         // Additional methods
         Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
         Task<List<JournalEntryDetailViewModel>> GetEntriesByVoucherIdAsync(int voucherId);
@@ -36,11 +36,11 @@ namespace PureLedger.Services
             decimal amount,
             bool postToCustomer,
             string reference,
-            string dcDate,
+            DateOnly dcDate,
             string dcRemarks,
             string dcStation,
             string dcOtherRef,
             int dcLocation
-);
+        );
     }
 }
