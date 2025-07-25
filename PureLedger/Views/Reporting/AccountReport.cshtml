@@ -1,0 +1,65 @@
+@model PureLedger.ViewModels.AgingReportPageViewModel
+@{
+    ViewData["Title"] = "Account Report";
+}
+<div class="container-fluid py-4" style="background:#282c40; color:#fff;">
+    <div class="row mb-3">
+        <div class="col">
+            <label>Project</label>
+            <select id="projectId" class="form-control bg-dark text-white border-secondary">
+                <option value="">Select Project</option>
+                @foreach (var p in Model.Projects)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col">
+            <label>Category</label>
+            <select id="categoryId" class="form-control bg-dark text-white border-secondary">
+                <option value="">Select Category</option>
+                @foreach (var c in Model.Categories)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col">
+            <label>Account</label>
+            <select id="accountId" class="form-control bg-dark text-white border-secondary" disabled>
+                <option value="">All Accounts</option>
+            </select>
+        </div>
+        <div class="col d-flex align-items-end">
+            <button id="goBtn" class="btn btn-primary me-2">Go</button>
+            <button id="allProjectBtn" class="btn btn-secondary">All Project</button>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col">
+            <input id="searchBox" class="form-control bg-dark text-white border-secondary" placeholder="Search.." />
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-bordered">
+            <thead style="background:#151a2e;">
+                <tr>
+                    <th>Id</th>
+                    <th>Category</th>
+                    <th>Name</th>
+                    <th>Debit</th>
+                    <th>Credit</th>
+                    <th>Balance</th>
+                </tr>
+            </thead>
+            <tbody id="reportData">
+                <tr>
+                    <td colspan="6" class="text-center">Please select at least one filter</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+@section Scripts {
+    <script src="~/js/accountReport.js"></script>
+}

@@ -65,6 +65,25 @@ namespace PureLedger.Controllers
             return Json(report);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> AccountReport()
+        {
+            var projects = await _reportingService.GetAllProjectsAsync();
+            var categories = await _reportingService.GetAllCategoriesAsync();
+            return View(new AgingReportPageViewModel
+            {
+                Projects = projects.Select(p => new ProjectViewModel { Id = p.ProjectId.ToString(), Name = p.ProjectName }).ToList(),
+                Categories = categories.Select(c => new CategoryViewModel { Id = c.CategoryId.ToString(), Name = c.CategoryName }).ToList()
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAccountReportData([FromQuery] AccountReportRequest request)
+        {
+            var report = await _reportingService.GetAccountReportAsync(request);
+            return Json(report);
+        }
+
         // --- Helpers ---
 
         private bool IsValidInput(int journalVoucherId, string type, out IActionResult errorResult)

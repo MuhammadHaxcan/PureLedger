@@ -189,5 +189,116 @@ namespace PureLedger.Services
             // Use the provided method from ICategoryRepository
             return await _categoryRepository.GetAllAsync();
         }
+
+        public async Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request)
+        {
+            // First, validate that we have at least one filter
+            if (string.IsNullOrWhiteSpace(request.CategoryId) && 
+                string.IsNullOrWhiteSpace(request.ProjectId) &&
+                string.IsNullOrWhiteSpace(request.AccountId))
+            {
+                return new List<AccountReportViewModel>();
+            }
+
+            // Parse the filter values
+            int? categoryId = null;
+            if (!string.IsNullOrWhiteSpace(request.CategoryId) && 
+                int.TryParse(request.CategoryId, out int cid))
+            {
+                categoryId = cid;
+            }
+
+            int? projectId = null;
+            if (!string.IsNullOrWhiteSpace(request.ProjectId) && 
+                int.TryParse(request.ProjectId, out int pid))
+            {
+                projectId = pid;
+            }
+
+            int? accountId = null;
+            if (!string.IsNullOrWhiteSpace(request.AccountId) && 
+                int.TryParse(request.AccountId, out int aid))
+            {
+                accountId = aid;
+            }
+
+            // Step 1: Get relevant accounts first - this is a key improvement
+            List<Account> accounts;
+            if (accountId.HasValue)
+            {
+                // If specific account is requested, get just that one
+                var account = await _accountRepository.GetByIdAsync(accountId.Value);
+                accounts = account != null ? new List<Account> { account } : new List<Account>();
+            }
+            else if (categoryId.HasValue)
+            {
+                // Get accounts by category
+                accounts = await _accountRepository.GetByCategoryIdAsync(categoryId.Value);
+            }
+            else
+            {
+                // If no category or account specified, we must have a project
+                // Let's get all accounts that have entries in this project
+                var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
+                var projectVouchers = vouchers.Where(v => v.ProjectId == projectId.Value).ToList();
+                
+                // Extract unique account IDs from the entries
+                var accountIds = projectVouchers
+                    .SelectMany(v => v.JournalEntries.Select(e => e.AccountId))
+                    .Distinct()
+                    .ToList();
+                
+                // Get all those accounts
+                accounts = new List<Account>();
+                foreach (var id in accountIds)
+                {
+                    var account = await _accountRepository.GetByIdAsync(id);
+                    if (account != null) accounts.Add(account);
+                }
+            }
+
+            // Step 2: Now get all relevant vouchers
+            var allVouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
+            var filteredVouchers = allVouchers
+                .Where(v => !projectId.HasValue || v.ProjectId == projectId.Value)
+                .ToList();
+
+            // Step 3: Process each account individually
+            var result = new List<AccountReportViewModel>();
+            foreach (var account in accounts)
+            {
+                // Skip if we're filtering by category and this account doesn't match
+                if (categoryId.HasValue && account.CategoryId != categoryId.Value)
+                    continue;
+
+                var accountEntries = filteredVouchers
+                    .SelectMany(v => v.JournalEntries
+                        .Where(e => e.AccountId == account.AccountId))
+                    .ToList();
+
+                // Additional category filter on entries if needed
+                if (categoryId.HasValue)
+                    accountEntries = accountEntries.Where(e => e.CategoryId == categoryId.Value).ToList();
+
+                // If no entries, skip this account
+                if (accountEntries.Count == 0)
+                    continue;
+
+                decimal totalDebit = accountEntries.Sum(e => e.Debit);
+                decimal totalCredit = accountEntries.Sum(e => e.Credit);
+
+                result.Add(new AccountReportViewModel
+                {
+                    AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
+                    AccountName = account.AccountName ?? "",
+                    CategoryName = account.Category?.CategoryName ?? "",
+                    TotalDebit = totalDebit,
+                    TotalCredit = totalCredit,
+                    NetBalance = totalDebit - totalCredit
+                });
+            }
+
+            return result;
+        }
     }
 }

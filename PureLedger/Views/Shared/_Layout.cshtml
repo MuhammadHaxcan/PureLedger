@@ -8,11 +8,11 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/PureLedger.styles.css" asp-append-version="true" />
 </head>
-<body class="bg-light">
+<body class="bg-dark text-white" style="font-family: 'Inter', sans-serif;">
     <header>
-        <nav class="navbar navbar-expand-sm navbar-light bg-white shadow-sm">
+        <nav class="navbar navbar-expand-sm navbar-dark bg-primary shadow-sm" style="background:#232746 !important;">
             <div class="container">
-                <a class="navbar-brand fw-bold text-primary" asp-area="" asp-controller="Home" asp-action="Entry">PureLedger</a>
+                <a class="navbar-brand fw-bold text-info" asp-area="" asp-controller="Home" asp-action="Entry">PureLedger</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
@@ -55,7 +55,7 @@
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" asp-controller="Reporting" asp-action="SingleDoc">Single Doc</a></li>
                                 <li><a class="dropdown-item" asp-controller="Reporting" asp-action="AgingReport">Aging Report</a></li>
-
+                                <li><a class="dropdown-item" asp-controller="Reporting" asp-action="AccountReport">Account Report</a></li>
                             </ul>
                         </li>
                     </ul>
@@ -63,7 +63,7 @@
             </div>
         </nav>
     </header>
-    <div class="container mt-4">
+    <div class="container-fluid mt-4" style="background:#282c40; border-radius:12px; min-height:80vh;">
         <main role="main" class="pb-2">
             @RenderBody()
         </main>

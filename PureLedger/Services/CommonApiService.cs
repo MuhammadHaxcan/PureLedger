@@ -27,5 +27,11 @@ namespace PureLedger.Services
 
         public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
             => await _accountRepository.GetByCategoryIdAsync(categoryId);
+
+        public async Task<IEnumerable<Account>> GetAccountsByCategoryAndProjectAsync(int categoryId, int projectId)
+        {
+            var accounts = await _accountRepository.GetByCategoryIdAsync(categoryId);
+            return accounts.Where(a => a.Category?.ProjectId == projectId);
+        }
     }
 }
