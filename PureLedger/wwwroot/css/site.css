@@ -1,25 +1,124 @@
+:root {
+    /* Light theme colors */
+    --primary-color: #0d6efd;
+    --secondary-color: #6c757d;
+    --background-color: #f8f9fa;
+    --card-background: #ffffff;
+    --text-color: #212529;
+    --border-color: #dee2e6;
+    --input-background: #ffffff;
+    --input-border: #ced4da;
+    --table-header-bg: #e9ecef;
+    --table-border: #dee2e6;
+    --navbar-bg: #343a40;
+    --navbar-color: #ffffff;
+}
+
 html {
-  font-size: 14px;
+    font-size: 14px;
+    position: relative;
+    min-height: 100%;
 }
 
 @media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
+    html {
+        font-size: 16px;
+    }
 }
 
 body {
-  margin-bottom: 60px;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    margin-bottom: 60px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
+
+/* Navigation styling */
+.navbar {
+    background-color: var(--navbar-bg) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: 600;
+    color: var(--navbar-color) !important;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+    .navbar-dark .navbar-nav .nav-link:hover {
+        color: #ffffff !important;
+    }
+
+.dropdown-menu {
+    background-color: var(--card-background);
+    border-color: var(--border-color);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.dropdown-item {
+    color: var(--text-color);
+}
+
+    .dropdown-item:hover {
+        background-color: rgba(13, 110, 253, 0.1);
+        color: var(--primary-color);
+    }
+
+/* Container styling */
+.container-fluid {
+    background-color: var(--card-background);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+/* Form controls */
+.form-control {
+    background-color: var(--input-background);
+    border-color: var(--input-border);
+    color: var(--text-color);
+}
+
+    .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+        box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    }
+
+/* Table styling */
+.table {
+    color: var(--text-color);
+    border-color: var(--table-border);
+}
+
+    .table thead th {
+        background-color: var(--table-header-bg);
+        border-color: var(--table-border);
+        color: var(--text-color);
+        font-weight: 600;
+    }
+
+.table-bordered th,
+.table-bordered td {
+    border-color: var(--table-border);
+}
+
+/* Custom table dark style that's more readable */
+.table-dark {
+    background-color: #343a40;
+    color: #ffffff;
+}
+
+    .table-dark th {
+        background-color: #212529;
+    }
 
 /* Hide dropdown arrow for RBP select */
 select[name*='Rbp'] {
@@ -28,7 +127,7 @@ select[name*='Rbp'] {
     -webkit-appearance: none;
     -moz-appearance: none;
     background-image: none !important;
-    padding-right: 0.5rem; /* adjust as needed */
+    padding-right: 0.5rem;
 }
 
 /* Hide number input spinners (arrows) for all browsers */
@@ -43,6 +142,77 @@ input[type=number] {
     appearance: textfield;
 }
 
+/* Alerts and messages */
 .alert {
     margin-top: 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
 }
+
+/* Button styling */
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+/* Card styling */
+.card {
+    border-color: var(--border-color);
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Dark mode overrides - these will be used if body has .bg-dark class */
+body.bg-dark {
+    --background-color: #212529;
+    --card-background: #2c3034;
+    --text-color: #f8f9fa;
+    --border-color: #495057;
+    --input-background: #343a40;
+    --input-border: #495057;
+    --table-header-bg: #343a40;
+    --table-border: #495057;
+}
+
+    /* Improved focus for dark mode */
+    body.bg-dark .form-control:focus {
+        background-color: #343a40;
+        color: #ffffff;
+        box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25);
+    }
+
+    /* Fix for inputs in dark mode */
+    body.bg-dark .form-control {
+        color: #ffffff;
+    }
+
+/* Typography improvements */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+/* Improved accessibility for links */
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+    a:hover {
+        text-decoration: underline;
+    }

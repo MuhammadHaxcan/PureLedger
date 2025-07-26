@@ -5,14 +5,143 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - PureLedger</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/PureLedger.styles.css" asp-append-version="true" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Light Theme - Better visibility */
+            --primary-bg: #ffffff;
+            --secondary-bg: #f8f9fa;
+            --accent-color: #0d6efd;
+            --text-primary: #212529;
+            --text-secondary: #495057;
+            --navbar-bg: #0d6efd;
+            --navbar-text: #ffffff;
+            --dropdown-bg: #ffffff;
+            --card-bg: #ffffff;
+            --border-color: #dee2e6;
+            --table-header-bg: #e9ecef;
+        }
+
+        body {
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+        }
+
+        .navbar {
+            background-color: var(--navbar-bg) !important;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .navbar-brand {
+            color: var(--navbar-text) !important;
+            font-weight: 700;
+        }
+
+        .navbar-nav .nav-link {
+            color: var(--navbar-text) !important;
+            font-weight: 500;
+        }
+
+            .navbar-nav .nav-link:hover {
+                color: rgba(255, 255, 255, 0.85) !important;
+            }
+
+        .dropdown-menu {
+            background-color: var(--dropdown-bg);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+
+        .dropdown-item {
+            color: var(--text-primary);
+        }
+
+            .dropdown-item:hover {
+                background-color: rgba(13, 110, 253, 0.1);
+                color: var(--accent-color);
+            }
+
+        .container-fluid {
+            background-color: var(--secondary-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        /* Table styles */
+        .table {
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+
+            .table thead th {
+                background-color: var(--table-header-bg);
+                color: var(--text-primary);
+                font-weight: 600;
+            }
+
+        /* Dark table override for specific use */
+        .table-dark {
+            background-color: #343a40;
+            color: #ffffff;
+        }
+
+            .table-dark thead th {
+                border-color: #454d55;
+                background-color: #212529;
+                padding: 10px;
+            }
+
+        /* Button styles */
+        .btn-primary {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            font-weight: 500;
+        }
+
+            .btn-primary:hover {
+                background-color: #0b5ed7;
+                border-color: #0a58ca;
+            }
+
+        /* Form controls */
+        .form-control {
+            background-color: #ffffff;
+            border-color: #ced4da;
+            color: #212529;
+        }
+
+            .form-control:focus {
+                background-color: #ffffff;
+                color: #212529;
+                border-color: #86b7fe;
+                box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            }
+
+        /* Add contrast for specific dark backgrounds */
+        .bg-dark {
+            background-color: #212529 !important;
+        }
+
+            .bg-dark .form-control {
+                background-color: #343a40;
+                border-color: #495057;
+                color: #fff;
+            }
+
+            .bg-dark .text-white {
+                color: #fff !important;
+            }
+    </style>
 </head>
-<body class="bg-dark text-white" style="font-family: 'Inter', sans-serif;">
+<body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-dark bg-primary shadow-sm" style="background:#232746 !important;">
+        <nav class="navbar navbar-expand-sm navbar-dark shadow-sm">
             <div class="container">
-                <a class="navbar-brand fw-bold text-info" asp-area="" asp-controller="Home" asp-action="Entry">PureLedger</a>
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Entry">PureLedger</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
@@ -43,7 +172,6 @@
                                 <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Account">Account</a></li>
                                 <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Tag">Tags</a></li>
                                 <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Location">Location</a></li>
-
                             </ul>
                         </li>
 
@@ -63,7 +191,7 @@
             </div>
         </nav>
     </header>
-    <div class="container-fluid mt-4" style="background:#282c40; border-radius:12px; min-height:80vh;">
+    <div class="container-fluid mt-4">
         <main role="main" class="pb-2">
             @RenderBody()
         </main>
