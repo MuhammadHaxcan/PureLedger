@@ -100,9 +100,14 @@ namespace PureLedger.Controllers
 
         private IActionResult HandleVoucherNotFound(int journalVoucherId, string type)
         {
-            TempData["Error"] = type == "DC"
-                ? $"No Delivery Challan exists for Voucher ID {journalVoucherId}."
-                : $"No Journal Voucher exists for Voucher ID {journalVoucherId}.";
+            string message = type switch
+            {
+                "DC" => $"No Delivery Challan exists for Voucher ID {journalVoucherId}.",
+                "INV" => $"No Invoice exists for Voucher ID {journalVoucherId}.",
+                _ => $"No Journal Voucher exists for Voucher ID {journalVoucherId}."
+            };
+
+            TempData["Error"] = message;
             return RedirectToAction("SingleDoc");
         }
     }

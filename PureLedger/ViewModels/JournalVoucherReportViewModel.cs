@@ -10,12 +10,25 @@
 
         // Additional Fields for Delivery Challan
         public bool IsPartial { get; set; } // Check if Partial DC
+
+        
+        
+        // Particular Customer Data
         public string? CustomerAccountName { get; set; } // Customer account name (from JournalEntries with Quantity == 0)
+        public string? CustomerAddress { get; set; }
+        public string? CustomerCity { get; set; }
+        public string? CustomerPhone { get; set; }
+
+
+        //Particular Document Detail
         public DateOnly? DueDate { get; set; }
         public string? Adda { get; set; }
-        public string? Builty { get; set; }
+        public int? Builty { get; set; }
         public string? Remarks { get; set; }
 
+
+
+        // All Entreis of that Entry
         public List<JournalVoucherEntryReportModel> Entries { get; set; } = new List<JournalVoucherEntryReportModel>();
 
         // Totals

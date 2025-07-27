@@ -3,6 +3,7 @@
 @{
     Layout = null;
     bool isDC = Model.VoucherType == "DC";
+    bool isInv = Model.VoucherType == "INV";
     string challanType = Model.IsPartial ? "Partial Delivery Challan" : "Full Delivery Challan";
 }
 
@@ -10,7 +11,13 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>@(isDC ? "Delivery Challan" : "Journal Voucher") Report</title>
+    <title>
+        @(
+            isInv ? "Invoice" :
+            isDC ? "Delivery Challan" :
+            "Journal Voucher"
+            ) 
+    </title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/PrintVoucher.css" rel="stylesheet" />
     <script src="~/js/PrintVoucher.js"></script>
@@ -19,17 +26,102 @@
 
     <div class="header-section mb-3 d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="mb-0">@((isDC ? "Delivery Challan" : "Journal Voucher")) #@Model.JvId</h2>
-            <small> @(Model.VoucherType == "DC" ? challanType : "Journal Voucher")  - @Model.CreatedDate.ToShortDateString()</small>
+            <h2 class="mb-0">
+                @(
+                    isInv ? "Invoice" :
+                    isDC ? "Delivery Challan" :
+                    "Journal Voucher"
+                    ) #@Model.JvId
+            </h2>
+            <small>
+                @if (isInv)
+                {
+                <small>@Model.CreatedDate.ToString("dd-MMM-yyyy")</small>
+                }
+                else if (isDC)
+                {
+                <small>@challanType  - @Model.CreatedDate.ToShortDateString()</small>
+                }
+                else
+                {
+                <small>Journal Voucher  - @Model.CreatedDate.ToShortDateString()</small>
+                } 
+            </small>
         </div>
         <img src="/images/logo.png" class="logo" alt="Company Logo" />
     </div>
 
-    @if (isDC)
+    @if (isInv)
     {
         <div class="row mb-3">
             <div class="col-md-6">
-                <strong>Customer:</strong> @Model.AccountName
+                <strong>Customer:</strong> @Model.CustomerAccountName
+                <br/>
+                <strong>Address:</strong> @Model.CustomerAddress
+                <br />
+                <strong>City:</strong> @Model.CustomerCity
+                <br />
+                <strong>Phone:</strong> @Model.CustomerPhone
+            </div>
+            <div class="col-md-6 ">
+                <strong>Due Date:</strong> @Model.CreatedDate
+                <br />
+                <strong>Adda:</strong> @Model.Adda
+                <br />
+                <strong>Builty:</strong> @Model.Builty
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>SR#</th>
+                        <th>Product Name</th>
+                        <th>Quantity</th>
+                        <th>PKG</th>
+                        <th>Rate</th>
+                        <th>DISC %</th>
+                        <th>NET</th>
+                        <th>AMOUNT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        int sr = 1;
+                        foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
+                        {
+                            <tr>
+                                <td>@(sr++)</td>
+                                <td>@entry.AccountName</td>
+                                <td>@entry.Quantity</td>
+                                <td>@entry.PKG</td>
+                                <td>@entry.Rate</td>
+                                <td>@entry.Discount</td>
+                                <td>@entry.NetRate</td>
+                                <td>@entry.Credit</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="table-info">
+                        <th colspan="2" class="text-end">Total</th>
+                        <th>@Model.TotalQuantity</th>
+                        <th></th>
+                        <th></th>
+                        <th colspan="2" class="text-end">Current Balance</th>
+                        <th>@Model.TotalAmount</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+    else if (isDC)
+    {
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <strong>Customer:</strong> @Model.CustomerAccountName
             </div>
             <div class="col-md-6 ">
                 <strong>Due Date:</strong> @Model.CreatedDate

@@ -34,12 +34,15 @@ namespace PureLedger.Services
 
         public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType)
         {
-            return voucherType == "DC"
-                ? await GetDeliveryChallanReportAsync(journalVoucherId)
-                : await GetJournalVoucherReportAsync(journalVoucherId, voucherType);
+            return voucherType switch
+            {
+                "DC" => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
+                "INV" => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType), // you must implement this method
+                _ => await GetJournalVoucherReportAsync(journalVoucherId, voucherType)
+            };
         }
 
-        private async Task<JournalVoucherReportViewModel?> GetDeliveryChallanReportAsync(int journalVoucherId)
+        private async Task<JournalVoucherReportViewModel?> GetDeliveryChallanReportAsync(int journalVoucherId, string voucherType)
         {
             var dcVoucher = await _deliveryChallanVoucherRepository.GetByJournalVoucherIdAsync(journalVoucherId);
             if (dcVoucher?.JournalVoucher == null) return null;
@@ -48,10 +51,9 @@ namespace PureLedger.Services
             if (project == null) return null;
 
             var entries = GetProcessedEntries(dcVoucher.DeliveryChallanEntries);
-            var customerAccountName = GetCustomerAccountName(dcVoucher.JournalVoucher);
+            var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-            return CreateVoucherViewModel(dcVoucher.JournalVoucherId, "DC", project.ProjectName, dcVoucher.DCDate,
-                entries, customerAccountName, !dcVoucher.JournalVoucher.IsProcessed);
+            return CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsProcessed);
         }
 
         private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, string voucherType)
@@ -64,11 +66,11 @@ namespace PureLedger.Services
 
             var isPartial = voucherType == "DC" && !voucher.IsProcessed;
             var entries = GetJournalVoucherEntries(voucher.JournalEntries, isPartial);
-            var customerAccountName = GetCustomerAccountName(voucher);
+            var customerInfo = GetCustomerAccountName(voucher);
             var typeLabel = isPartial ? "DC - Partial" : voucherType;
 
             return CreateVoucherViewModel(voucher.JvId, typeLabel, project.ProjectName, voucher.EntryDate,
-                entries, customerAccountName, isPartial);
+                entries, customerInfo, isPartial);
         }
 
         private List<JournalVoucherEntryReportModel> GetProcessedEntries(IEnumerable<DeliveryChallanEntry> entries)
@@ -95,6 +97,8 @@ namespace PureLedger.Services
                 Description = entry.Description ?? "",
                 Quantity = entry.Quantity,
                 Rate = entry.Rate,
+                PKG = 1,  // reteive the package quantity from helper function
+                Discount = entry.Discount,
                 Debit = entry.Debit,
                 Credit = entry.Credit
             };
@@ -102,13 +106,29 @@ namespace PureLedger.Services
 
         private string GetCustomerAccountName(JournalVoucher voucher)
         {
-            return voucher.JournalEntries.FirstOrDefault(e => e.Quantity == 0)?.Account?.AccountName ?? "";
+            var entry = voucher.JournalEntries.FirstOrDefault(e => e.Quantity == 0);
+            var account = entry?.Account;
+
+            if (account == null) return "";
+
+            var accountData = account.AccountData;
+
+            string name = account.AccountName ?? "";
+            string phone = accountData?.PhoneNumber ?? "";
+            string address = accountData?.Address ?? "";
+            string city = accountData?.City ?? "";
+
+            return $"{name} ({phone}, {address}, {city})";
         }
+        
 
         private JournalVoucherReportViewModel CreateVoucherViewModel(
             int jvId, string type, string projectName, DateOnly date,
             List<JournalVoucherEntryReportModel> entries, string accountName, bool isPartial)
         {
+                var (name, phone, address, city) = ParseCustomerInfo(accountName);
+            
+
             return new JournalVoucherReportViewModel
             {
                 JvId = jvId,
@@ -116,11 +136,19 @@ namespace PureLedger.Services
                 ProjectName = projectName,
                 BookerName = "",
                 CreatedDate = date,
+                Builty = jvId,
+
+                //Customer Info
+                CustomerAccountName = name,
+                CustomerAddress = address,
+                CustomerCity= city,
+                CustomerPhone = phone,
+
                 Entries = entries,
                 TotalQuantity = entries.Sum(e => e.Quantity),
                 TotalActualAmount = entries.Sum(e => e.LineTotal),
-                TotalAmount = entries.Sum(e => e.Debit),
-                AccountName = accountName,
+                TotalAmount = entries.Sum(e => e.Credit),
+                
                 AuthorizedBy = "",
                 ReceivedBy = "",
                 IsPartial = isPartial
@@ -189,6 +217,28 @@ namespace PureLedger.Services
             // Use the provided method from ICategoryRepository
             return await _categoryRepository.GetAllAsync();
         }
+
+        public (string Name, string Phone, string Address, string City) ParseCustomerInfo(string customerInfo)
+        {
+            if (string.IsNullOrWhiteSpace(customerInfo)) return ("", "", "", "");
+
+            // Split name and the rest inside parentheses
+            int bracketIndex = customerInfo.IndexOf('(');
+            if (bracketIndex == -1 || !customerInfo.EndsWith(")"))
+                return (customerInfo, "", "", "");
+
+            string name = customerInfo.Substring(0, bracketIndex).Trim();
+            string inside = customerInfo.Substring(bracketIndex + 1, customerInfo.Length - bracketIndex - 2); // removes ( and )
+
+            string[] parts = inside.Split(',');
+
+            string phone = parts.Length > 0 ? parts[0].Trim() : "";
+            string address = parts.Length > 1 ? parts[1].Trim() : "";
+            string city = parts.Length > 2 ? parts[2].Trim() : "";
+
+            return (name, phone, address, city);
+        }
+
 
         public async Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request)
         {
