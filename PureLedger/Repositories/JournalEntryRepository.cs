@@ -20,7 +20,7 @@ namespace PureLedger.Repositories
                 .Include(e => e.Account)
                 .Include(e => e.Category)
                 .Include(e => e.JournalVoucher)
-                .FirstOrDefaultAsync(e => e.EntryId == id);
+                .FirstOrDefaultAsync(e => e.JournalEntryId == id);
         }
 
         public async Task<JournalEntry> AddAsync(JournalEntry entry)

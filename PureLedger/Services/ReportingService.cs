@@ -50,10 +50,10 @@ namespace PureLedger.Services
             var project = await _projectRepository.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
             if (project == null) return null;
 
-            var entries = GetProcessedEntries(dcVoucher.DeliveryChallanEntries);
+            var entries = GetProcessedEntries(dcVoucher.Entries);
             var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-            return CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsProcessed);
+            return CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsCompleted);
         }
 
         private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, string voucherType)
@@ -64,12 +64,12 @@ namespace PureLedger.Services
             var project = await _projectRepository.GetByIdAsync(voucher.ProjectId);
             if (project == null) return null;
 
-            var isPartial = voucherType == "DC" && !voucher.IsProcessed;
+            var isPartial = voucherType == "DC" && !voucher.IsCompleted;
             var entries = GetJournalVoucherEntries(voucher.JournalEntries, isPartial);
             var customerInfo = GetCustomerAccountName(voucher);
             var typeLabel = isPartial ? "DC - Partial" : voucherType;
 
-            return CreateVoucherViewModel(voucher.JvId, typeLabel, project.ProjectName, voucher.EntryDate,
+            return CreateVoucherViewModel(voucher.JournalVoucherId, typeLabel, project.ProjectName, voucher.EntryDate,
                 entries, customerInfo, isPartial);
         }
 
@@ -175,7 +175,7 @@ namespace PureLedger.Services
                 .Where(v =>
                     (!projectId.HasValue || v.ProjectId == projectId.Value) &&
                     // Use CreditableDate if present, otherwise EntryDate
-                    ((v.CreditableDate ?? v.EntryDate) <= request.ReferenceDate)
+                    ((v.CreditableDate) <= request.ReferenceDate)
                 )
                 .ToList();
 

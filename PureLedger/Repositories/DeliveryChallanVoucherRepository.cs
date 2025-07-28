@@ -17,14 +17,14 @@ namespace PureLedger.Repositories
         public async Task<DeliveryChallanVoucher?> GetByIdAsync(int id)
         {
             return await _context.DeliveryChallanVouchers
-                .FirstOrDefaultAsync(dc => dc.DeliveryChallanId == id);
+                .FirstOrDefaultAsync(dc => dc.DeliveryChallanVoucherId == id);
         }
 
         public async Task<DeliveryChallanVoucher?> GetByIdWithEntriesAsync(int id)
         {
             return await _context.DeliveryChallanVouchers
-                .Include(dc => dc.DeliveryChallanEntries)
-                .FirstOrDefaultAsync(dc => dc.DeliveryChallanId == id);
+                .Include(dc => dc.Entries)
+                .FirstOrDefaultAsync(dc => dc.DeliveryChallanVoucherId == id);
         }
 
         public async Task<DeliveryChallanVoucher?> GetByJournalVoucherIdAsync(int journalVoucherId)
@@ -34,9 +34,9 @@ namespace PureLedger.Repositories
                     .ThenInclude(jv => jv.JournalEntries)
                         .ThenInclude(je => je.Account)
                             .ThenInclude(ad => ad.AccountData)
-                .Include(dc => dc.DeliveryChallanEntries)
+                .Include(dc => dc.Entries)
                     .ThenInclude(dce => dce.JournalEntry)
-                .Include(dc => dc.DeliveryChallanEntries)
+                .Include(dc => dc.Entries)
                     .ThenInclude(dce => dce.Location)
                 .FirstOrDefaultAsync(dc => dc.JournalVoucherId == journalVoucherId);
         }
@@ -46,10 +46,10 @@ namespace PureLedger.Repositories
             return await _context.DeliveryChallanVouchers
                 .Include(dc => dc.JournalVoucher)
                     .ThenInclude(jv => jv.Project)
-                .Include(dc => dc.DeliveryChallanEntries)
+                .Include(dc => dc.Entries)
                     .ThenInclude(dce => dce.JournalEntry)
                         .ThenInclude(je => je.Account)
-                .Include(dc => dc.DeliveryChallanEntries)
+                .Include(dc => dc.Entries)
                     .ThenInclude(dce => dce.Location)
                 .Where(dc => dc.DCDate >= startDate && dc.DCDate <= endDate)
                 .OrderByDescending(dc => dc.DCDate)

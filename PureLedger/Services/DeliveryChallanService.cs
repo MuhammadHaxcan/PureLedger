@@ -120,7 +120,7 @@ namespace PureLedger.Services
                     sinceDate, toDate, projectId, !accountId.HasValue && !categoryId.HasValue);
 
                 // Process only unprocessed vouchers
-                var unprocessedVouchers = vouchers.Where(v => !v.IsProcessed).ToList();
+                var unprocessedVouchers = vouchers.Where(v => !v.IsCompleted).ToList();
 
                 // Process each voucher sequentially to avoid DbContext concurrency issues
                 foreach (var voucher in unprocessedVouchers)
@@ -129,7 +129,7 @@ namespace PureLedger.Services
 
                     // Get entries for this voucher
                     var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                        voucher.JvId, categoryId, accountId);
+                        voucher.JournalVoucherId, categoryId, accountId);
 
                     // Add only unprocessed entries with quantity > 0
                     foreach (var entry in entries.Where(e => !e.IsProcessed && e.Quantity > 0))
@@ -180,9 +180,8 @@ namespace PureLedger.Services
                     _logger.LogInformation("Delivery challan voucher already exists for journal voucher ID {JournalVoucherId}", journalVoucherId);
 
                     // Update reference if provided and different
-                    if (!string.IsNullOrEmpty(reference) && existingDC.ReferenceNumber != reference)
+                    if (!string.IsNullOrEmpty(reference))
                     {
-                        existingDC.ReferenceNumber = reference;
                         await _unitOfWork.DeliveryChallanVouchers.UpdateAsync(existingDC);
                         await _unitOfWork.SaveChangesAsync();
                     }
@@ -194,7 +193,6 @@ namespace PureLedger.Services
                 {
                     JournalVoucherId = journalVoucherId,
                     DCDate = dcDate,
-                    ReferenceNumber = reference,
                     IsCompleted = false
                 };
 
@@ -202,7 +200,7 @@ namespace PureLedger.Services
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Created new delivery challan voucher with ID {DeliveryChallanId} for journal voucher ID {JournalVoucherId}",
-                    result.DeliveryChallanId, journalVoucherId);
+                    result.DeliveryChallanVoucherId, journalVoucherId);
 
                 return result;
             }
@@ -241,14 +239,14 @@ namespace PureLedger.Services
                     await _unitOfWork.DeliveryChallanEntries.UpdateAsync(existingEntry);
                     await _unitOfWork.SaveChangesAsync();
 
-                    _logger.LogInformation("Updated delivery challan entry with ID {DCEntryId}", existingEntry.DCEntryId);
+                    _logger.LogInformation("Updated delivery challan entry with ID {DCEntryId}", existingEntry.DeliveryChallanEntryId);
                     return existingEntry;
                 }
 
                 // Create new entry
                 var deliveryChallanEntry = new DeliveryChallanEntry
                 {
-                    DeliveryChallanId = deliveryChallanId,
+                    DeliveryChallanVoucherId = deliveryChallanId,
                     JournalEntryId = journalEntryId,
                     LocationId = locationId,
                     Remarks = remarks,
@@ -260,13 +258,12 @@ namespace PureLedger.Services
 
                 // Update journal entry status
                 journalEntry.IsProcessed = true;
-                journalEntry.LocationId = locationId;
                 await _unitOfWork.JournalEntries.UpdateAsync(journalEntry);
 
                 await _unitOfWork.SaveChangesAsync();
 
                 _logger.LogInformation("Created new delivery challan entry with ID {DCEntryId} with entry date {EntryDate}", 
-                    result.DCEntryId, entryDate);
+                    result.DeliveryChallanEntryId, entryDate);
                 return result;
             }
             catch (Exception ex)
@@ -296,7 +293,7 @@ namespace PureLedger.Services
                 }
 
                 // Check if there are any entries
-                if (!deliveryChallan.DeliveryChallanEntries.Any())
+                if (!deliveryChallan.Entries.Any())
                 {
                     _logger.LogError("Cannot complete delivery challan with ID {DeliveryChallanId} as it has no entries", deliveryChallanId);
                     return false;
@@ -344,9 +341,9 @@ namespace PureLedger.Services
                     .All(e => e.IsProcessed);
 
                 // Update the voucher's IsProcessed status only if there's a change
-                if (allEntriesProcessed != voucher.IsProcessed)
+                if (allEntriesProcessed != voucher.IsCompleted)
                 {
-                    voucher.IsProcessed = allEntriesProcessed;
+                    voucher.IsCompleted = allEntriesProcessed;
                     await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
                     await _unitOfWork.SaveChangesAsync();
 
@@ -385,7 +382,7 @@ namespace PureLedger.Services
             int journalVoucherId,
             int entryId,
             int transporterId,
-            decimal amount,
+            int amount,
             bool postToCustomer,
             string? reference,
             DateOnly dcDate,
@@ -410,7 +407,6 @@ namespace PureLedger.Services
                 int debitAccountId = await GetDebitAccountIdAsync(originalJV, entry, postToCustomer);
 
                 // Update the original entry first
-                entry.LocationId = dcLocation;
                 entry.IsProcessed = true;
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
 
@@ -419,8 +415,8 @@ namespace PureLedger.Services
 
                 // Create delivery challan entry
                 await CreateDeliveryChallanEntryAsync(
-                    deliveryChallanVoucher.DeliveryChallanId,
-                    entry.EntryId,
+                    deliveryChallanVoucher.DeliveryChallanVoucherId,
+                    entry.JournalEntryId,
                     dcLocation,
                     dcRemarks,
                     dcOtherRef);
@@ -447,7 +443,7 @@ namespace PureLedger.Services
         }
 
         private async Task<JournalVoucher> CreateCartageJournalVoucherAsync(
-            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, decimal amount)
+            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, int amount)
         {
             try
             {
@@ -456,7 +452,7 @@ namespace PureLedger.Services
                 {
                     ProjectId = projectId,
                     EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                    IsProcessed = true,
+                    IsCompleted = true,
                     CreditableDate = DateOnly.FromDateTime(DateTime.Now)
                 };
 
@@ -467,8 +463,8 @@ namespace PureLedger.Services
                 // Create both entries at once to avoid gaps
                 var entries = new List<JournalEntry>
                 {
-                    CreateCartageDebitEntry(cartageJV.JvId, debitAccountId, originalEntry, amount),
-                    CreateCartageCreditEntry(cartageJV.JvId, transporterId, originalEntry, amount)
+                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, originalEntry, amount),
+                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, originalEntry, amount)
                 };
 
                 // Add entries in batch
@@ -487,7 +483,7 @@ namespace PureLedger.Services
             }
         }
 
-        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, JournalEntry originalEntry, decimal amount)
+        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, JournalEntry originalEntry, int amount)
         {
             return new JournalEntry
             {
@@ -502,12 +498,11 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                LocationId = null,
                 IsProcessed = true
             };
         }
 
-        private static JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, decimal amount)
+        private static JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount)
         {
             return new JournalEntry
             {
@@ -522,7 +517,6 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                LocationId = null,
                 IsProcessed = true
             };
         }
@@ -584,7 +578,7 @@ namespace PureLedger.Services
         {
             return new JournalEntryDetailViewModel
             {
-                EntryId = entry.EntryId,
+                EntryId = entry.JournalEntryId,
                 JournalVoucherId = entry.JournalVoucherId,
                 AccountId = entry.AccountId,
                 AccountName = entry.Account?.AccountName,
@@ -599,10 +593,10 @@ namespace PureLedger.Services
         {
             return new JournalVoucherViewModel
             {
-                JvId = voucher.JvId,
+                JvId = voucher.JournalVoucherId,
                 ProjectName = voucher.Project?.ProjectName,
                 EntryDate = voucher.EntryDate,
-                IsProcessed = voucher.IsProcessed,
+                IsProcessed = voucher.IsCompleted,
                 Entries = new List<JournalEntryDetailViewModel>()
             };
         }

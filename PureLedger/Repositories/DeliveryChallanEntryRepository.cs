@@ -17,7 +17,7 @@ namespace PureLedger.Repositories
         public async Task<DeliveryChallanEntry?> GetByIdAsync(int id)
         {
             return await _context.DeliveryChallanEntries
-                .FirstOrDefaultAsync(dce => dce.DCEntryId == id);
+                .FirstOrDefaultAsync(dce => dce.DeliveryChallanEntryId == id);
         }
 
         public async Task<List<DeliveryChallanEntry>> GetByDeliveryChallanIdAsync(int deliveryChallanId)
@@ -26,7 +26,7 @@ namespace PureLedger.Repositories
                 .Include(dce => dce.JournalEntry)
                     .ThenInclude(je => je.Account)
                 .Include(dce => dce.Location)
-                .Where(dce => dce.DeliveryChallanId == deliveryChallanId)
+                .Where(dce => dce.DeliveryChallanVoucherId == deliveryChallanId)
                 .OrderBy(dce => dce.EntryDate)
                 .ToListAsync();
         }
@@ -34,7 +34,7 @@ namespace PureLedger.Repositories
         public async Task<DeliveryChallanEntry?> GetByDeliveryChallanIdAndJournalEntryIdAsync(int deliveryChallanId, int journalEntryId)
         {
             return await _context.DeliveryChallanEntries
-                .FirstOrDefaultAsync(dce => dce.DeliveryChallanId == deliveryChallanId && dce.JournalEntryId == journalEntryId);
+                .FirstOrDefaultAsync(dce => dce.DeliveryChallanVoucherId == deliveryChallanId && dce.JournalEntryId == journalEntryId);
         }
 
         public async Task<DeliveryChallanEntry> AddAsync(DeliveryChallanEntry deliveryChallanEntry)

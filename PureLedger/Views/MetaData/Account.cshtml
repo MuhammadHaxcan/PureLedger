@@ -4,7 +4,6 @@
     var categories = ViewBag.Categories as List<PureLedger.Models.Category>;
     var accountGroups = ViewBag.AccountGroups as List<PureLedger.Models.AccountGroup>;
     var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
-    // For new account creation, ensure nested objects are not null
     var newAccount = new PureLedger.Models.Account
     {
         AccountData = new PureLedger.Models.AccountData(),
@@ -13,136 +12,246 @@
 }
 
 <div class="container py-4">
-    <h2>Accounts</h2>
-    <form asp-action="Account" method="post" class="mb-4">
-        <!-- First Row: Project, Category, Account Name, Account Group -->
-        <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label" for="ProjectId">Project</label>
-                <select id="ProjectId" name="ProjectId" class="form-select" required>
-                    <option value="">Select Project</option>
-                    @if (projects != null)
-                    {
-                        foreach (var p in projects)
-                        {
-                            <option value="@p.ProjectId">@p.ProjectName</option>
-                        }
-                    }
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label asp-for="@newAccount.CategoryId" class="form-label">Category</label>
-                <select asp-for="@newAccount.CategoryId" class="form-select" name="CategoryId" id="CategoryId" required>
-                    <option value="">Select Category</option>
-                    @* Categories will be loaded by JS *@
-                </select>
-                <span asp-validation-for="@newAccount.CategoryId" class="text-danger"></span>
-            </div>
-            <div class="col-md-3">
-                <label asp-for="@newAccount.AccountName" class="form-label">Account</label>
-                <input asp-for="@newAccount.AccountName" class="form-control" name="AccountName" required />
-                <span asp-validation-for="@newAccount.AccountName" class="text-danger"></span>
-            </div>
-            <div class="col-md-3">
-                <label asp-for="@newAccount.AccountGroupId" class="form-label">Account Group</label>
-                <select asp-for="@newAccount.AccountGroupId" class="form-select" name="AccountGroupId" required>
-                    <option value="">Select Group</option>
-                    @foreach (var ag in accountGroups)
-                    {
-                        <option value="@ag.AccountGroupId">@ag.AccountGroupName</option>
-                    }
-                </select>
-                <span asp-validation-for="@newAccount.AccountGroupId" class="text-danger"></span>
-            </div>
+    <div class="card shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h2 class="h4 mb-0">
+                <i class="bi bi-journal-text"></i> Accounts
+            </h2>
         </div>
-        <!-- Second Row: Account Data -->
-        <div class="row g-2 mt-2">
-            <div class="col-md-2">
-                <label asp-for="@newAccount.AccountData.PhoneNumber" class="form-label">Phone</label>
-                <input asp-for="@newAccount.AccountData.PhoneNumber" class="form-control" name="AccountData.PhoneNumber" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="@newAccount.AccountData.Email" class="form-label">Email</label>
-                <input asp-for="@newAccount.AccountData.Email" class="form-control" name="AccountData.Email" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="@newAccount.AccountData.Address" class="form-label">Address</label>
-                <input asp-for="@newAccount.AccountData.Address" class="form-control" name="AccountData.Address" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="@newAccount.AccountData.Area" class="form-label">Area</label>
-                <input asp-for="@newAccount.AccountData.Area" class="form-control" name="AccountData.Area" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="@newAccount.AccountData.City" class="form-label">City</label>
-                <input asp-for="@newAccount.AccountData.City" class="form-control" name="AccountData.City" />
-            </div>
-        </div>
-        <!-- Third Row: Product Data -->
-        <div class="row g-2 mt-2">
-            <div class="col-md-3">
-                <label asp-for="@newAccount.ProductData.PkgForm" class="form-label">Pkg Form</label>
-                <input asp-for="@newAccount.ProductData.PkgForm" class="form-control" name="ProductData.PkgForm" />
-            </div>
-            <div class="col-md-3">
-                <label asp-for="@newAccount.ProductData.Pkg" class="form-label">Pkg</label>
-                <input asp-for="@newAccount.ProductData.Pkg" class="form-control" name="ProductData.Pkg" type="number" />
-            </div>
-            <div class="col-md-3">
-                <label asp-for="@newAccount.ProductData.Type" class="form-label">Type</label>
-                <input asp-for="@newAccount.ProductData.Type" class="form-control" name="ProductData.Type" />
-            </div>
-            <div class="col-md-3">
-                <label asp-for="@newAccount.ProductData.SaleRate" class="form-label">Sale Rate</label>
-                <input asp-for="@newAccount.ProductData.SaleRate" class="form-control" name="ProductData.SaleRate" type="number" />
-            </div>
-        </div>
-        <button type="submit" class="btn btn-success mt-3">Add Account</button>
-    </form>
 
-    <table class="table table-bordered mt-4">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Account</th>
-                <th>Group</th>
-                <th>Category</th>
-                <th>Project</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Pkg Form</th>
-                <th>Pkg</th>
-                <th>Type</th>
-                <th>Sale Rate</th>
-                <th>Edit</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var a in Model)
-            {
-                <tr>
-                    <td>@a.AccountId</td>
-                    <td>@a.AccountName</td>
-                    <td>@a.AccountGroup?.AccountGroupName</td>
-                    <td>@a.Category?.CategoryName</td>
-                    <td>@a.Category?.Project?.ProjectName</td>
-                    <td>@a.AccountData?.PhoneNumber</td>
-                    <td>@a.AccountData?.Email</td>
-                    <td>@a.ProductData?.PkgForm</td>
-                    <td>@a.ProductData?.Pkg</td>
-                    <td>@a.ProductData?.Type</td>
-                    <td>@a.ProductData?.SaleRate</td>
-                    <td>
-                        <a asp-action="EditAccount" asp-route-id="@a.AccountId" class="btn btn-sm btn-warning" title="Edit">
-                            <i class="bi bi-pencil-square"></i> Edit
-                        </a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+        <div class="card-body">
+            <form asp-action="Account" method="post" class="needs-validation" novalidate>
+                <!-- Account Group Selection -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="form-floating">
+                            <select asp-for="@newAccount.AccountGroupId" class="form-select" name="AccountGroupId" id="AccountGroupId" required>
+                                <option value="">Select Group</option>
+                                @foreach (var ag in accountGroups)
+                                {
+                                    <option value="@ag.AccountGroupId" data-group-name="@ag.AccountGroupName.ToLower()">@ag.AccountGroupName</option>
+                                }
+                            </select>
+                            <label asp-for="@newAccount.AccountGroupId">Account Group</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Form Fields -->
+                <div id="dynamicFields" class="d-none">
+                    <!-- Project and Category Row -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <select id="ProjectId" name="ProjectId" class="form-select" required>
+                                    <option value="">Select Project</option>
+                                    @if (projects != null)
+                                    {
+                                        foreach (var p in projects)
+                                        {
+                                            <option value="@p.ProjectId">@p.ProjectName</option>
+                                        }
+                                    }
+                                </select>
+                                <label for="ProjectId">Project</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <select asp-for="@newAccount.CategoryId" class="form-select" name="CategoryId" id="CategoryId" required>
+                                    <option value="">Select Category</option>
+                                </select>
+                                <label asp-for="@newAccount.CategoryId">Category</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input asp-for="@newAccount.AccountName" class="form-control" name="AccountName" id="AccountName" required />
+                                <label asp-for="@newAccount.AccountName">Account Name</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Data Section -->
+                    <div id="accountDataSection" class="data-section mb-4 d-none">
+                        <h5 class="mb-3">Account Details</h5>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.AccountData.PhoneNumber" class="form-control" name="AccountData.PhoneNumber" />
+                                    <label asp-for="@newAccount.AccountData.PhoneNumber">Phone Number</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.AccountData.Email" class="form-control" name="AccountData.Email" type="email" />
+                                    <label asp-for="@newAccount.AccountData.Email">Email</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.AccountData.Address" class="form-control" name="AccountData.Address" />
+                                    <label asp-for="@newAccount.AccountData.Address">Address</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.AccountData.Area" class="form-control" name="AccountData.Area" />
+                                    <label asp-for="@newAccount.AccountData.Area">Area</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.AccountData.City" class="form-control" name="AccountData.City" />
+                                    <label asp-for="@newAccount.AccountData.City">City</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product Data Section -->
+                    <div id="productDataSection" class="data-section mb-4 d-none">
+                        <h5 class="mb-3">Product Details</h5>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.ProductData.PkgForm" class="form-control" name="ProductData.PkgForm" />
+                                    <label asp-for="@newAccount.ProductData.PkgForm">Package Form</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.ProductData.Pkg" class="form-control" name="ProductData.Pkg" type="number" min="0" />
+                                    <label asp-for="@newAccount.ProductData.Pkg">Package</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.ProductData.Type" class="form-control" name="ProductData.Type" />
+                                    <label asp-for="@newAccount.ProductData.Type">Type</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating">
+                                    <input asp-for="@newAccount.ProductData.SaleRate" class="form-control" name="ProductData.SaleRate" type="number" min="0" />
+                                    <label asp-for="@newAccount.ProductData.SaleRate">Sale Rate</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Add Account
+                    </button>
+                </div>
+            </form>
+
+            <div class="table-responsive mt-4">
+                <table class="table table-hover table-striped align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Account</th>
+                            <th>Group</th>
+                            <th>Category</th>
+                            <th>Project</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Pkg Form</th>
+                            <th>Pkg</th>
+                            <th>Type</th>
+                            <th>Sale Rate</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in Model)
+                        {
+                            <tr>
+                                <td>@a.AccountId</td>
+                                <td>@a.AccountName</td>
+                                <td>@a.AccountGroup?.AccountGroupName</td>
+                                <td>@a.Category?.CategoryName</td>
+                                <td>@a.Category?.Project?.ProjectName</td>
+                                <td>@a.AccountData?.PhoneNumber</td>
+                                <td>@a.AccountData?.Email</td>
+                                <td>@a.ProductData?.PkgForm</td>
+                                <td>@a.ProductData?.Pkg</td>
+                                <td>@a.ProductData?.Type</td>
+                                <td>@a.ProductData?.SaleRate</td>
+                                <td>
+                                    <a asp-action="EditAccount" asp-route-id="@a.AccountId" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
 @section Scripts {
     <script src="~/js/account-category.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const accountGroupSelect = document.getElementById('AccountGroupId');
+            const dynamicFields = document.getElementById('dynamicFields');
+            const accountDataSection = document.getElementById('accountDataSection');
+            const productDataSection = document.getElementById('productDataSection');
+
+            // Function to toggle sections based on account group
+            function toggleDataSections(groupName) {
+                // First show the dynamic fields
+                dynamicFields.classList.remove('d-none');
+
+                // Then handle specific sections
+                if (!groupName) {
+                    accountDataSection.classList.add('d-none');
+                    productDataSection.classList.add('d-none');
+                    return;
+                }
+
+                if (groupName === 'account') {
+                    accountDataSection.classList.remove('d-none');
+                    productDataSection.classList.add('d-none');
+                } else if (groupName === 'product') {
+                    accountDataSection.classList.add('d-none');
+                    productDataSection.classList.remove('d-none');
+                }
+            }
+
+            // Handle account group change
+            accountGroupSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (!selectedOption.value) {
+                    dynamicFields.classList.add('d-none');
+                    return;
+                }
+                const groupName = selectedOption.dataset.groupName;
+                toggleDataSections(groupName);
+            });
+
+            // Initialize form state
+            if (accountGroupSelect.value) {
+                const selectedOption = accountGroupSelect.options[accountGroupSelect.selectedIndex];
+                const groupName = selectedOption.dataset.groupName;
+                toggleDataSections(groupName);
+            } else {
+                dynamicFields.classList.add('d-none');
+            }
+
+            // Form validation
+            const form = document.querySelector('form');
+            form.addEventListener('submit', function(event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            });
+        });
+    </script>
 }

@@ -51,7 +51,7 @@ namespace PureLedger.Services
             int journalVoucherId,
             int entryId,
             int transporterId,
-            decimal amount,
+            int amount,
             bool postToCustomer,
             string? reference,
             DateOnly dcDate,

@@ -14,7 +14,7 @@ public class CartageViewModel
     
     [Required]
     [Range(0.01, double.MaxValue)]
-    public decimal Amount { get; set; }
+    public int Amount { get; set; }
     
     public bool PostToCustomer { get; set; }
     

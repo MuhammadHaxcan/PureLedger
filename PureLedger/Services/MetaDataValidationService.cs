@@ -123,10 +123,10 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            if (string.IsNullOrWhiteSpace(location.Name))
+            if (string.IsNullOrWhiteSpace(location.LocationName))
                 errors.Add("Location name is required.");
 
-            if (location.Name?.Length > 100)
+            if (location.LocationName?.Length > 100)
                 errors.Add("Location name must be at most 100 characters.");
 
             if (location.Phone?.Length > 20)

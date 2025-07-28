@@ -6,7 +6,7 @@ using PureLedger.ViewModels.PureLedger.ViewModels;
 
 namespace PureLedger.Services
 {
-    public class JournalEntryService : IJournalEntryService
+    public class JournalEntryService 
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<JournalEntryService> _logger;
@@ -39,9 +39,8 @@ namespace PureLedger.Services
             return new JournalEntryViewModel
             {
                 ProjectId = voucher.ProjectId,
-                CreditDays = voucher.CreditableDate.HasValue ?
-                    (voucher.CreditableDate.Value.DayNumber - voucher.EntryDate.DayNumber) : 0,
-                DueDate = voucher.CreditableDate ?? DateOnly.FromDateTime(DateTime.Now),
+                CreditDays = voucher.EntryDate.Day - voucher.CreditableDate.Day,
+                DueDate = voucher.CreditableDate,
                 Booker = "", // Set if you have this info
                 Entries = voucher.JournalEntries.Select(e => new JournalEntryRowModel
                 {
@@ -66,7 +65,7 @@ namespace PureLedger.Services
             {
                 ProjectId = model.ProjectId,
                 EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                IsProcessed = false,
+                IsCompleted = false,
                 CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
             };
 
@@ -77,7 +76,7 @@ namespace PureLedger.Services
             {
                 var journalEntry = new JournalEntry
                 {
-                    JournalVoucherId = journalVoucher.JvId,
+                    JournalVoucherId = journalVoucher.JournalVoucherId,
                     AccountId = entryModel.AccountId,
                     CategoryId = entryModel.CategoryId,
                     Description = entryModel.Des,
@@ -88,8 +87,7 @@ namespace PureLedger.Services
                     Debit = entryModel.Debit,
                     Credit = entryModel.Credit,
                     Rbp = entryModel.Rbp,
-                    LocationId = null, // Default LocationId is null
-                    IsProcessed = entryModel.Qty == 0 // Set IsProcessed to true if quantity is 0
+                    IsProcessed = false
                 };
 
                 // Add entry using repository
@@ -98,12 +96,54 @@ namespace PureLedger.Services
                 // Process tags if any
                 if (entryModel.Tags != null && entryModel.Tags.Any())
                 {
-                    await _unitOfWork.JournalEntries.AddTagsAsync(journalEntry.EntryId, entryModel.Tags);
+                    await _unitOfWork.JournalEntries.AddTagsAsync(journalEntry.JournalEntryId, entryModel.Tags);
                 }
             }
 
             // Update voucher processed status
-            await UpdateVoucherProcessedStatusAsync(journalVoucher.JvId);
+//            await UpdateVoucherProcessedStatusAsync(journalVoucher.JournalVoucherId);
+
+            // Get all account IDs from the entries
+            var accountIds = model.Entries.Select(e => e.AccountId).Distinct().ToList();
+
+            // Fetch accounts with their AccountGroupId
+            var accounts = new List<Account>();
+            foreach (var accountId in accountIds)
+            {
+                var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
+                if (account != null)
+                    accounts.Add(account);
+            }
+
+            // Check if all accounts have AccountGroupId == 1
+            bool allAccountGroup1 = accounts.All(a => a.AccountGroupId == 1);
+
+            // Set flags based on the check
+            if (allAccountGroup1)
+            {
+                journalVoucher.IsCompleted = true;
+                // You need to fetch entries from the DB to update IsProcessed
+                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucher.JournalVoucherId, null, null);
+                foreach (var entry in entries)
+                {
+                    entry.IsProcessed = true;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+            }
+            else
+            {
+                journalVoucher.IsCompleted = false;
+                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucher.JournalVoucherId, null, null);
+                foreach (var entry in entries)
+                {
+                    entry.IsProcessed = false;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+            }
+
+            // Save changes as usual
+            await _unitOfWork.JournalVouchers.UpdateAsync(journalVoucher);
+            await _unitOfWork.SaveChangesAsync();
 
             return journalVoucher;
         }
@@ -119,7 +159,7 @@ namespace PureLedger.Services
 
             return new JournalEntryUpdateViewModel
             {
-                EntryId = entry.EntryId,
+                EntryId = entry.JournalEntryId,
                 AccountName = entry.Account?.AccountName,
                 Description = entry.Description,
                 Quantity = entry.Quantity,
@@ -160,8 +200,6 @@ namespace PureLedger.Services
                 entry.CategoryId = model.CategoryId;
             }
 
-            // Set IsProcessed to true if quantity is 0
-            entry.IsProcessed = entry.Quantity == 0;
             entry.IsEdited = true;
 
             try
@@ -169,7 +207,7 @@ namespace PureLedger.Services
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
                 
                 // Update voucher processed status
-                await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
+                //await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
                 
                 return true;
             }
@@ -188,7 +226,7 @@ namespace PureLedger.Services
                 return new { entries = new List<object>(), jvId = voucherId };
 
             var entries = voucher.JournalEntries.Select(e => new {
-                entryId = e.EntryId,
+                entryId = e.JournalEntryId,
                 accountName = e.Account?.AccountName,
                 description = e.Description,
                 quantity = e.Quantity,
@@ -199,7 +237,7 @@ namespace PureLedger.Services
                 credit = e.Credit
             }).ToList();
 
-            return new { entries, jvId = voucher.JvId };
+            return new { entries, jvId = voucher.JournalVoucherId };
         }
 
         public async Task<object?> GetProductDetailsAsync(int accountId)
@@ -213,13 +251,13 @@ namespace PureLedger.Services
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
             if (voucher == null) return;
 
-            // Check if all entries with quantity > 0 are processed
-            var entriesWithQuantity = voucher.JournalEntries.Where(e => e.Quantity > 0).ToList();
-            var allProcessed = entriesWithQuantity.Count == 0 || entriesWithQuantity.All(e => e.IsProcessed);
+            // Check if all entries are processed
+            var allProcessed = voucher.JournalEntries != null && voucher.JournalEntries.Count > 0
+                && voucher.JournalEntries.All(e => e.IsProcessed);
 
-            if (voucher.IsProcessed != allProcessed)
+            if (voucher.IsCompleted != allProcessed)
             {
-                voucher.IsProcessed = allProcessed;
+                voucher.IsCompleted = allProcessed;
                 await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
             }
         }

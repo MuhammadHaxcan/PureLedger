@@ -111,17 +111,16 @@ namespace PureLedger.Controllers
 
                 if (deliveryChallanVoucher != null)
                 {
-                    var firstEntry = deliveryChallanVoucher.DeliveryChallanEntries.FirstOrDefault();
+                    var firstEntry = deliveryChallanVoucher.Entries.FirstOrDefault();
 
                     return Json(new
                     {
                         exists = true,
-                        challanId = deliveryChallanVoucher.DeliveryChallanId,
+                        challanId = deliveryChallanVoucher.DeliveryChallanVoucherId,
                         challan = new
                         {
                             challanDate = deliveryChallanVoucher.DCDate,
                             locationId = firstEntry?.LocationId,
-                            remarks = deliveryChallanVoucher.ReferenceNumber,
                             otherRef = firstEntry?.OtherReference
                         }
                     });
@@ -163,7 +162,7 @@ namespace PureLedger.Controllers
 
                 // Create delivery challan entry
                 var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
-                    deliveryChallanVoucher.DeliveryChallanId,
+                    deliveryChallanVoucher.DeliveryChallanVoucherId,
                     model.JournalEntryId,
                     model.LocationId,  // Explicitly pass the LocationId from the model
                     model.Remarks,
@@ -174,8 +173,8 @@ namespace PureLedger.Controllers
 
                 return JsonSuccess("Entry successfully added to delivery challan.", new
                 {
-                    deliveryChallanId = deliveryChallanVoucher.DeliveryChallanId,
-                    dcEntryId = deliveryChallanEntry.DCEntryId
+                    deliveryChallanId = deliveryChallanVoucher.DeliveryChallanVoucherId,
+                    dcEntryId = deliveryChallanEntry.DeliveryChallanEntryId
                 });
             }
             catch (Exception ex)
@@ -214,7 +213,7 @@ namespace PureLedger.Controllers
 
                 // Process all entries and pass the date from the model
                 var results = await ProcessEntriesBatchAsync(
-                    deliveryChallanVoucher.DeliveryChallanId,
+                    deliveryChallanVoucher.DeliveryChallanVoucherId,
                     unprocessedEntries,
                     model.LocationId,
                     model.Remarks,
@@ -247,7 +246,7 @@ namespace PureLedger.Controllers
 
                 return JsonSuccess("Cartage added and delivery challan processed successfully", new
                 {
-                    deliveryChallanId = result.DeliveryChallanId
+                    deliveryChallanId = result.DeliveryChallanVoucherId
                 });
             }
             catch (Exception ex)
@@ -276,17 +275,17 @@ namespace PureLedger.Controllers
                 try
                 {
                     _logger.LogInformation("Processing entry ID {EntryId} for delivery challan ID {DeliveryChallanId}",
-                        entry.EntryId, deliveryChallanId);
+                        entry.JournalEntryId, deliveryChallanId);
 
                     // Make sure this entry isn't already processed
                     if (entry.IsProcessed)
                     {
                         _logger.LogWarning("Entry ID {EntryId} is already marked as processed - skipping",
-                            entry.EntryId);
+                            entry.JournalEntryId);
                         
                         results.Add(new EntryProcessResult
                         {
-                            EntryId = entry.EntryId,
+                            EntryId = entry.JournalEntryId,
                             Success = true,
                             Message = "Entry was already processed"
                         });
@@ -297,29 +296,29 @@ namespace PureLedger.Controllers
                     // Create delivery challan entry with the specified date
                     var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                         deliveryChallanId,
-                        entry.EntryId,
+                        entry.JournalEntryId,
                         locationId,
                         remarks,
                         otherReference,
                         entryDate);  // Pass the entry date from the batch model
 
                     _logger.LogInformation("Successfully processed entry ID {EntryId}, created DC entry ID {DCEntryId} with date {EntryDate}",
-                        entry.EntryId, deliveryChallanEntry.DCEntryId, entryDate);
+                        entry.JournalEntryId, deliveryChallanEntry.DeliveryChallanEntryId, entryDate);
 
                     results.Add(new EntryProcessResult
                     {
-                        EntryId = entry.EntryId,
+                        EntryId = entry.JournalEntryId,
                         Success = true
                     });
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error processing entry {EntryId} for delivery challan {DeliveryChallanId}: {ErrorMessage}",
-                        entry.EntryId, deliveryChallanId, ex.Message);
+                        entry.JournalEntryId, deliveryChallanId, ex.Message);
 
                     results.Add(new EntryProcessResult
                     {
-                        EntryId = entry.EntryId,
+                        EntryId = entry.JournalEntryId,
                         Success = false,
                         Message = ex.Message
                     });

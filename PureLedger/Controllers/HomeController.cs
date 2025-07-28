@@ -11,11 +11,11 @@ namespace PureLedger.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        private readonly IJournalEntryService _journalService;
+        private readonly JournalEntryService _journalService;
         private readonly JournalEntryValidationService _validator;
 
         public HomeController(
-            IJournalEntryService journalService,
+            JournalEntryService journalService,
             JournalEntryValidationService validator,
             ILogger<HomeController> logger)
         {
@@ -24,11 +24,6 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
 
         [HttpGet]
         [ActionName("Entry")]
@@ -65,7 +60,7 @@ namespace PureLedger.Controllers
             try
             {
                 var journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
-                TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JvId}";
+                TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
                 return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
             }
             catch (Exception ex)
@@ -178,7 +173,7 @@ namespace PureLedger.Controllers
             var vouchersWithModifiedEntries = await _journalService.GetVouchersWithModifiedEntriesAsync();
             var modifiedEntriesSummary = vouchersWithModifiedEntries.Select(v => new ModifiedEntriesSummaryViewModel
             {
-                JvId = v.JvId,
+                JvId = v.JournalVoucherId,
                 TotalDebit = v.TotalDebit,
                 TotalCredit = v.TotalCredit,
                 HasModifiedEntries = v.JournalEntries.Any(e => e.IsEdited)
@@ -206,10 +201,10 @@ namespace PureLedger.Controllers
 
             var model = new VoucherModifiedEntriesViewModel
             {
-                JvId = voucher.JvId,
+                JvId = voucher.JournalVoucherId,
                 Entries = voucher.JournalEntries.Select(e => new VoucherEntryDetailViewModel
                 {
-                    EntryId = e.EntryId,
+                    EntryId = e.JournalEntryId,
                     ModifyTime = e.IsEdited ? DateTime.Now : null,
                     Category = e.Category?.CategoryName ?? "",
                     Account = e.Account?.AccountName ?? "",
