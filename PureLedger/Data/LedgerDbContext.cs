@@ -93,8 +93,8 @@ namespace PureLedger.Data
             // DeliveryChallanEntry to DeliveryChallanVoucher relationship
             modelBuilder.Entity<DeliveryChallanEntry>()
                 .HasOne(dce => dce.DeliveryChallanVoucher)
-                .WithMany(dcv => dcv.DeliveryChallanEntries)
-                .HasForeignKey(dce => dce.DeliveryChallanId)
+                .WithMany(dcv => dcv.Entries)
+                .HasForeignKey(dce => dce.DeliveryChallanVoucherId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             // DeliveryChallanEntry to JournalEntry relationship

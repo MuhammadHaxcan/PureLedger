@@ -1,13 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PureLedger.Models
 {
+    [Index(nameof(TagName), IsUnique = true)]
     public class Tag
     {
         [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int TagId { get; set; }
-        [Required]
+
+        [Required(ErrorMessage = "Tag name is required")]
         public string TagName { get; set; }
 
         // Many-to-many navigation property
