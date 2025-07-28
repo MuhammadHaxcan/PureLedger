@@ -9,5 +9,6 @@ namespace PureLedger.Repositories.Interfaces
         Task<DeliveryChallanEntry?> GetByDeliveryChallanIdAndJournalEntryIdAsync(int deliveryChallanId, int journalEntryId);
         Task<DeliveryChallanEntry> AddAsync(DeliveryChallanEntry deliveryChallanEntry);
         Task<DeliveryChallanEntry> UpdateAsync(DeliveryChallanEntry deliveryChallanEntry);
+        Task<bool> DeleteAsync(int deliveryChallanEntryId);
     }
 }

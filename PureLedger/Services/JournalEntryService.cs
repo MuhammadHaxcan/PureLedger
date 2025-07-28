@@ -268,14 +268,57 @@ namespace PureLedger.Services
             if (entry == null)
                 return false;
 
-            var success = await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+            var voucherId = entry.JournalVoucherId;
 
-            if (success)
+            // Delete associated DeliveryChallanEntry if it exists
+            // Assuming DeliveryChallanEntry has a JournalEntryId foreign key
+            var deliveryChallanEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(voucherId);
+            if (deliveryChallanEntries != null && deliveryChallanEntries.Any())
             {
-                await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
+                foreach (var dcEntry in deliveryChallanEntries.Where(e => e.JournalEntryId == entryId))
+                {
+                    // If you have a DeleteAsync method for DeliveryChallanEntry, use it here
+                    await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
+                }
             }
 
-            return success;
+            // Get all entries for this voucher
+            var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
+
+            if (entries.Count == 1)
+            {
+                // This is the last entry, so delete the entry, the voucher, and any related delivery challan voucher
+
+                // Delete the entry
+                var entryDeleted = await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+
+                // Delete the delivery challan voucher if it exists
+                var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
+                if (deliveryChallanVoucher != null)
+                {
+                    // Assuming you have a DeleteAsync method for DeliveryChallanVoucher
+                    await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
+                }
+
+                // Delete the journal voucher
+                await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
+
+                await _unitOfWork.SaveChangesAsync();
+                return entryDeleted;
+            }
+            else
+            {
+                // Just delete the entry and update voucher status
+                var success = await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+
+                if (success)
+                {
+                    await UpdateVoucherProcessedStatusAsync(voucherId);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+
+                return success;
+            }
         }
 
         public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()

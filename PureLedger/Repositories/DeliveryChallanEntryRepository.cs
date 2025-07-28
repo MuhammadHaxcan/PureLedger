@@ -48,5 +48,18 @@ namespace PureLedger.Repositories
             _context.DeliveryChallanEntries.Update(deliveryChallanEntry);
             return deliveryChallanEntry;
         }
+
+        public async Task<bool> DeleteAsync(int deliveryChallanEntryId)
+        {
+            var entry = await _context.DeliveryChallanEntries
+                .FirstOrDefaultAsync(e => e.DeliveryChallanEntryId == deliveryChallanEntryId);
+
+            if (entry == null)
+                return false;
+
+            _context.DeliveryChallanEntries.Remove(entry);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

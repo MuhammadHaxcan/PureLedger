@@ -76,5 +76,22 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<bool> DeleteAsync(int deliveryChallanVoucherId)
+        {
+            var voucher = await _context.DeliveryChallanVouchers
+                .Include(dcv => dcv.Entries)
+                .FirstOrDefaultAsync(dcv => dcv.DeliveryChallanVoucherId == deliveryChallanVoucherId);
+
+            if (voucher == null)
+                return false;
+
+            // Remove related entries first if needed (cascade delete may handle this)
+            if (voucher.Entries != null)
+                _context.DeliveryChallanEntries.RemoveRange(voucher.Entries);
+
+            _context.DeliveryChallanVouchers.Remove(voucher);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

@@ -90,5 +90,23 @@ namespace PureLedger.Repositories
                 .Where(v => v.JournalEntries.Any(e => e.IsEdited))
                 .ToListAsync();
         }
+
+        public async Task<bool> DeleteAsync(int journalVoucherId)
+        {
+            var voucher = await _context.JournalVouchers
+                .Include(jv => jv.JournalEntries)
+                .FirstOrDefaultAsync(jv => jv.JournalVoucherId == journalVoucherId);
+
+            if (voucher == null)
+                return false;
+
+            // Remove related entries first if needed (cascade delete may handle this)
+            if (voucher.JournalEntries != null)
+                _context.JournalEntries.RemoveRange(voucher.JournalEntries);
+
+            _context.JournalVouchers.Remove(voucher);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }
