@@ -160,13 +160,14 @@ namespace PureLedger.Controllers
                 var deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                     journalEntry.JournalVoucherId, model.DCDate, model.OtherReference);
 
-                // Create delivery challan entry
+                // Create delivery challan entry (pass the date!)
                 var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                     deliveryChallanVoucher.DeliveryChallanVoucherId,
                     model.JournalEntryId,
-                    model.LocationId,  // Explicitly pass the LocationId from the model
+                    model.LocationId,
                     model.Remarks,
-                    model.OtherReference);
+                    model.OtherReference,
+                    model.DCDate); // <-- Pass the date here
 
                 // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalEntry.JournalVoucherId);
@@ -212,7 +213,7 @@ namespace PureLedger.Controllers
                     journalVoucherId, model.DCDate, model.OtherReference);
 
                 // Process all entries and pass the date from the model
-                var results = await ProcessEntriesBatchAsync(
+                var results = await     ProcessEntriesBatchAsync(
                     deliveryChallanVoucher.DeliveryChallanVoucherId,
                     unprocessedEntries,
                     model.LocationId,

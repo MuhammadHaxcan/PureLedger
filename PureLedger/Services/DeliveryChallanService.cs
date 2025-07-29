@@ -441,13 +441,14 @@ namespace PureLedger.Services
                 // Create or get delivery challan voucher
                 var deliveryChallanVoucher = await CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDate, reference);
 
-                // Create delivery challan entry
+                // Create delivery challan entry with correct date
                 await CreateDeliveryChallanEntryAsync(
                     deliveryChallanVoucher.DeliveryChallanVoucherId,
                     entry.JournalEntryId,
                     dcLocation,
                     dcRemarks,
-                    dcOtherRef);
+                    dcOtherRef,
+                    dcDate); // <-- Pass the date here
 
                 // Create cartage journal voucher and entries as the last step
                 await CreateCartageJournalVoucherAsync(
