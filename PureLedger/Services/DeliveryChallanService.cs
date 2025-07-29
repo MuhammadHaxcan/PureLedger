@@ -23,7 +23,7 @@ namespace PureLedger.Services
         public async Task<List<Project>> GetAllProjectsAsync() =>
             await _unitOfWork.Projects.GetAllAsync();
 
-        public async Task<List<Models.Location>> GetAllLocationsAsync() =>
+        public async Task<List<Location>> GetAllLocationsAsync() =>
             await _unitOfWork.Locations.GetAllAsync();
 
         public async Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId) =>
@@ -335,18 +335,30 @@ namespace PureLedger.Services
             foreach (var accountId in accountIds)
             {
                 var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(accountId);
-                if (account != null && account.AccountGroup != null)
-                    accounts[accountId] = account.AccountGroup.AccountGroupId;
+                if (account != null && account.AccountGroupId != null)
+                    accounts[accountId] = account.AccountGroupId;
             }
 
-            // Check if all AccountGroupId == 2 entries are processed
-            var group2Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 2).ToList();
+            // Get all group 2 entries
+            var group2Entries = voucher.JournalEntries
+                .Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 2)
+                .ToList();
+
+            // Only proceed if there is at least one group 2 entry
+            if (group2Entries.Count == 0)
+                return;
+
+            // Check if all group 2 entries are processed
             bool allGroup2Processed = group2Entries.All(e => e.IsProcessed);
 
+            // Only if all group 2 entries are processed, process group 1 entries and mark voucher as completed
             if (allGroup2Processed)
             {
                 // Set all AccountGroupId == 1 entries to processed
-                var group1Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 1 && !e.IsProcessed).ToList();
+                var group1Entries = voucher.JournalEntries
+                    .Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 1 && !e.IsProcessed)
+                    .ToList();
+
                 foreach (var entry in group1Entries)
                 {
                     entry.IsProcessed = true;
@@ -361,6 +373,16 @@ namespace PureLedger.Services
                 }
 
                 await _unitOfWork.SaveChangesAsync();
+            }
+            else
+            {
+                // If not all group 2 entries are processed, ensure voucher is not completed
+                if (voucher.IsCompleted)
+                {
+                    voucher.IsCompleted = false;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                    await _unitOfWork.SaveChangesAsync();
+                }
             }
         }
 

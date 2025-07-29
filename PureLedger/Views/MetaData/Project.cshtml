@@ -5,99 +5,41 @@
 }
 
 <div class="container py-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-            <h2 class="h4 mb-0">
-                <i class="bi bi-folder"></i> Projects
-            </h2>
-            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#newProjectForm">
-                <i class="bi bi-plus-circle"></i> New Project
-            </button>
-        </div>
-
-        <div class="card-body">
-            <div id="newProjectForm" class="collapse mb-4">
-                <form asp-action="Project" method="post" class="row g-3 needs-validation" novalidate>
-                    <div class="col-md-8">
-                        <div class="form-floating">
-                            <input asp-for="@newProject.ProjectName"
-                                   class="form-control"
-                                   id="projectName"
-                                   placeholder="Project Name"
-                                   required
-                                   pattern="^[a-zA-Z0-9\s\-_]{2,100}$"
-                                   maxlength="100" />
-                            <label asp-for="@newProject.ProjectName">Project Name</label>
-                            <div class="invalid-feedback">
-                                Please enter a valid project name (2-100 characters, letters, numbers, spaces, hyphens and underscores only)
-                            </div>
-                            <span asp-validation-for="@newProject.ProjectName" class="text-danger"></span>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-success w-100">
-                            <i class="bi bi-check-circle"></i> Create Project
-                        </button>
-                    </div>
-                </form>
+    <h2>Projects</h2>
+    <form asp-action="Project" method="post" class="mb-4">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label asp-for="@newProject.ProjectName" class="form-label">Project Name</label>
+                <input asp-for="@newProject.ProjectName" class="form-control" name="ProjectName" required />
+                <span asp-validation-for="@newProject.ProjectName" class="text-danger"></span>
             </div>
-
-            @if (!Model.Any())
-            {
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> No projects have been created yet.
-                </div>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th scope="col" class="text-center" style="width: 80px">#</th>
-                                <th scope="col">Project Name</th>
-                                <th scope="col" class="text-center" style="width: 120px">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var project in Model)
-                            {
-                                <tr>
-                                    <td class="text-center">@project.ProjectId</td>
-                                    <td>@project.ProjectName</td>
-                                    <td class="text-center">
-                                        <a asp-action="EditProject"
-                                           asp-route-id="@project.ProjectId"
-                                           class="btn btn-sm btn-outline-primary"
-                                           title="Edit Project">
-                                            <i class="bi bi-pencil-square"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-success">Add Project</button>
+            </div>
         </div>
-    </div>
-</div>
+    </form>
 
-@section Scripts {
-    <script>
-        // Enable Bootstrap form validation
-        (() => {
-            'use strict'
-            const forms = document.querySelectorAll('.needs-validation')
-            Array.from(forms).forEach(form => {
-                form.addEventListener('submit', event => {
-                    if (!form.checkValidity()) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                    }
-                    form.classList.add('was-validated')
-                }, false)
-            })
-        })()
-    </script>
-}
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Edit</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in Model)
+            {
+                <tr>
+                    <td>@p.ProjectId</td>
+                    <td>@p.ProjectName</td>
+                    <td>
+                        <a asp-action="EditProject" asp-route-id="@p.ProjectId" class="btn btn-sm btn-warning" title="Edit">
+                            <i class="bi bi-pencil-square"></i> Edit
+                        </a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

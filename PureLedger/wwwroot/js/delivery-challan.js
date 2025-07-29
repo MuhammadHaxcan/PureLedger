@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 locations.forEach(loc => {
                     const opt = document.createElement('option');
                     opt.value = loc.locationId;
-                    opt.textContent = loc.name;
+                    opt.textContent = loc.locationName; // <-- Corrected here
                     locationSelect.appendChild(opt);
                 });
             })
