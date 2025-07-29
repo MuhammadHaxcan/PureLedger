@@ -489,10 +489,17 @@ namespace PureLedger.Services
                 cartageJV = await _unitOfWork.JournalVouchers.AddAsync(cartageJV);
                 await _unitOfWork.SaveChangesAsync();
 
+                // Fetch the correct category for the debit account
+                var debitAccount = await _unitOfWork.Accounts.GetByIdAsync(debitAccountId);
+                if (debitAccount == null)
+                    throw new InvalidOperationException("Debit account not found for cartage entry.");
+
+                int debitCategoryId = debitAccount.CategoryId;
+
                 // Create both entries at once to avoid gaps
                 var entries = new List<JournalEntry>
                 {
-                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, originalEntry, amount),
+                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, debitCategoryId, originalEntry, amount),
                     CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, originalEntry, amount)
                 };
 
@@ -512,13 +519,13 @@ namespace PureLedger.Services
             }
         }
 
-        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, JournalEntry originalEntry, int amount)
+        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = accountId,
-                CategoryId = originalEntry.CategoryId,
+                CategoryId = categoryId,
                 Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}",
                 Quantity = 1,
                 Rate = amount,
@@ -585,22 +592,24 @@ namespace PureLedger.Services
 
         private async Task<int> GetDebitAccountIdAsync(JournalVoucher originalJV, JournalEntry entry, bool postToCustomer)
         {
-            if (!postToCustomer)
+            if (postToCustomer)
             {
+                // Find customer account (AccountGroupId == 1)
+                foreach (var je in originalJV.JournalEntries)
+                {
+                    var account = await _unitOfWork.Accounts.GetByIdAsync(je.AccountId);
+                    if (account != null && account.AccountGroupId == 1)
+                    {
+                        return account.AccountId;
+                    }
+                }
+                throw new InvalidOperationException("No customer account found in the journal voucher");
+            }
+            else
+            {
+                // Always use the account of the entry being processed
                 return entry.AccountId;
             }
-
-            // Find customer account (AccountGroupId == 1)
-            foreach (var je in originalJV.JournalEntries)
-            {
-                var account = await _unitOfWork.Accounts.GetByIdAsync(je.AccountId);
-                if (account != null && account.AccountGroupId == 1)
-                {
-                    return account.AccountId;
-                }
-            }
-
-            throw new InvalidOperationException("No customer account found in the journal voucher");
         }
 
         private static JournalEntryDetailViewModel MapToJournalEntryDetailViewModel(JournalEntry entry)
