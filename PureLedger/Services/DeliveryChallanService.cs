@@ -325,36 +325,42 @@ namespace PureLedger.Services
 
         public async Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId)
         {
-            try
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null || voucher.JournalEntries == null || !voucher.JournalEntries.Any())
+                return;
+
+            // Load accounts for all entries
+            var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
+            var accounts = new Dictionary<int, int>(); // AccountId -> AccountGroupId
+            foreach (var accountId in accountIds)
             {
-                // Get the journal voucher with all its entries
-                var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
-                if (voucher == null)
-                {
-                    _logger.LogWarning("Cannot update processed status: Journal voucher {JournalVoucherId} not found", journalVoucherId);
-                    return;
-                }
-
-                // Check if all entries that have quantity > 0 are processed
-                bool allEntriesProcessed = voucher.JournalEntries
-                    .Where(e => e.Quantity > 0)
-                    .All(e => e.IsProcessed);
-
-                // Update the voucher's IsProcessed status only if there's a change
-                if (allEntriesProcessed != voucher.IsCompleted)
-                {
-                    voucher.IsCompleted = allEntriesProcessed;
-                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-                    await _unitOfWork.SaveChangesAsync();
-
-                    _logger.LogInformation("Updated journal voucher {JournalVoucherId} processed status to {IsProcessed}",
-                        journalVoucherId, allEntriesProcessed);
-                }
+                var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(accountId);
+                if (account != null && account.AccountGroup != null)
+                    accounts[accountId] = account.AccountGroup.AccountGroupId;
             }
-            catch (Exception ex)
+
+            // Check if all AccountGroupId == 2 entries are processed
+            var group2Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 2).ToList();
+            bool allGroup2Processed = group2Entries.All(e => e.IsProcessed);
+
+            if (allGroup2Processed)
             {
-                _logger.LogError(ex, "Error updating journal voucher processed status for voucher {JournalVoucherId}", journalVoucherId);
-                throw; 
+                // Set all AccountGroupId == 1 entries to processed
+                var group1Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 1 && !e.IsProcessed).ToList();
+                foreach (var entry in group1Entries)
+                {
+                    entry.IsProcessed = true;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+
+                // Mark voucher as completed if not already
+                if (!voucher.IsCompleted)
+                {
+                    voucher.IsCompleted = true;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
             }
         }
 
@@ -599,6 +605,47 @@ namespace PureLedger.Services
                 IsProcessed = voucher.IsCompleted,
                 Entries = new List<JournalEntryDetailViewModel>()
             };
+        }
+
+        private async Task CompleteVoucherIfAllGroup2ProcessedAsync(int journalVoucherId)
+        {
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null || voucher.JournalEntries == null || !voucher.JournalEntries.Any())
+                return;
+
+            // Load accounts for all entries
+            var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
+            var accounts = new Dictionary<int, int>(); // AccountId -> AccountGroupId
+            foreach (var accountId in accountIds)
+            {
+                var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(accountId);
+                if (account != null && account.AccountGroup != null)
+                    accounts[accountId] = account.AccountGroup.AccountGroupId;
+            }
+
+            // Check if all AccountGroupId == 2 entries are processed
+            var group2Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 2).ToList();
+            bool allGroup2Processed = group2Entries.All(e => e.IsProcessed);
+
+            if (allGroup2Processed)
+            {
+                // Set all AccountGroupId == 1 entries to processed
+                var group1Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 1 && !e.IsProcessed).ToList();
+                foreach (var entry in group1Entries)
+                {
+                    entry.IsProcessed = true;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+
+                // Mark voucher as completed if not already
+                if (!voucher.IsCompleted)
+                {
+                    voucher.IsCompleted = true;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+            }
         }
 
         #endregion

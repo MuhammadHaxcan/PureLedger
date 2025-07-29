@@ -34,7 +34,9 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("AccountName")
-                        .HasColumnType("nvarchar(max)");
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
@@ -42,6 +44,9 @@ namespace PureLedger.Migrations
                     b.HasKey("AccountId");
 
                     b.HasIndex("AccountGroupId");
+
+                    b.HasIndex("AccountName")
+                        .IsUnique();
 
                     b.HasIndex("CategoryId");
 
@@ -60,19 +65,24 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Address")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Area")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("City")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Email")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("AccountDataId");
 
@@ -92,7 +102,8 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("AccountGroupName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("AccountGroupId");
 
@@ -121,7 +132,8 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("AccountTypeName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("AccountTypeId");
 
@@ -168,7 +180,8 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("CategoryName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
@@ -177,6 +190,9 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("AccountTypeId");
 
+                    b.HasIndex("CategoryName")
+                        .IsUnique();
+
                     b.HasIndex("ProjectId");
 
                     b.ToTable("Categories");
@@ -184,13 +200,13 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanEntry", b =>
                 {
-                    b.Property<int>("DCEntryId")
+                    b.Property<int>("DeliveryChallanEntryId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DCEntryId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DeliveryChallanEntryId"));
 
-                    b.Property<int>("DeliveryChallanId")
+                    b.Property<int>("DeliveryChallanVoucherId")
                         .HasColumnType("int");
 
                     b.Property<DateOnly>("EntryDate")
@@ -210,9 +226,9 @@ namespace PureLedger.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.HasKey("DCEntryId");
+                    b.HasKey("DeliveryChallanEntryId");
 
-                    b.HasIndex("DeliveryChallanId");
+                    b.HasIndex("DeliveryChallanVoucherId");
 
                     b.HasIndex("JournalEntryId");
 
@@ -223,11 +239,11 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
                 {
-                    b.Property<int>("DeliveryChallanId")
+                    b.Property<int>("DeliveryChallanVoucherId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DeliveryChallanId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DeliveryChallanVoucherId"));
 
                     b.Property<DateOnly>("DCDate")
                         .HasColumnType("date");
@@ -241,11 +257,7 @@ namespace PureLedger.Migrations
                     b.Property<int>("JournalVoucherId")
                         .HasColumnType("int");
 
-                    b.Property<string>("ReferenceNumber")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("DeliveryChallanId");
+                    b.HasKey("DeliveryChallanVoucherId");
 
                     b.HasIndex("JournalVoucherId");
 
@@ -254,11 +266,11 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>
                 {
-                    b.Property<int>("EntryId")
+                    b.Property<int>("JournalEntryId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EntryId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalEntryId"));
 
                     b.Property<int>("AccountId")
                         .HasColumnType("int");
@@ -266,21 +278,21 @@ namespace PureLedger.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("Credit")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int>("Credit")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("Debit")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int>("Debit")
+                        .HasColumnType("int");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<decimal>("Discount")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int>("Discount")
+                        .HasColumnType("int");
 
-                    b.Property<decimal?>("DiscountPercent")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("DiscountPercent")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsEdited")
                         .HasColumnType("bit");
@@ -291,28 +303,24 @@ namespace PureLedger.Migrations
                     b.Property<int>("JournalVoucherId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("LocationId")
-                        .HasColumnType("int");
-
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("Rate")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int>("Rate")
+                        .HasColumnType("int");
 
                     b.Property<string>("Rbp")
+                        .IsRequired()
                         .HasMaxLength(1)
                         .HasColumnType("nvarchar(1)");
 
-                    b.HasKey("EntryId");
+                    b.HasKey("JournalEntryId");
 
                     b.HasIndex("AccountId");
 
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("JournalVoucherId");
-
-                    b.HasIndex("LocationId");
 
                     b.ToTable("JournalEntries");
                 });
@@ -323,6 +331,10 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("JournalEntryTagId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("TagId")
                         .HasColumnType("int");
 
                     b.HasKey("JournalEntryId", "JournalEntryTagId");
@@ -334,25 +346,25 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
                 {
-                    b.Property<int>("JvId")
+                    b.Property<int>("JournalVoucherId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JvId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalVoucherId"));
 
-                    b.Property<DateOnly?>("CreditableDate")
+                    b.Property<DateOnly>("CreditableDate")
                         .HasColumnType("date");
 
                     b.Property<DateOnly>("EntryDate")
                         .HasColumnType("date");
 
-                    b.Property<bool>("IsProcessed")
+                    b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
-                    b.HasKey("JvId");
+                    b.HasKey("JournalVoucherId");
 
                     b.HasIndex("ProjectId");
 
@@ -367,20 +379,23 @@ namespace PureLedger.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LocationId"));
 
-                    b.Property<string>("Name")
+                    b.Property<string>("LocationName")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Region")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("LocationId");
+
+                    b.HasIndex("LocationName")
+                        .IsUnique();
 
                     b.ToTable("Locations");
                 });
@@ -400,13 +415,15 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("PkgForm")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
-                    b.Property<long?>("SaleRate")
-                        .HasColumnType("bigint");
+                    b.Property<int?>("SaleRate")
+                        .HasColumnType("int");
 
                     b.Property<string>("Type")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.HasKey("ProductDataId");
 
@@ -426,9 +443,13 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("ProjectName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("ProjectId");
+
+                    b.HasIndex("ProjectName")
+                        .IsUnique();
 
                     b.ToTable("Projects");
                 });
@@ -443,9 +464,12 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("TagName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("TagId");
+
+                    b.HasIndex("TagName")
+                        .IsUnique();
 
                     b.ToTable("Tags");
                 });
@@ -502,8 +526,8 @@ namespace PureLedger.Migrations
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanEntry", b =>
                 {
                     b.HasOne("PureLedger.Models.DeliveryChallanVoucher", "DeliveryChallanVoucher")
-                        .WithMany("DeliveryChallanEntries")
-                        .HasForeignKey("DeliveryChallanId")
+                        .WithMany("Entries")
+                        .HasForeignKey("DeliveryChallanVoucherId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -557,17 +581,11 @@ namespace PureLedger.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("PureLedger.Models.Location", "Location")
-                        .WithMany()
-                        .HasForeignKey("LocationId");
-
                     b.Navigation("Account");
 
                     b.Navigation("Category");
 
                     b.Navigation("JournalVoucher");
-
-                    b.Navigation("Location");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>
@@ -625,7 +643,7 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
                 {
-                    b.Navigation("DeliveryChallanEntries");
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>

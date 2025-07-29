@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace PureLedger.Migrations
 {
     /// <inheritdoc />
-    public partial class init : Migration
+    public partial class UPDATED_DB : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -19,7 +19,7 @@ namespace PureLedger.Migrations
                 {
                     AccountGroupId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    AccountGroupName = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    AccountGroupName = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -32,7 +32,7 @@ namespace PureLedger.Migrations
                 {
                     AccountTypeId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    AccountTypeName = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    AccountTypeName = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -45,9 +45,9 @@ namespace PureLedger.Migrations
                 {
                     LocationId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    LocationName = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     Phone = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
-                    Region = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                    Region = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -60,7 +60,7 @@ namespace PureLedger.Migrations
                 {
                     ProjectId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    ProjectName = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    ProjectName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -73,7 +73,7 @@ namespace PureLedger.Migrations
                 {
                     TagId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    TagName = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    TagName = table.Column<string>(type: "nvarchar(450)", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -88,7 +88,7 @@ namespace PureLedger.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ProjectId = table.Column<int>(type: "int", nullable: false),
                     AccountTypeId = table.Column<int>(type: "int", nullable: false),
-                    CategoryName = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    CategoryName = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -111,16 +111,16 @@ namespace PureLedger.Migrations
                 name: "JournalVouchers",
                 columns: table => new
                 {
-                    JvId = table.Column<int>(type: "int", nullable: false)
+                    JournalVoucherId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ProjectId = table.Column<int>(type: "int", nullable: false),
                     EntryDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    CreditableDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    IsProcessed = table.Column<bool>(type: "bit", nullable: false)
+                    CreditableDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    IsCompleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_JournalVouchers", x => x.JvId);
+                    table.PrimaryKey("PK_JournalVouchers", x => x.JournalVoucherId);
                     table.ForeignKey(
                         name: "FK_JournalVouchers_Projects_ProjectId",
                         column: x => x.ProjectId,
@@ -137,7 +137,7 @@ namespace PureLedger.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CategoryId = table.Column<int>(type: "int", nullable: false),
                     AccountGroupId = table.Column<int>(type: "int", nullable: false),
-                    AccountName = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    AccountName = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -157,17 +157,38 @@ namespace PureLedger.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "DeliveryChallanVouchers",
+                columns: table => new
+                {
+                    DeliveryChallanVoucherId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    JournalVoucherId = table.Column<int>(type: "int", nullable: false),
+                    DCDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    FinalDeliveryDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    IsCompleted = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DeliveryChallanVouchers", x => x.DeliveryChallanVoucherId);
+                    table.ForeignKey(
+                        name: "FK_DeliveryChallanVouchers_JournalVouchers_JournalVoucherId",
+                        column: x => x.JournalVoucherId,
+                        principalTable: "JournalVouchers",
+                        principalColumn: "JournalVoucherId");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AccountDatas",
                 columns: table => new
                 {
                     AccountDataId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     AccountId = table.Column<int>(type: "int", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Address = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Area = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    City = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    Email = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    PhoneNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    Address = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Area = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    City = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -184,25 +205,25 @@ namespace PureLedger.Migrations
                 name: "JournalEntries",
                 columns: table => new
                 {
-                    EntryId = table.Column<int>(type: "int", nullable: false)
+                    JournalEntryId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     JournalVoucherId = table.Column<int>(type: "int", nullable: false),
                     AccountId = table.Column<int>(type: "int", nullable: false),
                     CategoryId = table.Column<int>(type: "int", nullable: false),
-                    LocationId = table.Column<int>(type: "int", nullable: true),
                     IsProcessed = table.Column<bool>(type: "bit", nullable: false),
+                    IsEdited = table.Column<bool>(type: "bit", nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     Quantity = table.Column<int>(type: "int", nullable: false),
-                    Rate = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    DiscountPercent = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
-                    Discount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Debit = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Credit = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Rbp = table.Column<string>(type: "nvarchar(1)", maxLength: 1, nullable: true)
+                    Rate = table.Column<int>(type: "int", nullable: false),
+                    DiscountPercent = table.Column<int>(type: "int", nullable: true),
+                    Discount = table.Column<int>(type: "int", nullable: false),
+                    Debit = table.Column<int>(type: "int", nullable: false),
+                    Credit = table.Column<int>(type: "int", nullable: false),
+                    Rbp = table.Column<string>(type: "nvarchar(1)", maxLength: 1, nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_JournalEntries", x => x.EntryId);
+                    table.PrimaryKey("PK_JournalEntries", x => x.JournalEntryId);
                     table.ForeignKey(
                         name: "FK_JournalEntries_Accounts_AccountId",
                         column: x => x.AccountId,
@@ -217,13 +238,8 @@ namespace PureLedger.Migrations
                         name: "FK_JournalEntries_JournalVouchers_JournalVoucherId",
                         column: x => x.JournalVoucherId,
                         principalTable: "JournalVouchers",
-                        principalColumn: "JvId",
+                        principalColumn: "JournalVoucherId",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_JournalEntries_Locations_LocationId",
-                        column: x => x.LocationId,
-                        principalTable: "Locations",
-                        principalColumn: "LocationId");
                 });
 
             migrationBuilder.CreateTable(
@@ -233,10 +249,10 @@ namespace PureLedger.Migrations
                     ProductDataId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     AccountId = table.Column<int>(type: "int", nullable: false),
-                    PkgForm = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PkgForm = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
                     Pkg = table.Column<int>(type: "int", nullable: true),
-                    Type = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    SaleRate = table.Column<long>(type: "bigint", nullable: true)
+                    Type = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
+                    SaleRate = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -250,11 +266,46 @@ namespace PureLedger.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "DeliveryChallanEntries",
+                columns: table => new
+                {
+                    DeliveryChallanEntryId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    DeliveryChallanVoucherId = table.Column<int>(type: "int", nullable: false),
+                    JournalEntryId = table.Column<int>(type: "int", nullable: false),
+                    LocationId = table.Column<int>(type: "int", nullable: false),
+                    EntryDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    Remarks = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    OtherReference = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DeliveryChallanEntries", x => x.DeliveryChallanEntryId);
+                    table.ForeignKey(
+                        name: "FK_DeliveryChallanEntries_DeliveryChallanVouchers_DeliveryChallanVoucherId",
+                        column: x => x.DeliveryChallanVoucherId,
+                        principalTable: "DeliveryChallanVouchers",
+                        principalColumn: "DeliveryChallanVoucherId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DeliveryChallanEntries_JournalEntries_JournalEntryId",
+                        column: x => x.JournalEntryId,
+                        principalTable: "JournalEntries",
+                        principalColumn: "JournalEntryId");
+                    table.ForeignKey(
+                        name: "FK_DeliveryChallanEntries_Locations_LocationId",
+                        column: x => x.LocationId,
+                        principalTable: "Locations",
+                        principalColumn: "LocationId");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "JournalEntryTags",
                 columns: table => new
                 {
                     JournalEntryTagId = table.Column<int>(type: "int", nullable: false),
-                    JournalEntryId = table.Column<int>(type: "int", nullable: false)
+                    JournalEntryId = table.Column<int>(type: "int", nullable: false),
+                    TagId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -263,7 +314,7 @@ namespace PureLedger.Migrations
                         name: "FK_JournalEntryTags_JournalEntries_JournalEntryId",
                         column: x => x.JournalEntryId,
                         principalTable: "JournalEntries",
-                        principalColumn: "EntryId",
+                        principalColumn: "JournalEntryId",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_JournalEntryTags_Tags_JournalEntryTagId",
@@ -306,6 +357,12 @@ namespace PureLedger.Migrations
                 column: "AccountGroupId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Accounts_AccountName",
+                table: "Accounts",
+                column: "AccountName",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Accounts_CategoryId",
                 table: "Accounts",
                 column: "CategoryId");
@@ -316,9 +373,35 @@ namespace PureLedger.Migrations
                 column: "AccountTypeId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Categories_CategoryName",
+                table: "Categories",
+                column: "CategoryName",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Categories_ProjectId",
                 table: "Categories",
                 column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeliveryChallanEntries_DeliveryChallanVoucherId",
+                table: "DeliveryChallanEntries",
+                column: "DeliveryChallanVoucherId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeliveryChallanEntries_JournalEntryId",
+                table: "DeliveryChallanEntries",
+                column: "JournalEntryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeliveryChallanEntries_LocationId",
+                table: "DeliveryChallanEntries",
+                column: "LocationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DeliveryChallanVouchers_JournalVoucherId",
+                table: "DeliveryChallanVouchers",
+                column: "JournalVoucherId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_JournalEntries_AccountId",
@@ -336,11 +419,6 @@ namespace PureLedger.Migrations
                 column: "JournalVoucherId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_JournalEntries_LocationId",
-                table: "JournalEntries",
-                column: "LocationId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_JournalEntryTags_JournalEntryTagId",
                 table: "JournalEntryTags",
                 column: "JournalEntryTagId");
@@ -351,9 +429,27 @@ namespace PureLedger.Migrations
                 column: "ProjectId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Locations_LocationName",
+                table: "Locations",
+                column: "LocationName",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ProductDatas_AccountId",
                 table: "ProductDatas",
                 column: "AccountId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Projects_ProjectName",
+                table: "Projects",
+                column: "ProjectName",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Tags_TagName",
+                table: "Tags",
+                column: "TagName",
                 unique: true);
         }
 
@@ -364,10 +460,19 @@ namespace PureLedger.Migrations
                 name: "AccountDatas");
 
             migrationBuilder.DropTable(
+                name: "DeliveryChallanEntries");
+
+            migrationBuilder.DropTable(
                 name: "JournalEntryTags");
 
             migrationBuilder.DropTable(
                 name: "ProductDatas");
+
+            migrationBuilder.DropTable(
+                name: "DeliveryChallanVouchers");
+
+            migrationBuilder.DropTable(
+                name: "Locations");
 
             migrationBuilder.DropTable(
                 name: "JournalEntries");
@@ -380,9 +485,6 @@ namespace PureLedger.Migrations
 
             migrationBuilder.DropTable(
                 name: "JournalVouchers");
-
-            migrationBuilder.DropTable(
-                name: "Locations");
 
             migrationBuilder.DropTable(
                 name: "AccountGroups");
