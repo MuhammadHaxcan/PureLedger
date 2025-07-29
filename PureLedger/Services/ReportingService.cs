@@ -173,8 +173,8 @@ namespace PureLedger.Services
             var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
             var filteredVouchers = vouchers
                 .Where(v =>
+                    v.IsCompleted && // Only include processed vouchers
                     (!projectId.HasValue || v.ProjectId == projectId.Value) &&
-                    // Use CreditableDate if present, otherwise EntryDate
                     ((v.CreditableDate) <= request.ReferenceDate)
                 )
                 .ToList();
@@ -290,7 +290,9 @@ namespace PureLedger.Services
                 // If no category or account specified, we must have a project
                 // Let's get all accounts that have entries in this project
                 var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
-                var projectVouchers = vouchers.Where(v => v.ProjectId == projectId.Value).ToList();
+                var projectVouchers = vouchers
+                    .Where(v => v.IsCompleted && v.ProjectId == projectId.Value) // Only processed vouchers
+                    .ToList();
                 
                 // Extract unique account IDs from the entries
                 var accountIds = projectVouchers
@@ -310,7 +312,7 @@ namespace PureLedger.Services
             // Step 2: Now get all relevant vouchers
             var allVouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
             var filteredVouchers = allVouchers
-                .Where(v => !projectId.HasValue || v.ProjectId == projectId.Value)
+                .Where(v => v.IsCompleted && (!projectId.HasValue || v.ProjectId == projectId.Value))
                 .ToList();
 
             // Step 3: Process each account individually
