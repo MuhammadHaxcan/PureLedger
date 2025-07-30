@@ -24,19 +24,14 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
-
         [HttpGet]
         [ActionName("Entry")]
         public async Task<IActionResult> Entry(int? projectId = null)
         {
-            var projects = await _journalService.GetAllProjectsAsync();
-            ViewBag.Projects = projects;
-            ViewBag.SelectedProjectId = projectId;
+            await LoadProjectsData(projectId);
             return View();
         }
 
-
-        // AJAX: Get product details for an account
         [HttpGet]
         public async Task<IActionResult> GetProductDetails(int accountId)
         {
@@ -51,8 +46,7 @@ namespace PureLedger.Controllers
 
             if (errors.Any())
             {
-                var projects = await _journalService.GetAllProjectsAsync();
-                ViewBag.Projects = projects;
+                await LoadProjectsData(model.ProjectId);
                 ViewBag.Error = string.Join("<br/>", errors);
                 return View(model);
             }
@@ -66,8 +60,7 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving journal entries");
-                var projects = await _journalService.GetAllProjectsAsync();
-                ViewBag.Projects = projects;
+                await LoadProjectsData(model.ProjectId);
                 ViewBag.Error = "An error occurred while saving. Please try again.";
                 return View(model);
             }
@@ -76,8 +69,7 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> VoucherEntry(int? jvId = null)
         {
-            var projects = await _journalService.GetAllProjectsAsync();
-            ViewBag.Projects = projects;
+            await LoadProjectsData();
 
             if (jvId.HasValue)
             {
@@ -89,8 +81,7 @@ namespace PureLedger.Controllers
                 }
             }
 
-            var model = new JournalEntryViewModel();
-            return View(model);
+            return View(new JournalEntryViewModel());
         }
 
         [HttpGet]
@@ -108,10 +99,8 @@ namespace PureLedger.Controllers
                 return NotFound();
 
             var model = await _journalService.MapVoucherToViewModelAsync(voucher);
+            await LoadProjectsData(voucher.ProjectId);
 
-            var projects = await _journalService.GetAllProjectsAsync();
-            ViewBag.Projects = projects;
-            ViewBag.SelectedProjectId = voucher.ProjectId;
             return View("Entry", model);
         }
 
@@ -137,35 +126,25 @@ namespace PureLedger.Controllers
         {
             if (!ModelState.IsValid)
             {
-                return Json(new
-                {
-                    success = false,
-                    errors = ModelState.Values
-                        .SelectMany(v => v.Errors)
-                        .Select(e => e.ErrorMessage)
-                        .ToList()
-                });
+                return JsonError(ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList());
             }
 
             try
             {
                 var success = await _journalService.UpdateJournalEntryAsync(model);
-                if (success)
-                {
-                    return Json(new { success = true });
-                }
-                else
-                {
-                    return Json(new { success = false, message = "Error updating entry" });
-                }
+                return success
+                    ? JsonSuccess()
+                    : JsonError("Error updating entry");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in UpdateJournalEntry: {Message}", ex.Message);
-                return Json(new { success = false, message = "An unexpected error occurred" });
+                return JsonError("An unexpected error occurred");
             }
         }
-
 
         [HttpGet]
         public async Task<IActionResult> ModifiedEntries()
@@ -186,10 +165,9 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> DeleteJournalEntry(int entryId)
         {
             var success = await _journalService.DeleteJournalEntryAsync(entryId);
-            if (success)
-                return Json(new { success = true });
-            else
-                return Json(new { success = false, message = "Invalid entry." });
+            return success
+                ? JsonSuccess()
+                : JsonError("Invalid entry.");
         }
 
         [HttpGet]
@@ -205,7 +183,7 @@ namespace PureLedger.Controllers
                 Entries = voucher.JournalEntries.Select(e => new VoucherEntryDetailViewModel
                 {
                     EntryId = e.JournalEntryId,
-                    ModifyTime = e.IsEdited ? DateTime.Now : null,
+                    ModifyTime = e.ModifiedDateTime, // <-- Use the DB value
                     Category = e.Category?.CategoryName ?? "",
                     Account = e.Account?.AccountName ?? "",
                     Quantity = e.Quantity,
@@ -218,5 +196,31 @@ namespace PureLedger.Controllers
 
             return View(model);
         }
+
+        #region Helper Methods
+        private async Task LoadProjectsData(int? selectedProjectId = null)
+        {
+            var projects = await _journalService.GetAllProjectsAsync();
+            ViewBag.Projects = projects;
+            ViewBag.SelectedProjectId = selectedProjectId;
+        }
+
+        private IActionResult JsonSuccess(object? data = null)
+        {
+            return data != null
+                ? Json(new { success = true, data })
+                : Json(new { success = true });
+        }
+
+        private IActionResult JsonError(string message)
+        {
+            return Json(new { success = false, message });
+        }
+
+        private IActionResult JsonError(List<string> errors)
+        {
+            return Json(new { success = false, errors });
+        }
+        #endregion
     }
 }

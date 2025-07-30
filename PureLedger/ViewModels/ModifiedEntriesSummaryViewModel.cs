@@ -15,12 +15,12 @@ public class VoucherModifiedEntriesViewModel
 public class VoucherEntryDetailViewModel
 {
     public int EntryId { get; set; }
-    public DateTime? ModifyTime { get; set; }
     public string Category { get; set; } = "";
     public string Account { get; set; } = "";
     public int Quantity { get; set; }
-    public decimal Rate { get; set; }
-    public decimal Debit { get; set; }
-    public decimal Credit { get; set; }
+    public int Rate { get; set; }
+    public int Debit { get; set; }
+    public int Credit { get; set; }
     public bool IsModified { get; set; }
+    public DateTime? ModifyTime { get; set; }
 }

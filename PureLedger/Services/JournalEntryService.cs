@@ -6,7 +6,7 @@ using PureLedger.ViewModels.PureLedger.ViewModels;
 
 namespace PureLedger.Services
 {
-    public class JournalEntryService 
+    public class JournalEntryService
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<JournalEntryService> _logger;
@@ -60,23 +60,43 @@ namespace PureLedger.Services
 
         public async Task<JournalVoucher> CreateJournalVoucherAsync(JournalEntryViewModel model)
         {
-            // Create journal voucher
-            var journalVoucher = new JournalVoucher
+            try
             {
-                ProjectId = model.ProjectId,
-                EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                IsCompleted = false,
-                CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
-            };
+                // Create journal voucher
+                var journalVoucher = new JournalVoucher
+                {
+                    ProjectId = model.ProjectId,
+                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
+                    IsCompleted = false,
+                    CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
+                };
 
-            // Add voucher using repository
-            journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
+                // Add voucher using repository
+                journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
 
-            foreach (var entryModel in model.Entries)
+                // Create journal entries
+                await CreateJournalEntriesAsync(journalVoucher.JournalVoucherId, model.Entries);
+
+                // Update voucher status based on account groups
+                await UpdateVoucherStatusBasedOnAccountsAsync(journalVoucher.JournalVoucherId);
+
+                await _unitOfWork.SaveChangesAsync();
+                return journalVoucher;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating journal voucher");
+                throw;
+            }
+        }
+
+        private async Task CreateJournalEntriesAsync(int journalVoucherId, List<JournalEntryRowModel> entryModels)
+        {
+            foreach (var entryModel in entryModels)
             {
                 var journalEntry = new JournalEntry
                 {
-                    JournalVoucherId = journalVoucher.JournalVoucherId,
+                    JournalVoucherId = journalVoucherId,
                     AccountId = entryModel.AccountId,
                     CategoryId = entryModel.CategoryId,
                     Description = entryModel.Des,
@@ -90,7 +110,6 @@ namespace PureLedger.Services
                     IsProcessed = false
                 };
 
-                // Add entry using repository
                 journalEntry = await _unitOfWork.JournalEntries.AddAsync(journalEntry);
 
                 // Process tags if any
@@ -99,12 +118,15 @@ namespace PureLedger.Services
                     await _unitOfWork.JournalEntries.AddTagsAsync(journalEntry.JournalEntryId, entryModel.Tags);
                 }
             }
+        }
 
-            // Update voucher processed status
-//            await UpdateVoucherProcessedStatusAsync(journalVoucher.JournalVoucherId);
+        private async Task UpdateVoucherStatusBasedOnAccountsAsync(int journalVoucherId)
+        {
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null) return;
 
             // Get all account IDs from the entries
-            var accountIds = model.Entries.Select(e => e.AccountId).Distinct().ToList();
+            var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
 
             // Fetch accounts with their AccountGroupId
             var accounts = new List<Account>();
@@ -118,34 +140,17 @@ namespace PureLedger.Services
             // Check if all accounts have AccountGroupId == 1
             bool allAccountGroup1 = accounts.All(a => a.AccountGroupId == 1);
 
-            // Set flags based on the check
-            if (allAccountGroup1)
-            {
-                journalVoucher.IsCompleted = true;
-                // You need to fetch entries from the DB to update IsProcessed
-                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucher.JournalVoucherId, null, null);
-                foreach (var entry in entries)
-                {
-                    entry.IsProcessed = true;
-                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
-                }
-            }
-            else
-            {
-                journalVoucher.IsCompleted = false;
-                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucher.JournalVoucherId, null, null);
-                foreach (var entry in entries)
-                {
-                    entry.IsProcessed = false;
-                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
-                }
-            }
+            // Update voucher and entries status
+            voucher.IsCompleted = allAccountGroup1;
+            await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
 
-            // Save changes as usual
-            await _unitOfWork.JournalVouchers.UpdateAsync(journalVoucher);
-            await _unitOfWork.SaveChangesAsync();
-
-            return journalVoucher;
+            // Update entry processing status
+            var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucherId, null, null);
+            foreach (var entry in entries)
+            {
+                entry.IsProcessed = allAccountGroup1;
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+            }
         }
 
         public async Task<JournalEntryUpdateViewModel?> GetJournalEntryForEditAsync(int entryId)
@@ -165,9 +170,9 @@ namespace PureLedger.Services
                 : null;
             int accountGroupId = account?.AccountGroupId ?? 0;
 
+            // Load additional data for AccountGroup 2
             if (accountGroupId == 2)
             {
-                // Find related DeliveryChallanEntry
                 var dcEntry = await _unitOfWork.DeliveryChallanEntries
                     .GetByDeliveryChallanIdAndJournalEntryIdAsync(entry.JournalVoucherId, entry.JournalEntryId);
                 if (dcEntry != null)
@@ -175,7 +180,6 @@ namespace PureLedger.Services
                     deliveryChallanEntryId = dcEntry.DeliveryChallanEntryId;
                     locationId = dcEntry.LocationId;
                 }
-                // Get all locations for dropdown
                 allLocations = await _unitOfWork.Locations.GetAllAsync();
             }
 
@@ -193,7 +197,7 @@ namespace PureLedger.Services
                 AccountId = entry.AccountId,
                 CategoryId = entry.CategoryId,
                 ProjectId = projectId,
-                AccountGroupId = accountGroupId, // Always set this
+                AccountGroupId = accountGroupId,
                 DeliveryChallanEntryId = deliveryChallanEntryId,
                 LocationId = locationId,
                 Locations = allLocations
@@ -202,11 +206,35 @@ namespace PureLedger.Services
 
         public async Task<bool> UpdateJournalEntryAsync(JournalEntryUpdateViewModel model)
         {
-            var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(model.EntryId);
-            if (entry == null)
-                return false;
+            try
+            {
+                var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(model.EntryId);
+                if (entry == null)
+                    return false;
 
-            // Map view model to entity
+                // Map view model to entity
+                UpdateEntryFromViewModel(entry, model);
+
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+
+                // Update DeliveryChallanEntry Location if needed
+                if (model.AccountGroupId == 2 && model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
+                {
+                    await UpdateDeliveryChallanEntryLocationAsync(model.DeliveryChallanEntryId.Value, model.LocationId.Value);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
+                return false;
+            }
+        }
+
+        private void UpdateEntryFromViewModel(JournalEntry entry, JournalEntryUpdateViewModel model)
+        {
             entry.Description = model.Description;
             entry.Quantity = model.Quantity;
             entry.Rate = model.Rate;
@@ -227,33 +255,17 @@ namespace PureLedger.Services
             }
 
             entry.IsEdited = true;
+            entry.ModifiedDateTime = DateTime.Now; // <-- Set modification time
 
-            try
+        }
+
+        private async Task UpdateDeliveryChallanEntryLocationAsync(int deliveryChallanEntryId, int locationId)
+        {
+            var dcEntry = await _unitOfWork.DeliveryChallanEntries.GetByIdAsync(deliveryChallanEntryId);
+            if (dcEntry != null)
             {
-                await _unitOfWork.JournalEntries.UpdateAsync(entry);
-
-                // --- Update DeliveryChallanEntry Location if needed ---
-                if (model.AccountGroupId == 2 && model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
-                {
-                    var dcEntry = await _unitOfWork.DeliveryChallanEntries.GetByIdAsync(model.DeliveryChallanEntryId.Value);
-                    if (dcEntry != null)
-                    {
-                        dcEntry.LocationId = model.LocationId.Value;
-                        await _unitOfWork.DeliveryChallanEntries.UpdateAsync(dcEntry);
-                    }
-                }
-                // ------------------------------------------------------
-
-                // Update voucher processed status
-                //await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
-
-                await _unitOfWork.SaveChangesAsync();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
-                return false;
+                dcEntry.LocationId = locationId;
+                await _unitOfWork.DeliveryChallanEntries.UpdateAsync(dcEntry);
             }
         }
 
@@ -283,80 +295,75 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.Accounts.GetProductDetailsAsync(accountId);
         }
-        
-        // Helper method to update the voucher processed status
-        private async Task UpdateVoucherProcessedStatusAsync(int voucherId)
-        {
-            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
-            if (voucher == null) return;
-
-            // Check if all entries are processed
-            var allProcessed = voucher.JournalEntries != null && voucher.JournalEntries.Count > 0
-                && voucher.JournalEntries.All(e => e.IsProcessed);
-
-            if (voucher.IsCompleted != allProcessed)
-            {
-                voucher.IsCompleted = allProcessed;
-                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-            }
-        }
 
         public async Task<bool> DeleteJournalEntryAsync(int entryId)
         {
-            var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
-            if (entry == null)
+            try
+            {
+                var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
+                if (entry == null)
+                    return false;
+
+                var voucherId = entry.JournalVoucherId;
+
+                // Get all entries for this voucher
+                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
+
+                if (entries.Count == 1)
+                {
+                    // This is the last entry - delete entry, voucher, and related data
+                    await DeleteVoucherWithLastEntryAsync(entryId, voucherId);
+                }
+                else
+                {
+                    // Just delete the entry
+                    await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+
+                    // Delete associated DeliveryChallanEntries
+                    await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
+
+                    // Update voucher status
+                    await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting journal entry {EntryId}", entryId);
                 return false;
+            }
+        }
 
-            var voucherId = entry.JournalVoucherId;
+        private async Task DeleteVoucherWithLastEntryAsync(int entryId, int voucherId)
+        {
+            // Delete the entry
+            await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
-            // Delete associated DeliveryChallanEntry if it exists
-            // Assuming DeliveryChallanEntry has a JournalEntryId foreign key
+            // Delete related DeliveryChallanEntries
+            await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
+
+            // Delete the delivery challan voucher if it exists
+            var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
+            if (deliveryChallanVoucher != null)
+            {
+                await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
+            }
+
+            // Delete the journal voucher
+            await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
+        }
+
+        private async Task DeleteRelatedDeliveryChallanEntriesAsync(int voucherId, int entryId)
+        {
             var deliveryChallanEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(voucherId);
             if (deliveryChallanEntries != null && deliveryChallanEntries.Any())
             {
                 foreach (var dcEntry in deliveryChallanEntries.Where(e => e.JournalEntryId == entryId))
                 {
-                    // If you have a DeleteAsync method for DeliveryChallanEntry, use it here
                     await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
                 }
-            }
-
-            // Get all entries for this voucher
-            var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
-
-            if (entries.Count == 1)
-            {
-                // This is the last entry, so delete the entry, the voucher, and any related delivery challan voucher
-
-                // Delete the entry
-                var entryDeleted = await _unitOfWork.JournalEntries.DeleteAsync(entryId);
-
-                // Delete the delivery challan voucher if it exists
-                var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
-                if (deliveryChallanVoucher != null)
-                {
-                    // Assuming you have a DeleteAsync method for DeliveryChallanVoucher
-                    await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
-                }
-
-                // Delete the journal voucher
-                await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
-
-                await _unitOfWork.SaveChangesAsync();
-                return entryDeleted;
-            }
-            else
-            {
-                // Just delete the entry and update voucher status
-                var success = await _unitOfWork.JournalEntries.DeleteAsync(entryId);
-
-                if (success)
-                {
-                    await UpdateVoucherProcessedStatusAsync(voucherId);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-
-                return success;
             }
         }
 

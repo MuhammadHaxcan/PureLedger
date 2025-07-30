@@ -100,9 +100,8 @@
 
                 loadDropdowns(data.projectId, data.categoryId, data.accountId);
 
-                // Show DeliveryChallanEntry/location fields if AccountGroupId == 2
-                if (data.accountGroupId === 2) {
-                    // Show location dropdown and set value
+                // Show DeliveryChallanEntry/location fields if AccountGroupId == 2 AND locationId is not null
+                if (data.accountGroupId === 2 && data.locationId != null) {
                     $('#editLocationGroup').show();
                     const $loc = $('#editLocation');
                     $loc.empty();
