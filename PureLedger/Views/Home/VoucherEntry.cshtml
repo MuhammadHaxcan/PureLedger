@@ -101,6 +101,14 @@
                             <input type="number" class="form-control form-control-sm" id="editCredit" name="Credit" min="0" step="0.01">
                         </div>
                     </div>
+                    <div class="row g-2 align-items-end" id="editLocationGroup" style="display:none;">
+                        <div class="col">
+                            <label class="form-label small mb-1">Location</label>
+                            <select id="editLocation" name="LocationId" class="form-select form-select-sm"></select>
+                        </div>
+                    </div>
+                    <input type="hidden" id="editDeliveryChallanEntryId" name="DeliveryChallanEntryId" />
+                    <input type="hidden" id="editAccountGroupId" name="AccountGroupId" />
                 </div>
                 <div class="modal-footer py-1">
                     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>

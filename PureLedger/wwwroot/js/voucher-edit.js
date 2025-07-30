@@ -96,8 +96,32 @@
                 $('#editDiscountPercent').val(data.discountPercent || 0);
                 $('#editDebit').val(data.debit || 0);
                 $('#editCredit').val(data.credit || 0);
+                $('#editAccountGroupId').val(data.accountGroupId || 0); // <-- Add this line
 
                 loadDropdowns(data.projectId, data.categoryId, data.accountId);
+
+                // Show DeliveryChallanEntry/location fields if AccountGroupId == 2
+                if (data.accountGroupId === 2) {
+                    // Show location dropdown and set value
+                    $('#editLocationGroup').show();
+                    const $loc = $('#editLocation');
+                    $loc.empty();
+                    if (data.locations && data.locations.length) {
+                        data.locations.forEach(function (loc) {
+                            $loc.append(
+                                $('<option>')
+                                    .val(loc.locationId)
+                                    .text(loc.locationName)
+                                    .prop('selected', loc.locationId === data.locationId)
+                            );
+                        });
+                    }
+                    $('#editDeliveryChallanEntryId').val(data.deliveryChallanEntryId || '');
+                } else {
+                    $('#editLocationGroup').hide();
+                    $('#editDeliveryChallanEntryId').val('');
+                }
+
                 // Show modal
                 if (editModal) {
                     editModal.show();

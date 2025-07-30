@@ -151,11 +151,33 @@ namespace PureLedger.Services
         public async Task<JournalEntryUpdateViewModel?> GetJournalEntryForEditAsync(int entryId)
         {
             var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
-
             if (entry == null)
                 return null;
 
             var projectId = entry.JournalVoucher?.ProjectId ?? 0;
+            int? deliveryChallanEntryId = null;
+            int? locationId = null;
+            List<Location>? allLocations = null;
+
+            // Always fetch the account with details to get AccountGroupId
+            var account = entry.AccountId > 0
+                ? await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId)
+                : null;
+            int accountGroupId = account?.AccountGroupId ?? 0;
+
+            if (accountGroupId == 2)
+            {
+                // Find related DeliveryChallanEntry
+                var dcEntry = await _unitOfWork.DeliveryChallanEntries
+                    .GetByDeliveryChallanIdAndJournalEntryIdAsync(entry.JournalVoucherId, entry.JournalEntryId);
+                if (dcEntry != null)
+                {
+                    deliveryChallanEntryId = dcEntry.DeliveryChallanEntryId;
+                    locationId = dcEntry.LocationId;
+                }
+                // Get all locations for dropdown
+                allLocations = await _unitOfWork.Locations.GetAllAsync();
+            }
 
             return new JournalEntryUpdateViewModel
             {
@@ -168,9 +190,13 @@ namespace PureLedger.Services
                 DiscountPercent = entry.DiscountPercent ?? 0,
                 Debit = entry.Debit,
                 Credit = entry.Credit,
-                AccountId = entry.AccountId,      
+                AccountId = entry.AccountId,
                 CategoryId = entry.CategoryId,
-                ProjectId = projectId
+                ProjectId = projectId,
+                AccountGroupId = accountGroupId, // Always set this
+                DeliveryChallanEntryId = deliveryChallanEntryId,
+                LocationId = locationId,
+                Locations = allLocations
             };
         }
 
@@ -188,13 +214,13 @@ namespace PureLedger.Services
             entry.DiscountPercent = model.DiscountPercent;
             entry.Debit = model.Debit;
             entry.Credit = model.Credit;
-            
+
             // Update account and category if they were changed
             if (model.AccountId > 0 && model.AccountId != entry.AccountId)
             {
                 entry.AccountId = model.AccountId;
             }
-            
+
             if (model.CategoryId > 0 && model.CategoryId != entry.CategoryId)
             {
                 entry.CategoryId = model.CategoryId;
@@ -205,10 +231,23 @@ namespace PureLedger.Services
             try
             {
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
-                
+
+                // --- Update DeliveryChallanEntry Location if needed ---
+                if (model.AccountGroupId == 2 && model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
+                {
+                    var dcEntry = await _unitOfWork.DeliveryChallanEntries.GetByIdAsync(model.DeliveryChallanEntryId.Value);
+                    if (dcEntry != null)
+                    {
+                        dcEntry.LocationId = model.LocationId.Value;
+                        await _unitOfWork.DeliveryChallanEntries.UpdateAsync(dcEntry);
+                    }
+                }
+                // ------------------------------------------------------
+
                 // Update voucher processed status
                 //await UpdateVoucherProcessedStatusAsync(entry.JournalVoucherId);
-                
+
+                await _unitOfWork.SaveChangesAsync();
                 return true;
             }
             catch (Exception ex)

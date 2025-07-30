@@ -1,5 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
-
+using PureLedger.Models;
 namespace PureLedger.ViewModels
 {
     namespace PureLedger.ViewModels
@@ -34,6 +34,10 @@ namespace PureLedger.ViewModels
             public int ProjectId { get; set; } 
             public int CategoryId { get; set; }
             public int AccountId { get; set; }
+            public int AccountGroupId { get; set; }
+            public int? DeliveryChallanEntryId { get; set; }
+            public int? LocationId { get; set; }
+            public List<Location>? Locations { get; set; }
         }
     }
 }
