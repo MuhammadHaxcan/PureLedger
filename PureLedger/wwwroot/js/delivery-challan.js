@@ -123,7 +123,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function loadFilteredEntries() {
-        // Show loading indicator
+        // Destroy DataTable if it exists before updating table content
+        if ($.fn.DataTable.isDataTable('#entriesTable')) {
+            $('#entriesTable').DataTable().clear().destroy();
+        }
         resultsTable.innerHTML = '<tr><td colspan="6" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>';
 
         const params = new URLSearchParams({
@@ -135,8 +138,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (categorySelect.value) params.append('CategoryId', categorySelect.value);
         if (accountSelect.value) params.append('AccountId', accountSelect.value);
 
-        console.log('Fetching data with params:', params.toString());
-
         fetch(`/DeliveryChallan/GetFilteredEntries?${params.toString()}`)
             .then(response => {
                 if (!response.ok) {
@@ -147,20 +148,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 return response.json();
             })
             .then(data => {
-                console.log('Received data:', data);
                 renderResults(data);
-
-                // Initialize DataTable after rendering results
                 initializeDataTable();
             })
             .catch(error => {
-                console.error('Error loading entries:', error);
                 resultsTable.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
                 showAlert('danger', 'Error loading entries: ' + error.message);
             });
     }
 
     function renderResults(data) {
+        // Clear table body before rendering
         resultsTable.innerHTML = '';
 
         if (!data || !data.vouchers || data.vouchers.length === 0) {
@@ -170,15 +168,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         data.vouchers.forEach(voucher => {
             if (!voucher.entries || voucher.entries.length === 0) {
-                return; // Skip vouchers with no entries
+                return;
             }
-
             voucher.entries.forEach(entry => {
                 const row = document.createElement('tr');
                 row.dataset.voucherId = voucher.jvId;
                 row.dataset.entryId = entry.entryId;
 
-                // Add a class if the entry is already processed
                 if (entry.isProcessed) {
                     row.classList.add('table-success');
                 }
@@ -222,7 +218,18 @@ document.addEventListener('DOMContentLoaded', function () {
             $('#entriesTable').DataTable().destroy();
         }
 
-        // Initialize DataTable
+        // Only initialize DataTable if there is at least one real data row
+        // Exclude rows with the "No entries found" or error message
+        const dataRows = Array.from(resultsTable.querySelectorAll('tr')).filter(tr =>
+            !tr.textContent.includes('No entries found') &&
+            !tr.textContent.includes('Error loading data') &&
+            !tr.textContent.includes('No entries available')
+        );
+
+        if (dataRows.length === 0) {
+            return; // Do not initialize DataTable if no real data rows
+        }
+
         $('#entriesTable').DataTable({
             "pageLength": 10,
             "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
