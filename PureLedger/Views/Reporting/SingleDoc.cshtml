@@ -1,38 +1,133 @@
 ﻿@{
-    ViewBag.Title = "SingleDoc Printing";
+    ViewBag.Title = "Print Documents";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-danger" role="alert">
-        @TempData["Error"]
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-print me-2"></i>Print Documents</h2>
     </div>
-}
 
-<div class="container mt-4">
-    <h3 class="mb-4">Single Document Printing</h3>
-
-    <form method="get" action="/Reporting/PrintVoucher">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Voucher ID</label>
-                <input type="number" class="form-control" name="journalVoucherId" placeholder="Enter Voucher ID" min="1" required />
+    <div id="alertArea">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
+        }
 
-            <div class="col-md-4">
-                <label class="form-label">Voucher Type</label>
-                <select class="form-select" name="type" required>
-                    <option value="">-- Select Type --</option>
-                    <option value="JV">Journal Voucher (JV)</option>
-                    <option value="DC">Delivery Challan (DC)</option>
-                    <option value="INV">Invoice</option>
-                </select>
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
+        }
+    </div>
 
-            <div class="col-md-4 d-flex align-items-end">
-                <button class="btn btn-primary w-100" type="submit">Go</button>
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-file-alt me-2"></i>Document Parameters
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <label class="form-label">Voucher ID</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-hashtag"></i></span>
+                        <input type="number" class="form-control" id="voucherId" placeholder="Enter Voucher ID" min="1" required />
+                    </div>
+                </div>
+                
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <label class="form-label">Voucher Type</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-file-invoice"></i></span>
+                        <select class="form-select" id="voucherType" required>
+                            <option value="">-- Select Type --</option>
+                            <option value="JV">Journal Voucher (JV)</option>
+                            <option value="DC">Delivery Challan (DC)</option>
+                            <option value="INV">Invoice</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-grid">
+                        <button id="btnGo" class="btn btn-primary">
+                            <i class="fas fa-search me-1"></i> Find Document
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle me-2"></i> Select a document type and enter the voucher ID to print or view the document.
+                    </div>
+                </div>
             </div>
         </div>
-    </form>
+    </div>
+    
+    <div id="recentDocuments" class="card shadow mb-4 d-none">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-history me-2"></i>Recently Printed Documents
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="recentDocsTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Type</th>
+                            <th>Date</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentDocsData">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/SingleDoc.js" asp-append-version="true"></script>
+}
+
+<style>
+    /* Remove dropdown arrows from all select elements */
+    select.form-select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        background-image: none !important;
+        padding-right: 0.75rem !important;
+    }
+    
+    /* For Firefox */
+    select.form-select::-ms-expand {
+        display: none;
+    }
+    
+    /* Remove spinner from number inputs */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    
+    input[type="number"] {
+        -moz-appearance: textfield;
+    }
+</style>

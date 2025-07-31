@@ -1,51 +1,188 @@
-﻿document.getElementById("btnGo").addEventListener("click", async function () {
-    const id = document.getElementById("voucherId").value.trim();
-    const type = document.getElementById("voucherType").value;
+﻿$(function () {
+    // Initialize any stored recent documents
+    initializeRecentDocs();
 
-    if (!id || !Number.isInteger(Number(id)) || Number(id) < 1) {
-        alert("Please enter a valid Journal Voucher ID.");
-        return;
+    // Handle Enter key press in inputs
+    $('#voucherId').keypress(function (e) {
+        if (e.which === 13) {
+            $('#btnGo').click();
+        }
+    });
+
+    // Handle Go button click
+    $('#btnGo').on('click', async function () {
+        const id = $('#voucherId').val().trim();
+        const type = $('#voucherType').val();
+
+        if (!id || !Number.isInteger(Number(id)) || Number(id) < 1) {
+            showAlert('warning', 'Please enter a valid Voucher ID.');
+            return;
+        }
+
+        if (!type) {
+            showAlert('warning', 'Please select a Voucher Type.');
+            return;
+        }
+
+        // Show loading state
+        $(this).html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Validating...');
+        $(this).prop('disabled', true);
+
+        try {
+            // First, validate using AJAX
+            const validateUrl = `/Reporting/ValidateVoucher?journalVoucherId=${id}&type=${type}`;
+            const response = await fetch(validateUrl);
+            const result = await response.json();
+
+            if (result.exists) {
+                // If valid, open print page in new tab
+                const printUrl = `/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+                window.open(printUrl, '_blank');
+
+                // Add to recent docs history
+                addToRecentDocs(id, type);
+
+                // Reset the form
+                $('#voucherId').val('');
+
+                // Show success message
+                showAlert('success', 'Document found and opened for printing.');
+            } else {
+                // Show error message on the same page
+                const errorMessage = type === "DC"
+                    ? "No Delivery Challan exists for this Voucher ID."
+                    : (type === "INV"
+                        ? "No Invoice exists for this Voucher ID."
+                        : "No Journal Voucher found for this ID.");
+
+                showAlert('danger', errorMessage);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showAlert('danger', 'An error occurred while validating the voucher.');
+        } finally {
+            // Restore button state
+            $(this).html('<i class="fas fa-search me-1"></i> Find Document');
+            $(this).prop('disabled', false);
+        }
+    });
+
+    // Function to show alerts
+    function showAlert(type, message) {
+        const icon = type === 'success' ? 'check-circle' :
+            type === 'warning' ? 'exclamation-triangle' :
+                'exclamation-circle';
+
+        const alert = $(`
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${icon} me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `);
+
+        $('#alertArea').append(alert);
+
+        // Auto dismiss after 5 seconds
+        setTimeout(function () {
+            alert.alert('close');
+        }, 5000);
     }
 
-    if (!type) {
-        alert("Please select a Voucher Type.");
-        return;
+    // Recent documents functionality
+    function initializeRecentDocs() {
+        // Get recent docs from localStorage
+        const recentDocs = getRecentDocs();
+
+        if (recentDocs.length > 0) {
+            // Show the recent docs section
+            $('#recentDocuments').removeClass('d-none');
+
+            // Populate the table
+            updateRecentDocsTable(recentDocs);
+        }
     }
 
-    // ✅ First, validate using AJAX
-    const validateUrl = `/Reporting/ValidateVoucher?journalVoucherId=${id}&type=${type}`;
+    function getRecentDocs() {
+        try {
+            const docs = localStorage.getItem('recentPrintDocs');
+            return docs ? JSON.parse(docs) : [];
+        } catch (e) {
+            console.error('Error loading recent docs:', e);
+            return [];
+        }
+    }
 
-    try {
-        const response = await fetch(validateUrl);
-        const result = await response.json();
+    function addToRecentDocs(id, type) {
+        try {
+            const docs = getRecentDocs();
 
-        if (result.exists) {
-            // ✅ If valid, open print page in new tab
+            // Check if already exists
+            const existingIndex = docs.findIndex(d => d.id === id && d.type === type);
+            if (existingIndex !== -1) {
+                // Remove the existing entry (will be re-added at the top)
+                docs.splice(existingIndex, 1);
+            }
+
+            // Add new entry at the beginning
+            docs.unshift({
+                id: id,
+                type: type,
+                date: new Date().toISOString()
+            });
+
+            // Keep only the most recent 10
+            const recentDocs = docs.slice(0, 10);
+
+            // Save back to localStorage
+            localStorage.setItem('recentPrintDocs', JSON.stringify(recentDocs));
+
+            // Show the recent docs section if it was hidden
+            $('#recentDocuments').removeClass('d-none');
+
+            // Update the table
+            updateRecentDocsTable(recentDocs);
+        } catch (e) {
+            console.error('Error adding to recent docs:', e);
+        }
+    }
+
+    function updateRecentDocsTable(docs) {
+        const tbody = $('#recentDocsData');
+        tbody.empty();
+
+        docs.forEach(doc => {
+            const date = new Date(doc.date);
+            const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+
+            const typeLabel = doc.type === 'JV' ? 'Journal Voucher' :
+                doc.type === 'DC' ? 'Delivery Challan' :
+                    'Invoice';
+
+            const row = $(`
+                <tr>
+                    <td>${doc.id}</td>
+                    <td>${typeLabel}</td>
+                    <td>${formattedDate}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-primary print-again-btn" 
+                                data-id="${doc.id}" 
+                                data-type="${doc.type}">
+                            <i class="fas fa-print me-1"></i> Print
+                        </button>
+                    </td>
+                </tr>
+            `);
+
+            tbody.append(row);
+        });
+
+        // Attach event handlers
+        $('.print-again-btn').on('click', function () {
+            const id = $(this).data('id');
+            const type = $(this).data('type');
+
             const printUrl = `/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
             window.open(printUrl, '_blank');
-        } else {
-            // ❌ Show error message on the same page
-            const errorMessage = type === "DC"
-                ? "No Delivery Challan exists for this Voucher ID."
-                : "No Journal Voucher found for this ID.";
-
-            showError(errorMessage);
-        }
-    } catch (error) {
-        showError("An error occurred while validating the voucher.");
-        console.error(error);
+        });
     }
 });
-
-function showError(message) {
-    let alertBox = document.getElementById("errorBox");
-
-    if (!alertBox) {
-        alertBox = document.createElement("div");
-        alertBox.className = "alert alert-danger mt-3";
-        alertBox.id = "errorBox";
-        document.querySelector(".container").prepend(alertBox);
-    }
-
-    alertBox.innerText = message;
-}

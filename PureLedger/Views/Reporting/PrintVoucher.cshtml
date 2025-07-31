@@ -1,5 +1,4 @@
-﻿
-@model PureLedger.ViewModels.JournalVoucherReportViewModel
+﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
 @{
     Layout = null;
     bool isDC = Model.VoucherType == "DC";
@@ -11,231 +10,317 @@
 <html>
 <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>
         @(
-            isInv ? "Invoice" :
-            isDC ? "Delivery Challan" :
-            "Journal Voucher"
-            ) 
+            isInv ? "Invoice #" + Model.JvId :
+            isDC ? "Delivery Challan #" + Model.JvId :
+            "Journal Voucher #" + Model.JvId
+        ) 
     </title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="~/css/PrintVoucher.css" rel="stylesheet" />
-    <script src="~/js/PrintVoucher.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="~/css/PrintVoucher.css" rel="stylesheet" asp-append-version="true" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body data-voucher-type="@Model.VoucherType" data-voucher-id="@Model.JvId">
+    <div class="container-fluid print-container">
+        <div class="d-print-none text-end mb-3 print-controls">
+            <button class="btn btn-secondary me-2" onclick="window.close()">
+                <i class="fas fa-times me-1"></i> Close
+            </button>
+            <button class="btn btn-success" onclick="window.print()">
+                <i class="fas fa-print me-1"></i> Print
+            </button>
+        </div>
 
-    <div class="header-section mb-3 d-flex justify-content-between align-items-center">
-        <div>
-            <h2 class="mb-0">
-                @(
-                    isInv ? "Invoice" :
-                    isDC ? "Delivery Challan" :
-                    "Journal Voucher"
-                    ) #@Model.JvId
-            </h2>
-            <small>
+        <div class="card shadow mb-4">
+            <div class="card-body p-4">
+                <div class="header-section mb-4 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="mb-0">
+                            @(
+                                isInv ? "Invoice" :
+                                isDC ? "Delivery Challan" :
+                                "Journal Voucher"
+                            ) #@Model.JvId
+                        </h2>
+                        <div class="text-muted">
+                            @if (isInv)
+                            {
+                                <span>@Model.CreatedDate.ToString("dd-MMM-yyyy")</span>
+                            }
+                            else if (isDC)
+                            {
+                                <span>@challanType - @Model.CreatedDate.ToShortDateString()</span>
+                            }
+                            else
+                            {
+                                <span>Journal Voucher - @Model.CreatedDate.ToShortDateString()</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="logo-container">
+                        <img src="/images/logo.png" class="logo" alt="Company Logo" />
+                    </div>
+                </div>
+
                 @if (isInv)
                 {
-                <small>@Model.CreatedDate.ToString("dd-MMM-yyyy")</small>
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="customer-info">
+                                <h5 class="info-heading">Customer Information</h5>
+                                <table class="info-table">
+                                    <tr>
+                                        <td><strong>Customer:</strong></td>
+                                        <td>@Model.CustomerAccountName</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Address:</strong></td>
+                                        <td>@Model.CustomerAddress</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>City:</strong></td>
+                                        <td>@Model.CustomerCity</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Phone:</strong></td>
+                                        <td>@Model.CustomerPhone</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="invoice-info">
+                                <h5 class="info-heading">Invoice Details</h5>
+                                <table class="info-table">
+                                    <tr>
+                                        <td><strong>Due Date:</strong></td>
+                                        <td>@Model.CreatedDate</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Adda:</strong></td>
+                                        <td>@Model.Adda</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Builty:</strong></td>
+                                        <td>@Model.Builty</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th>SR#</th>
+                                    <th>Product Name</th>
+                                    <th class="text-end">Quantity</th>
+                                    <th class="text-end">PKG</th>
+                                    <th class="text-end">Rate</th>
+                                    <th class="text-end">DISC %</th>
+                                    <th class="text-end">NET</th>
+                                    <th class="text-end">AMOUNT</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int sr = 1;
+                                    foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
+                                    {
+                                        <tr>
+                                            <td>@(sr++)</td>
+                                            <td>@entry.AccountName</td>
+                                            <td class="text-end">@entry.Quantity</td>
+                                            <td class="text-end">@entry.PKG</td>
+                                            <td class="text-end">@entry.Rate.ToString("N2")</td>
+                                            <td class="text-end">@entry.Discount</td>
+                                            <td class="text-end">@entry.NetRate.ToString("N2")</td>
+                                            <td class="text-end">@entry.Credit.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <th colspan="2" class="text-end">Total</th>
+                                    <th class="text-end">@Model.TotalQuantity</th>
+                                    <th class="text-end"></th>
+                                    <th class="text-end"></th>
+                                    <th class="text-end"></th>
+                                    <th class="text-end">Current Balance</th>
+                                    <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 }
                 else if (isDC)
                 {
-                <small>@challanType  - @Model.CreatedDate.ToShortDateString()</small>
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="customer-info">
+                                <h5 class="info-heading">Customer Information</h5>
+                                <table class="info-table">
+                                    <tr>
+                                        <td><strong>Customer:</strong></td>
+                                        <td>@Model.CustomerAccountName</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="challan-info">
+                                <h5 class="info-heading">Challan Details</h5>
+                                <table class="info-table">
+                                    <tr>
+                                        <td><strong>Due Date:</strong></td>
+                                        <td>@Model.CreatedDate</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Adda:</strong></td>
+                                        <td>@Model.Adda</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Builty:</strong></td>
+                                        <td>@Model.Builty</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Remarks:</strong></td>
+                                        <td>@Model.Remarks</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th>SR#</th>
+                                    <th>Product Name</th>
+                                    <th class="text-end">Quantity</th>
+                                    <th class="text-end">PKG</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    int sr = 1;
+                                    foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
+                                    {
+                                        <tr>
+                                            <td>@(sr++)</td>
+                                            <td>@entry.AccountName</td>
+                                            <td class="text-end">@entry.Quantity</td>
+                                            <td class="text-end">1</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <th colspan="2" class="text-end">Total</th>
+                                    <th class="text-end">@Model.TotalQuantity</th>
+                                    <th class="text-end"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 }
                 else
                 {
-                <small>Journal Voucher  - @Model.CreatedDate.ToShortDateString()</small>
-                } 
-            </small>
-        </div>
-        <img src="/images/logo.png" class="logo" alt="Company Logo" />
-    </div>
+                    <div class="voucher-info mb-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="info-table">
+                                    <tr>
+                                        <td><strong>Project:</strong></td>
+                                        <td>@Model.ProjectName</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="info-table">
+                                    <tr>
+                                        <td><strong>Booker:</strong></td>
+                                        <td>@Model.BookerName</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
-    @if (isInv)
-    {
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <strong>Customer:</strong> @Model.CustomerAccountName
-                <br/>
-                <strong>Address:</strong> @Model.CustomerAddress
-                <br />
-                <strong>City:</strong> @Model.CustomerCity
-                <br />
-                <strong>Phone:</strong> @Model.CustomerPhone
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Account</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Rate</th>
+                                    <th class="text-end">Line Total</th>
+                                    <th class="text-end">Debit</th>
+                                    <th class="text-end">Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in Model.Entries)
+                                {
+                                    <tr>
+                                        <td>@entry.AccountName</td>
+                                        <td>@entry.Description</td>
+                                        <td class="text-end">@entry.Quantity</td>
+                                        <td class="text-end">@entry.Rate.ToString("N2")</td>
+                                        <td class="text-end">@entry.LineTotal.ToString("N2")</td>
+                                        <td class="text-end">@entry.Debit.ToString("N2")</td>
+                                        <td class="text-end">@entry.Credit.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <th colspan="2" class="text-end">Totals</th>
+                                    <th class="text-end">@Model.TotalQuantity</th>
+                                    <th class="text-end"></th>
+                                    <th class="text-end">@Model.TotalActualAmount.ToString("N2")</th>
+                                    <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+                                    <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+
+                <div class="signatures-section mt-5">
+                    <div class="row">
+                        <div class="col-md-4 signature-block">
+                            <div class="signature-line"></div>
+                            <div class="signature-title">Accountant</div>
+                        </div>
+                        <div class="col-md-4 signature-block">
+                            <div class="signature-line">@Model.AuthorizedBy</div>
+                            <div class="signature-title">Authorized By</div>
+                        </div>
+                        <div class="col-md-4 signature-block">
+                            <div class="signature-line">@Model.ReceivedBy</div>
+                            <div class="signature-title">Received/Paid By</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="document-footer mt-4 text-center">
+                    <small class="text-muted">
+                        Document ID: @Model.JvId | Generated on: @DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
+                    </small>
+                </div>
             </div>
-            <div class="col-md-6 ">
-                <strong>Due Date:</strong> @Model.CreatedDate
-                <br />
-                <strong>Adda:</strong> @Model.Adda
-                <br />
-                <strong>Builty:</strong> @Model.Builty
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>SR#</th>
-                        <th>Product Name</th>
-                        <th>Quantity</th>
-                        <th>PKG</th>
-                        <th>Rate</th>
-                        <th>DISC %</th>
-                        <th>NET</th>
-                        <th>AMOUNT</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @{
-                        int sr = 1;
-                        foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
-                        {
-                            <tr>
-                                <td>@(sr++)</td>
-                                <td>@entry.AccountName</td>
-                                <td>@entry.Quantity</td>
-                                <td>@entry.PKG</td>
-                                <td>@entry.Rate</td>
-                                <td>@entry.Discount</td>
-                                <td>@entry.NetRate</td>
-                                <td>@entry.Credit</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-                <tfoot>
-                    <tr class="table-info">
-                        <th colspan="2" class="text-end">Total</th>
-                        <th>@Model.TotalQuantity</th>
-                        <th></th>
-                        <th></th>
-                        <th colspan="2" class="text-end">Current Balance</th>
-                        <th>@Model.TotalAmount</th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    }
-    else if (isDC)
-    {
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <strong>Customer:</strong> @Model.CustomerAccountName
-            </div>
-            <div class="col-md-6 ">
-                <strong>Due Date:</strong> @Model.CreatedDate
-                <br />
-                <strong>Adda:</strong> @Model.Adda
-                <br />
-                <strong>Builty:</strong> @Model.Builty
-                <br />
-                <strong>Remarks:</strong> @Model.Remarks
-            </div>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>SR#</th>
-                        <th>Product Name</th>
-                        <th>Quantity</th>
-                        <th>PKG</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @{
-                        int sr = 1;
-                        foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
-                        {
-                            <tr>
-                                <td>@(sr++)</td>
-                                <td>@entry.AccountName</td>
-                                <td>@entry.Quantity</td>
-                                <td>1</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-                <tfoot>
-                    <tr class="table-info">
-                        <th colspan="2" class="text-end">Total</th>
-                        <th>@Model.TotalQuantity</th>
-                        <th></th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    }
-    else
-    {
-        <!-- Journal Voucher layout (existing layout) -->
-        <div class="mb-3">
-            <p><strong>Project:</strong> @Model.ProjectName</p>
-            <p><strong>Booker:</strong> @Model.BookerName</p>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>Account</th>
-                        <th>Description</th>
-                        <th>Qty</th>
-                        <th>Rate</th>
-                        <th>Line Total</th>
-                        <th>Debit</th>
-                        <th>Credit</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var entry in Model.Entries)
-                    {
-                        <tr>
-                            <td>@entry.AccountName</td>
-                            <td>@entry.Description</td>
-                            <td>@entry.Quantity</td>
-                            <td>@entry.Rate.ToString("N2")</td>
-                            <td>@entry.LineTotal.ToString("N2")</td>
-                            <td>@entry.Debit.ToString("N2")</td>
-                            <td>@entry.Credit.ToString("N2")</td>
-                        </tr>
-                    }
-                </tbody>
-                <tfoot>
-                    <tr class="table-info">
-                        <th colspan="2" class="text-end">Totals</th>
-                        <th>@Model.TotalQuantity</th>
-                        <th></th>
-                        <th>@Model.TotalActualAmount.ToString("N2")</th>
-                        <th>@Model.TotalAmount.ToString("N2")</th>
-                        <th>@Model.TotalAmount.ToString("N2")</th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    }
-
-    <div class="row mt-4">
-        <div class="col-md-4">
-            <div class="footer-label">Accountant:</div>
-            <p></p>
-        </div>
-        <div class="col-md-4">
-            <div class="footer-label">Authorized By:</div>
-            <p>@Model.AuthorizedBy</p>
-        </div>
-        <div class="col-md-4">
-            <div class="footer-label">Received/Paid By:</div>
-            <p>@Model.ReceivedBy</p>
         </div>
     </div>
 
-    <div class="d-print-none text-end mb-3">
-        <button class="btn btn-success no-print" onclick="window.print()">🖨️ Print</button>
-
-    </div>
-
+    <script src="~/js/PrintVoucher.js" asp-append-version="true"></script>
 </body>
 </html>

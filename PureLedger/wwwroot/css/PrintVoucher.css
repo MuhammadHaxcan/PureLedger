@@ -1,37 +1,118 @@
 ﻿body {
-    font-family: 'Segoe UI', sans-serif;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f8f9fa;
     margin: 30px;
 }
 
+.print-container {
+    max-width: 1200px;
+    margin: 1rem auto;
+}
+
+/* Logo styling */
+.logo-container {
+    text-align: right;
+}
+
 .logo {
-    width: 120px;
+    max-height: 80px;
+    max-width: 180px;
 }
 
-.header-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/* Information tables */
+.info-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #dee2e6;
 }
 
-.table th, .table td {
-    vertical-align: middle;
-    font-size: 14px;
+.info-table {
+    width: 100%;
+    margin-bottom: 1rem;
 }
 
-.section-title {
-    margin-top: 30px;
-    font-weight: bold;
-    font-size: 16px;
-    text-decoration: underline;
+.info-table td {
+    padding: 0.25rem 0;
+    vertical-align: top;
 }
 
-.footer-label {
-    font-weight: bold;
-    margin-top: 40px;
+.info-table td:first-child {
+    width: 100px;
+    font-weight: 500;
 }
 
+/* Table styles */
+.table {
+    font-size: 0.9rem;
+}
+
+.table th {
+    background-color: #f8f9fa;
+}
+
+.text-end {
+    text-align: right !important;
+}
+
+/* Signature section */
+.signatures-section {
+    margin-top: 3rem;
+}
+
+.signature-block {
+    text-align: center;
+}
+
+.signature-line {
+    border-top: 1px solid #000;
+    height: 1.5rem;
+    margin-bottom: 0.25rem;
+    padding-top: 0.25rem;
+}
+
+.signature-title {
+    font-weight: 500;
+}
+
+/* Print styles */
 @media print {
-    .no-print {
+    body {
+        background-color: #fff;
+    }
+    
+    .print-controls {
         display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .card-body {
+        padding: 0 !important;
+    }
+    
+    .table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+    
+    .table th {
+        background-color: #f8f9fa !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    .table-active,
+    .table-active td,
+    .table-active th {
+        background-color: #e9ecef !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 }
