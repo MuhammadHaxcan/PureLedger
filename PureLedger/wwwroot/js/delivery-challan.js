@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('transferBtn')?.addEventListener('click', function () {
-        alert('Transfer functionality will be implemented in the future.');
+        showAlert('warning', 'Transfer functionality will be implemented in the future.');
     });
 
     // Listen for modal close events to clean up
@@ -78,7 +78,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function fetchCategories(projectId) {
         fetch(`/api/common/categories/${projectId}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error loading categories');
+                }
+                return response.json();
+            })
             .then(data => {
                 categorySelect.disabled = false;
                 data.forEach(category => {
@@ -90,14 +95,18 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error loading categories:', error);
-                // Show error to user
-                alert('Error loading categories. Please try again.');
+                showAlert('danger', 'Error loading categories. Please try again.');
             });
     }
 
     function fetchAccounts(categoryId) {
         fetch(`/api/common/accounts/${categoryId}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error loading accounts');
+                }
+                return response.json();
+            })
             .then(data => {
                 accountSelect.disabled = false;
                 data.forEach(account => {
@@ -109,8 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error loading accounts:', error);
-                // Show error to user
-                alert('Error loading accounts. Please try again.');
+                showAlert('danger', 'Error loading accounts. Please try again.');
             });
     }
 
@@ -141,10 +149,14 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(data => {
                 console.log('Received data:', data);
                 renderResults(data);
+
+                // Initialize DataTable after rendering results
+                initializeDataTable();
             })
             .catch(error => {
                 console.error('Error loading entries:', error);
                 resultsTable.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
+                showAlert('danger', 'Error loading entries: ' + error.message);
             });
     }
 
@@ -172,17 +184,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 row.innerHTML = `
-                    <td>JV${voucher.jvId}<br>E-Id ${entry.entryId}</td>
-                    <td>${formatDate(voucher.entryDate)}</td>
-                    <td>${entry.description || ''}</td>
-                    <td>${entry.accountName || ''}</td>
-                    <td>${entry.quantity}</td>
                     <td>
+                        <span class="badge bg-secondary mb-1">JV-${voucher.jvId}</span>
+                        <br />
+                        <small>E-Id: ${entry.entryId}</small>
+                    </td>
+                    <td>${formatDate(voucher.entryDate)}</td>
+                    <td>${entry.description || '-'}</td>
+                    <td>${entry.accountName || '-'}</td>
+                    <td>${entry.quantity}</td>
+                    <td class="text-center">
                         <button class="btn btn-sm ${entry.isProcessed ? 'btn-success' : 'btn-primary'} create-dc-btn" 
                                 data-voucher-id="${voucher.jvId}" 
                                 data-entry-id="${entry.entryId}">
-                            <i class="bi bi-${entry.isProcessed ? 'check-circle' : 'pencil'}"></i> 
-                            ${entry.isProcessed ? 'Processed' : 'Edit'}
+                            <i class="fas fa-${entry.isProcessed ? 'check-circle' : 'pencil'}"></i> 
+                            ${entry.isProcessed ? 'Processed' : 'Process'}
                         </button>
                     </td>
                 `;
@@ -200,17 +216,45 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function filterResults(searchTerm) {
-        const rows = resultsTable.querySelectorAll('tr');
-        searchTerm = searchTerm.toLowerCase();
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm) ? '' : 'none';
+    function initializeDataTable() {
+        // Destroy existing DataTable if it exists
+        if ($.fn.DataTable.isDataTable('#entriesTable')) {
+            $('#entriesTable').DataTable().destroy();
+        }
+
+        // Initialize DataTable
+        $('#entriesTable').DataTable({
+            "pageLength": 10,
+            "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
+            "language": {
+                "emptyTable": "No entries available",
+                "search": "Search entries:",
+                "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                "lengthMenu": "Show _MENU_ entries"
+            },
+            "columnDefs": [
+                { "orderable": false, "targets": 5 } // Disable sorting on the Actions column
+            ],
+            "order": [[1, "desc"]] // Sort by date descending
         });
     }
 
+    function filterResults(searchTerm) {
+        if ($.fn.DataTable.isDataTable('#entriesTable')) {
+            $('#entriesTable').DataTable().search(searchTerm).draw();
+        } else {
+            // Fallback to manual filtering if DataTable isn't initialized
+            const rows = resultsTable.querySelectorAll('tr');
+            searchTerm = searchTerm.toLowerCase();
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+    }
+
     function formatDate(dateString) {
-        if (!dateString) return '';
+        if (!dateString) return '-';
 
         try {
             const parts = dateString.split('-');
@@ -220,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return dateString;
         } catch (error) {
             console.error('Error formatting date:', error, dateString);
-            return dateString || '';
+            return dateString || '-';
         }
     }
 
@@ -275,13 +319,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         const isSelected = entry.entryId == entryId && !entry.isProcessed;
 
                         row.innerHTML = `
-                            <td>${entry.accountName || ''}</td>
-                            <td>${entry.description || ''}</td>
+                            <td>${entry.accountName || '-'}</td>
+                            <td>${entry.description || '-'}</td>
                             <td>${entry.quantity}</td>
-                            <td>
-                                <input type="checkbox" class="entry-checkbox" data-entry-id="${entry.entryId}" 
-                                       ${entry.isProcessed ? 'disabled checked' : ''}
-                                       ${isSelected ? 'checked' : ''}>
+                            <td class="text-center">
+                                <div class="form-check d-flex justify-content-center">
+                                    <input type="checkbox" class="form-check-input entry-checkbox" data-entry-id="${entry.entryId}" 
+                                        ${entry.isProcessed ? 'disabled checked' : ''}
+                                        ${isSelected ? 'checked' : ''}>
+                                </div>
                             </td>
                         `;
                         entriesTable.appendChild(row);
@@ -336,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error loading voucher entries:', error);
-                alert('Error loading voucher entries: ' + error.message);
+                showAlert('danger', 'Error loading voucher entries: ' + error.message);
             });
     }
 
@@ -370,20 +416,26 @@ document.addEventListener('DOMContentLoaded', function () {
         // Create the entries table structure if it doesn't exist
         if (!document.getElementById('dcEntriesTable')) {
             allEntriesView.innerHTML = `
-                <h6>Available Entries:</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Account</th>
-                                <th>Description</th>
-                                <th>Quantity</th>
-                                <th>Select</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dcEntriesTable">
-                        </tbody>
-                    </table>
+                <div class="card mt-3">
+                    <div class="card-header py-2 bg-light">
+                        <h6 class="m-0 font-weight-bold">Available Entries</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Account</th>
+                                        <th>Description</th>
+                                        <th>Quantity</th>
+                                        <th class="text-center" style="width: 80px;">Select</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dcEntriesTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -429,6 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error checking existing challan:', error);
+                showAlert('danger', 'Error checking existing challan: ' + error.message);
             });
 
         // Add cartage button to modal footer
@@ -437,7 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const cartageBtn = document.createElement('button');
             cartageBtn.id = 'openCartageBtn';
             cartageBtn.className = 'btn btn-info';
-            cartageBtn.textContent = 'Add Cartage';
+            cartageBtn.innerHTML = '<i class="fas fa-shipping-fast me-1"></i> Add Cartage';
             cartageBtn.onclick = function () {
                 // Use the current modal data when opening cartage
                 openCartageModal(currentModalData.voucherId, currentModalData.entryId);
@@ -506,7 +559,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error loading transporters:', error);
-                alert('Error loading transporters: ' + error.message);
+                showAlert('danger', 'Error loading transporters: ' + error.message);
             });
     }
 
@@ -532,7 +585,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Error loading locations:', error);
-                alert('Error loading locations: ' + error.message);
+                showAlert('danger', 'Error loading locations: ' + error.message);
             });
     }
 
@@ -552,7 +605,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!entryId) {
                 const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
                 if (!selected) {
-                    alert('Please select an unprocessed entry to process');
+                    showAlert('warning', 'Please select an unprocessed entry to process');
                     return;
                 }
                 entryId = selected.dataset.entryId;
@@ -565,7 +618,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const otherRef = document.getElementById('dcOtherRef').value;
 
             if (!locationId) {
-                alert('Please select a location');
+                showAlert('warning', 'Please select a location');
                 return;
             }
 
@@ -605,14 +658,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
                         // Refresh data
                         loadFilteredEntries();
-                        alert('Entry processed successfully');
+                        showAlert('success', 'Entry processed successfully');
                     } else {
-                        alert(data.message || 'Error processing entry');
+                        showAlert('danger', data.message || 'Error processing entry');
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    alert('Error: ' + err.message);
+                    showAlert('danger', 'Error: ' + err.message);
                 });
         });
     }
@@ -623,13 +676,13 @@ document.addEventListener('DOMContentLoaded', function () {
         postAllBtn.addEventListener('click', function () {
             const voucherId = document.getElementById('dcJournalVoucherId').value;
             if (!voucherId) {
-                alert('No voucher selected');
+                showAlert('warning', 'No voucher selected');
                 return;
             }
 
             const locationId = document.getElementById('dcLocation').value;
             if (!locationId) {
-                alert('Please select a location');
+                showAlert('warning', 'Please select a location');
                 return;
             }
 
@@ -674,14 +727,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         loadFilteredEntries();
 
                         // Show success message
-                        alert(data.message || 'Entries processed successfully');
+                        showAlert('success', data.message || 'Entries processed successfully');
                     } else {
-                        alert(data.message || 'Error processing entries');
+                        showAlert('danger', data.message || 'Error processing entries');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error processing entries: ' + error.message);
+                    showAlert('danger', 'Error processing entries: ' + error.message);
                 });
         });
     }
@@ -706,12 +759,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const dcLocation = document.getElementById('dcLocation').value;
 
             if (!transporterId || !amount) {
-                alert('Please fill in all required fields');
+                showAlert('warning', 'Please fill in all required fields');
                 return;
             }
 
             if (!dcLocation) {
-                alert('Please select a location');
+                showAlert('warning', 'Please select a location');
                 return;
             }
 
@@ -760,16 +813,37 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Refresh data
                         loadFilteredEntries();
 
-                        alert('Cartage added and delivery challan processed successfully');
+                        showAlert('success', 'Cartage added and delivery challan processed successfully');
                     } else {
-                        alert(result.message || 'Error processing cartage');
+                        showAlert('danger', result.message || 'Error processing cartage');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error processing cartage: ' + error.message);
+                    showAlert('danger', 'Error processing cartage: ' + error.message);
                 });
         });
+    }
+
+    // Show alert function (similar to Tags.cshtml)
+    function showAlert(type, message) {
+        const icon = type === 'success' ? 'check-circle' :
+            type === 'warning' ? 'exclamation-triangle' :
+                'exclamation-circle';
+
+        const alert = $(`
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${icon} me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `);
+
+        $('#alertArea').append(alert);
+
+        // Auto dismiss after 5 seconds
+        setTimeout(function () {
+            alert.alert('close');
+        }, 5000);
     }
 
     // Initialize the page
