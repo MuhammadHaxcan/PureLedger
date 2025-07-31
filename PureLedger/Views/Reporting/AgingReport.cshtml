@@ -1,25 +1,53 @@
 @model PureLedger.ViewModels.AgingReportPageViewModel
-
 @{
     ViewData["Title"] = "Aging Report";
 }
 
-<div class="container mt-4">
-    <h2>Aging Report</h2>
-    <div class="card mb-4">
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-hourglass-half me-2"></i>Aging Report</h2>
+    </div>
+
+    <div id="alertArea">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter me-2"></i>Report Parameters
+            </h6>
+        </div>
         <div class="card-body">
             <form id="agingReportForm">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label for="referenceDate">Reference Date</label>
+                <div class="row mb-3">
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <label class="form-label">Reference Date</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
                             <input type="date" class="form-control" id="referenceDate" required>
                         </div>
+                        <small class="form-text text-muted">The date to calculate aging from</small>
                     </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label for="projectId">Project</label>
-                            <select class="form-control" id="projectId">
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <label class="form-label">Project</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                            <select class="form-select" id="projectId">
                                 <option value="">All Projects</option>
                                 @foreach (var project in Model.Projects)
                                 {
@@ -28,10 +56,11 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label for="categoryId">Category</label>
-                            <select class="form-control" id="categoryId" required>
+                    <div class="col-md-4 mb-3 mb-md-0">
+                        <label class="form-label">Category</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-list"></i></span>
+                            <select class="form-select" id="categoryId" required>
                                 <option value="">Select Category</option>
                                 @foreach (var category in Model.Categories)
                                 {
@@ -41,29 +70,91 @@
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary mt-3">Generate Report</button>
+                <div class="row">
+                    <div class="col-12 text-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-chart-bar me-1"></i> Generate Report
+                        </button>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
 
-    <div id="reportResults" style="display: none;">
-        <div class="table-responsive">
-            <table class="table table-bordered table-striped">
-                <thead>
-                    <tr>
-                        <th>Account</th>
-                        <th class="text-right">Total Debit</th>
-                        <th class="text-right">Total Credit</th>
-                        <th class="text-right">Net Balance</th>
-                    </tr>
-                </thead>
-                <tbody id="reportData">
-                </tbody>
-            </table>
+    <div class="card shadow mb-4" id="reportResults" style="display: none;">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table me-2"></i>Aging Report Results
+            </h6>
+            <div id="reportSummary"></div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="agingReportTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th class="text-end">Total Debit</th>
+                            <th class="text-end">Total Credit</th>
+                            <th class="text-end">Net Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportData">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-secondary fw-bold">
+                            <td class="text-end">TOTAL</td>
+                            <td class="text-end"></td>
+                            <td class="text-end"></td>
+                            <td class="text-end"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         </div>
     </div>
 </div>
 
 @section Scripts {
-    <script src="~/js/agingReport.js"></script>
+    <script src="~/js/agingReport.js" asp-append-version="true"></script>
 }
+
+
+<style>
+    /* Remove dropdown arrows from all select elements */
+    select.form-select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        background-image: none !important;
+        padding-right: 0.75rem !important;
+    }
+    
+    /* For Firefox */
+    select.form-select::-ms-expand {
+        display: none;
+    }
+    
+    /* Table number columns alignment */
+    .text-end {
+        text-align: right !important;
+    }
+    
+    #agingReportTable td.text-end {
+        font-family: monospace;
+        font-size: 1rem;
+    }
+    
+    /* Highlight negative balances */
+    #agingReportTable .negative-balance {
+        color: #dc3545;
+    }
+    
+    /* Fix date input alignment */
+    input[type="date"].form-control {
+        line-height: 1.5;
+        padding: 0.375rem 0.75rem;
+    }
+    
+</style>
