@@ -3,15 +3,13 @@
     let editModal = null;
 
     // Initialize Bootstrap modal
-    document.addEventListener('DOMContentLoaded', function () {
-        editModal = new bootstrap.Modal(document.getElementById('editEntryModal'));
-    });
+    editModal = new bootstrap.Modal(document.getElementById('editEntryModal'));
 
     // Fetch voucher by ID
     $('#fetchVoucherBtn').on('click', function () {
         const voucherId = $('#voucherIdInput').val();
         if (!voucherId) {
-            alert('Please enter a voucher ID.');
+            showAlert('warning', 'Please enter a voucher ID.');
             return;
         }
 
@@ -25,6 +23,8 @@
                 if (data && data.entries && data.entries.length > 0) {
                     currentVoucherId = data.jvId;
                     displayVoucherEntries(data.entries);
+                    $('#voucherSummaryContainer').show();
+                    $('#noVoucherMsg').hide();
                 } else {
                     $('#voucherSummaryContainer').hide();
                     $('#noVoucherMsg').show();
@@ -33,6 +33,7 @@
             .fail(function () {
                 $('#voucherSummaryContainer').hide();
                 $('#noVoucherMsg').show();
+                showAlert('danger', 'Failed to fetch voucher data. Please try again.');
             });
     }
 
@@ -57,14 +58,16 @@
                 $('<td>').text(formatPercent(entry.discountPercent || 0)),
                 $('<td>').text(formatCurrency(entry.debit || 0)),
                 $('<td>').text(formatCurrency(entry.credit || 0)),
-                $('<td>').append(
+                $('<td class="text-center">').append(
                     $('<button>')
-                        .addClass('btn btn-primary btn-sm btn-edit-entry')
-                        .text('Edit')
+                        .addClass('btn btn-primary btn-sm me-1 btn-edit-entry')
+                        .html('<i class="fas fa-edit"></i>')
+                        .attr('title', 'Edit')
                         .data('entry-id', entry.entryId),
                     $('<button>')
                         .addClass('btn btn-danger btn-sm btn-delete-entry')
-                        .text('Delete')
+                        .html('<i class="fas fa-trash"></i>')
+                        .attr('title', 'Delete')
                         .data('entry-id', entry.entryId)
                 )
             );
@@ -74,9 +77,6 @@
         // Update totals
         $('#totalDebit').text(formatCurrency(totalDebit));
         $('#totalCredit').text(formatCurrency(totalCredit));
-
-        $('#voucherSummaryContainer').show();
-        $('#noVoucherMsg').hide();
     }
 
     // Handle edit button click
@@ -86,6 +86,9 @@
         // Fetch entry details
         $.get('/Home/GetJournalEntry', { entryId: entryId })
             .done(function (data) {
+                // Reset form
+                $('#editEntryForm')[0].reset();
+
                 // Populate modal
                 $('#editEntryId').val(data.entryId);
                 $('#editProjectId').val(data.projectId);
@@ -96,11 +99,12 @@
                 $('#editDiscountPercent').val(data.discountPercent || 0);
                 $('#editDebit').val(data.debit || 0);
                 $('#editCredit').val(data.credit || 0);
-                $('#editAccountGroupId').val(data.accountGroupId || 0); // <-- Add this line
+                $('#editAccountGroupId').val(data.accountGroupId || 0);
 
+                // Load dropdown selections
                 loadDropdowns(data.projectId, data.categoryId, data.accountId);
 
-                // Show DeliveryChallanEntry/location fields if AccountGroupId == 2 AND locationId is not null
+                // Show/hide location fields based on AccountGroupId
                 if (data.accountGroupId === 2 && data.locationId != null) {
                     $('#editLocationGroup').show();
                     const $loc = $('#editLocation');
@@ -122,24 +126,20 @@
                 }
 
                 // Show modal
-                if (editModal) {
-                    editModal.show();
-                } else {
-                    new bootstrap.Modal(document.getElementById('editEntryModal')).show();
-                }
+                editModal.show();
             })
             .fail(function () {
-                alert('Error loading entry details.');
+                showAlert('danger', 'Error loading entry details.');
             });
     });
 
     // Handle form submission
     $('#editEntryForm').on('submit', function (e) {
         e.preventDefault();
-        
+
         // Get form data
         const formData = new FormData(this);
-        
+
         // Submit data using AJAX with FormData
         $.ajax({
             url: '/Home/UpdateJournalEntry',
@@ -147,26 +147,29 @@
             data: formData,
             processData: false,
             contentType: false,
-            success: function(result) {
+            success: function (result) {
                 if (result.success) {
                     // Hide modal
-                    bootstrap.Modal.getInstance(document.getElementById('editEntryModal')).hide();
+                    editModal.hide();
+
+                    // Show success message
+                    showAlert('success', 'Journal entry updated successfully!');
 
                     // Refresh voucher summary
                     fetchVoucherSummary(currentVoucherId);
                 } else {
                     // Display errors
                     if (result.errors && result.errors.length) {
-                        alert('Error: ' + result.errors.join('\n'));
+                        showAlert('danger', 'Error: ' + result.errors.join('<br>'));
                     } else if (result.message) {
-                        alert('Error: ' + result.message);
+                        showAlert('danger', 'Error: ' + result.message);
                     } else {
-                        alert('An error occurred while saving changes.');
+                        showAlert('danger', 'An error occurred while saving changes.');
                     }
                 }
             },
-            error: function() {
-                alert('An error occurred while saving changes.');
+            error: function () {
+                showAlert('danger', 'An error occurred while saving changes.');
             }
         });
     });
@@ -184,7 +187,7 @@
         return value + '%';
     }
 
-    //Load Drop Downs for the combo boxes
+    // Load Drop Downs for the combo boxes
     function loadDropdowns(projectId, selectedCategoryId, selectedAccountId) {
         // Load Categories by ProjectId
         $.get(`/api/common/categories/${projectId}`, function (categories) {
@@ -209,6 +212,7 @@
         });
     }
 
+    // Handle category change
     $('#editCategory').on('change', function () {
         const categoryId = $(this).val();
         const $account = $('#editAccount');
@@ -223,40 +227,69 @@
         }
     });
 
-});
+    // Show alerts
+    function showAlert(type, message) {
+        const icon = type === 'success' ? 'check-circle' :
+            type === 'warning' ? 'exclamation-triangle' :
+                'exclamation-circle';
 
-$(document).on('click', '.btn-delete-entry', function () {
-    const entryId = $(this).data('entry-id');
+        const alert = $(`
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${icon} me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `);
 
-    Swal.fire({
-        title: 'Are you sure?',
-        text: "Do you really want to delete this entry?",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, delete it!',
-        cancelButtonText: 'Cancel'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            $.post('/Home/DeleteJournalEntry', { entryId })
-                .done(function (response) {
-                    if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Deleted!',
-                            text: 'The entry has been deleted.',
-                            timer: 1500,
-                            showConfirmButton: false
-                        });
-                        fetchVoucherSummary(currentVoucherId);
-                    } else {
-                        Swal.fire('Error', response.message || 'Could not delete the entry.', 'error');
-                    }
-                })
-                .fail(function () {
-                    Swal.fire('Error', 'An error occurred while deleting the entry.', 'error');
-                });
+        $('#alertArea').append(alert);
+
+        // Auto dismiss after 5 seconds
+        setTimeout(function () {
+            alert.alert('close');
+        }, 5000);
+    }
+
+    // Handle delete button clicks
+    $(document).on('click', '.btn-delete-entry', function () {
+        const entryId = $(this).data('entry-id');
+
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "Do you really want to delete this entry?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, delete it!',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.post('/Home/DeleteJournalEntry', { entryId })
+                    .done(function (response) {
+                        if (response.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Deleted!',
+                                text: 'The entry has been deleted.',
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                            fetchVoucherSummary(currentVoucherId);
+                        } else {
+                            Swal.fire('Error', response.message || 'Could not delete the entry.', 'error');
+                        }
+                    })
+                    .fail(function () {
+                        Swal.fire('Error', 'An error occurred while deleting the entry.', 'error');
+                    });
+            }
+        });
+    });
+
+    // Allow pressing Enter in the voucher ID input to trigger fetch
+    $('#voucherIdInput').on('keypress', function (e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $('#fetchVoucherBtn').click();
         }
     });
 });

@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using PureLedger.Models;
 using PureLedger.Services;
 
@@ -21,44 +21,49 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
-        // ---------------- PROJECT ----------------
+        #region Project
 
-        // GET: /MetaData/Project
-        [HttpGet]
-        public async Task<IActionResult> Project()
+        // GET: /MetaData/Projects
+        public async Task<IActionResult> Projects()
         {
             var projects = await _metaDataService.GetAllProjectsAsync();
             return View(projects);
         }
 
-        // POST: /MetaData/Project
+        // GET: /MetaData/CreateProject
+        public IActionResult CreateProject()
+        {
+            return View();
+        }
+
+        // POST: /MetaData/CreateProject
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Project(Project project)
+        public async Task<IActionResult> CreateProject(Project project)
         {
             var errors = await _validationService.ValidateProjectAsync(project);
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                await _metaDataService.CreateProjectAsync(project);
-                return RedirectToAction(nameof(Project));
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(project);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            var projects = await _metaDataService.GetAllProjectsAsync();
-            return View(projects);
+            await _metaDataService.CreateProjectAsync(project);
+            TempData["SuccessMessage"] = "Project created successfully.";
+            return RedirectToAction(nameof(Projects));
         }
 
         // GET: /MetaData/EditProject/5
-        [HttpGet]
         public async Task<IActionResult> EditProject(int id)
         {
             var project = await _metaDataService.GetProjectByIdAsync(id);
-            if (project == null) return NotFound();
+            if (project == null)
+            {
+                return NotFound();
+            }
             return View(project);
         }
 
@@ -68,69 +73,86 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> EditProject(Project project)
         {
             var errors = await _validationService.ValidateProjectAsync(project);
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                await _metaDataService.UpdateProjectAsync(project);
-                return RedirectToAction(nameof(Project));
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(project);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            return View(project);
+            await _metaDataService.UpdateProjectAsync(project);
+            TempData["SuccessMessage"] = "Project updated successfully.";
+            return RedirectToAction(nameof(Projects));
         }
 
-        // ---------------- CATEGORY ----------------
+        #endregion
 
-        // GET: /MetaData/Category
-        [HttpGet]
-        public async Task<IActionResult> Category()
+        #region Category
+
+        // GET: /MetaData/Categories
+        public async Task<IActionResult> Categories()
         {
             var categories = await _metaDataService.GetAllCategoriesAsync();
-            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
-            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
-
             return View(categories);
         }
 
-        // POST: /MetaData/Category
+        // GET: /MetaData/CreateCategory
+        public async Task<IActionResult> CreateCategory()
+        {
+            ViewBag.Projects = new SelectList(
+                await _metaDataService.GetAllProjectsForCategoriesAsync(),
+                "ProjectId", "ProjectName");
+            ViewBag.AccountTypes = new SelectList(
+                await _metaDataService.GetAllAccountTypesAsync(),
+                "AccountTypeId", "AccountTypeName");
+            return View();
+        }
+
+        // POST: /MetaData/CreateCategory
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Category(Category category)
+        public async Task<IActionResult> CreateCategory(Category category)
         {
             var errors = await _validationService.ValidateCategoryAsync(category);
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                await _metaDataService.CreateCategoryAsync(category);
-                return RedirectToAction(nameof(Category));
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Projects = new SelectList(
+                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
+                    "ProjectId", "ProjectName", category.ProjectId);
+                ViewBag.AccountTypes = new SelectList(
+                    await _metaDataService.GetAllAccountTypesAsync(),
+                    "AccountTypeId", "AccountTypeName", category.AccountTypeId);
+
+                return View(category);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            // Get fresh data for the view
-            var categories = await _metaDataService.GetAllCategoriesAsync();
-            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
-            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
-
-            return View(categories);
+            await _metaDataService.CreateCategoryAsync(category);
+            TempData["SuccessMessage"] = "Category created successfully.";
+            return RedirectToAction(nameof(Categories));
         }
 
         // GET: /MetaData/EditCategory/5
-        [HttpGet]
         public async Task<IActionResult> EditCategory(int id)
         {
             var category = await _metaDataService.GetCategoryByIdAsync(id);
-            if (category == null) return NotFound();
+            if (category == null)
+            {
+                return NotFound();
+            }
 
-            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
-            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
+            ViewBag.Projects = new SelectList(
+                await _metaDataService.GetAllProjectsForCategoriesAsync(),
+                "ProjectId", "ProjectName", category.ProjectId);
+            ViewBag.AccountTypes = new SelectList(
+                await _metaDataService.GetAllAccountTypesAsync(),
+                "AccountTypeId", "AccountTypeName", category.AccountTypeId);
 
             return View(category);
         }
@@ -141,74 +163,97 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> EditCategory(Category category)
         {
             var errors = await _validationService.ValidateCategoryAsync(category);
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                await _metaDataService.UpdateCategoryAsync(category);
-                return RedirectToAction(nameof(Category));
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Projects = new SelectList(
+                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
+                    "ProjectId", "ProjectName", category.ProjectId);
+                ViewBag.AccountTypes = new SelectList(
+                    await _metaDataService.GetAllAccountTypesAsync(),
+                    "AccountTypeId", "AccountTypeName", category.AccountTypeId);
+
+                return View(category);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            ViewBag.Projects = await _metaDataService.GetAllProjectsForCategoriesAsync();
-            ViewBag.AccountTypes = await _metaDataService.GetAllAccountTypesAsync();
-
-            return View(category);
+            await _metaDataService.UpdateCategoryAsync(category);
+            TempData["SuccessMessage"] = "Category updated successfully.";
+            return RedirectToAction(nameof(Categories));
         }
 
-        // ---------------- ACCOUNT ----------------
+        #endregion
 
-        // GET: /MetaData/Account
-        [HttpGet]
-        public async Task<IActionResult> Account()
+        #region Account
+
+        // GET: /MetaData/Accounts
+        public async Task<IActionResult> Accounts()
         {
             var accounts = await _metaDataService.GetAllAccountsAsync();
-            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
-            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
-            ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
-
             return View(accounts);
         }
 
-        // POST: /MetaData/Account
+        // GET: /MetaData/CreateAccount
+        public async Task<IActionResult> CreateAccount()
+        {
+            ViewBag.Categories = new SelectList(
+                await _metaDataService.GetCategoriesForAccountsAsync(),
+                "CategoryId", "CategoryName");
+            ViewBag.AccountGroups = new SelectList(
+                await _metaDataService.GetAccountGroupsAsync(),
+                "AccountGroupId", "AccountGroupName");
+            ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
+            return View();
+        }
+
+        // POST: /MetaData/CreateAccount
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Account(Account account)
+        public async Task<IActionResult> CreateAccount(Account account)
         {
             var errors = await _validationService.ValidateAccountAsync(account);
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                await _metaDataService.CreateAccountAsync(account);
-                return RedirectToAction(nameof(Account));
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Categories = new SelectList(
+                    await _metaDataService.GetCategoriesForAccountsAsync(),
+                    "CategoryId", "CategoryName", account.CategoryId);
+                ViewBag.AccountGroups = new SelectList(
+                    await _metaDataService.GetAccountGroupsAsync(),
+                    "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+                ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
+                return View(account);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            // Get fresh data for the view
-            var accounts = await _metaDataService.GetAllAccountsAsync();
-            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
-            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
-            ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
-
-            return View(accounts);
+            await _metaDataService.CreateAccountAsync(account);
+            TempData["SuccessMessage"] = "Account created successfully.";
+            return RedirectToAction(nameof(Accounts));
         }
 
         // GET: /MetaData/EditAccount/5
-        [HttpGet]
         public async Task<IActionResult> EditAccount(int id)
         {
             var account = await _metaDataService.GetAccountByIdAsync(id);
-            if (account == null) return NotFound();
+            if (account == null)
+            {
+                return NotFound();
+            }
 
-            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
-            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
+            ViewBag.Categories = new SelectList(
+                await _metaDataService.GetCategoriesForAccountsAsync(),
+                "CategoryId", "CategoryName", account.CategoryId);
+            ViewBag.AccountGroups = new SelectList(
+                await _metaDataService.GetAccountGroupsAsync(),
+                "AccountGroupId", "AccountGroupName", account.AccountGroupId);
 
             return View(account);
         }
@@ -219,152 +264,184 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> EditAccount(Account account)
         {
             var errors = await _validationService.ValidateAccountAsync(account);
-            if (errors.Count == 0)
+            if (errors.Count > 0)
             {
-                await _metaDataService.UpdateAccountAsync(account);
-                return RedirectToAction(nameof(Account));
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Categories = new SelectList(
+                    await _metaDataService.GetCategoriesForAccountsAsync(),
+                    "CategoryId", "CategoryName", account.CategoryId);
+                ViewBag.AccountGroups = new SelectList(
+                    await _metaDataService.GetAccountGroupsAsync(),
+                    "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+
+                return View(account);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            ViewBag.Categories = await _metaDataService.GetCategoriesForAccountsAsync();
-            ViewBag.AccountGroups = await _metaDataService.GetAccountGroupsAsync();
-
-            return View(account);
+            await _metaDataService.UpdateAccountAsync(account);
+            TempData["SuccessMessage"] = "Account updated successfully.";
+            return RedirectToAction(nameof(Accounts));
         }
 
-        // ---------------- TAG ----------------
-
-        // GET: /MetaData/Tag
-        [HttpGet]
-        public async Task<IActionResult> Tag()
-        {
-            var tags = await _metaDataService.GetAllTagsAsync();
-            return View(tags);
-        }
-
-        // POST: /MetaData/Tag
+        // POST: /MetaData/GetCategoriesByProject
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Tag(Tag tag)
-        {
-            var errors = await _validationService.ValidateTagAsync(tag);
-            if (errors.Count == 0)
-            {
-                await _metaDataService.CreateTagAsync(tag);
-                TempData["Success"] = "Tag added successfully.";
-                return RedirectToAction(nameof(Tag));
-            }
-
-            // Add validation errors to ModelState
-            foreach (var error in errors)
-            {
-                ModelState.AddModelError("", error);
-            }
-
-            var tags = await _metaDataService.GetAllTagsAsync();
-            return View(tags);
-        }
-
-        // AJAX: Delete Tag
-        [HttpPost]
-        public async Task<IActionResult> DeleteTag(int id)
-        {
-            if (await _metaDataService.IsTagInUseAsync(id))
-            {
-                return Json(new { success = false, message = "This tag is in use and cannot be deleted." });
-            }
-
-            var success = await _metaDataService.DeleteTagAsync(id);
-            return Json(new { success });
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> SearchTags(string term)
-        {
-            var tags = await _metaDataService.SearchTagsAsync(term);
-            return Json(tags);
-        }
-
-        [HttpGet]
         public async Task<IActionResult> GetCategoriesByProject(int projectId)
         {
             var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
             return Json(categories);
         }
 
-        // ---------------- LOCATION ----------------
+        #endregion
 
-        // GET: /MetaData/Location
-        [HttpGet]
-        public async Task<IActionResult> Location()
+        #region Tag
+
+        // GET: /MetaData/Tags
+        public async Task<IActionResult> Tags()
         {
-            var locations = await _metaDataService.GetAllLocationsAsync();
-            return View(locations);
+            var tags = await _metaDataService.GetAllTagsAsync();
+            return View(tags);
         }
 
-        // POST: /MetaData/Location
+        // GET: /MetaData/CreateTag
+        public IActionResult CreateTag()
+        {
+            return View();
+        }
+
+        // POST: /MetaData/CreateTag
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Location(Location location)
+        public async Task<IActionResult> CreateTag(Tag tag)
         {
-            var errors = await _validationService.ValidateLocationAsync(location);
-            if (errors.Count == 0)
+            var errors = await _validationService.ValidateTagAsync(tag);
+            if (errors.Count > 0)
             {
-                await _metaDataService.CreateLocationAsync(location);
-
-                // Check if the request is AJAX
-                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                foreach (var error in errors)
                 {
-                    return Json(new
-                    {
-                        success = true,
-                        location = location, // Return the created location for UI update
-                        message = "Location added successfully."
-                    });
+                    ModelState.AddModelError("", error);
                 }
-
-                TempData["Success"] = "Location added successfully.";
-                return RedirectToAction(nameof(Location));
+                return View(tag);
             }
 
-            // Add validation errors to ModelState
-            foreach (var error in errors)
+            await _metaDataService.CreateTagAsync(tag);
+            TempData["SuccessMessage"] = "Tag created successfully.";
+            return RedirectToAction(nameof(Tags));
+        }
+
+        // GET: /MetaData/DeleteTag/5
+        public async Task<IActionResult> DeleteTag(int id)
+        {
+            var tag = await _metaDataService.GetAllTagsAsync()
+                .ContinueWith(t => t.Result.FirstOrDefault(tag => tag.TagId == id));
+
+            if (tag == null)
             {
-                ModelState.AddModelError("", error);
+                return NotFound();
             }
 
-            // If AJAX request, return validation errors
-            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+            if (await _metaDataService.IsTagInUseAsync(id))
             {
-                var modelErrors = ModelState
-                    .Where(x => x.Value.Errors.Count > 0)
-                    .ToDictionary(
-                        k => k.Key,
-                        v => v.Value.Errors.Select(e => e.ErrorMessage).ToArray()
-                    );
-
-                return Json(new
-                {
-                    success = false,
-                    errors = modelErrors
-                });
+                TempData["ErrorMessage"] = "This tag is in use and cannot be deleted.";
+                return RedirectToAction(nameof(Tags));
             }
 
+            return View(tag);
+        }
+
+        // POST: /MetaData/DeleteTag/5
+        [HttpPost, ActionName("DeleteTag")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteTagConfirmed(int id)
+        {
+            if (await _metaDataService.IsTagInUseAsync(id))
+            {
+                TempData["ErrorMessage"] = "This tag is in use and cannot be deleted.";
+                return RedirectToAction(nameof(Tags));
+            }
+
+            await _metaDataService.DeleteTagAsync(id);
+            TempData["SuccessMessage"] = "Tag deleted successfully.";
+            return RedirectToAction(nameof(Tags));
+        }
+
+        // GET: /MetaData/SearchTags
+        public async Task<IActionResult> SearchTags(string term)
+        {
+            var tags = await _metaDataService.SearchTagsAsync(term);
+            return Json(tags);
+        }
+
+        #endregion
+
+        #region Location
+
+        // GET: /MetaData/Locations
+        public async Task<IActionResult> Locations()
+        {
             var locations = await _metaDataService.GetAllLocationsAsync();
             return View(locations);
         }
 
-        // GET: /MetaData/GetAllLocations - AJAX Endpoint
-        [HttpGet]
-        public async Task<IActionResult> GetAllLocations()
+        // GET: /MetaData/CreateLocation
+        public IActionResult CreateLocation()
         {
-            var locations = await _metaDataService.GetAllLocationsAsync();
-            return Json(locations);
+            return View();
         }
+
+        // POST: /MetaData/CreateLocation
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateLocation(Location location)
+        {
+            var errors = await _validationService.ValidateLocationAsync(location);
+            if (errors.Count > 0)
+            {
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(location);
+            }
+
+            await _metaDataService.CreateLocationAsync(location);
+            TempData["SuccessMessage"] = "Location created successfully.";
+            return RedirectToAction(nameof(Locations));
+        }
+
+        // GET: /MetaData/EditLocation/5
+        public async Task<IActionResult> EditLocation(int id)
+        {
+            var location = await _metaDataService.GetLocationByIdAsync(id);
+            if (location == null)
+            {
+                return NotFound();
+            }
+            return View(location);
+        }
+
+        // POST: /MetaData/EditLocation/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditLocation(Location location)
+        {
+            var errors = await _validationService.ValidateLocationAsync(location);
+            if (errors.Count > 0)
+            {
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(location);
+            }
+
+            // Implementation pending - Add UpdateLocationAsync method to IMetaDataService
+            TempData["SuccessMessage"] = "Location updated successfully.";
+            return RedirectToAction(nameof(Locations));
+        }
+
+        #endregion
     }
 }

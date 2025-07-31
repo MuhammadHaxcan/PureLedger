@@ -303,6 +303,9 @@ namespace PureLedger.Migrations
                     b.Property<int>("JournalVoucherId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ModifiedDateTime")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -352,6 +355,9 @@ namespace PureLedger.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalVoucherId"));
 
+                    b.Property<int?>("CartageVoucherId")
+                        .HasColumnType("int");
+
                     b.Property<DateOnly>("CreditableDate")
                         .HasColumnType("date");
 
@@ -365,6 +371,8 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("JournalVoucherId");
+
+                    b.HasIndex("CartageVoucherId");
 
                     b.HasIndex("ProjectId");
 
@@ -609,11 +617,17 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
                 {
+                    b.HasOne("PureLedger.Models.JournalVoucher", "CartageVoucher")
+                        .WithMany()
+                        .HasForeignKey("CartageVoucherId");
+
                     b.HasOne("PureLedger.Models.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("CartageVoucher");
 
                     b.Navigation("Project");
                 });

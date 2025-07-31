@@ -1,35 +1,99 @@
 @model List<ModifiedEntriesSummaryViewModel>
+@{
+    ViewData["Title"] = "Modified Entries";
+}
 
-<div class="container-fluid py-4">
-    <h2 class="mb-4">Modified Entries</h2>
-    
-    <div class="table-responsive">
-        <table class="table table-striped align-middle">
-            <thead class="table-dark">
-                <tr>
-                    <th>Jv Id</th>
-                    <th>Debit</th>
-                    <th>Credit</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in Model)
-                {
-                    <tr>
-                        <td>@item.JvId</td>
-                        <td>@item.TotalDebit.ToString("N2")</td>
-                        <td>@item.TotalCredit.ToString("N2")</td>
-                        <td>
-                            <a asp-action="VoucherModifiedEntries" 
-                               asp-route-jvId="@item.JvId"
-                               class="btn btn-outline-primary btn-sm">
-                                <i class="bi bi-eye me-1"></i>Show Modified Entries
-                            </a>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-history me-2"></i>Modified Entries</h2>
+    </div>
+
+    <div id="alertArea">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-list-alt me-2"></i>Modified Voucher Entries
+            </h6>
+            <span class="badge bg-primary">@Model.Count entries</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="modifiedEntriesTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Voucher ID</th>
+                            <th>Debit</th>
+                            <th>Credit</th>
+                            <th class="text-center" style="width: 150px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            foreach (var item in Model)
+                            {
+                                <tr>
+                                    <td><span class="fw-bold">JV-@item.JvId</span></td>
+                                    <td>@item.TotalDebit.ToString("N2")</td>
+                                    <td>@item.TotalCredit.ToString("N2")</td>
+                                    <td class="text-center">
+                                        <a asp-action="VoucherModifiedEntries"
+                                           asp-route-jvId="@item.JvId"
+                                           class="btn btn-primary btn-sm">
+                                            <i class="fas fa-eye me-1"></i>View Details
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center py-3">No modified entries found.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            $('#modifiedEntriesTable').DataTable({
+                "order": [[ 0, "desc" ]],
+                "language": {
+                    "emptyTable": "No modified entries available",
+                    "search": "Search entries:",
+                    "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                    "lengthMenu": "Show _MENU_ entries"
+                },
+                "pageLength": 10,
+                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
+                "columnDefs": [
+                    { "orderable": false, "targets": 3 }
+                ]
+            });
+        });
+    </script>
+}

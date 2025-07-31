@@ -1,84 +1,148 @@
-@model PureLedger.Models.Account
+﻿@model PureLedger.Models.Account
 @{
     ViewData["Title"] = "Edit Account";
-    var categories = ViewBag.Categories as List<PureLedger.Models.Category>;
-    var accountGroups = ViewBag.AccountGroups as List<PureLedger.Models.AccountGroup>;
 }
 
-<div class="container py-4">
-    <h2>Edit Account</h2>
-    <form asp-action="EditAccount" method="post">
-        <input type="hidden" asp-for="AccountId" />
-        <div class="row g-2">
-            <div class="col-md-4">
-                <label asp-for="AccountName" class="form-label"></label>
-                <input asp-for="AccountName" class="form-control" required />
-                <span asp-validation-for="AccountName" class="text-danger"></span>
-            </div>
-            <div class="col-md-4">
-                <label asp-for="AccountGroupId" class="form-label">Account Group</label>
-                <select asp-for="AccountGroupId" class="form-select" required>
-                    <option value="">Select Group</option>
-                    @foreach (var ag in accountGroups)
-                    {
-                        <option value="@ag.AccountGroupId">@ag.AccountGroupName</option>
-                    }
-                </select>
-                <span asp-validation-for="AccountGroupId" class="text-danger"></span>
-            </div>
-            <div class="col-md-4">
-                <label asp-for="CategoryId" class="form-label">Category</label>
-                <select asp-for="CategoryId" class="form-select" required>
-                    <option value="">Select Category</option>
-                    @foreach (var c in categories)
-                    {
-                        <option value="@c.CategoryId">@c.CategoryName (@c.Project?.ProjectName)</option>
-                    }
-                </select>
-                <span asp-validation-for="CategoryId" class="text-danger"></span>
-            </div>
+<div class="container-fluid">
+    <h2 class="mb-4">Edit Account</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edit Account</h6>
         </div>
-        <div class="row g-2 mt-2">
-            <!-- Account Data Fields -->
-            <div class="col-md-2">
-                <label asp-for="AccountData.PhoneNumber" class="form-label">Phone</label>
-                <input asp-for="AccountData.PhoneNumber" class="form-control" name="AccountData.PhoneNumber" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="AccountData.Email" class="form-label">Email</label>
-                <input asp-for="AccountData.Email" class="form-control" name="AccountData.Email" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="AccountData.Address" class="form-label">Address</label>
-                <input asp-for="AccountData.Address" class="form-control" name="AccountData.Address" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="AccountData.Area" class="form-label">Area</label>
-                <input asp-for="AccountData.Area" class="form-control" name="AccountData.Area" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="AccountData.City" class="form-label">City</label>
-                <input asp-for="AccountData.City" class="form-control" name="AccountData.City" />
-            </div>
-            <!-- Product Data Fields -->
-            <div class="col-md-2">
-                <label asp-for="ProductData.PkgForm" class="form-label">Pkg Form</label>
-                <input asp-for="ProductData.PkgForm" class="form-control" name="ProductData.PkgForm" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="ProductData.Pkg" class="form-label">Pkg</label>
-                <input asp-for="ProductData.Pkg" class="form-control" name="ProductData.Pkg" type="number" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="ProductData.Type" class="form-label">Type</label>
-                <input asp-for="ProductData.Type" class="form-control" name="ProductData.Type" />
-            </div>
-            <div class="col-md-2">
-                <label asp-for="ProductData.SaleRate" class="form-label">Sale Rate</label>
-                <input asp-for="ProductData.SaleRate" class="form-control" name="ProductData.SaleRate" type="number" />
-            </div>
+        <div class="card-body">
+            <form asp-action="EditAccount" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input type="hidden" asp-for="AccountId" />
+
+                <div class="mb-3">
+                    <label asp-for="AccountName" class="form-label">Account Name</label>
+                    <input asp-for="AccountName" class="form-control" />
+                    <span asp-validation-for="AccountName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="CategoryId" class="form-label">Category</label>
+                    <select asp-for="CategoryId" asp-items="ViewBag.Categories" class="form-select">
+                        <option value="">-- Select Category --</option>
+                    </select>
+                    <span asp-validation-for="CategoryId" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="AccountGroupId" class="form-label">Account Group</label>
+                    <select asp-for="AccountGroupId" asp-items="ViewBag.AccountGroups" class="form-select" id="accountGroupSelect">
+                        <option value="">-- Select Account Group --</option>
+                    </select>
+                    <span asp-validation-for="AccountGroupId" class="text-danger"></span>
+                </div>
+
+                <!-- Account Data Fields -->
+                <div id="accountDataFields" style="display: none;">
+                    <h5 class="mt-4 mb-3">Account Details</h5>
+                    <input type="hidden" asp-for="AccountData.AccountDataId" />
+                    <input type="hidden" asp-for="AccountData.AccountId" />
+
+                    <div class="mb-3">
+                        <label asp-for="AccountData.PhoneNumber" class="form-label">Phone Number</label>
+                        <input asp-for="AccountData.PhoneNumber" class="form-control" />
+                        <span asp-validation-for="AccountData.PhoneNumber" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="AccountData.Email" class="form-label">Email</label>
+                        <input asp-for="AccountData.Email" class="form-control" type="email" />
+                        <span asp-validation-for="AccountData.Email" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="AccountData.Address" class="form-label">Address</label>
+                        <textarea asp-for="AccountData.Address" class="form-control"></textarea>
+                        <span asp-validation-for="AccountData.Address" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="AccountData.Area" class="form-label">Area</label>
+                            <input asp-for="AccountData.Area" class="form-control" />
+                            <span asp-validation-for="AccountData.Area" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="AccountData.City" class="form-label">City</label>
+                            <input asp-for="AccountData.City" class="form-control" />
+                            <span asp-validation-for="AccountData.City" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Data Fields -->
+                <div id="productDataFields" style="display: none;">
+                    <h5 class="mt-4 mb-3">Product Details</h5>
+                    <input type="hidden" asp-for="ProductData.ProductDataId" />
+                    <input type="hidden" asp-for="ProductData.AccountId" />
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="ProductData.PkgForm" class="form-label">Package Form</label>
+                            <input asp-for="ProductData.PkgForm" class="form-control" />
+                            <span asp-validation-for="ProductData.PkgForm" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="ProductData.Pkg" class="form-label">Package</label>
+                            <input asp-for="ProductData.Pkg" class="form-control" type="number" min="0" />
+                            <span asp-validation-for="ProductData.Pkg" class="text-danger"></span>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="ProductData.Type" class="form-label">Type</label>
+                            <input asp-for="ProductData.Type" class="form-control" />
+                            <span asp-validation-for="ProductData.Type" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="ProductData.SaleRate" class="form-label">Sale Rate</label>
+                            <input asp-for="ProductData.SaleRate" class="form-control" type="number" min="0" />
+                            <span asp-validation-for="ProductData.SaleRate" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a asp-action="Accounts" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
         </div>
-        <button type="submit" class="btn btn-success mt-3">Save</button>
-        <a asp-action="Account" class="btn btn-secondary mt-3">Back</a>
-    </form>
+    </div>
 </div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+    <script>
+        $(document).ready(function() {
+            // Handle showing/hiding account type specific fields
+            function updateFieldVisibility() {
+                var selectedText = $('#accountGroupSelect').find('option:selected').text().toLowerCase().trim();
+
+                if (selectedText === 'account') {
+                    $('#accountDataFields').show();
+                    $('#productDataFields').hide();
+                } else if (selectedText === 'product') {
+                    $('#productDataFields').show();
+                    $('#accountDataFields').hide();
+                } else {
+                    $('#accountDataFields').hide();
+                    $('#productDataFields').hide();
+                }
+            }
+
+            $('#accountGroupSelect').change(updateFieldVisibility);
+
+            // Trigger on page load to set initial visibility
+            updateFieldVisibility();
+        });
+    </script>
+}

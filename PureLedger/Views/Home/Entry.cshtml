@@ -5,80 +5,99 @@
     var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
 }
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-<link href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-
-<div class="container-fluid py-4 px-2">
-    <div class="mb-4">
-        <h2 class="fw-bold text-primary">Journal Entry</h2>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-book-open me-2"></i>Journal Entry</h2>
     </div>
 
-    @if (ViewBag.Error != null)
-    {
-        <div class="alert alert-danger">@ViewBag.Error</div>
-    }
+    <div id="alertArea">
+        @if (ViewBag.Error != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i>@ViewBag.Error
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
 
-    @if (TempData["Success"] != null)
-    {
-        <div class="alert alert-success">@TempData["Success"]</div>
-    }
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i>@TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
 
     <form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
-        <div class="row mb-4">
-            <div class="col-md-6 mb-3 mb-md-0">
-                <label class="form-label text-secondary">Date:</label>
-                <div class="date-input-group">
-                    <input class="form-control bg-white border-primary-subtle datepicker" 
-                           name="EntryDate" 
-                           type="text" 
-                           id="EntryDate" 
-                           value="@today" />
-                    <i class="calendar-icon bi bi-calendar3"></i>
-                </div>
+        <div class="card shadow mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-info-circle me-2"></i>Entry Details</h6>
             </div>
-            <div class="col-md-6">
-                <label class="form-label text-secondary" for="ProjectId">Select Project</label>
-                <select class="form-select bg-white border-primary-subtle" id="ProjectId" name="ProjectId" required>
-                    <option value="">Select Project</option>
-                    @if (projects != null)
-                    {
-                        foreach (var p in projects)
-                        {
-                            var selected = (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == p.ProjectId) ? "selected" : "";
-                            <option value="@p.ProjectId" selected="@selected">@p.ProjectName</option>
-                        }
-                    }
-                </select>
-                <span asp-validation-for="ProjectId" class="text-danger"></span>
+            <div class="card-body py-2">
+                <div class="row mb-2">
+                    <div class="col-md-6 mb-2 mb-md-0">
+                        <label class="form-label">Entry Date:</label>
+                        <div class="input-group">
+                            <span class="input-group-text calendar-icon" style="cursor:pointer;"><i class="fas fa-calendar-alt"></i></span>
+                            <input class="form-control datepicker no-arrow"
+                                   name="EntryDate"
+                                   type="text"
+                                   id="EntryDate"
+                                   value="@today" />
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="ProjectId">Project</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                            <select class="form-select" id="ProjectId" name="ProjectId" required>
+                                <option value="">Select Project</option>
+                                @if (projects != null)
+                                {
+                                    foreach (var p in projects)
+                                    {
+                                        var selected = (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == p.ProjectId) ? "selected" : "";
+                                        <option value="@p.ProjectId" selected="@selected">@p.ProjectName</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <span asp-validation-for="ProjectId" class="text-danger"></span>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div id="validationAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
             <span id="validationMessage"></span>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
 
-        <div class="card shadow-sm border-primary-subtle mb-4">
-            <div class="card-header bg-primary-subtle d-flex justify-content-between align-items-center">
-                <span class="fw-semibold fs-5 text-primary">Entries</span>
-                <button id="addRowBtn" type="button" class="btn btn-outline-primary btn-sm">Add More</button>
+        <div class="card shadow mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-list-alt me-2"></i>Journal Entries
+                </h6>
+                <button id="addRowBtn" type="button" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Add Row
+                </button>
             </div>
-            <div class="card-body bg-light p-0">
+            <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-bordered align-middle mb-0">
                         <thead class="table-primary">
                             <tr>
                                 <th>Category</th>
                                 <th>Account</th>
-                                <th>Type/PKG</th>
+                                <th>PKG</th>
                                 <th>RBP</th>
                                 <th>Tags</th>
-                                <th>Des</th>
+                                <th>Description</th>
                                 <th>Qty</th>
                                 <th>Rate</th>
                                 <th>%</th>
-                                <th>Disc</th>
+                                <th>Discount</th>
                                 <th>Debit</th>
                                 <th>Credit</th>
                                 <th></th>
@@ -87,79 +106,87 @@
                         <tbody id="entryRows">
                             <tr id="entryRow-0" class="entry-row">
                                 <td>
-                                    <select class="form-select form-select-sm category-select" 
-                                            id="Entries_0__CategoryId" 
-                                            name="Entries[0].CategoryId" 
+                                    <select class="form-select form-select-sm category-select"
+                                            id="Entries_0__CategoryId"
+                                            name="Entries[0].CategoryId"
                                             required>
                                         <option value="">Select Category</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm account-select" 
-                                            id="Entries_0__AccountId" 
-                                            name="Entries[0].AccountId" 
+                                    <select class="form-select form-select-sm account-select"
+                                            id="Entries_0__AccountId"
+                                            name="Entries[0].AccountId"
                                             required>
                                         <option value="">Select Account</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <div class="input-group input-group-sm">
-                                        <input class="form-control form-control-sm pkg-input"
-                                               id="Entries_0__Pkg"
-                                               name="Entries[0].Pkg"
-                                               type="number"
-                                               min="0"
-                                               step="1"
-                                               placeholder="PKG" />
-                                    </div>
+                                    <input class="form-control form-control-sm pkg-input"
+                                           id="Entries_0__Pkg"
+                                           name="Entries[0].Pkg"
+                                           type="number"
+                                           min="0"
+                                           step="1"
+                                           placeholder="PKG" />
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm rbp-select" 
-                                            id="Entries_0__Rbp" 
+                                    <select class="form-select form-select-sm rbp-select no-arrow"
+                                            id="Entries_0__Rbp"
                                             name="Entries[0].Rbp">
                                         <option value="Y" selected>Y</option>
                                         <option value="N">N</option>
                                     </select>
                                 </td>
-                                <td>
-                                    <select class="form-control form-control-sm tags-input" 
-                                            id="Entries_0__Tags" 
-                                            name="Entries[0].Tags" 
-                                            multiple="multiple" 
-                                            style="width: 100%;">
-                                    </select>
+                                <td class="position-relative">
+                                    <div class="tag-multibox d-flex flex-wrap align-items-center" style="min-height:31px;">
+                                        <!-- Chips will be appended here -->
+                                        <input type="text"
+                                               class="form-control form-control-sm tag-search-input border-0 flex-grow-1"
+                                               style="min-width:100px;box-shadow:none;background:transparent;"
+                                               placeholder="Search tags"
+                                               autocomplete="off"
+                                               data-index="0" />
+                                    </div>
+                                    <input type="hidden"
+                                           class="tag-hidden-input"
+                                           id="Entries_0__Tags"
+                                           name="Entries[0].Tags" />
+                                    <div class="tag-suggestions dropdown-menu" style="width:100%;"></div>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm des-input" id="Entries_0__Des" name="Entries[0].Des" />
+                                    <input class="form-control form-control-sm des-input" id="Entries_0__Des" name="Entries[0].Des" placeholder="Description" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm qty-input" id="Entries_0__Qty" name="Entries[0].Qty" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm qty-input" id="Entries_0__Qty" name="Entries[0].Qty" type="number" min="0" step="1" placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm rate-input" id="Entries_0__Rate" name="Entries[0].Rate" type="number" min="0" step="0.01" />
+                                    <input class="form-control form-control-sm rate-input" id="Entries_0__Rate" name="Entries[0].Rate" type="number" min="0" step="0.01" placeholder="0.00" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm percent-input" id="Entries_0__Percent" name="Entries[0].Percent" type="number" min="0" max="100" step="0.01" />
+                                    <input class="form-control form-control-sm percent-input" id="Entries_0__Percent" name="Entries[0].Percent" type="number" min="0" max="100" step="0.01" placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm disc-input" id="Entries_0__Disc" name="Entries[0].Disc" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm disc-input" id="Entries_0__Disc" name="Entries[0].Disc" type="number" min="0" step="1" placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm debit-input" id="Entries_0__Debit" name="Entries[0].Debit" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm debit-input" id="Entries_0__Debit" name="Entries[0].Debit" type="number" min="0" step="1" placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm credit-input" id="Entries_0__Credit" name="Entries[0].Credit" type="number" min="0" step="1" />
+                                    <input class="form-control form-control-sm credit-input" id="Entries_0__Credit" name="Entries[0].Credit" type="number" min="0" step="1" placeholder="0" />
                                 </td>
                                 <td>
-                                    <button type="button" class="btn btn-outline-danger btn-sm remove-row-btn">X</button>
+                                    <button type="button" class="btn btn-danger btn-sm remove-row-btn">
+                                        <i class="fas fa-times"></i>
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>
                         <tfoot>
-                            <tr>
-                                <td colspan="10" class="text-end fw-bold text-primary">TOTAL</td>
-                                <td class="fw-bold text-primary" id="totalDebit">0</td>
-                                <td class="fw-bold text-primary" id="totalCredit">0</td>
+                            <tr class="table-secondary">
+                                <td colspan="10" class="text-end fw-bold">TOTAL</td>
+                                <td class="fw-bold" id="totalDebit">0</td>
+                                <td class="fw-bold" id="totalCredit">0</td>
                                 <td></td>
                             </tr>
                         </tfoot>
@@ -168,30 +195,143 @@
             </div>
         </div>
 
-        <div class="row mb-4">
-            <div class="col-md-4 mb-3 mb-md-0">
-                <label class="form-label text-secondary" for="CreditDays">Credit Days</label>
-                <input class="form-control bg-white border-primary-subtle" id="CreditDays" name="CreditDays" type="number" min="0" value="0" />
+        <div class="card shadow mb-3">
+            <div class="card-header py-2">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-cog me-2"></i>Additional Details</h6>
             </div>
-            <div class="col-md-4 mb-3 mb-md-0">
-                <label class="form-label text-secondary" for="DueDate">Due Date</label>
-                <input class="form-control bg-white border-primary-subtle" id="DueDate" name="DueDate" type="text" value="@today" readonly />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label text-secondary" for="Booker">Booker</label>
-                <select class="form-select bg-white border-primary-subtle" id="Booker" name="Booker">
-                    <option value="ghazi">ghazi</option>
-                </select>
+            <div class="card-body py-2">
+                <div class="row">
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label" for="CreditDays">Credit Days</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-day"></i></span>
+                            <input class="form-control no-arrow" id="CreditDays" name="CreditDays" type="number" min="0" value="0" />
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label" for="DueDate">Due Date</label>
+                        <div class="input-group">
+                            <span class="input-group-text calendar-icon" style="cursor:pointer;"><i class="fas fa-calendar-check"></i></span>
+                            <input class="form-control datepicker" id="DueDate" name="DueDate" type="text" value="@today" readonly />
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-2">
+                        <label class="form-label" for="Booker">Booker</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            <select class="form-select" id="Booker" name="Booker">
+                                <option value="ghazi">ghazi</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <button type="submit" class="btn btn-primary px-4">Submit</button>
+
+        <div class="d-flex justify-content-between mb-3">
+            <button type="button" class="btn btn-secondary" onclick="history.back()">
+                <i class="fas fa-arrow-left me-1"></i> Back
+            </button>
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="fas fa-save me-1"></i> Submit Journal Entry
+            </button>
+        </div>
     </form>
 </div>
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="~/js/journal-entry.js" asp-append-version="true"></script>
 }
+
+<style>
+    /* Fix z-index for dropdowns */
+    .dropdown-menu {
+        z-index: 9999 !important;
+    }
+
+    /* Fix inputs in table */
+    .table .form-control-sm,
+    .table .form-select-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    /* Remove dropdown arrows from all select elements */
+    select.form-select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        background-image: none !important;
+        padding-right: 0.75rem !important;
+    }
+    
+    /* For Firefox */
+    select.form-select::-ms-expand {
+        display: none;
+    }
+
+    /* Multibox for tags */
+    .tag-multibox {
+        min-height: 31px;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        background: #fff;
+        padding: 2px 4px;
+        position: relative;
+    }
+
+        .tag-multibox .tag-chip {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.85em;
+            background: #375a7f;
+            color: #fff;
+            border-radius: 4px;
+            padding: 0 4px;
+            margin-right: 2px;
+            margin-bottom: 2px;
+        }
+
+        .tag-multibox .tag-chip-remove {
+            color: #fff;
+            margin-left: 3px;
+        }
+
+        .tag-multibox .tag-search-input {
+            background: transparent;
+            color: #212529;
+            border: none;
+            outline: none;
+            min-width: 80px;
+            flex: 1 1 0;
+            box-shadow: none !important;
+        }
+
+    .tag-suggestions {
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 9999;
+    }
+
+    /* Datepicker appearance */
+    .ui-datepicker {
+        background-color: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        padding: 8px;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        z-index: 9999 !important;
+    }
+
+    /* Card section padding reduced */
+    .card-header.py-2 {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    .card-body.py-2 {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+</style>

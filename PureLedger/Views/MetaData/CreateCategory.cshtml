@@ -1,0 +1,52 @@
+﻿@model PureLedger.Models.Category
+@{
+    ViewData["Title"] = "Create Category";
+}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Create Category</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Add New Category</h6>
+        </div>
+        <div class="card-body">
+            <form asp-action="CreateCategory" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="mb-3">
+                    <label asp-for="CategoryName" class="form-label">Category Name</label>
+                    <input asp-for="CategoryName" class="form-control" />
+                    <span asp-validation-for="CategoryName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="ProjectId" class="form-label">Project</label>
+                    <select asp-for="ProjectId" asp-items="ViewBag.Projects" class="form-select">
+                        <option value="">-- Select Project --</option>
+                    </select>
+                    <span asp-validation-for="ProjectId" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="AccountTypeId" class="form-label">Account Type</label>
+                    <select asp-for="AccountTypeId" asp-items="ViewBag.AccountTypes" class="form-select">
+                        <option value="">-- Select Account Type --</option>
+                    </select>
+                    <span asp-validation-for="AccountTypeId" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-action="Categories" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

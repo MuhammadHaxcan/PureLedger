@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace PureLedger.Migrations
 {
     /// <inheritdoc />
-    public partial class UPDATED_DB : Migration
+    public partial class init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -116,11 +116,17 @@ namespace PureLedger.Migrations
                     ProjectId = table.Column<int>(type: "int", nullable: false),
                     EntryDate = table.Column<DateOnly>(type: "date", nullable: false),
                     CreditableDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    IsCompleted = table.Column<bool>(type: "bit", nullable: false)
+                    IsCompleted = table.Column<bool>(type: "bit", nullable: false),
+                    CartageVoucherId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_JournalVouchers", x => x.JournalVoucherId);
+                    table.ForeignKey(
+                        name: "FK_JournalVouchers_JournalVouchers_CartageVoucherId",
+                        column: x => x.CartageVoucherId,
+                        principalTable: "JournalVouchers",
+                        principalColumn: "JournalVoucherId");
                     table.ForeignKey(
                         name: "FK_JournalVouchers_Projects_ProjectId",
                         column: x => x.ProjectId,
@@ -219,7 +225,8 @@ namespace PureLedger.Migrations
                     Discount = table.Column<int>(type: "int", nullable: false),
                     Debit = table.Column<int>(type: "int", nullable: false),
                     Credit = table.Column<int>(type: "int", nullable: false),
-                    Rbp = table.Column<string>(type: "nvarchar(1)", maxLength: 1, nullable: false)
+                    Rbp = table.Column<string>(type: "nvarchar(1)", maxLength: 1, nullable: false),
+                    ModifiedDateTime = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -422,6 +429,11 @@ namespace PureLedger.Migrations
                 name: "IX_JournalEntryTags_JournalEntryTagId",
                 table: "JournalEntryTags",
                 column: "JournalEntryTagId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_JournalVouchers_CartageVoucherId",
+                table: "JournalVouchers",
+                column: "CartageVoucherId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_JournalVouchers_ProjectId",

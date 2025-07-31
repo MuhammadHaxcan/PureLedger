@@ -1,49 +1,108 @@
 @model VoucherModifiedEntriesViewModel
+@{
+    ViewData["Title"] = $"Voucher Details - JV-{Model.JvId}";
+}
 
-<div class="container-fluid py-4">
+<div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Voucher Details - JV-@Model.JvId</h2>
-        <a asp-action="ModifiedEntries" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i>Back to List
+        <h2><i class="fas fa-file-invoice me-2"></i>Voucher Details - JV-@Model.JvId</h2>
+        <a asp-action="ModifiedEntries" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Back to List
         </a>
     </div>
-    
-    <div class="table-responsive">
-        <table class="table table-striped align-middle">
-            <thead class="table-dark">
-                <tr>
-                    <th>Modify Time</th>
-                    <th>Entry Id</th>
-                    <th>Category</th>
-                    <th>Account</th>
-                    <th>Qty</th>
-                    <th>Rate</th>
-                    <th>Debit</th>
-                    <th>Credit</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var entry in Model.Entries)
-                {
-                    <tr class="@(entry.IsModified ? "table-warning" : "")">
-                        <td>
-                            @if (entry.IsModified)
+
+    <div id="alertArea">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-history me-2"></i>Modified Entries
+            </h6>
+            <span class="badge bg-primary">@Model.Entries.Count entries</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="voucherDetailsTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Modify Time</th>
+                            <th>Entry ID</th>
+                            <th>Category</th>
+                            <th>Account</th>
+                            <th>Quantity</th>
+                            <th>Rate</th>
+                            <th>Debit</th>
+                            <th>Credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Entries != null && Model.Entries.Any())
+                        {
+                            foreach (var entry in Model.Entries)
                             {
-                                <span class="text-danger">Modified</span>
-                                <br/>
-                                @entry.ModifyTime?.ToString("dd-MM-yyyy HH:mm:ss")
+                                <tr class="@(entry.IsModified ? "table-warning" : "")">
+                                    <td>
+                                        @if (entry.IsModified)
+                                        {
+                                            <span class="badge bg-danger mb-1">Modified</span>
+                                            <br />
+                                            <small class="text-muted">@entry.ModifyTime?.ToString("dd-MM-yyyy HH:mm:ss")</small>
+                                        }
+                                    </td>
+                                    <td>@entry.EntryId</td>
+                                    <td>@entry.Category</td>
+                                    <td>@entry.Account</td>
+                                    <td>@entry.Quantity</td>
+                                    <td>@entry.Rate.ToString("N2")</td>
+                                    <td>@entry.Debit.ToString("N2")</td>
+                                    <td>@entry.Credit.ToString("N2")</td>
+                                </tr>
                             }
-                        </td>
-                        <td>@entry.EntryId</td>
-                        <td>@entry.Category</td>
-                        <td>@entry.Account</td>
-                        <td>@entry.Quantity</td>
-                        <td>@entry.Rate.ToString("N2")</td>
-                        <td>@entry.Debit.ToString("N2")</td>
-                        <td>@entry.Credit.ToString("N2")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-3">No entries found for this voucher.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            $('#voucherDetailsTable').DataTable({
+                "order": [[ 0, "desc" ]],
+                "language": {
+                    "emptyTable": "No entries available",
+                    "search": "Search entries:",
+                    "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                    "lengthMenu": "Show _MENU_ entries"
+                },
+                "pageLength": 10,
+                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]]
+            });
+        });
+    </script>
+}

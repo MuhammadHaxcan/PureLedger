@@ -370,6 +370,12 @@ namespace PureLedger.Services
                 {
                     voucher.IsCompleted = true;
                     await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                    
+                    // NEW CODE: If this voucher has a cartage voucher reference, process that cartage voucher
+                    if (voucher.CartageVoucherId.HasValue)
+                    {
+                        await ProcessCartageVoucherAsync(voucher.CartageVoucherId.Value);
+                    }
                 }
 
                 await _unitOfWork.SaveChangesAsync();
@@ -383,6 +389,37 @@ namespace PureLedger.Services
                     await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
                     await _unitOfWork.SaveChangesAsync();
                 }
+            }
+        }
+
+        // Add this new method to process the cartage voucher
+        private async Task ProcessCartageVoucherAsync(int cartageVoucherId)
+        {
+            try
+            {
+                var cartageVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(cartageVoucherId);
+                if (cartageVoucher == null)
+                {
+                    _logger.LogError("Cartage voucher with ID {CartageVoucherId} not found", cartageVoucherId);
+                    return;
+                }
+
+                // Mark all entries as processed
+                foreach (var entry in cartageVoucher.JournalEntries)
+                {
+                    entry.IsProcessed = true;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+
+                // Mark the cartage voucher as completed
+                cartageVoucher.IsCompleted = true;
+                await _unitOfWork.JournalVouchers.UpdateAsync(cartageVoucher);
+                
+                _logger.LogInformation("Processed cartage voucher with ID {CartageVoucherId}", cartageVoucherId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing cartage voucher with ID {CartageVoucherId}", cartageVoucherId);
             }
         }
 
@@ -448,11 +485,15 @@ namespace PureLedger.Services
                     dcLocation,
                     dcRemarks,
                     dcOtherRef,
-                    dcDate); // <-- Pass the date here
+                    dcDate);
 
                 // Create cartage journal voucher and entries as the last step
-                await CreateCartageJournalVoucherAsync(
+                var cartageVoucher = await CreateCartageJournalVoucherAsync(
                     originalJV.ProjectId, debitAccountId, transporterId, entry, amount);
+                    
+                // Set the reference in the original voucher
+                originalJV.CartageVoucherId = cartageVoucher.JournalVoucherId;
+                await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
 
                 // Update journal voucher processed status
                 await UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
@@ -481,7 +522,7 @@ namespace PureLedger.Services
                 {
                     ProjectId = projectId,
                     EntryDate = DateOnly.FromDateTime(DateTime.Now),
-                    IsCompleted = true,
+                    IsCompleted = false, // Changed from true to false - cartage voucher not processed by default
                     CreditableDate = DateOnly.FromDateTime(DateTime.Now)
                 };
 
@@ -506,6 +547,8 @@ namespace PureLedger.Services
                 // Add entries in batch
                 foreach (var entry in entries)
                 {
+                    // Entries should not be marked as processed initially
+                    entry.IsProcessed = false; // Changed from true to false
                     await _unitOfWork.JournalEntries.AddAsync(entry);
                 }
 
@@ -534,7 +577,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = true
+                IsProcessed = false // Changed from true to false
             };
         }
 
@@ -553,7 +596,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = true
+                IsProcessed = false // Changed from true to false
             };
         }
 

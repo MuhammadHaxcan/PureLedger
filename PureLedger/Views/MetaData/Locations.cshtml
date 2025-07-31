@@ -1,0 +1,64 @@
+﻿@model List<PureLedger.Models.Location>
+@{
+    ViewData["Title"] = "Locations";
+}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Locations</h2>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Location List</h6>
+            <a asp-action="CreateLocation" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Add New Location
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="locationsTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Location Name</th>
+                            <th>Phone</th>
+                            <th>Region</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var location in Model)
+                        {
+                            <tr>
+                                <td>@location.LocationId</td>
+                                <td>@location.LocationName</td>
+                                <td>@location.Phone</td>
+                                <td>@location.Region</td>
+                                <td>
+                                    <a asp-action="EditLocation" asp-route-id="@location.LocationId" class="btn btn-sm btn-info">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('#locationsTable').DataTable();
+        });
+    </script>
+}

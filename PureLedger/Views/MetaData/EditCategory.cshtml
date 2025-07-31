@@ -1,42 +1,53 @@
-@model PureLedger.Models.Category
+﻿@model PureLedger.Models.Category
 @{
     ViewData["Title"] = "Edit Category";
-    var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
-    var accountTypes = ViewBag.AccountTypes as List<PureLedger.Models.AccountType>;
 }
 
-<div class="container py-4">
-    <h2>Edit Category</h2>
-    <form asp-action="EditCategory" method="post">
-        <input type="hidden" asp-for="CategoryId" />
-        <div class="mb-3">
-            <label asp-for="CategoryName" class="form-label"></label>
-            <input asp-for="CategoryName" class="form-control" required />
-            <span asp-validation-for="CategoryName" class="text-danger"></span>
+<div class="container-fluid">
+    <h2 class="mb-4">Edit Category</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edit Category</h6>
         </div>
-        <div class="mb-3">
-            <label asp-for="ProjectId" class="form-label">Project</label>
-            <select asp-for="ProjectId" class="form-select" required>
-                <option value="">Select Project</option>
-                @foreach (var p in projects)
-                {
-                    <option value="@p.ProjectId">@p.ProjectName</option>
-                }
-            </select>
-            <span asp-validation-for="ProjectId" class="text-danger"></span>
+        <div class="card-body">
+            <form asp-action="EditCategory" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input type="hidden" asp-for="CategoryId" />
+
+                <div class="mb-3">
+                    <label asp-for="CategoryName" class="form-label">Category Name</label>
+                    <input asp-for="CategoryName" class="form-control" />
+                    <span asp-validation-for="CategoryName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="ProjectId" class="form-label">Project</label>
+                    <select asp-for="ProjectId" asp-items="ViewBag.Projects" class="form-select">
+                        <option value="">-- Select Project --</option>
+                    </select>
+                    <span asp-validation-for="ProjectId" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="AccountTypeId" class="form-label">Account Type</label>
+                    <select asp-for="AccountTypeId" asp-items="ViewBag.AccountTypes" class="form-select">
+                        <option value="">-- Select Account Type --</option>
+                    </select>
+                    <span asp-validation-for="AccountTypeId" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-action="Categories" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
         </div>
-        <div class="mb-3">
-            <label asp-for="AccountTypeId" class="form-label">Account Type</label>
-            <select asp-for="AccountTypeId" class="form-select" required>
-                <option value="">Select Account Type</option>
-                @foreach (var at in accountTypes)
-                {
-                    <option value="@at.AccountTypeId">@at.AccountTypeName</option>
-                }
-            </select>
-            <span asp-validation-for="AccountTypeId" class="text-danger"></span>
-        </div>
-        <button type="submit" class="btn btn-success">Save</button>
-        <a asp-action="Category" class="btn btn-secondary">Back</a>
-    </form>
+    </div>
 </div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

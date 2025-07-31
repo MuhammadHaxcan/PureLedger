@@ -120,8 +120,22 @@ body {
         background-color: #212529;
     }
 
-/* Hide dropdown arrow for RBP select */
-select[name*='Rbp'] {
+/* Hide dropdown arrow for all select elements */
+select {
+    /* For Chrome, Safari, Edge */
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    padding-right: 2.5rem;
+}
+
+/* Hide dropdown arrow completely for specific selects */
+select[name*='Rbp'], 
+.no-arrow {
     /* For Chrome, Safari, Edge */
     appearance: none;
     -webkit-appearance: none;
@@ -216,3 +230,61 @@ a {
     a:hover {
         text-decoration: underline;
     }
+
+/* Fix for Firefox dropdown arrow which can persist */
+select::-ms-expand {
+    display: none;
+}
+
+/* Custom styling for form-select (Bootstrap 5) */
+.form-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+    padding-right: 2.5rem;
+}
+
+.form-select.no-arrow {
+    background-image: none !important;
+    padding-right: 0.75rem;
+}
+
+/* DataTables specific styling */
+.dataTables_length select,
+div.dataTables_wrapper div.dataTables_length select {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: none !important;
+    padding-right: 0.75rem !important;
+    min-width: 4rem;
+    text-align: center;
+    border-radius: 0.25rem;
+}
+
+/* For Safari and other browsers that may still show dropdown indicators */
+.dataTables_length select::-ms-expand,
+div.dataTables_wrapper div.dataTables_length select::-ms-expand {
+    display: none;
+}
+
+/* Optional: Add custom styling to make it more visually appealing without arrows */
+.dataTables_length select,
+div.dataTables_wrapper div.dataTables_length select {
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    padding: 0.375rem 0.5rem;
+    font-weight: 500;
+}
+
+/* Style the wrapper text too for consistency */
+.dataTables_length label {
+    font-weight: normal;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}

@@ -1,0 +1,49 @@
+﻿@model PureLedger.Models.Location
+@{
+    ViewData["Title"] = "Edit Location";
+}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Edit Location</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edit Location</h6>
+        </div>
+        <div class="card-body">
+            <form asp-action="EditLocation" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input type="hidden" asp-for="LocationId" />
+
+                <div class="mb-3">
+                    <label asp-for="LocationName" class="form-label">Location Name</label>
+                    <input asp-for="LocationName" class="form-control" />
+                    <span asp-validation-for="LocationName" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Phone" class="form-label">Phone</label>
+                    <input asp-for="Phone" class="form-control" />
+                    <span asp-validation-for="Phone" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Region" class="form-label">Region</label>
+                    <input asp-for="Region" class="form-control" />
+                    <span asp-validation-for="Region" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-action="Locations" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

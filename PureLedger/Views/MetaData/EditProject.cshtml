@@ -1,18 +1,37 @@
-@model PureLedger.Models.Project
+﻿@model PureLedger.Models.Project
 @{
     ViewData["Title"] = "Edit Project";
 }
 
-<div class="container py-4">
-    <h2>Edit Project</h2>
-    <form asp-action="EditProject" method="post">
-        <input type="hidden" asp-for="ProjectId" />
-        <div class="mb-3">
-            <label asp-for="ProjectName" class="form-label"></label>
-            <input asp-for="ProjectName" class="form-control" required />
-            <span asp-validation-for="ProjectName" class="text-danger"></span>
+<div class="container-fluid">
+    <h2 class="mb-4">Edit Project</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edit Project</h6>
         </div>
-        <button type="submit" class="btn btn-success">Save</button>
-        <a asp-action="Project" class="btn btn-secondary">Back</a>
-    </form>
+        <div class="card-body">
+            <form asp-action="EditProject" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input type="hidden" asp-for="ProjectId" />
+
+                <div class="mb-3">
+                    <label asp-for="ProjectName" class="form-label">Project Name</label>
+                    <input asp-for="ProjectName" class="form-control" />
+                    <span asp-validation-for="ProjectName" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-action="Projects" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

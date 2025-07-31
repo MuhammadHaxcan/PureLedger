@@ -1,0 +1,238 @@
+﻿@model List<PureLedger.Models.Tag>
+@{
+    ViewData["Title"] = "Tags Management";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-tags me-2"></i>Tags Management</h2>
+    </div>
+    
+    <div id="alertArea">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-plus-circle me-2"></i>Add New Tag
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="createTagForm" asp-action="CreateTag" method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                        <div class="mb-3">
+                            <label for="TagName" class="form-label">Tag Name</label>
+                            <input name="TagName" id="TagName" class="form-control" required 
+                                   placeholder="Enter tag name" autofocus />
+                            <div class="form-text">Tags help you organize and filter your journal entries.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Create Tag
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-list me-2"></i>Tags List
+                    </h6>
+                    <span class="badge bg-primary">@Model.Count tags</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="tagsTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Tag Name</th>
+                                    <th class="text-center" style="width: 100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tag in Model)
+                                {
+                                    <tr id="tag-@tag.TagId">
+                                        <td>@tag.TagId</td>
+                                        <td>
+                                            <span class="badge bg-light text-dark" style="font-size: 1rem;">
+                                                <i class="fas fa-tag me-1"></i>
+                                                @tag.TagName
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <button class="btn btn-sm btn-danger delete-tag" 
+                                                    data-id="@tag.TagId" 
+                                                    data-name="@tag.TagName">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the tag "<span id="deleteTagName"></span>"?</p>
+                <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" id="confirmDelete" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable with improved configuration
+            var table = $('#tagsTable').DataTable({
+                "order": [[ 1, "asc" ]],
+                "language": {
+                    "emptyTable": "No tags available",
+                    "search": "Search tags:",
+                    "info": "Showing _START_ to _END_ of _TOTAL_ tags",
+                    "lengthMenu": "Show _MENU_ tags"
+                },
+                "pageLength": 10,
+                "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
+                "columnDefs": [
+                    { "orderable": false, "targets": 2 }
+                ]
+            });
+
+            // Handle delete button clicks
+            $(document).on('click', '.delete-tag', function() {
+                var tagId = $(this).data('id');
+                var tagName = $(this).data('name');
+                
+                $('#deleteTagName').text(tagName);
+                $('#confirmDelete').data('id', tagId);
+                $('#deleteModal').modal('show');
+            });
+
+            // Handle confirmation of delete
+            $('#confirmDelete').on('click', function() {
+                var tagId = $(this).data('id');
+                
+                // Send AJAX request to delete the tag
+                $.ajax({
+                    url: '@Url.Action("DeleteTag")',
+                    type: 'POST',
+                    data: { id: tagId },
+                    success: function(response) {
+                        if (response.success) {
+                            // Remove the row from the table
+                            table.row($('#tag-' + tagId)).remove().draw();
+                            
+                            // Show success message
+                            $('#deleteModal').modal('hide');
+                            
+                            // Create alert
+                            var alert = $('<div class="alert alert-success alert-dismissible fade show" role="alert">' +
+                                '<i class="fas fa-check-circle me-2"></i> Tag deleted successfully!' +
+                                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                                '</div>');
+                            
+                            $('#alertArea').append(alert);
+                            
+                            // Auto-dismiss after 3 seconds
+                            setTimeout(function() {
+                                alert.alert('close');
+                            }, 3000);
+                        } else {
+                            // Show error message
+                            $('#deleteModal').modal('hide');
+                            
+                            // Create alert
+                            var alert = $('<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                                '<i class="fas fa-exclamation-circle me-2"></i> ' + response.message +
+                                '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                                '</div>');
+                            
+                            $('#alertArea').append(alert);
+                        }
+                    },
+                    error: function() {
+                        $('#deleteModal').modal('hide');
+                        
+                        // Create alert for server error
+                        var alert = $('<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                            '<i class="fas fa-exclamation-circle me-2"></i> An error occurred while trying to delete the tag.' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                            '</div>');
+                        
+                        $('#alertArea').append(alert);
+                    }
+                });
+            });
+
+            // Handle form submission with AJAX
+            $('#createTagForm').on('submit', function(e) {
+                var tagName = $('#TagName').val().trim();
+                if (!tagName) {
+                    e.preventDefault();
+                    
+                    // Create alert
+                    var alert = $('<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
+                        '<i class="fas fa-exclamation-circle me-2"></i> Please enter a tag name.' +
+                        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                        '</div>');
+                    
+                    $('#alertArea').append(alert);
+                    
+                    setTimeout(function() {
+                        alert.alert('close');
+                    }, 3000);
+                    
+                    $('#TagName').focus();
+                }
+            });
+        });
+    </script>
+}

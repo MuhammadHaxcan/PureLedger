@@ -22,8 +22,12 @@ namespace PureLedger.Models
         [Required(ErrorMessage = "Creditable date is required")]
         [DateAfter("EntryDate", ErrorMessage = "Creditable date must be after entry date")]
         public DateOnly CreditableDate { get; set; }
-
+        
         public bool IsCompleted { get; set; }
+
+        // New property to reference cartage voucher
+        [ForeignKey("CartageVoucher")]
+        public int? CartageVoucherId { get; set; }
 
         [NotMapped]
         public decimal TotalDebit => JournalEntries?.Sum(e => e.Debit) ?? 0;
@@ -34,7 +38,11 @@ namespace PureLedger.Models
         // Navigation properties
         public virtual Project Project { get; set; }
         public virtual ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
+        
+        // New navigation property for cartage voucher reference
+        public virtual JournalVoucher? CartageVoucher { get; set; }
     }
+    
     public class DateAfterAttribute : ValidationAttribute
     {
         private readonly string _comparisonProperty;

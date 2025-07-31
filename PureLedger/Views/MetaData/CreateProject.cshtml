@@ -1,0 +1,36 @@
+﻿@model PureLedger.Models.Project
+@{
+    ViewData["Title"] = "Create Project";
+}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Create Project</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Add New Project</h6>
+        </div>
+        <div class="card-body">
+            <form asp-action="CreateProject" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="mb-3">
+                    <label asp-for="ProjectName" class="form-label">Project Name</label>
+                    <input asp-for="ProjectName" class="form-control" />
+                    <span asp-validation-for="ProjectName" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-action="Projects" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
