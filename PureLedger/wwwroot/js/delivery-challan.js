@@ -539,8 +539,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const transporterSelect = document.getElementById('transporterAccount');
         transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
 
-        // Fetch transporter accounts from categoryId 4
-        fetch('/api/common/accounts/2')
+        // First fetch the transporter category ID from a new endpoint
+        fetch('/api/common/settings/transporterCategoryId')
+            .then(response => response.json())
+            .then(data => {
+                // Now use the dynamic category ID instead of hardcoded 2
+                const transporterCategoryId = data.value;
+                
+                // Fetch transporter accounts with the dynamic category ID
+                return fetch(`/api/common/accounts/${transporterCategoryId}`);
+            })
             .then(response => {
                 if (!response.ok) {
                     return response.text().then(text => {
