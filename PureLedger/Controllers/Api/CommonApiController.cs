@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using PureLedger.Services;
 
 namespace PureLedger.Controllers.Api
@@ -9,10 +11,17 @@ namespace PureLedger.Controllers.Api
     public class CommonApiController : ControllerBase
     {
         private readonly ICommonApiService _commonApiService;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<CommonApiController> _logger;
 
-        public CommonApiController(ICommonApiService commonApiService)
+        public CommonApiController(
+            ICommonApiService commonApiService, 
+            IConfiguration configuration,
+            ILogger<CommonApiController> logger)
         {
             _commonApiService = commonApiService;
+            _configuration = configuration;
+            _logger = logger;
         }
 
         [HttpGet("projects")]
@@ -56,6 +65,33 @@ namespace PureLedger.Controllers.Api
 
             var result = accounts.Select(a => new { accountId = a.AccountId, accountName = a.AccountName });
             return Ok(result); // Use Ok() instead of Json()
+        }
+        
+        [HttpGet("transporters")]
+        public async Task<IActionResult> GetTransporters()
+        {
+            try
+            {
+                // Get the transporter category ID from configuration
+                var transporterCategoryId = _configuration.GetValue<int>("AppSettings:TransporterCategoryId");
+
+                // Use GetAccountsByCategoryAsync instead of GetAccountsByCategoryIdAsync
+                var accounts = await _commonApiService.GetAccountsByCategoryAsync(transporterCategoryId);
+
+                return Ok(accounts.Select(a => new { id = a.AccountId, name = a.AccountName }));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting transporters");
+                return StatusCode(500, "An error occurred while retrieving transporters");
+            }
+        }
+        
+        [HttpGet("settings/transporterCategoryId")]
+        public IActionResult GetTransporterCategoryId()
+        {
+            var transporterCategoryId = _configuration.GetValue<int>("AppSettings:TransporterCategoryId");
+            return Ok(new { value = transporterCategoryId });
         }
     }
 }

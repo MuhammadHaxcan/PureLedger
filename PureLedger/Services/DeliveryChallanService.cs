@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.ViewModels;
@@ -9,13 +10,19 @@ namespace PureLedger.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<DeliveryChallanService> _logger;
+        private readonly int _transporterCategoryId;
 
         public DeliveryChallanService(
             IUnitOfWork unitOfWork,
-            ILogger<DeliveryChallanService> logger)
+            ILogger<DeliveryChallanService> logger,
+            IConfiguration configuration)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            
+            // Get the transporter category ID from configuration
+            _transporterCategoryId = configuration.GetValue<int>("AppSettings:TransporterCategoryId");
+            _logger.LogInformation("Transporter category ID set to {TransporterCategoryId}", _transporterCategoryId);
         }
 
         #region Entity Retrieval
@@ -132,7 +139,7 @@ namespace PureLedger.Services
                         voucher.JournalVoucherId, categoryId, accountId);
 
                     // Add only unprocessed entries with quantity > 0
-                    foreach (var entry in entries.Where(e => !e.IsProcessed && e.Quantity > 0))
+                    foreach (var entry in entries.Where(e => !e.IsProcessed && e.Account.AccountGroupId != 1))
                     {
                         voucherViewModel.Entries.Add(MapToJournalEntryDetailViewModel(entry));
                     }
@@ -370,12 +377,33 @@ namespace PureLedger.Services
                 {
                     voucher.IsCompleted = true;
                     await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-                    
+
                     // NEW CODE: If this voucher has a cartage voucher reference, process that cartage voucher
                     if (voucher.CartageVoucherId.HasValue)
                     {
                         await ProcessCartageVoucherAsync(voucher.CartageVoucherId.Value);
                     }
+                }
+
+                // NEW CODE: Mark the corresponding delivery challan voucher as completed
+                try
+                {
+                    var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
+                    if (deliveryChallanVoucher != null && !deliveryChallanVoucher.IsCompleted)
+                    {
+                        _logger.LogInformation("Marking delivery challan voucher with ID {DeliveryChallanId} as completed because all group 2 entries are processed",
+                            deliveryChallanVoucher.DeliveryChallanVoucherId);
+
+                        deliveryChallanVoucher.IsCompleted = true;
+                        deliveryChallanVoucher.FinalDeliveryDate = DateOnly.FromDateTime(DateTime.Now);
+                        await _unitOfWork.DeliveryChallanVouchers.UpdateAsync(deliveryChallanVoucher);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error marking delivery challan voucher as completed for journal voucher ID {JournalVoucherId}",
+                        journalVoucherId);
+                    // Don't rethrow - we want to continue with the rest of the process
                 }
 
                 await _unitOfWork.SaveChangesAsync();
@@ -577,17 +605,17 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = false // Changed from true to false
+                IsProcessed = false
             };
         }
 
-        private static JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount)
+        private JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = transporterId,
-                CategoryId = 2, // Transporter category
+                CategoryId = _transporterCategoryId, // Use the instance field
                 Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}",
                 Quantity = 1,
                 Rate = amount,
@@ -596,7 +624,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = false // Changed from true to false
+                IsProcessed = false
             };
         }
 

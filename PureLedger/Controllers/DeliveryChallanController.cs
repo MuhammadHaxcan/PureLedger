@@ -213,7 +213,7 @@ namespace PureLedger.Controllers
                     journalVoucherId, model.DCDate, model.OtherReference);
 
                 // Process all entries and pass the date from the model
-                var results = await     ProcessEntriesBatchAsync(
+                var results = await ProcessEntriesBatchAsync(
                     deliveryChallanVoucher.DeliveryChallanVoucherId,
                     unprocessedEntries,
                     model.LocationId,
@@ -223,7 +223,7 @@ namespace PureLedger.Controllers
 
                 // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
-
+                
                 return JsonSuccess($"Processed {results.Count(r => r.Success)} out of {unprocessedEntries.Count} entries.", new { results });
             }
             catch (Exception ex)
