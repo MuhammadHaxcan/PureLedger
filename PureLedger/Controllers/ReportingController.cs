@@ -31,6 +31,16 @@ namespace PureLedger.Controllers
             if (report == null)
                 return HandleVoucherNotFound(journalVoucherId, type);
 
+            // For Invoice, calculate running balance for the customer account
+            if (type == "INV" && !string.IsNullOrEmpty(report.CustomerAccountName))
+            {
+                // You may need to use AccountId instead of AccountName for accuracy
+                var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(
+                    journalVoucherId
+                );
+                ViewBag.CustomerRunningBalance = balance;
+            }
+
             ViewBag.Type = type;
             return View("PrintVoucher", report);
         }

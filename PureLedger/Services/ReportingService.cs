@@ -352,5 +352,37 @@ namespace PureLedger.Services
 
             return result;
         }
+
+        public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId)
+        {
+            // Get the voucher with entries
+            var voucher = await _journalVoucherRepository.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null)
+                return 0m;
+
+            // Find the customer entry (assuming Quantity == 0 marks the customer line)
+            var customerEntry = voucher.JournalEntries.FirstOrDefault(e => e.Account.AccountGroupId == 1);
+            if (customerEntry == null || customerEntry.Account == null)
+                return 0m;
+
+            int customerAccountId = customerEntry.AccountId;
+
+            // Get all completed vouchers up to and including this one
+            var allVouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
+            var relevantVouchers = allVouchers
+                .Where(v => v.IsCompleted && v.JournalVoucherId <= journalVoucherId)
+                .ToList();
+
+            // Get all entries for this account in those vouchers
+            var entries = relevantVouchers
+                .SelectMany(v => v.JournalEntries)
+                .Where(e => e.AccountId == customerAccountId)
+                .ToList();
+
+            decimal totalDebit = entries.Sum(e => e.Debit);
+            decimal totalCredit = entries.Sum(e => e.Credit);
+
+            return totalDebit - totalCredit;
+        }
     }
 }

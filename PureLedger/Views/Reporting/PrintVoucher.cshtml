@@ -157,6 +157,15 @@
                             </tfoot>
                         </table>
                     </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6 offset-md-6">
+                            <div class="alert alert-secondary text-end">
+                                <strong>Customer Running Balance:</strong>
+                                @((ViewBag.CustomerRunningBalance is decimal bal ? bal.ToString("N2") : "N/A"))
+                            </div>
+                        </div>
+                    </div>
                 }
                 else if (isDC)
                 {

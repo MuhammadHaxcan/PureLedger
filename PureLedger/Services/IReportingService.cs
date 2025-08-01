@@ -14,5 +14,6 @@ namespace PureLedger.Services
         // Add these:
         Task<List<Project>> GetAllProjectsAsync();
         Task<List<Category>> GetAllCategoriesAsync();
+        Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId);
     }
 }
