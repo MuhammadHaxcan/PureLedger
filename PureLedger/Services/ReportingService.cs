@@ -106,7 +106,7 @@ namespace PureLedger.Services
 
         private string GetCustomerAccountName(JournalVoucher voucher)
         {
-            var entry = voucher.JournalEntries.FirstOrDefault(e => e.Quantity == 0);
+            var entry = voucher.JournalEntries.FirstOrDefault(e => e.Account != null && e.Account.AccountGroupId == 1);
             var account = entry?.Account;
 
             if (account == null) return "";
@@ -360,8 +360,7 @@ namespace PureLedger.Services
             if (voucher == null)
                 return 0m;
 
-            // Find the customer entry (assuming Quantity == 0 marks the customer line)
-            var customerEntry = voucher.JournalEntries.FirstOrDefault(e => e.Account.AccountGroupId == 1);
+            var customerEntry = voucher.JournalEntries.FirstOrDefault(e => e.Account != null && e.Account.AccountGroupId == 1);
             if (customerEntry == null || customerEntry.Account == null)
                 return 0m;
 
