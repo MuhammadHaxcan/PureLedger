@@ -29,6 +29,7 @@
                             <th>ID</th>
                             <th>Account Name</th>
                             <th>Category</th>
+                            <th>Project</th>
                             <th>Account Group</th>
                             <th>Actions</th>
                         </tr>
@@ -40,6 +41,7 @@
                                 <td>@account.AccountId</td>
                                 <td>@account.AccountName</td>
                                 <td>@account.Category?.CategoryName</td>
+                                <td>@account.Category?.Project?.ProjectName</td>
                                 <td>@account.AccountGroup?.AccountGroupName</td>
                                 <td>
                                     <a asp-action="EditAccount" asp-route-id="@account.AccountId" class="btn btn-sm btn-info">
