@@ -199,13 +199,13 @@ namespace PureLedger.Controllers
         // GET: /MetaData/CreateAccount
         public async Task<IActionResult> CreateAccount()
         {
-            ViewBag.Categories = new SelectList(
-                await _metaDataService.GetCategoriesForAccountsAsync(),
-                "CategoryId", "CategoryName");
+            ViewBag.Projects = new SelectList(
+                await _metaDataService.GetProjectsForAccountsAsync(),
+                "ProjectId", "ProjectName");
+            ViewBag.Categories = new SelectList(new List<object>(), "categoryId", "categoryName");
             ViewBag.AccountGroups = new SelectList(
                 await _metaDataService.GetAccountGroupsAsync(),
                 "AccountGroupId", "AccountGroupName");
-            ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
 
             return View();
         }
@@ -216,21 +216,27 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> CreateAccount(Account account)
         {
             var errors = await _validationService.ValidateAccountAsync(account);
+            int.TryParse(Request.Form["ProjectId"], out int selectedProjectId);
+
             if (errors.Count > 0)
             {
+                ViewBag.Projects = new SelectList(
+                    await _metaDataService.GetProjectsForAccountsAsync(),
+                    "ProjectId", "ProjectName", selectedProjectId);
+
+                var categories = selectedProjectId > 0
+                    ? await _metaDataService.GetCategoriesByProjectAsync(selectedProjectId)
+                    : new List<object>();
+                ViewBag.Categories = new SelectList(categories, "categoryId", "categoryName", account.CategoryId);
+
+                ViewBag.AccountGroups = new SelectList(
+                    await _metaDataService.GetAccountGroupsAsync(),
+                    "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+
                 foreach (var error in errors)
                 {
                     ModelState.AddModelError("", error);
                 }
-
-                ViewBag.Categories = new SelectList(
-                    await _metaDataService.GetCategoriesForAccountsAsync(),
-                    "CategoryId", "CategoryName", account.CategoryId);
-                ViewBag.AccountGroups = new SelectList(
-                    await _metaDataService.GetAccountGroupsAsync(),
-                    "AccountGroupId", "AccountGroupName", account.AccountGroupId);
-                ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
-
                 return View(account);
             }
 
