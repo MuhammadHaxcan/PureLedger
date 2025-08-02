@@ -604,270 +604,273 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    // Post Single button handler
-    const postSingleBtn = document.getElementById('postSingleBtn');
-    if (postSingleBtn) {
-        postSingleBtn.addEventListener('click', function () {
-            // Get the current voucher ID
-            const voucherId = document.getElementById('dcJournalVoucherId').value;
-
-            // Get the specific entry ID either from the form or from the selected checkbox
-            let entryId = document.getElementById('dcJournalEntryId').value;
-
-            console.log(`Posting entry - Current form entryId: ${entryId}`);
-
-            // If no entry ID is set in the form field, check for a selected checkbox
-            if (!entryId) {
-                const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
-                if (!selected) {
-                    showAlert('warning', 'Please select an unprocessed entry to process');
-                    return;
-                }
-                entryId = selected.dataset.entryId;
-                console.log(`Selected checkbox entryId: ${entryId}`);
-            }
-
-            const locationId = document.getElementById('dcLocation').value;
-            const dcDate = document.getElementById('dcDate').value;
-            const remarks = document.getElementById('dcRemarks').value;
-            const otherRef = document.getElementById('dcOtherRef').value;
-
-            if (!locationId) {
-                showAlert('warning', 'Please select a location');
-                return;
-            }
-
-            const data = {
-                JournalEntryId: parseInt(entryId),
-                LocationId: parseInt(locationId),
-                DCDate: dcDate,
-                Remarks: remarks,
-                OtherReference: otherRef
-            };
-
-            // For debugging
-            console.log('Posting entry with data:', data);
-
-            fetch('/DeliveryChallan/PostSingleEntry', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            })
-                .then(res => {
-                    if (!res.ok) {
-                        return res.text().then(text => {
-                            throw new Error(`Server returned ${res.status}: ${text}`);
-                        });
-                    }
-                    return res.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Close the modal
-                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-
-                        // Reset form field and state
-                        document.getElementById('dcJournalEntryId').value = '';
-                        document.getElementById('dcJournalVoucherId').value = '';
-                        currentModalData = { voucherId: null, entryId: null };
-
-                        // Refresh data
-                        loadFilteredEntries();
-                        showAlert('success', 'Entry processed successfully');
-                    } else {
-                        showAlert('danger', data.message || 'Error processing entry');
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    showAlert('danger', 'Error: ' + err.message);
-                });
-        });
-    }
-
-    // Post All button handler
-    const postAllBtn = document.getElementById('postAllBtn');
-    if (postAllBtn) {
-        postAllBtn.addEventListener('click', function () {
-            const voucherId = document.getElementById('dcJournalVoucherId').value;
-            if (!voucherId) {
-                showAlert('warning', 'No voucher selected');
-                return;
-            }
-
-            const locationId = document.getElementById('dcLocation').value;
-            if (!locationId) {
-                showAlert('warning', 'Please select a location');
-                return;
-            }
-
-            const dcDate = document.getElementById('dcDate').value;
-            const remarks = document.getElementById('dcRemarks').value;
-            const otherRef = document.getElementById('dcOtherRef').value;
-
-            // Prepare data for sending
-            const data = {
-                JournalVoucherId: parseInt(voucherId),
-                LocationId: parseInt(locationId),
-                DCDate: dcDate,
-                Remarks: remarks,
-                OtherReference: otherRef
-            };
-
-            // Send request
-            fetch('/DeliveryChallan/ProcessAll', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.text().then(text => {
-                            throw new Error('Server returned ' + response.status + ': ' + text);
-                        });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Close modal
-                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-
-                        // Reset form field and state
-                        document.getElementById('dcJournalEntryId').value = '';
-                        document.getElementById('dcJournalVoucherId').value = '';
-                        currentModalData = { voucherId: null, entryId: null };
-
-                        // Refresh data
-                        loadFilteredEntries();
-
-                        // Show success message
-                        showAlert('success', data.message || 'Entries processed successfully');
-                    } else {
-                        showAlert('danger', data.message || 'Error processing entries');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showAlert('danger', 'Error processing entries: ' + error.message);
-                });
-        });
-    }
-
-    // Add cartage button handler
-    const addCartageBtn = document.getElementById('addCartageBtn');
-    if (addCartageBtn) {
-        addCartageBtn.addEventListener('click', function () {
-            const voucherId = document.getElementById('cartageJournalVoucherId').value;
-            const entryId = document.getElementById('cartageEntryId').value;
-            const transporterId = document.getElementById('transporterAccount').value;
-            const amount = document.getElementById('cartageAmount').value;
-            const postToCustomer = document.getElementById('postToCustomer').checked;
-
-            console.log(`Adding cartage for voucher: ${voucherId}, entry: ${entryId}`);
-
-            // Collect DC fields from the main modal
-            const dcDate = document.getElementById('dcDate').value;
-            const dcRemarks = document.getElementById('dcRemarks').value;
-            const dcStation = document.getElementById('dcStation')?.value || '';
-            const dcOtherRef = document.getElementById('dcOtherRef').value;
-            const dcLocation = document.getElementById('dcLocation').value;
-
-            if (!transporterId || !amount) {
-                showAlert('warning', 'Please fill in all required fields');
-                return;
-            }
-
-            if (!dcLocation) {
-                showAlert('warning', 'Please select a location');
-                return;
-            }
-
-            const data = {
-                journalVoucherId: parseInt(voucherId),
-                entryId: parseInt(entryId),
-                transporterId: parseInt(transporterId),
-                amount: parseFloat(amount),
-                postToCustomer: postToCustomer,
-                dcDate: dcDate,
-                dcRemarks: dcRemarks,
-                dcStation: dcStation,
-                dcOtherRef: dcOtherRef,
-                dcLocation: parseInt(dcLocation)
-            };
-
-            // For debugging
-            console.log('Posting cartage with data:', data);
-
-            fetch('/DeliveryChallan/AddCartage', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.text().then(text => {
-                            throw new Error(`Server returned ${response.status}: ${text}`);
-                        });
-                    }
-                    return response.json();
-                })
-                .then(result => {
-                    if (result.success) {
-                        // Close both modals
-                        bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
-                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-
-                        // Reset form field and state
-                        document.getElementById('dcJournalEntryId').value = '';
-                        document.getElementById('dcJournalVoucherId').value = '';
-                        document.getElementById('cartageJournalVoucherId').value = '';
-                        document.getElementById('cartageEntryId').value = '';
-                        currentModalData = { voucherId: null, entryId: null };
-
-                        // Refresh data
-                        loadFilteredEntries();
-
-                        showAlert('success', 'Cartage added and delivery challan processed successfully');
-                    } else {
-                        showAlert('danger', result.message || 'Error processing cartage');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showAlert('danger', 'Error processing cartage: ' + error.message);
-                });
-        });
-    }
-
-    // Show alert function (similar to Tags.cshtml)
-    function showAlert(type, message) {
-        const icon = type === 'success' ? 'check-circle' :
-            type === 'warning' ? 'exclamation-triangle' :
-                'exclamation-circle';
-
-        const alert = $(`
-            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                <i class="fas fa-${icon} me-2"></i>${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        `);
-
-        $('#alertArea').append(alert);
-
-        // Auto dismiss after 5 seconds
-        setTimeout(function () {
-            alert.alert('close');
-        }, 5000);
-    }
-
-    // Initialize the page
-    console.log('Initializing Delivery Challan page');
-    loadFilteredEntries();
-
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+    // Utility to show loading state on a button and disable others
+function setButtonLoadingExclusive(activeBtn, loadingText, allBtns) {
+    allBtns.forEach(btn => {
+        if (btn && btn !== activeBtn) {
+            btn.disabled = true;
+        }
     });
+    if (activeBtn) {
+        activeBtn.disabled = true;
+        activeBtn.dataset.originalHtml = activeBtn.innerHTML;
+        activeBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${loadingText}`;
+    }
+}
+function resetButtonLoadingExclusive(activeBtn, allBtns) {
+    allBtns.forEach(btn => {
+        if (btn) btn.disabled = false;
+    });
+    if (activeBtn && activeBtn.dataset.originalHtml) {
+        activeBtn.innerHTML = activeBtn.dataset.originalHtml;
+        delete activeBtn.dataset.originalHtml;
+    }
+}
+
+// Get references to all action buttons
+const postSingleBtn = document.getElementById('postSingleBtn');
+const postAllBtn = document.getElementById('postAllBtn');
+const addCartageBtn = document.getElementById('addCartageBtn');
+const actionBtns = [postSingleBtn, postAllBtn, addCartageBtn];
+
+// Post Single button handler
+if (postSingleBtn) {
+    postSingleBtn.addEventListener('click', function () {
+        if (postSingleBtn.disabled) return; // Prevent double submit
+        setButtonLoadingExclusive(postSingleBtn, 'Posting...', actionBtns);
+
+        // Get the current voucher ID
+        const voucherId = document.getElementById('dcJournalVoucherId').value;
+
+        // Get the specific entry ID either from the form or from the selected checkbox
+        let entryId = document.getElementById('dcJournalEntryId').value;
+        if (!entryId) {
+            const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
+            if (!selected) {
+                showAlert('warning', 'Please select an unprocessed entry to process');
+                resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+                return;
+            }
+            entryId = selected.dataset.entryId;
+        }
+        const locationId = document.getElementById('dcLocation').value;
+        const dcDate = document.getElementById('dcDate').value;
+        const remarks = document.getElementById('dcRemarks').value;
+        const otherRef = document.getElementById('dcOtherRef').value;
+        if (!locationId) {
+            showAlert('warning', 'Please select a location');
+            resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+            return;
+        }
+        const data = {
+            JournalEntryId: parseInt(entryId),
+            LocationId: parseInt(locationId),
+            DCDate: dcDate,
+            Remarks: remarks,
+            OtherReference: otherRef
+        };
+        fetch('/DeliveryChallan/PostSingleEntry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+            .then(res => {
+                if (!res.ok) {
+                    return res.text().then(text => {
+                        throw new Error(`Server returned ${res.status}: ${text}`);
+                    });
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                    document.getElementById('dcJournalEntryId').value = '';
+                    document.getElementById('dcJournalVoucherId').value = '';
+                    currentModalData = { voucherId: null, entryId: null };
+                    loadFilteredEntries();
+                    showAlert('success', 'Entry processed successfully');
+                } else {
+                    showAlert('danger', data.message || 'Error processing entry');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showAlert('danger', 'Error: ' + err.message);
+            })
+            .finally(() => {
+                resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+            });
+    });
+}
+
+// Post All button handler
+if (postAllBtn) {
+    postAllBtn.addEventListener('click', function () {
+        if (postAllBtn.disabled) return;
+        setButtonLoadingExclusive(postAllBtn, 'Posting...', actionBtns);
+
+        const voucherId = document.getElementById('dcJournalVoucherId').value;
+        if (!voucherId) {
+            showAlert('warning', 'No voucher selected');
+            resetButtonLoadingExclusive(postAllBtn, actionBtns);
+            return;
+        }
+        const locationId = document.getElementById('dcLocation').value;
+        if (!locationId) {
+            showAlert('warning', 'Please select a location');
+            resetButtonLoadingExclusive(postAllBtn, actionBtns);
+            return;
+        }
+        const dcDate = document.getElementById('dcDate').value;
+        const remarks = document.getElementById('dcRemarks').value;
+        const otherRef = document.getElementById('dcOtherRef').value;
+        const data = {
+            JournalVoucherId: parseInt(voucherId),
+            LocationId: parseInt(locationId),
+            DCDate: dcDate,
+            Remarks: remarks,
+            OtherReference: otherRef
+        };
+        fetch('/DeliveryChallan/ProcessAll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('Server returned ' + response.status + ': ' + text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                    document.getElementById('dcJournalEntryId').value = '';
+                    document.getElementById('dcJournalVoucherId').value = '';
+                    currentModalData = { voucherId: null, entryId: null };
+                    loadFilteredEntries();
+                    showAlert('success', data.message || 'Entries processed successfully');
+                } else {
+                    showAlert('danger', data.message || 'Error processing entries');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('danger', 'Error processing entries: ' + error.message);
+            })
+            .finally(() => {
+                resetButtonLoadingExclusive(postAllBtn, actionBtns);
+            });
+    });
+}
+
+// Add cartage button handler
+if (addCartageBtn) {
+    addCartageBtn.addEventListener('click', function () {
+        if (addCartageBtn.disabled) return;
+        setButtonLoadingExclusive(addCartageBtn, 'Processing...', actionBtns);
+
+        const voucherId = document.getElementById('cartageJournalVoucherId').value;
+        const entryId = document.getElementById('cartageEntryId').value;
+        const transporterId = document.getElementById('transporterAccount').value;
+        const amount = document.getElementById('cartageAmount').value;
+        const postToCustomer = document.getElementById('postToCustomer').checked;
+        const dcDate = document.getElementById('dcDate').value;
+        const dcRemarks = document.getElementById('dcRemarks').value;
+        const dcStation = document.getElementById('dcStation')?.value || '';
+        const dcOtherRef = document.getElementById('dcOtherRef').value;
+        const dcLocation = document.getElementById('dcLocation').value;
+        if (!transporterId || !amount) {
+            showAlert('warning', 'Please fill in all required fields');
+            resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+            return;
+        }
+        if (!dcLocation) {
+            showAlert('warning', 'Please select a location');
+            resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+            return;
+        }
+        const data = {
+            journalVoucherId: parseInt(voucherId),
+            entryId: parseInt(entryId),
+            transporterId: parseInt(transporterId),
+            amount: parseFloat(amount),
+            postToCustomer: postToCustomer,
+            dcDate: dcDate,
+            dcRemarks: dcRemarks,
+            dcStation: dcStation,
+            dcOtherRef: dcOtherRef,
+            dcLocation: parseInt(dcLocation)
+        };
+        fetch('/DeliveryChallan/AddCartage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`Server returned ${response.status}: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(result => {
+                if (result.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
+                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                    document.getElementById('dcJournalEntryId').value = '';
+                    document.getElementById('dcJournalVoucherId').value = '';
+                    document.getElementById('cartageJournalVoucherId').value = '';
+                    document.getElementById('cartageEntryId').value = '';
+                    currentModalData = { voucherId: null, entryId: null };
+                    loadFilteredEntries();
+                    showAlert('success', 'Cartage added and delivery challan processed successfully');
+                } else {
+                    showAlert('danger', result.message || 'Error processing cartage');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('danger', 'Error processing cartage: ' + error.message);
+            })
+            .finally(() => {
+                resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+            });
+    });
+}
+
+// Show alert function (similar to Tags.cshtml)
+function showAlert(type, message) {
+    const icon = type === 'success' ? 'check-circle' :
+        type === 'warning' ? 'exclamation-triangle' :
+            'exclamation-circle';
+
+    const alert = $(`
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="fas fa-${icon} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `);
+
+    $('#alertArea').append(alert);
+
+    // Auto dismiss after 5 seconds
+    setTimeout(function () {
+        alert.alert('close');
+    }, 5000);
+}
+
+// Initialize the page
+console.log('Initializing Delivery Challan page');
+loadFilteredEntries();
+
+// Initialize tooltips
+const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+});
 });
