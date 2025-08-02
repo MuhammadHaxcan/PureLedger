@@ -402,7 +402,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("LocationId");
 
-                    b.HasIndex("LocationName", "LocationId")
+                    b.HasIndex("LocationName")
                         .IsUnique();
 
                     b.ToTable("Locations");
@@ -476,7 +476,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("TagId");
 
-                    b.HasIndex("TagName", "TagId")
+                    b.HasIndex("TagName")
                         .IsUnique();
 
                     b.ToTable("Tags");

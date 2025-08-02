@@ -273,14 +273,21 @@ namespace PureLedger.Controllers
                 {
                     ModelState.AddModelError("", error);
                 }
+                ViewBag.Projects = new SelectList(
+                    await _metaDataService.GetProjectsForAccountsAsync(),
+                    "ProjectId", "ProjectName", selectedProjectId);
 
-                ViewBag.Categories = new SelectList(
-                    await _metaDataService.GetCategoriesForAccountsAsync(),
-                    "CategoryId", "CategoryName", account.CategoryId);
+                var categories = selectedProjectId > 0
+                    ? await _metaDataService.GetCategoriesByProjectAsync(selectedProjectId)
+                    : new List<object>();
+                ViewBag.Categories = new SelectList(categories, "categoryId", "categoryName", account.CategoryId);
+                //ViewBag.Categories = new SelectList(
+                //    await _metaDataService.GetCategoriesForAccountsAsync(),
+                //    "CategoryId", "CategoryName", account.CategoryId);
                 ViewBag.AccountGroups = new SelectList(
                     await _metaDataService.GetAccountGroupsAsync(),
                     "AccountGroupId", "AccountGroupName", account.AccountGroupId);
-                ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+                //ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
 
                 return View(account);
             }
@@ -370,13 +377,22 @@ namespace PureLedger.Controllers
             if (errors.Count > 0)
             {
                 foreach (var error in errors)
-                {
                     ModelState.AddModelError("", error);
-                }
-                return View(tag);
+
+                var tags = await _metaDataService.GetAllTagsAsync();
+                return View("Tags", tags); 
             }
 
-            await _metaDataService.CreateTagAsync(tag);
+            var creationErrors = await _metaDataService.CreateTagAsync(tag);
+            if (creationErrors.Count > 0)
+            {
+                foreach (var error in creationErrors)
+                    ModelState.AddModelError("", error);
+
+                var tags = await _metaDataService.GetAllTagsAsync();
+                return View("Tags", tags);
+            }
+
             TempData["SuccessMessage"] = "Tag created successfully.";
             return RedirectToAction(nameof(Tags));
         }
@@ -450,16 +466,24 @@ namespace PureLedger.Controllers
             if (errors.Count > 0)
             {
                 foreach (var error in errors)
-                {
                     ModelState.AddModelError("", error);
-                }
+
                 return View(location);
             }
 
-            await _metaDataService.CreateLocationAsync(location);
+            var creationErrors = await _metaDataService.CreateLocationAsync(location);
+            if (creationErrors.Count > 0)
+            {
+                foreach (var error in creationErrors)
+                    ModelState.AddModelError("", error);
+
+                return View(location);
+            }
+
             TempData["SuccessMessage"] = "Location created successfully.";
             return RedirectToAction(nameof(Locations));
         }
+
 
         // GET: /MetaData/EditLocation/5
         public async Task<IActionResult> EditLocation(int id)

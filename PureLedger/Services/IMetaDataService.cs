@@ -30,7 +30,7 @@ namespace PureLedger.Services
         
         // Tag operations
         Task<List<Tag>> GetAllTagsAsync();
-        Task<Tag> CreateTagAsync(Tag tag);
+        Task<List<string>> CreateTagAsync(Tag tag);
         Task<bool> DeleteTagAsync(int tagId);
         Task<bool> IsTagInUseAsync(int tagId);
         Task<List<object>> SearchTagsAsync(string term, int take = 20);
@@ -38,6 +38,6 @@ namespace PureLedger.Services
         // Location operations
         Task<List<Location>> GetAllLocationsAsync();
         Task<Location?> GetLocationByIdAsync(int id);
-        Task<Location> CreateLocationAsync(Location location);
+        Task<List<string>> CreateLocationAsync(Location location);
     }
 }

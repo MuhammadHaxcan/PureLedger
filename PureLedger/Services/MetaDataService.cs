@@ -179,7 +179,8 @@ namespace PureLedger.Services
 
             // Check for duplicate account name (case-insensitive)
             var existing = await _unitOfWork.Accounts.GetAllAsync();
-            if (existing.Any(a => a.AccountName.ToLower().Trim() == account.AccountName.ToLower().Trim()))
+            if (existing.Any(a => a.AccountName.ToLower().Trim() == account.AccountName.ToLower().Trim() &&
+            a.CategoryId == account.CategoryId))
             {
                 errors.Add("An account with this name already exists.");
                 return errors;
@@ -291,12 +292,31 @@ namespace PureLedger.Services
             return await _unitOfWork.Tags.GetAllAsync();
         }
 
-        public async Task<Tag> CreateTagAsync(Tag tag)
+        public async Task<List<string>> CreateTagAsync(Tag tag)
         {
-            await _unitOfWork.Tags.AddAsync(tag);
-            await _unitOfWork.SaveChangesAsync();
-            return tag;
+            var errors = new List<string>();
+
+            var existing = await _unitOfWork.Tags.GetAllAsync();
+            if (existing.Any(t => t.TagName.ToLower().Trim() == tag.TagName.ToLower().Trim()))
+            {
+                errors.Add("A tag with this name already exists.");
+                return errors;
+            }
+
+            try
+            {
+                await _unitOfWork.Tags.AddAsync(tag);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Database error while creating tag.");
+                errors.Add("An unexpected error occurred while creating the tag.");
+            }
+
+            return errors;
         }
+
 
         public async Task<bool> DeleteTagAsync(int tagId)
         {
@@ -334,12 +354,31 @@ namespace PureLedger.Services
             return await _unitOfWork.Locations.GetByIdAsync(id);
         }
 
-        public async Task<Location> CreateLocationAsync(Location location)
+        public async Task<List<string>> CreateLocationAsync(Location location)
         {
-            await _unitOfWork.Locations.AddAsync(location);
-            await _unitOfWork.SaveChangesAsync();
-            return location;
+            var errors = new List<string>();
+
+            var existing = await _unitOfWork.Locations.GetAllAsync();
+            if (existing.Any(l => l.LocationName.ToLower().Trim() == location.LocationName.ToLower().Trim()))
+            {
+                errors.Add("A location with this name already exists.");
+                return errors;
+            }
+
+            try
+            {
+                await _unitOfWork.Locations.AddAsync(location);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Database error while creating location.");
+                errors.Add("An unexpected error occurred while creating the location.");
+            }
+
+            return errors;
         }
+
 
         #endregion
     }
