@@ -40,7 +40,7 @@ namespace PureLedger.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Entry(JournalEntryViewModel model)
+        public async Task<IActionResult> Entry(JournalEntryViewModel model, string action)
         {
             var errors = await _validator.ValidateAsync(model);
 
@@ -54,8 +54,17 @@ namespace PureLedger.Controllers
             try
             {
                 var journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
-                TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
-                return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
+
+                if (action == "submit_print")
+                {
+                    // Redirect to the print page with the new JV id
+                    return Redirect($"https://localhost:7062/Reporting/PrintVoucher?journalVoucherId={journalVoucher.JournalVoucherId}&type=JV");
+                }
+                else
+                {
+                    TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
+                    return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
+                }
             }
             catch (Exception ex)
             {

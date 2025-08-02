@@ -232,9 +232,15 @@
             <button type="button" class="btn btn-secondary" onclick="history.back()">
                 <i class="fas fa-arrow-left me-1"></i> Back
             </button>
-            <button type="submit" class="btn btn-primary px-4">
-                <i class="fas fa-save me-1"></i> Submit Journal Entry
-            </button>
+            <div>
+                <input type="hidden" id="formAction" name="action" value="submit" />
+                <button type="submit" class="btn btn-primary px-4 me-2" id="submitBtn">
+                    <i class="fas fa-save me-1"></i> Submit Journal Entry
+                </button>
+                <button type="submit" class="btn btn-success px-4" id="submitPrintBtn" name="action" value="submit_print">
+                    <i class="fas fa-print me-1"></i> Submit and Print
+                </button>
+            </div>
         </div>
     </form>
 </div>
@@ -242,6 +248,33 @@
 @section Scripts {
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="~/js/journal-entry.js" asp-append-version="true"></script>
+    <script>
+        $(function () {
+            let form = $('#entryForm');
+            let submitBtn = $('#submitBtn');
+            let submitPrintBtn = $('#submitPrintBtn');
+            let formAction = $('#formAction');
+
+            submitBtn.on('click', function () {
+                formAction.val('submit');
+            });
+            submitPrintBtn.on('click', function () {
+                formAction.val('submit_print');
+            });
+
+            form.on('submit', function (e) {
+                if (submitBtn.prop('disabled') || submitPrintBtn.prop('disabled')) {
+                    e.preventDefault();
+                    return false;
+                }
+                submitBtn.prop('disabled', true);
+                submitPrintBtn.prop('disabled', true);
+
+                submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Submitting...');
+                submitPrintBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Submitting...');
+            });
+        });
+    </script>
 }
 
 <style>
