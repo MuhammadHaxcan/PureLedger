@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PureLedger.Models
 {
-    [Index(nameof(CategoryName), IsUnique = true)]
+    [Index(nameof(CategoryName), nameof(ProjectId), IsUnique = true)]
     public class Category
     {
         [Key]

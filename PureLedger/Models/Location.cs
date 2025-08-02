@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PureLedger.Models
 {
-    [Index(nameof(LocationName), IsUnique = true)]
+    [Index(nameof(LocationName), nameof(LocationId), IsUnique = true)]
     public class Location
     {
         [Key]
