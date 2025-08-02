@@ -1,4 +1,5 @@
-﻿using PureLedger.Models;
+﻿using Microsoft.EntityFrameworkCore;
+using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 
 namespace PureLedger.Services
@@ -26,13 +27,39 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.Projects.GetByIdAsync(id);
         }
-
-        public async Task<Project> CreateProjectAsync(Project project)
+        public async Task<List<string>> CreateProjectAsync(Project project)
         {
-            await _unitOfWork.Projects.AddAsync(project);
-            await _unitOfWork.SaveChangesAsync();
-            return project;
+            var errors = new List<string>();
+
+            // Check for duplicate project name (case-insensitive)
+            var existing = await _unitOfWork.Projects.GetAllAsync();
+            if (existing.Any(p => p.ProjectName.ToLower().Trim() == project.ProjectName.ToLower().Trim()))
+            {
+                errors.Add("A project with this name already exists.");
+                return errors;
+            }
+
+            try
+            {
+                await _unitOfWork.Projects.AddAsync(project);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                // Optional: log detailed internal error
+                _logger.LogError(ex, "Error while creating project.");
+                errors.Add("An error occurred while saving the project.");
+            }
+
+            return errors;
         }
+
+        //public async Task<Project> CreateProjectAsync(Project project)
+        //{
+        //    await _unitOfWork.Projects.AddAsync(project);
+        //    await _unitOfWork.SaveChangesAsync();
+        //    return project;
+        //}
 
         public async Task<Project> UpdateProjectAsync(Project project)
         {
@@ -63,11 +90,30 @@ namespace PureLedger.Services
             return await _unitOfWork.Categories.GetByIdWithDetailsAsync(id);
         }
 
-        public async Task<Category> CreateCategoryAsync(Category category)
+        public async Task<List<string>> CreateCategoryAsync(Category category)
         {
-            await _unitOfWork.Categories.AddAsync(category);
-            await _unitOfWork.SaveChangesAsync();
-            return category;
+            var errors = new List<string>();
+
+            var existing = await _unitOfWork.Categories.GetAllWithDetailsAsync();
+            if (existing.Any(c => c.CategoryName.ToLower().Trim() == category.CategoryName.ToLower().Trim()
+                               && c.ProjectId == category.ProjectId))
+            {
+                errors.Add("This category already exists under the selected project.");
+                return errors;
+            }
+
+            try
+            {
+                await _unitOfWork.Categories.AddAsync(category);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while creating category.");
+                errors.Add("An error occurred while saving the category.");
+            }
+
+            return errors;
         }
 
         public async Task<Category> UpdateCategoryAsync(Category category)
@@ -127,26 +173,45 @@ namespace PureLedger.Services
             };
         }
 
-        public async Task<Account> CreateAccountAsync(Account account)
+        public async Task<List<string>> CreateAccountAsync(Account account)
         {
-            var accountGroup = await _unitOfWork.AccountGroups.GetByIdAsync(account.AccountGroupId);
-            if (accountGroup != null)
-            {
-                var groupName = accountGroup.AccountGroupName?.Trim().ToLower();
+            var errors = new List<string>();
 
-                if (groupName == "account")
-                {
-                    account.ProductData = null;
-                }
-                else if (groupName == "product")
-                {
-                    account.AccountData = null;
-                }
+            // Check for duplicate account name (case-insensitive)
+            var existing = await _unitOfWork.Accounts.GetAllAsync();
+            if (existing.Any(a => a.AccountName.ToLower().Trim() == account.AccountName.ToLower().Trim()))
+            {
+                errors.Add("An account with this name already exists.");
+                return errors;
             }
 
-            await _unitOfWork.Accounts.AddAsync(account);
-            await _unitOfWork.SaveChangesAsync();
-            return account;
+            try
+            {
+                var accountGroup = await _unitOfWork.AccountGroups.GetByIdAsync(account.AccountGroupId);
+                if (accountGroup != null)
+                {
+                    var groupName = accountGroup.AccountGroupName?.Trim().ToLower();
+
+                    if (groupName == "account")
+                    {
+                        account.ProductData = null;
+                    }
+                    else if (groupName == "product")
+                    {
+                        account.AccountData = null;
+                    }
+                }
+
+                await _unitOfWork.Accounts.AddAsync(account);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while creating account.");
+                errors.Add("An error occurred while saving the account.");
+            }
+
+            return errors;
         }
 
         public async Task<Account> UpdateAccountAsync(Account account)

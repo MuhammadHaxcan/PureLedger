@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 namespace PureLedger.Models
 {
-    [Index(nameof(AccountName), IsUnique = true)] 
+    [Index(nameof(AccountName), nameof(CategoryId), IsUnique = true)] 
     public class Account
     {
         [Key]

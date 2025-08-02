@@ -45,10 +45,10 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("AccountGroupId");
 
-                    b.HasIndex("AccountName")
-                        .IsUnique();
-
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("AccountName", "CategoryId")
+                        .IsUnique();
 
                     b.ToTable("Accounts");
                 });
@@ -190,10 +190,10 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("AccountTypeId");
 
-                    b.HasIndex("CategoryName")
-                        .IsUnique();
-
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("CategoryName", "ProjectId")
+                        .IsUnique();
 
                     b.ToTable("Categories");
                 });
@@ -402,7 +402,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("LocationId");
 
-                    b.HasIndex("LocationName")
+                    b.HasIndex("LocationName", "LocationId")
                         .IsUnique();
 
                     b.ToTable("Locations");
@@ -456,7 +456,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("ProjectId");
 
-                    b.HasIndex("ProjectName")
+                    b.HasIndex("ProjectName", "ProjectId")
                         .IsUnique();
 
                     b.ToTable("Projects");
@@ -476,7 +476,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("TagId");
 
-                    b.HasIndex("TagName")
+                    b.HasIndex("TagName", "TagId")
                         .IsUnique();
 
                     b.ToTable("Tags");

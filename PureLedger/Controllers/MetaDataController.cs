@@ -51,7 +51,16 @@ namespace PureLedger.Controllers
                 return View(project);
             }
 
-            await _metaDataService.CreateProjectAsync(project);
+            var creationErrors = await _metaDataService.CreateProjectAsync(project);
+            if (creationErrors.Count > 0)
+            {
+                foreach (var error in creationErrors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(project);
+            }
+
             TempData["SuccessMessage"] = "Project created successfully.";
             return RedirectToAction(nameof(Projects));
         }
@@ -133,7 +142,24 @@ namespace PureLedger.Controllers
                 return View(category);
             }
 
-            await _metaDataService.CreateCategoryAsync(category);
+            var creationErrors = await _metaDataService.CreateCategoryAsync(category);
+            if (creationErrors.Count > 0)
+            {
+                foreach (var error in creationErrors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Projects = new SelectList(
+                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
+                    "ProjectId", "ProjectName", category.ProjectId);
+                ViewBag.AccountTypes = new SelectList(
+                    await _metaDataService.GetAllAccountTypesAsync(),
+                    "AccountTypeId", "AccountTypeName", category.AccountTypeId);
+
+                return View(category);
+            }
+
             TempData["SuccessMessage"] = "Category created successfully.";
             return RedirectToAction(nameof(Categories));
         }
@@ -234,7 +260,25 @@ namespace PureLedger.Controllers
                 return View(account);
             }
 
-            await _metaDataService.CreateAccountAsync(account);
+            var creationErrors = await _metaDataService.CreateAccountAsync(account);
+            if (creationErrors.Count > 0)
+            {
+                foreach (var error in creationErrors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Categories = new SelectList(
+                    await _metaDataService.GetCategoriesForAccountsAsync(),
+                    "CategoryId", "CategoryName", account.CategoryId);
+                ViewBag.AccountGroups = new SelectList(
+                    await _metaDataService.GetAccountGroupsAsync(),
+                    "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+                ViewBag.Projects = await _metaDataService.GetProjectsForAccountsAsync();
+
+                return View(account);
+            }
+
             TempData["SuccessMessage"] = "Account created successfully.";
             return RedirectToAction(nameof(Accounts));
         }

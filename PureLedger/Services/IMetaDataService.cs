@@ -7,7 +7,7 @@ namespace PureLedger.Services
         // Project operations
         Task<List<Project>> GetAllProjectsAsync();
         Task<Project?> GetProjectByIdAsync(int id);
-        Task<Project> CreateProjectAsync(Project project);
+        Task<List<string>> CreateProjectAsync(Project project);
         Task<Project> UpdateProjectAsync(Project project);
         
         // Category operations
@@ -15,7 +15,7 @@ namespace PureLedger.Services
         Task<List<Project>> GetAllProjectsForCategoriesAsync();
         Task<List<AccountType>> GetAllAccountTypesAsync();
         Task<Category?> GetCategoryByIdAsync(int id);
-        Task<Category> CreateCategoryAsync(Category category);
+        Task<List<string>> CreateCategoryAsync(Category category);
         Task<Category> UpdateCategoryAsync(Category category);
         Task<List<object>> GetCategoriesByProjectAsync(int projectId);
         
@@ -25,7 +25,7 @@ namespace PureLedger.Services
         Task<List<AccountGroup>> GetAccountGroupsAsync();
         Task<List<Project>> GetProjectsForAccountsAsync();
         Task<Account?> GetAccountByIdAsync(int id);
-        Task<Account> CreateAccountAsync(Account account);
+        Task<List<string>> CreateAccountAsync(Account account);
         Task<Account> UpdateAccountAsync(Account account);
         
         // Tag operations
