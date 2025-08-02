@@ -131,18 +131,25 @@
                 ],
                 "footerCallback": function (row, data, start, end, display) {
                     const api = this.api();
-
+                    function parseValue(value) {
+                        if (typeof value === 'string') {
+                            return parseFloat(value.replace(/,/g, '')) || 0;
+                        }
+                        if (typeof value === 'number') {
+                            return value;
+                        }
+                        return 0;
+                    }
                     // Calculate column sums for debit, credit, and balance
                     const debitTotal = api.column(3, { page: 'current' }).data()
-                        .reduce((acc, val) => acc + parseFloat($(val).text().replace(/[^\d.-]/g, '')), 0);
+                        .reduce((acc, val) => acc + parseValue(val), 0);
 
                     const creditTotal = api.column(4, { page: 'current' }).data()
-                        .reduce((acc, val) => acc + parseFloat($(val).text().replace(/[^\d.-]/g, '')), 0);
+                        .reduce((acc, val) => acc + parseValue(val), 0);
 
                     const balanceTotal = api.column(5, { page: 'current' }).data()
-                        .reduce((acc, val) => acc + parseFloat($(val).text().replace(/[^\d.-]/g, '')), 0);
+                        .reduce((acc, val) => acc + parseValue(val), 0);
 
-                    // Add footer row with totals
                     $(api.column(3).footer()).html(formatCurrency(debitTotal));
                     $(api.column(4).footer()).html(formatCurrency(creditTotal));
                     $(api.column(5).footer()).html(formatCurrency(balanceTotal));
