@@ -152,7 +152,7 @@ namespace PureLedger.Services
                 ProjectName = projectName,
                 BookerName = "",
                 CreatedDate = date,
-                Builty = cartageEntry.Credit,
+                Builty = cartageEntry?.Credit != null? cartageEntry?.Credit : 0,
 
                 //Customer Info
                 CustomerAccountName = name,
