@@ -13,6 +13,6 @@ namespace PureLedger.Repositories.Interfaces
             int? categoryId,
             int? accountId);
         Task<bool> DeleteAsync(int entryId);
-
+        Task<JournalEntry?> GetByCartageId(int id);
     }
 }

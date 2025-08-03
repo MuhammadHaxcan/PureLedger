@@ -84,5 +84,10 @@ namespace PureLedger.Repositories
             return true;
         }
 
+        public async Task<JournalEntry?> GetByCartageId(int id)
+        {
+            return await _context.JournalEntries.FirstOrDefaultAsync(e => e.JournalVoucherId == id && e.Debit == 0 && e.Credit > 0);
+        }
+
     }
 }

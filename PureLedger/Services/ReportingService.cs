@@ -17,19 +17,22 @@ namespace PureLedger.Services
         private readonly IProjectRepository _projectRepository;
         private readonly IAccountRepository _accountRepository;
         private readonly ICategoryRepository _categoryRepository;
+        private readonly ICommonApiService _commonApiService;
 
         public ReportingService(
             IJournalVoucherRepository journalVoucherRepository,
             IDeliveryChallanVoucherRepository deliveryChallanVoucherRepository,
             IProjectRepository projectRepository,
             IAccountRepository accountRepository,
-            ICategoryRepository categoryRepository)
+            ICategoryRepository categoryRepository,
+            ICommonApiService commonApiService)
         {
             _journalVoucherRepository = journalVoucherRepository;
             _deliveryChallanVoucherRepository = deliveryChallanVoucherRepository;
             _projectRepository = projectRepository;
             _accountRepository = accountRepository;
             _categoryRepository = categoryRepository;
+            _commonApiService = commonApiService;
         }
 
         public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType)
@@ -47,13 +50,24 @@ namespace PureLedger.Services
             var dcVoucher = await _deliveryChallanVoucherRepository.GetByJournalVoucherIdAsync(journalVoucherId);
             if (dcVoucher?.JournalVoucher == null) return null;
 
+            string locationNames = string.Join(", ",
+            dcVoucher.Entries
+                .Where(e => e.Location != null)
+                .Select(e => e.Location.LocationName)
+                .Distinct());
+
             var project = await _projectRepository.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
             if (project == null) return null;
 
             var entries = GetProcessedEntries(dcVoucher.Entries);
             var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-            return CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsCompleted);
+            var cartageEntry = await _commonApiService.GetCartageEntryByJournalVoucherIdAsync(dcVoucher.JournalVoucherId);
+
+            var viewModel = CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsCompleted, cartageEntry);
+            viewModel.Adda = locationNames;
+
+            return viewModel;
         }
 
         private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, string voucherType)
@@ -69,8 +83,10 @@ namespace PureLedger.Services
             var customerInfo = GetCustomerAccountName(voucher);
             var typeLabel = isPartial ? "DC - Partial" : voucherType;
 
+            var cartageEntry = await _commonApiService.GetCartageEntryByJournalVoucherIdAsync(voucher.JournalVoucherId);
+
             return CreateVoucherViewModel(voucher.JournalVoucherId, typeLabel, project.ProjectName, voucher.EntryDate,
-                entries, customerInfo, isPartial);
+                entries, customerInfo, isPartial, cartageEntry);
         }
 
         private List<JournalVoucherEntryReportModel> GetProcessedEntries(IEnumerable<DeliveryChallanEntry> entries)
@@ -124,7 +140,7 @@ namespace PureLedger.Services
 
         private JournalVoucherReportViewModel CreateVoucherViewModel(
             int jvId, string type, string projectName, DateOnly date,
-            List<JournalVoucherEntryReportModel> entries, string accountName, bool isPartial)
+            List<JournalVoucherEntryReportModel> entries, string accountName, bool isPartial, JournalEntry? cartageEntry)
         {
                 var (name, phone, address, city) = ParseCustomerInfo(accountName);
             
@@ -136,7 +152,7 @@ namespace PureLedger.Services
                 ProjectName = projectName,
                 BookerName = "",
                 CreatedDate = date,
-                Builty = jvId,
+                Builty = cartageEntry.Credit,
 
                 //Customer Info
                 CustomerAccountName = name,

@@ -1,4 +1,6 @@
-﻿namespace PureLedger.ViewModels
+﻿using PureLedger.Models;
+
+namespace PureLedger.ViewModels
 {
     public class JournalVoucherReportViewModel
     {
@@ -40,5 +42,7 @@
         public string? AccountName { get; set; }
         public string? AuthorizedBy { get; set; }
         public string? ReceivedBy { get; set; }
+
+        public JournalEntry? CartageEntry { get; set; }
     }
 }

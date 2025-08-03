@@ -8,15 +8,22 @@ namespace PureLedger.Services
         private readonly IProjectRepository _projectRepository;
         private readonly ICategoryRepository _categoryRepository;
         private readonly IAccountRepository _accountRepository;
+        private readonly IJournalVoucherRepository _journalVoucherRepository;
+        private readonly IJournalEntryRepository _journalEntryRepository;
+
 
         public CommonApiService(
             IProjectRepository projectRepository,
             ICategoryRepository categoryRepository,
-            IAccountRepository accountRepository)
+            IAccountRepository accountRepository,
+            IJournalVoucherRepository journalVoucherRepository,
+            IJournalEntryRepository journalEntryRepository)
         {
             _projectRepository = projectRepository;
             _categoryRepository = categoryRepository;
             _accountRepository = accountRepository;
+            _journalVoucherRepository = journalVoucherRepository;
+            _journalEntryRepository = journalEntryRepository;
         }
 
         public async Task<IEnumerable<Project>> GetProjectsAsync()
@@ -32,6 +39,18 @@ namespace PureLedger.Services
         {
             var accounts = await _accountRepository.GetByCategoryIdAsync(categoryId);
             return accounts.Where(a => a.Category?.ProjectId == projectId);
+        }
+
+        public async Task<JournalEntry?> GetCartageEntryByJournalVoucherIdAsync(int journalVoucherId)
+        {
+            var voucher = await _journalVoucherRepository.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null || !voucher.CartageVoucherId.HasValue)
+                return null;
+
+            var cartageVoucherId = voucher.CartageVoucherId.Value;
+
+            var entries = await _journalEntryRepository.GetByCartageId(cartageVoucherId);
+            return entries; // or any specific logic to pick one
         }
     }
 }

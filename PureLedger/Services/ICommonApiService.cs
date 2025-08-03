@@ -8,5 +8,7 @@ namespace PureLedger.Services
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Account>> GetAccountsByCategoryAndProjectAsync(int categoryId, int projectId);
+        Task<JournalEntry?> GetCartageEntryByJournalVoucherIdAsync(int journalVoucherId);
+
     }
 }

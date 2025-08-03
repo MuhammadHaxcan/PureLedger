@@ -33,8 +33,19 @@ namespace PureLedger.Repositories
 
         public async Task<DeliveryChallanEntry?> GetByDeliveryChallanIdAndJournalEntryIdAsync(int deliveryChallanId, int journalEntryId)
         {
+           
+            var deliveryChallanVoucherId = await _context.DeliveryChallanVouchers
+        .Where(dcv => dcv.JournalVoucherId == deliveryChallanId)
+        .Select(dcv => dcv.DeliveryChallanVoucherId)
+        .FirstOrDefaultAsync();
+
+            if (deliveryChallanVoucherId == 0)
+                return null;
+
+            // Now get the DeliveryChallanEntry using DeliveryChallanVoucherId and JournalEntryId
             return await _context.DeliveryChallanEntries
-                .FirstOrDefaultAsync(dce => dce.DeliveryChallanVoucherId == deliveryChallanId && dce.JournalEntryId == journalEntryId);
+                .FirstOrDefaultAsync(dce => dce.DeliveryChallanVoucherId == deliveryChallanVoucherId
+                                          && dce.JournalEntryId == journalEntryId);
         }
 
         public async Task<DeliveryChallanEntry> AddAsync(DeliveryChallanEntry deliveryChallanEntry)
