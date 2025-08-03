@@ -152,7 +152,7 @@ namespace PureLedger.Services
                 ProjectName = projectName,
                 BookerName = "",
                 CreatedDate = date,
-                Builty = cartageEntry?.Credit != null? cartageEntry?.Credit : 0,
+                Builty = cartageEntry?.Credit ?? 0,
 
                 //Customer Info
                 CustomerAccountName = name,
@@ -293,13 +293,14 @@ namespace PureLedger.Services
             if (accountId.HasValue)
             {
                 // If specific account is requested, get just that one
-                var account = await _accountRepository.GetByIdAsync(accountId.Value);
+                var account = await _accountRepository.GetByIdWithCategoryAsync(accountId.Value);
+
                 accounts = account != null ? new List<Account> { account } : new List<Account>();
             }
             else if (categoryId.HasValue)
             {
                 // Get accounts by category
-                accounts = await _accountRepository.GetByCategoryIdAsync(categoryId.Value);
+                accounts = await _accountRepository.GetByCategoryIdWithCategoryAsync(categoryId.Value);
             }
             else
             {
@@ -320,7 +321,7 @@ namespace PureLedger.Services
                 accounts = new List<Account>();
                 foreach (var id in accountIds)
                 {
-                    var account = await _accountRepository.GetByIdAsync(id);
+                    var account = await _accountRepository.GetByIdWithCategoryAsync(id);
                     if (account != null) accounts.Add(account);
                 }
             }

@@ -91,7 +91,16 @@ namespace PureLedger.Controllers
                 return View(project);
             }
 
-            await _metaDataService.UpdateProjectAsync(project);
+            var updateErrors = await _metaDataService.UpdateProjectAsync(project);
+            if (updateErrors.Count > 0)
+            {
+                foreach (var error in updateErrors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(project);
+            }
+
             TempData["SuccessMessage"] = "Project updated successfully.";
             return RedirectToAction(nameof(Projects));
         }
@@ -206,7 +215,22 @@ namespace PureLedger.Controllers
                 return View(category);
             }
 
-            await _metaDataService.UpdateCategoryAsync(category);
+            var updateErrors = await _metaDataService.UpdateCategoryAsync(category);
+            if (updateErrors.Count > 0)
+            {
+                foreach (var error in updateErrors)
+                    ModelState.AddModelError("", error);
+
+                ViewBag.Projects = new SelectList(
+                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
+                    "ProjectId", "ProjectName", category.ProjectId);
+                ViewBag.AccountTypes = new SelectList(
+                    await _metaDataService.GetAllAccountTypesAsync(),
+                    "AccountTypeId", "AccountTypeName", category.AccountTypeId);
+
+                return View(category);
+            }
+
             TempData["SuccessMessage"] = "Category updated successfully.";
             return RedirectToAction(nameof(Categories));
         }
@@ -338,7 +362,24 @@ namespace PureLedger.Controllers
                 return View(account);
             }
 
-            await _metaDataService.UpdateAccountAsync(account);
+            var updateErrors = await _metaDataService.UpdateAccountAsync(account);
+            if (updateErrors.Count > 0)
+            {
+                foreach (var error in updateErrors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+
+                ViewBag.Categories = new SelectList(
+                    await _metaDataService.GetCategoriesForAccountsAsync(),
+                    "CategoryId", "CategoryName", account.CategoryId);
+                ViewBag.AccountGroups = new SelectList(
+                    await _metaDataService.GetAccountGroupsAsync(),
+                    "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+
+                return View(account);
+            }
+
             TempData["SuccessMessage"] = "Account updated successfully.";
             return RedirectToAction(nameof(Accounts));
         }
@@ -511,7 +552,16 @@ namespace PureLedger.Controllers
                 return View(location);
             }
 
-            // Implementation pending - Add UpdateLocationAsync method to IMetaDataService
+            var updateErrors = await _metaDataService.UpdateLocationAsync(location);
+            if (updateErrors.Count > 0)
+            {
+                foreach (var error in updateErrors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(location);
+            }
+
             TempData["SuccessMessage"] = "Location updated successfully.";
             return RedirectToAction(nameof(Locations));
         }

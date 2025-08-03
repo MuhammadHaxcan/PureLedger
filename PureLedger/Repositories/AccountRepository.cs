@@ -79,5 +79,21 @@ namespace PureLedger.Repositories
         {
             return await _context.Accounts.ToListAsync();
         }
+
+        public async Task<Account?> GetByIdWithCategoryAsync(int id)
+        {
+            return await _context.Accounts
+                .Include(a => a.Category)
+                .FirstOrDefaultAsync(a => a.AccountId == id);
+        }
+
+        public async Task<List<Account>> GetByCategoryIdWithCategoryAsync(int categoryId)
+        {
+            return await _context.Accounts
+                .Include(a => a.Category)
+                .Where(a => a.CategoryId == categoryId)
+                .ToListAsync();
+        }
+
     }
 }

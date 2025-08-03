@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PureLedger.Models
 {
-    [Index(nameof(ProjectName), nameof(ProjectId), IsUnique = true)]
+    [Index(nameof(ProjectName), IsUnique = true)]
     public class Project
     {
         [Key]

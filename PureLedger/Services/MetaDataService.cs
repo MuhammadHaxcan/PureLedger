@@ -61,12 +61,43 @@ namespace PureLedger.Services
         //    return project;
         //}
 
-        public async Task<Project> UpdateProjectAsync(Project project)
+        public async Task<List<string>> UpdateProjectAsync(Project project)
         {
-            await _unitOfWork.Projects.UpdateAsync(project);
-            await _unitOfWork.SaveChangesAsync();
-            return project;
+            var errors = new List<string>();
+
+            // Check for duplicate name excluding current
+            var existingProjects = await _unitOfWork.Projects.GetAllAsync();
+            if (existingProjects.Any(p =>
+                p.ProjectId != project.ProjectId &&
+                p.ProjectName.ToLower().Trim() == project.ProjectName.ToLower().Trim()))
+            {
+                errors.Add("A project with this name already exists.");
+                return errors;
+            }
+
+            var existing = await _unitOfWork.Projects.GetByIdAsync(project.ProjectId);
+            if (existing == null)
+            {
+                errors.Add("Project not found.");
+                return errors;
+            }
+
+            existing.ProjectName = project.ProjectName;
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating project.");
+                errors.Add("An unexpected error occurred while updating the project.");
+            }
+
+            return errors;
         }
+
+
         #endregion
 
         #region Category Operations
@@ -116,13 +147,45 @@ namespace PureLedger.Services
             return errors;
         }
 
-        public async Task<Category> UpdateCategoryAsync(Category category)
+        public async Task<List<string>> UpdateCategoryAsync(Category category)
         {
-            await _unitOfWork.Categories.UpdateAsync(category);
-            await _unitOfWork.SaveChangesAsync();
-            return category;
-        }
+            var errors = new List<string>();
 
+            // Check for duplicate name in same project, excluding the current category
+            var existing = await _unitOfWork.Categories.GetAllWithDetailsAsync();
+            if (existing.Any(c =>
+                c.CategoryId != category.CategoryId &&
+                c.ProjectId == category.ProjectId &&
+                c.CategoryName.ToLower().Trim() == category.CategoryName.ToLower().Trim()))
+            {
+                errors.Add("This category name already exists under the selected project.");
+                return errors;
+            }
+
+            var existingCategory = await _unitOfWork.Categories.GetByIdWithDetailsAsync(category.CategoryId);
+            if (existingCategory == null)
+            {
+                errors.Add("Category not found.");
+                return errors;
+            }
+
+            // Update properties safely
+            existingCategory.CategoryName = category.CategoryName;
+            existingCategory.ProjectId = category.ProjectId;
+            existingCategory.AccountTypeId = category.AccountTypeId;
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating category.");
+                errors.Add("An unexpected error occurred while updating the category.");
+            }
+
+            return errors;
+        }
         public async Task<List<object>> GetCategoriesByProjectAsync(int projectId)
         {
             var categories = await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
@@ -215,74 +278,113 @@ namespace PureLedger.Services
             return errors;
         }
 
-        public async Task<Account> UpdateAccountAsync(Account account)
+        public async Task<List<string>> UpdateAccountAsync(Account account)
         {
-            var existingAccount = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(account.AccountId);
-            if (existingAccount == null)
-                throw new KeyNotFoundException($"Account with ID {account.AccountId} not found.");
+            var errors = new List<string>();
 
-            // Update basic properties
-            existingAccount.AccountName = account.AccountName;
-            existingAccount.CategoryId = account.CategoryId;
-            existingAccount.AccountGroupId = account.AccountGroupId;
-
-            var accountGroup = await _unitOfWork.AccountGroups.GetByIdAsync(account.AccountGroupId);
-            if (accountGroup != null)
+            // Check for duplicates (excluding current)
+            var existingAccounts = await _unitOfWork.Accounts.GetAllAsync();
+            if (existingAccounts.Any(a =>
+                a.AccountId != account.AccountId &&
+                a.AccountName.ToLower().Trim() == account.AccountName.ToLower().Trim() &&
+                a.CategoryId == account.CategoryId))
             {
-                var groupName = accountGroup.AccountGroupName?.Trim().ToLower();
-
-                if (groupName == "account")
-                {
-                    if (account.AccountData != null)
-                    {
-                        if (existingAccount.AccountData == null)
-                        {
-                            existingAccount.AccountData = account.AccountData;
-                        }
-                        else
-                        {
-                            existingAccount.AccountData.PhoneNumber = account.AccountData.PhoneNumber;
-                            existingAccount.AccountData.Email = account.AccountData.Email;
-                            existingAccount.AccountData.Address = account.AccountData.Address;
-                            existingAccount.AccountData.Area = account.AccountData.Area;
-                            existingAccount.AccountData.City = account.AccountData.City;
-                        }
-                    }
-
-                    if (existingAccount.ProductData != null)
-                    {
-                        await _unitOfWork.ProductDatas.DeleteAsync(existingAccount.ProductData);
-                        existingAccount.ProductData = null;
-                    }
-                }
-                else if (groupName == "product")
-                {
-                    if (account.ProductData != null)
-                    {
-                        if (existingAccount.ProductData == null)
-                        {
-                            existingAccount.ProductData = account.ProductData;
-                        }
-                        else
-                        {
-                            existingAccount.ProductData.PkgForm = account.ProductData.PkgForm;
-                            existingAccount.ProductData.Pkg = account.ProductData.Pkg;
-                            existingAccount.ProductData.Type = account.ProductData.Type;
-                            existingAccount.ProductData.SaleRate = account.ProductData.SaleRate;
-                        }
-                    }
-
-                    if (existingAccount.AccountData != null)
-                    {
-                        await _unitOfWork.AccountDatas.DeleteAsync(existingAccount.AccountData);
-                        existingAccount.AccountData = null;
-                    }
-                }
+                errors.Add("An account with this name already exists under the selected category.");
+                return errors;
             }
 
-            await _unitOfWork.Accounts.UpdateAsync(existingAccount);
-            await _unitOfWork.SaveChangesAsync();
-            return existingAccount;
+            var existingAccount = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(account.AccountId);
+            if (existingAccount == null)
+            {
+                errors.Add($"Account with ID {account.AccountId} not found.");
+                return errors;
+            }
+
+            try
+            {
+                // Update basic fields
+                existingAccount.AccountName = account.AccountName;
+                existingAccount.CategoryId = account.CategoryId;
+                existingAccount.AccountGroupId = account.AccountGroupId;
+
+                var accountGroup = await _unitOfWork.AccountGroups.GetByIdAsync(account.AccountGroupId);
+                if (accountGroup != null)
+                {
+                    var groupName = accountGroup.AccountGroupName?.Trim().ToLower();
+
+                    if (groupName == "account")
+                    {
+                        if (account.AccountData != null)
+                        {
+                            if (existingAccount.AccountData == null)
+                            {
+                                // Attach new AccountData
+                                existingAccount.AccountData = new AccountData
+                                {
+                                    PhoneNumber = account.AccountData.PhoneNumber,
+                                    Email = account.AccountData.Email,
+                                    Address = account.AccountData.Address,
+                                    Area = account.AccountData.Area,
+                                    City = account.AccountData.City
+                                };
+                            }
+                            else
+                            {
+                                existingAccount.AccountData.PhoneNumber = account.AccountData.PhoneNumber;
+                                existingAccount.AccountData.Email = account.AccountData.Email;
+                                existingAccount.AccountData.Address = account.AccountData.Address;
+                                existingAccount.AccountData.Area = account.AccountData.Area;
+                                existingAccount.AccountData.City = account.AccountData.City;
+                            }
+                        }
+
+                        // Remove ProductData if it exists
+                        if (existingAccount.ProductData != null)
+                        {
+                            await _unitOfWork.ProductDatas.DeleteAsync(existingAccount.ProductData);
+                            existingAccount.ProductData = null;
+                        }
+                    }
+                    else if (groupName == "product")
+                    {
+                        if (account.ProductData != null)
+                        {
+                            if (existingAccount.ProductData == null)
+                            {
+                                existingAccount.ProductData = new ProductData
+                                {
+                                    PkgForm = account.ProductData.PkgForm,
+                                    Pkg = account.ProductData.Pkg,
+                                    Type = account.ProductData.Type,
+                                    SaleRate = account.ProductData.SaleRate
+                                };
+                            }
+                            else
+                            {
+                                existingAccount.ProductData.PkgForm = account.ProductData.PkgForm;
+                                existingAccount.ProductData.Pkg = account.ProductData.Pkg;
+                                existingAccount.ProductData.Type = account.ProductData.Type;
+                                existingAccount.ProductData.SaleRate = account.ProductData.SaleRate;
+                            }
+                        }
+
+                        if (existingAccount.AccountData != null)
+                        {
+                            await _unitOfWork.AccountDatas.DeleteAsync(existingAccount.AccountData);
+                            existingAccount.AccountData = null;
+                        }
+                    }
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating account.");
+                errors.Add("An unexpected error occurred while updating the account.");
+            }
+
+            return errors;
         }
         #endregion
 
@@ -374,6 +476,45 @@ namespace PureLedger.Services
             {
                 _logger.LogError(ex, "Database error while creating location.");
                 errors.Add("An unexpected error occurred while creating the location.");
+            }
+
+            return errors;
+        }
+
+        public async Task<List<string>> UpdateLocationAsync(Location location)
+        {
+            var errors = new List<string>();
+
+            // Prevent duplicate name (case-insensitive, exclude current ID)
+            var existing = await _unitOfWork.Locations.GetAllAsync();
+            if (existing.Any(l =>
+                l.LocationId != location.LocationId &&
+                l.LocationName.ToLower().Trim() == location.LocationName.ToLower().Trim()))
+            {
+                errors.Add("A location with this name already exists.");
+                return errors;
+            }
+
+            var existingLocation = await _unitOfWork.Locations.GetByIdAsync(location.LocationId);
+            if (existingLocation == null)
+            {
+                errors.Add("Location not found.");
+                return errors;
+            }
+
+            try
+            {
+                existingLocation.LocationName = location.LocationName;
+                existingLocation.Phone = location.Phone;
+                existingLocation.Region = location.Region;
+
+                await _unitOfWork.Locations.UpdateAsync(existingLocation);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating location.");
+                errors.Add("An unexpected error occurred while updating the location.");
             }
 
             return errors;

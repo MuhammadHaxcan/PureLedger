@@ -456,7 +456,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("ProjectId");
 
-                    b.HasIndex("ProjectName", "ProjectId")
+                    b.HasIndex("ProjectName")
                         .IsUnique();
 
                     b.ToTable("Projects");
