@@ -94,6 +94,28 @@ namespace PureLedger.Controllers
             return Json(report);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> MasterReport()
+        {
+            var projects = await _reportingService.GetAllProjectsAsync();
+            var categories = await _reportingService.GetAllCategoriesAsync();
+
+            var viewModel = new MasterReportPageViewModel
+            {
+                Projects = projects.Select(p => new ProjectViewModel { Id = p.ProjectId.ToString(), Name = p.ProjectName }).ToList(),
+                Categories = categories.Select(c => new CategoryViewModel { Id = c.CategoryId.ToString(), Name = c.CategoryName }).ToList()
+            };
+
+            return View(viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMasterReportData([FromQuery] MasterReportRequest request)
+        {
+            var report = await _reportingService.GetMasterReportAsync(request);
+            return Json(report);
+        }
+
         // --- Helpers ---
 
         private bool IsValidInput(int journalVoucherId, string type, out IActionResult errorResult)

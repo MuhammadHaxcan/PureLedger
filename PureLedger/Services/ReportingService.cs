@@ -400,5 +400,108 @@ namespace PureLedger.Services
 
             return totalDebit - totalCredit;
         }
+        public async Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request)
+        {
+            // Initialize result
+            var result = new MasterReportViewModel();
+
+            // Normalize dates if not provided
+            if (!request.StartDate.HasValue) request.StartDate = DateOnly.FromDateTime(DateTime.Today);
+            if (!request.EndDate.HasValue) request.EndDate = DateOnly.FromDateTime(DateTime.Today);
+
+            // Parse filter parameters
+            int? projectId = null;
+            if (!string.IsNullOrWhiteSpace(request.ProjectId) && int.TryParse(request.ProjectId, out int pid))
+                projectId = pid;
+
+            int? categoryId = null;
+            if (!string.IsNullOrWhiteSpace(request.CategoryId) && int.TryParse(request.CategoryId, out int cid))
+                categoryId = cid;
+
+            int? accountId = null;
+            if (!string.IsNullOrWhiteSpace(request.AccountId) && int.TryParse(request.AccountId, out int aid))
+                accountId = aid;
+
+            // Get all vouchers with entries within the date range
+            var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
+
+            // Apply date range and completion filter
+            var filteredVouchers = vouchers
+                .Where(v =>
+                    v.IsCompleted && // Only include completed vouchers
+                    GetEffectiveDate(v) >= request.StartDate.Value &&
+                    GetEffectiveDate(v) <= request.EndDate.Value)
+                .ToList();
+
+            // Apply project filter if specified
+            if (projectId.HasValue)
+            {
+                filteredVouchers = filteredVouchers.Where(v => v.ProjectId == projectId.Value).ToList();
+            }
+
+            // Process entries
+            result.Entries = new List<MasterReportEntryViewModel>();
+            decimal runningBalance = 0;
+
+            foreach (var voucher in filteredVouchers.OrderBy(v => GetEffectiveDate(v)))
+            {
+                var project = await _projectRepository.GetByIdAsync(voucher.ProjectId);
+
+                foreach (var entry in voucher.JournalEntries)
+                {
+                    // Apply category filter if specified
+                    if (categoryId.HasValue && entry.CategoryId != categoryId.Value)
+                        continue;
+
+                    // Apply account filter if specified
+                    if (accountId.HasValue && entry.AccountId != accountId.Value)
+                        continue;
+
+                    // Get account and category info
+                    var account = await _accountRepository.GetByIdAsync(entry.AccountId);
+                    var category = await _categoryRepository.GetByIdWithDetailsAsync(entry.CategoryId);
+
+                    if (account == null) continue;
+
+                    // Update running balance
+                    runningBalance += entry.Debit - entry.Credit;
+
+                    // Format ID
+                    string formattedId = $"{voucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
+
+                    // Add entry to results
+                    result.Entries.Add(new MasterReportEntryViewModel
+                    {
+                        Id = entry.JournalEntryId,
+                        FormattedId = formattedId,
+                        JournalVoucherId = voucher.JournalVoucherId,
+                        TransactionDate = GetEffectiveDate(voucher),
+                        Description = entry.Description,
+                        AccountName = account.AccountName ?? string.Empty,
+                        AccountId = account.AccountId,
+                        Debit = entry.Debit,
+                        Credit = entry.Credit,
+                        Balance = runningBalance,
+                        ProjectName = project?.ProjectName ?? string.Empty,
+                        ProjectId = voucher.ProjectId,
+                        CategoryName = category?.CategoryName ?? string.Empty,
+                        CategoryId = entry.CategoryId
+                    });
+                }
+            }
+
+            // Calculate totals
+            result.TotalDebit = result.Entries.Sum(e => e.Debit);
+            result.TotalCredit = result.Entries.Sum(e => e.Credit);
+            result.NetBalance = result.TotalDebit - result.TotalCredit;
+
+            return result;
+        }
+
+        private DateOnly GetEffectiveDate(JournalVoucher voucher)
+        {            
+            return voucher.CreditableDate;
+
+        }
     }
 }
