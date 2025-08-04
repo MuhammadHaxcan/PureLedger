@@ -207,5 +207,18 @@ namespace PureLedger.Repositories
             // Execute the optimized query
             return await query.ToListAsync();
         }
+
+        public async Task<JournalEntry?> GetCartageEntryByJournalVoucherIdAsync(int journalVoucherId)
+        {
+            var voucher = await _context.JournalVouchers
+                .FirstOrDefaultAsync(v => v.JournalVoucherId == journalVoucherId);
+                
+            if (voucher == null || !voucher.CartageVoucherId.HasValue)
+                return null;
+
+            var cartageVoucherId = voucher.CartageVoucherId.Value;
+
+            return await GetByCartageId(cartageVoucherId);
+        }
     }
 }

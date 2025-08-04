@@ -113,5 +113,11 @@ namespace PureLedger.Repositories
                 .Where(a => accountIds.Contains(a.AccountId))
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Account>> GetAccountsByCategoryAndProjectAsync(int categoryId, int projectId)
+        {
+            var accounts = await GetByCategoryIdAsync(categoryId);
+            return accounts.Where(a => a.Category?.ProjectId == projectId);
+        }
     }
 }

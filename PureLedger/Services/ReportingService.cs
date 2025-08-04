@@ -14,14 +14,10 @@ namespace PureLedger.Services
     public class ReportingService : IReportingService
     {
         private readonly IUnitOfWork _unitOfWork;
-        private readonly ICommonApiService _commonApiService;
 
-        public ReportingService(
-            IUnitOfWork unitOfWork,
-            ICommonApiService commonApiService)
+        public ReportingService(IUnitOfWork unitOfWork)
         {
             _unitOfWork = unitOfWork;
-            _commonApiService = commonApiService;
         }
 
         public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType)
@@ -51,7 +47,7 @@ namespace PureLedger.Services
             var entries = GetProcessedEntries(dcVoucher.Entries);
             var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-            var cartageEntry = await _commonApiService.GetCartageEntryByJournalVoucherIdAsync(dcVoucher.JournalVoucherId);
+            var cartageEntry = await _unitOfWork.JournalEntries.GetCartageEntryByJournalVoucherIdAsync(dcVoucher.JournalVoucherId);
 
             var viewModel = CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsCompleted, cartageEntry);
             viewModel.Adda = locationNames;
@@ -72,7 +68,7 @@ namespace PureLedger.Services
             var customerInfo = GetCustomerAccountName(voucher);
             var typeLabel = isPartial ? "DC - Partial" : voucherType;
 
-            var cartageEntry = await _commonApiService.GetCartageEntryByJournalVoucherIdAsync(voucher.JournalVoucherId);
+            var cartageEntry = await _unitOfWork.JournalEntries.GetCartageEntryByJournalVoucherIdAsync(voucher.JournalVoucherId);
 
             return CreateVoucherViewModel(voucher.JournalVoucherId, typeLabel, project.ProjectName, voucher.EntryDate,
                 entries, customerInfo, isPartial, cartageEntry);
@@ -459,7 +455,7 @@ namespace PureLedger.Services
         private DateOnly GetEffectiveDate(JournalVoucher voucher)
         {
             // If voucher has a creditable date, use it
-            if (voucher?.CreditableDate !=null )
+            if (voucher?.CreditableDate != null)
                 return voucher.CreditableDate;
             
             // Otherwise fall back to entry date
