@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.ViewModels;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -12,26 +13,14 @@ namespace PureLedger.Services
 {
     public class ReportingService : IReportingService
     {
-        private readonly IJournalVoucherRepository _journalVoucherRepository;
-        private readonly IDeliveryChallanVoucherRepository _deliveryChallanVoucherRepository;
-        private readonly IProjectRepository _projectRepository;
-        private readonly IAccountRepository _accountRepository;
-        private readonly ICategoryRepository _categoryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ICommonApiService _commonApiService;
 
         public ReportingService(
-            IJournalVoucherRepository journalVoucherRepository,
-            IDeliveryChallanVoucherRepository deliveryChallanVoucherRepository,
-            IProjectRepository projectRepository,
-            IAccountRepository accountRepository,
-            ICategoryRepository categoryRepository,
+            IUnitOfWork unitOfWork,
             ICommonApiService commonApiService)
         {
-            _journalVoucherRepository = journalVoucherRepository;
-            _deliveryChallanVoucherRepository = deliveryChallanVoucherRepository;
-            _projectRepository = projectRepository;
-            _accountRepository = accountRepository;
-            _categoryRepository = categoryRepository;
+            _unitOfWork = unitOfWork;
             _commonApiService = commonApiService;
         }
 
@@ -47,16 +36,16 @@ namespace PureLedger.Services
 
         private async Task<JournalVoucherReportViewModel?> GetDeliveryChallanReportAsync(int journalVoucherId, string voucherType)
         {
-            var dcVoucher = await _deliveryChallanVoucherRepository.GetByJournalVoucherIdAsync(journalVoucherId);
+            var dcVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
             if (dcVoucher?.JournalVoucher == null) return null;
 
             string locationNames = string.Join(", ",
-            dcVoucher.Entries
-                .Where(e => e.Location != null)
-                .Select(e => e.Location.LocationName)
-                .Distinct());
+                dcVoucher.Entries
+                    .Where(e => e.Location != null)
+                    .Select(e => e.Location.LocationName)
+                    .Distinct());
 
-            var project = await _projectRepository.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
+            var project = await _unitOfWork.Projects.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
             if (project == null) return null;
 
             var entries = GetProcessedEntries(dcVoucher.Entries);
@@ -72,10 +61,10 @@ namespace PureLedger.Services
 
         private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, string voucherType)
         {
-            var voucher = await _journalVoucherRepository.GetWithEntriesAsync(journalVoucherId);
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null) return null;
 
-            var project = await _projectRepository.GetByIdAsync(voucher.ProjectId);
+            var project = await _unitOfWork.Projects.GetByIdAsync(voucher.ProjectId);
             if (project == null) return null;
 
             var isPartial = voucherType == "DC" && !voucher.IsCompleted;
@@ -113,7 +102,7 @@ namespace PureLedger.Services
                 Description = entry.Description ?? "",
                 Quantity = entry.Quantity,
                 Rate = entry.Rate,
-                PKG = 1,  // reteive the package quantity from helper function
+                PKG = 1,  // Default package quantity
                 Discount = entry.Discount,
                 Debit = entry.Debit,
                 Credit = entry.Credit
@@ -136,14 +125,12 @@ namespace PureLedger.Services
 
             return $"{name} ({phone}, {address}, {city})";
         }
-        
 
         private JournalVoucherReportViewModel CreateVoucherViewModel(
             int jvId, string type, string projectName, DateOnly date,
             List<JournalVoucherEntryReportModel> entries, string accountName, bool isPartial, JournalEntry? cartageEntry)
         {
-                var (name, phone, address, city) = ParseCustomerInfo(accountName);
-            
+            var (name, phone, address, city) = ParseCustomerInfo(accountName);
 
             return new JournalVoucherReportViewModel
             {
@@ -153,18 +140,14 @@ namespace PureLedger.Services
                 BookerName = "",
                 CreatedDate = date,
                 Builty = cartageEntry?.Credit ?? 0,
-
-                //Customer Info
                 CustomerAccountName = name,
                 CustomerAddress = address,
-                CustomerCity= city,
+                CustomerCity = city,
                 CustomerPhone = phone,
-
                 Entries = entries,
                 TotalQuantity = entries.Sum(e => e.Quantity),
                 TotalActualAmount = entries.Sum(e => e.LineTotal),
                 TotalAmount = entries.Sum(e => e.Credit),
-                
                 AuthorizedBy = "",
                 ReceivedBy = "",
                 IsPartial = isPartial
@@ -180,71 +163,81 @@ namespace PureLedger.Services
             if (!string.IsNullOrWhiteSpace(request.ProjectId) && int.TryParse(request.ProjectId, out int pid))
                 projectId = pid;
 
-            // 1. Fetch all accounts for the selected category
-            var accounts = await _accountRepository.GetByCategoryIdAsync(categoryId);
+            // Get filtered accounts with entries in a more efficient way
+            var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+            
+            if (accounts.Count == 0)
+                return new List<AgingReportViewModel>();
 
-            var result = new List<AgingReportViewModel>();
-
-            // 2. Fetch all vouchers (with entries) for the selected project (if any)
-            var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
-            var filteredVouchers = vouchers
-                .Where(v =>
-                    v.IsCompleted && // Only include processed vouchers
-                    (!projectId.HasValue || v.ProjectId == projectId.Value) &&
-                    ((v.CreditableDate) <= request.ReferenceDate)
-                )
-                .ToList();
-
-            // 3. For each account, filter entries and calculate totals
-            foreach (var account in accounts)
+            var accountIds = accounts.Select(a => a.AccountId).ToList();
+            
+            // Using a transaction for consistent read
+            using var transaction = await _unitOfWork.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+            
+            try
             {
-                var entries = filteredVouchers
-                    .SelectMany(v => v.JournalEntries
-                        .Where(e => e.AccountId == account.AccountId && e.CategoryId == categoryId))
-                    .ToList();
+                // Get vouchers that match our criteria directly from the database
+                var filteredEntries = await _unitOfWork.JournalEntries.GetEntriesByCriteriaAsync(
+                    accountIds, 
+                    categoryId,
+                    projectId, 
+                    request.ReferenceDate);
 
-                if (entries.Count == 0)
-                    continue;
-
-                decimal totalDebit = entries.Sum(e => e.Debit);
-                decimal totalCredit = entries.Sum(e => e.Credit);
-
-                result.Add(new AgingReportViewModel
+                var result = new List<AgingReportViewModel>();
+                
+                // Process account totals
+                foreach (var account in accounts)
                 {
-                    AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
-                    AccountName = account.AccountName ?? "",
-                    TotalDebit = totalDebit,
-                    TotalCredit = totalCredit,
-                    NetBalance = totalDebit - totalCredit
-                });
-            }
+                    var accountEntries = filteredEntries
+                        .Where(e => e.AccountId == account.AccountId)
+                        .ToList();
 
-            return result;
+                    if (accountEntries.Count == 0)
+                        continue;
+
+                    decimal totalDebit = accountEntries.Sum(e => e.Debit);
+                    decimal totalCredit = accountEntries.Sum(e => e.Credit);
+
+                    result.Add(new AgingReportViewModel
+                    {
+                        AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
+                        AccountName = account.AccountName ?? "",
+                        TotalDebit = totalDebit,
+                        TotalCredit = totalCredit,
+                        NetBalance = totalDebit - totalCredit
+                    });
+                }
+
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<List<Project>> GetAllProjectsAsync()
         {
-            // Assuming your IProjectRepository has GetAllAsync()
-            return await _projectRepository.GetAllAsync();
+            return await _unitOfWork.Projects.GetAllAsync();
         }
 
         public async Task<List<Category>> GetAllCategoriesAsync()
         {
-            // Use the provided method from ICategoryRepository
-            return await _categoryRepository.GetAllAsync();
+            return await _unitOfWork.Categories.GetAllAsync();
         }
 
         public (string Name, string Phone, string Address, string City) ParseCustomerInfo(string customerInfo)
         {
             if (string.IsNullOrWhiteSpace(customerInfo)) return ("", "", "", "");
 
-            // Split name and the rest inside parentheses
             int bracketIndex = customerInfo.IndexOf('(');
             if (bracketIndex == -1 || !customerInfo.EndsWith(")"))
                 return (customerInfo, "", "", "");
 
             string name = customerInfo.Substring(0, bracketIndex).Trim();
-            string inside = customerInfo.Substring(bracketIndex + 1, customerInfo.Length - bracketIndex - 2); // removes ( and )
+            string inside = customerInfo.Substring(bracketIndex + 1, customerInfo.Length - bracketIndex - 2);
 
             string[] parts = inside.Split(',');
 
@@ -255,10 +248,9 @@ namespace PureLedger.Services
             return (name, phone, address, city);
         }
 
-
         public async Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request)
         {
-            // First, validate that we have at least one filter
+            // Validate that we have at least one filter
             if (string.IsNullOrWhiteSpace(request.CategoryId) && 
                 string.IsNullOrWhiteSpace(request.ProjectId) &&
                 string.IsNullOrWhiteSpace(request.AccountId))
@@ -266,7 +258,7 @@ namespace PureLedger.Services
                 return new List<AccountReportViewModel>();
             }
 
-            // Parse the filter values
+            // Parse filter values
             int? categoryId = null;
             if (!string.IsNullOrWhiteSpace(request.CategoryId) && 
                 int.TryParse(request.CategoryId, out int cid))
@@ -288,92 +280,90 @@ namespace PureLedger.Services
                 accountId = aid;
             }
 
-            // Step 1: Get relevant accounts first - this is a key improvement
-            List<Account> accounts;
-            if (accountId.HasValue)
+            // Use a transaction for consistent reads
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            
+            try
             {
-                // If specific account is requested, get just that one
-                var account = await _accountRepository.GetByIdWithCategoryAsync(accountId.Value);
-
-                accounts = account != null ? new List<Account> { account } : new List<Account>();
-            }
-            else if (categoryId.HasValue)
-            {
-                // Get accounts by category
-                accounts = await _accountRepository.GetByCategoryIdWithCategoryAsync(categoryId.Value);
-            }
-            else
-            {
-                // If no category or account specified, we must have a project
-                // Let's get all accounts that have entries in this project
-                var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
-                var projectVouchers = vouchers
-                    .Where(v => v.IsCompleted && v.ProjectId == projectId.Value) // Only processed vouchers
-                    .ToList();
-                
-                // Extract unique account IDs from the entries
-                var accountIds = projectVouchers
-                    .SelectMany(v => v.JournalEntries.Select(e => e.AccountId))
-                    .Distinct()
-                    .ToList();
-                
-                // Get all those accounts
-                accounts = new List<Account>();
-                foreach (var id in accountIds)
+                // Get accounts based on criteria (optimized database query)
+                List<Account> accounts;
+                if (accountId.HasValue)
                 {
-                    var account = await _accountRepository.GetByIdWithCategoryAsync(id);
-                    if (account != null) accounts.Add(account);
+                    var account = await _unitOfWork.Accounts.GetByIdWithCategoryAsync(accountId.Value);
+                    accounts = account != null ? new List<Account> { account } : new List<Account>();
                 }
-            }
-
-            // Step 2: Now get all relevant vouchers
-            var allVouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
-            var filteredVouchers = allVouchers
-                .Where(v => v.IsCompleted && (!projectId.HasValue || v.ProjectId == projectId.Value))
-                .ToList();
-
-            // Step 3: Process each account individually
-            var result = new List<AccountReportViewModel>();
-            foreach (var account in accounts)
-            {
-                // Skip if we're filtering by category and this account doesn't match
-                if (categoryId.HasValue && account.CategoryId != categoryId.Value)
-                    continue;
-
-                var accountEntries = filteredVouchers
-                    .SelectMany(v => v.JournalEntries
-                        .Where(e => e.AccountId == account.AccountId))
-                    .ToList();
-
-                // Additional category filter on entries if needed
-                if (categoryId.HasValue)
-                    accountEntries = accountEntries.Where(e => e.CategoryId == categoryId.Value).ToList();
-
-                // If no entries, skip this account
-                if (accountEntries.Count == 0)
-                    continue;
-
-                decimal totalDebit = accountEntries.Sum(e => e.Debit);
-                decimal totalCredit = accountEntries.Sum(e => e.Credit);
-
-                result.Add(new AccountReportViewModel
+                else if (categoryId.HasValue)
                 {
-                    AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
-                    AccountName = account.AccountName ?? "",
-                    CategoryName = account.Category?.CategoryName ?? "",
-                    TotalDebit = totalDebit,
-                    TotalCredit = totalCredit,
-                    NetBalance = totalDebit - totalCredit
-                });
-            }
+                    accounts = await _unitOfWork.Accounts.GetByCategoryIdWithCategoryAsync(categoryId.Value);
+                }
+                else if (projectId.HasValue)
+                {
+                    // Optimized to fetch only account IDs with entries in the project
+                    accounts = await _unitOfWork.Accounts.GetAccountsWithEntriesInProjectAsync(projectId.Value);
+                }
+                else
+                {
+                    return new List<AccountReportViewModel>();
+                }
 
-            return result;
+                if (!accounts.Any())
+                {
+                    await transaction.CommitAsync();
+                    return new List<AccountReportViewModel>();
+                }
+
+                // Get all account IDs for filtering
+                var accountIds = accounts.Select(a => a.AccountId).ToList();
+
+                // Get relevant journal entries based on criteria (filtered at database level)
+                var journalEntries = await _unitOfWork.JournalEntries.GetJournalEntriesByFiltersAsync(
+                    accountIds, categoryId, projectId);
+
+                // Group entries by account and calculate totals
+                var accountTotals = journalEntries
+                    .GroupBy(e => e.AccountId)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => new {
+                            TotalDebit = g.Sum(e => e.Debit),
+                            TotalCredit = g.Sum(e => e.Credit)
+                        });
+
+                // Build report view models
+                var result = new List<AccountReportViewModel>();
+                foreach (var account in accounts)
+                {
+                    // Skip if no entries
+                    if (!accountTotals.ContainsKey(account.AccountId))
+                        continue;
+
+                    var totals = accountTotals[account.AccountId];
+                    
+                    result.Add(new AccountReportViewModel
+                    {
+                        AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
+                        AccountName = account.AccountName ?? "",
+                        CategoryName = account.Category?.CategoryName ?? "",
+                        TotalDebit = totals.TotalDebit,
+                        TotalCredit = totals.TotalCredit,
+                        NetBalance = totals.TotalDebit - totals.TotalCredit
+                    });
+                }
+
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId)
         {
-            // Get the voucher with entries
-            var voucher = await _journalVoucherRepository.GetWithEntriesAsync(journalVoucherId);
+            // Get the voucher with entries to find the customer account
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null)
                 return 0m;
 
@@ -383,31 +373,19 @@ namespace PureLedger.Services
 
             int customerAccountId = customerEntry.AccountId;
 
-            // Get all completed vouchers up to and including this one
-            var allVouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
-            var relevantVouchers = allVouchers
-                .Where(v => v.IsCompleted && v.JournalVoucherId <= journalVoucherId)
-                .ToList();
-
-            // Get all entries for this account in those vouchers
-            var entries = relevantVouchers
-                .SelectMany(v => v.JournalEntries)
-                .Where(e => e.AccountId == customerAccountId)
-                .ToList();
-
-            decimal totalDebit = entries.Sum(e => e.Debit);
-            decimal totalCredit = entries.Sum(e => e.Credit);
-
-            return totalDebit - totalCredit;
+            // Efficient direct query to calculate balance up to specific voucher ID
+            return await _unitOfWork.JournalEntries.GetAccountBalanceUpToVoucherAsync(
+                customerAccountId, journalVoucherId);
         }
+
         public async Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request)
         {
             // Initialize result
             var result = new MasterReportViewModel();
 
-            // Normalize dates if not provided
-            if (!request.StartDate.HasValue) request.StartDate = DateOnly.FromDateTime(DateTime.Today);
-            if (!request.EndDate.HasValue) request.EndDate = DateOnly.FromDateTime(DateTime.Today);
+            // Normalize dates
+            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today);
+            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
 
             // Parse filter parameters
             int? projectId = null;
@@ -422,86 +400,70 @@ namespace PureLedger.Services
             if (!string.IsNullOrWhiteSpace(request.AccountId) && int.TryParse(request.AccountId, out int aid))
                 accountId = aid;
 
-            // Get all vouchers with entries within the date range
-            var vouchers = await _journalVoucherRepository.GetAllWithEntriesAsync();
-
-            // Apply date range and completion filter
-            var filteredVouchers = vouchers
-                .Where(v =>
-                    v.IsCompleted && // Only include completed vouchers
-                    GetEffectiveDate(v) >= request.StartDate.Value &&
-                    GetEffectiveDate(v) <= request.EndDate.Value)
-                .ToList();
-
-            // Apply project filter if specified
-            if (projectId.HasValue)
+            // Use a transaction for consistent read
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            
+            try
             {
-                filteredVouchers = filteredVouchers.Where(v => v.ProjectId == projectId.Value).ToList();
-            }
+                // Get filtered entries directly from database with all required data
+                var entries = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
+                    startDate, endDate, projectId, categoryId, accountId);
 
-            // Process entries
-            result.Entries = new List<MasterReportEntryViewModel>();
-            decimal runningBalance = 0;
+                // Process entries into view models with running balance
+                result.Entries = new List<MasterReportEntryViewModel>();
+                decimal runningBalance = 0;
 
-            foreach (var voucher in filteredVouchers.OrderBy(v => GetEffectiveDate(v)))
-            {
-                var project = await _projectRepository.GetByIdAsync(voucher.ProjectId);
-
-                foreach (var entry in voucher.JournalEntries)
+                foreach (var entry in entries)
                 {
-                    // Apply category filter if specified
-                    if (categoryId.HasValue && entry.CategoryId != categoryId.Value)
-                        continue;
-
-                    // Apply account filter if specified
-                    if (accountId.HasValue && entry.AccountId != accountId.Value)
-                        continue;
-
-                    // Get account and category info
-                    var account = await _accountRepository.GetByIdAsync(entry.AccountId);
-                    var category = await _categoryRepository.GetByIdWithDetailsAsync(entry.CategoryId);
-
-                    if (account == null) continue;
-
                     // Update running balance
                     runningBalance += entry.Debit - entry.Credit;
 
                     // Format ID
-                    string formattedId = $"{voucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
+                    string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
                     // Add entry to results
                     result.Entries.Add(new MasterReportEntryViewModel
                     {
                         Id = entry.JournalEntryId,
                         FormattedId = formattedId,
-                        JournalVoucherId = voucher.JournalVoucherId,
-                        TransactionDate = GetEffectiveDate(voucher),
+                        JournalVoucherId = entry.JournalVoucherId,
+                        TransactionDate = GetEffectiveDate(entry.JournalVoucher),
                         Description = entry.Description,
-                        AccountName = account.AccountName ?? string.Empty,
-                        AccountId = account.AccountId,
+                        AccountName = entry.Account?.AccountName ?? string.Empty,
+                        AccountId = entry.AccountId,
                         Debit = entry.Debit,
                         Credit = entry.Credit,
                         Balance = runningBalance,
-                        ProjectName = project?.ProjectName ?? string.Empty,
-                        ProjectId = voucher.ProjectId,
-                        CategoryName = category?.CategoryName ?? string.Empty,
+                        ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
+                        ProjectId = entry.JournalVoucher.ProjectId,
+                        CategoryName = entry.Category?.CategoryName ?? string.Empty,
                         CategoryId = entry.CategoryId
                     });
                 }
+
+                // Calculate totals
+                result.TotalDebit = result.Entries.Sum(e => e.Debit);
+                result.TotalCredit = result.Entries.Sum(e => e.Credit);
+                result.NetBalance = result.TotalDebit - result.TotalCredit;
+
+                await transaction.CommitAsync();
+                return result;
             }
-
-            // Calculate totals
-            result.TotalDebit = result.Entries.Sum(e => e.Debit);
-            result.TotalCredit = result.Entries.Sum(e => e.Credit);
-            result.NetBalance = result.TotalDebit - result.TotalCredit;
-
-            return result;
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         private DateOnly GetEffectiveDate(JournalVoucher voucher)
-        {            
-            return voucher.CreditableDate;
-
+        {
+            // If voucher has a creditable date, use it
+            if (voucher?.CreditableDate !=null )
+                return voucher.CreditableDate;
+            
+            // Otherwise fall back to entry date
+            return voucher.EntryDate;
         }
     }
 }

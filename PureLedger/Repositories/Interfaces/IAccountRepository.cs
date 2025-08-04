@@ -14,6 +14,6 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<Account>> GetAllAsync();
         Task<Account?> GetByIdWithCategoryAsync(int id);
         Task<List<Account>> GetByCategoryIdWithCategoryAsync(int categoryId);
-
+        Task<List<Account>> GetAccountsWithEntriesInProjectAsync(int projectId);
     }
 }

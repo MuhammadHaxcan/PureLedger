@@ -95,5 +95,23 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
+        // New optimized method to get accounts with entries in a specific project
+        public async Task<List<Account>> GetAccountsWithEntriesInProjectAsync(int projectId)
+        {
+            // This query finds all accounts that have at least one journal entry 
+            // in a voucher belonging to the specified project
+            var accountIds = await _context.JournalEntries
+                .Where(je => je.JournalVoucher.ProjectId == projectId && 
+                            je.JournalVoucher.IsCompleted)
+                .Select(je => je.AccountId)
+                .Distinct()
+                .ToListAsync();
+
+            // Then fetch those accounts with their categories in a single query
+            return await _context.Accounts
+                .Include(a => a.Category)
+                .Where(a => accountIds.Contains(a.AccountId))
+                .ToListAsync();
+        }
     }
 }
