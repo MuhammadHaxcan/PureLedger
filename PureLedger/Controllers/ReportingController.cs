@@ -116,6 +116,45 @@ namespace PureLedger.Controllers
             return Json(report);
         }
 
+        // New API endpoints to replace the ones from CommonApiController
+
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProject(int projectId)
+        {
+            try
+            {
+                // Get categories directly instead of trying to access project.Categories
+                var categories = await _reportingService.GetCategoriesByProjectAsync(projectId);
+                
+                if (categories == null || !categories.Any())
+                {
+                    return Json(new object[] { }); // Return empty array instead of 404
+                }
+                
+                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = $"Error loading categories: {ex.Message}" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
+        {
+            try
+            {
+                var accounts = await _reportingService.GetAccountsByCategoryAsync(categoryId);
+                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = $"Error loading accounts: {ex.Message}" });
+            }
+        }
+
         // --- Helpers ---
 
         private bool IsValidInput(int journalVoucherId, string type, out IActionResult errorResult)

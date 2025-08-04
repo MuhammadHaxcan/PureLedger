@@ -60,5 +60,8 @@ namespace PureLedger.Services
             string? dcOtherRef,
             int dcLocation);
         #endregion
+
+        Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
+        Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
     }
 }

@@ -461,5 +461,25 @@ namespace PureLedger.Services
             // Otherwise fall back to entry date
             return voucher.EntryDate;
         }
+
+        public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
+        {
+            try
+            {
+                return await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error retrieving accounts for category ID {categoryId}: {ex.Message}", ex);
+            }
+        }
+
+        // Implement this method in ReportingService class
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
+        {
+            // Use _unitOfWork to get categories by project ID directly
+            var categories = await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
+            return categories;
+        }
     }
 }

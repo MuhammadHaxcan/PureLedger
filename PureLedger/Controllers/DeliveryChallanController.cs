@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.ViewModels;
@@ -9,13 +10,16 @@ namespace PureLedger.Controllers
     {
         private readonly IDeliveryChallanService _deliveryChallanService;
         private readonly ILogger<DeliveryChallanController> _logger;
+        private readonly IConfiguration _configuration;
 
         public DeliveryChallanController(
             IDeliveryChallanService deliveryChallanService,
-            ILogger<DeliveryChallanController> logger)
+            ILogger<DeliveryChallanController> logger,
+            IConfiguration configuration)
         {
             _deliveryChallanService = deliveryChallanService;
             _logger = logger;
+            _configuration = configuration;
         }
 
         #region View Pages
@@ -132,6 +136,62 @@ namespace PureLedger.Controllers
             {
                 _logger.LogError(ex, "Error checking existing challan for voucher {VoucherId}", voucherId);
                 return JsonError("An error occurred while checking for existing challan", ex, new { exists = false });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProject(int projectId)
+        {
+            try
+            {
+                // Add this method to IDeliveryChallanService and implement it in DeliveryChallanService
+                var categories = await _deliveryChallanService.GetCategoriesByProjectAsync(projectId);
+                
+                if (categories == null || !categories.Any())
+                {
+                    return Json(new object[] { }); // Return empty array instead of 404
+                }
+                
+                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                return JsonError("An error occurred while retrieving categories", ex);
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
+        {
+            try
+            {
+                // Get accounts for a specific category - we'll need to extend the service
+                // This needs to be added to IDeliveryChallanService
+                var accounts = await _deliveryChallanService.GetAccountsByCategoryAsync(categoryId);
+                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
+                return JsonError("An error occurred while retrieving accounts", ex);
+            }
+        }
+
+        [HttpGet]
+        public IActionResult GetTransporterCategoryId()
+        {
+            try
+            {
+                var transporterCategoryId = _configuration.GetValue<int>("AppSettings:TransporterCategoryId");
+                return Json(new { value = transporterCategoryId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting transporter category ID");
+                return JsonError("An error occurred while retrieving transporter category ID", ex);
             }
         }
 

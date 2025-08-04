@@ -752,5 +752,24 @@ namespace PureLedger.Services
         }
 
         #endregion
+
+        public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
+        {
+            return await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+        }
+
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
+        {
+            try
+            {
+                // Access the Categories repository directly to get categories by project ID
+                return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                throw;
+            }
+        }
     }
 }

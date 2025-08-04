@@ -79,7 +79,8 @@ $(document).ready(function () {
             $accountSelect.empty().append('<option value="">Select Account</option>');
 
             if (projectId) {
-                $.get(`/api/common/categories/${projectId}`, function (categories) {
+                // Updated to use HomeController endpoint instead of API endpoint
+                $.get(`/Home/GetCategoriesByProject?projectId=${projectId}`, function (categories) {
                     categories.forEach(c => {
                         $categorySelect.append(new Option(c.name, c.id));
                     });
@@ -98,7 +99,8 @@ $(document).ready(function () {
         $row[0].removeAttribute('data-account-type');
 
         if (categoryId) {
-            $.get(`/api/common/accounts/${categoryId}`, function (accounts) {
+            // Updated to use HomeController endpoint instead of API endpoint
+            $.get(`/Home/GetAccountsByCategory?categoryId=${categoryId}`, function (accounts) {
                 accounts.forEach(a => {
                     const $option = $(new Option(a.name, a.id));
                     $option.data('account-type', a.accountTypeName || '');
@@ -427,7 +429,8 @@ $(document).ready(function () {
             $categorySelect.empty().append('<option value="">Select Category</option>');
 
             if (projectId) {
-                $.get(`/api/common/categories/${projectId}`, function (categories) {
+                // Updated to use HomeController endpoint instead of API endpoint
+                $.get(`/Home/GetCategoriesByProject?projectId=${projectId}`, function (categories) {
                     categories.forEach(c => {
                         $categorySelect.append(new Option(c.name, c.id));
                     });

@@ -190,7 +190,7 @@
     // Load Drop Downs for the combo boxes
     function loadDropdowns(projectId, selectedCategoryId, selectedAccountId) {
         // Load Categories by ProjectId
-        $.get(`/api/common/categories/${projectId}`, function (categories) {
+        $.get(`/Home/GetCategoriesByProject?projectId=${projectId}`, function (categories) {
             const $category = $('#editCategory');
             $category.empty().append('<option value="">Select Category</option>');
             categories.forEach(c => {
@@ -200,7 +200,7 @@
 
             // Now load accounts based on selected category
             if (selectedCategoryId) {
-                $.get(`/api/common/accounts/${selectedCategoryId}`, function (accounts) {
+                $.get(`/Home/GetAccountsByCategory?categoryId=${selectedCategoryId}`, function (accounts) {
                     const $account = $('#editAccount');
                     $account.empty().append('<option value="">Select Account</option>');
                     accounts.forEach(a => {
@@ -219,7 +219,7 @@
         $account.empty().append('<option value="">Select Account</option>');
 
         if (categoryId) {
-            $.get(`/api/common/accounts/${categoryId}`, function (accounts) {
+            $.get(`/Home/GetAccountsByCategory?categoryId=${categoryId}`, function (accounts) {
                 accounts.forEach(a => {
                     $account.append(`<option value="${a.id}">${a.name}</option>`);
                 });

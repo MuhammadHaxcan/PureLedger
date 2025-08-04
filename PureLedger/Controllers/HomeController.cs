@@ -206,6 +206,48 @@ namespace PureLedger.Controllers
             return View(model);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProject(int projectId)
+        {
+            try
+            {
+                // Get categories directly from repository through the service
+                // We need to add this method to JournalEntryService if it doesn't exist
+                var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
+                
+                if (categories == null || !categories.Any())
+                {
+                    // Return empty array instead of 404 for better frontend handling
+                    return Json(new object[] { });
+                }
+                
+                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                return Json(new { error = "Error loading categories" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
+        {
+            try
+            {
+                // This uses the JournalEntryService to get accounts by category
+                var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
+                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
+                return Json(new { error = "Error loading accounts" });
+            }
+        }
+
         #region Helper Methods
         private async Task LoadProjectsData(int? selectedProjectId = null)
         {

@@ -371,5 +371,33 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync();
         }
+
+        public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
+        {
+            try
+            {
+                return await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
+                throw;
+            }
+        }
+
+        // Add this method to JournalEntryService
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
+        {
+            try
+            {
+                // Access the Categories repository directly to get categories by project ID
+                return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                throw;
+            }
+        }
     }
 }

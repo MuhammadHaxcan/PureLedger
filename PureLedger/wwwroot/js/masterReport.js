@@ -11,6 +11,9 @@
     // Initialize category selection change handler
     document.getElementById('categoryId').addEventListener('change', loadAccountsForCategory);
 
+    // Add project change handler to load categories
+    document.getElementById('projectId').addEventListener('change', loadCategoriesForProject);
+
     // Set default dates to today
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('startDate').value = today;
@@ -41,22 +44,89 @@ function initColumnToggles() {
     });
 }
 
+// Change the loadCategoriesForProject function to handle potential issues better
+
+async function loadCategoriesForProject() {
+    const projectId = document.getElementById('projectId').value;
+    const categorySelect = document.getElementById('categoryId');
+    
+    // Reset category and account dropdowns
+    categorySelect.innerHTML = '<option value="">All Categories</option>';
+    categorySelect.disabled = true; // Disable while loading
+    resetAccountDropdown();
+    
+    if (!projectId) {
+        return;
+    }
+    
+    try {
+        // Call the ReportingController endpoint to get categories for the selected project
+        const response = await fetch(`/Reporting/GetCategoriesByProject?projectId=${projectId}`);
+        
+        // Log raw response for debugging
+        console.log(`Categories response status: ${response.status}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error response: ${errorText}`);
+            throw new Error(`Server returned ${response.status}: ${errorText}`);
+        }
+        
+        const categories = await response.json();
+        console.log(`Received ${categories.length} categories:`, categories);
+        
+        // Enable the select
+        categorySelect.disabled = false;
+        
+        if (categories && categories.length > 0) {
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.name;
+                categorySelect.appendChild(option);
+            });
+        } else {
+            console.warn('No categories received from server');
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+        // No fallback - just show the error
+        alert('Failed to load categories. Please try again or contact support.');
+    }
+}
+
+// Also update the loadAccountsForCategory function to provide better fallback
 async function loadAccountsForCategory() {
     const categoryId = document.getElementById('categoryId').value;
+    const accountSelect = document.getElementById('accountId');
+
+    accountSelect.innerHTML = '<option value="">All Accounts</option>';
+    accountSelect.disabled = true;
 
     if (!categoryId) {
-        resetAccountDropdown();
         return;
     }
 
     try {
-        // Call your API to get accounts for the selected category
-        const response = await fetch(`/api/common/accounts?categoryId=${categoryId}`);
+        // Call the ReportingController endpoint to get accounts
+        const response = await fetch(`/Reporting/GetAccountsByCategory?categoryId=${categoryId}`);
+        console.log(`Accounts response status: ${response.status}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error response: ${errorText}`);
+            throw new Error(`Server returned ${response.status}: ${errorText}`);
+        }
+        
         const accounts = await response.json();
+        console.log(`Received ${accounts.length} accounts:`, accounts);
+        
+        accountSelect.disabled = false;
         updateAccountDropdown(accounts);
     } catch (error) {
         console.error('Error loading accounts:', error);
-        resetAccountDropdown();
+        // No fallback - just show the error and leave dropdown empty/disabled
+        alert('Failed to load accounts. Please try again or contact support.');
     }
 }
 
@@ -78,6 +148,14 @@ function resetAccountDropdown() {
 }
 
 async function generateReport() {
+    // Show loading indicator
+    const resultsSection = document.getElementById('reportResults');
+    resultsSection.style.display = 'none';
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
+
     // Get form values
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
@@ -96,11 +174,19 @@ async function generateReport() {
     try {
         // Call API to get report data
         const response = await fetch(`/Reporting/GetMasterReportData?${params}`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${await response.text()}`);
+        }
         const data = await response.json();
         displayReport(data);
     } catch (error) {
         console.error('Error generating report:', error);
-        alert('Failed to generate report. Please try again.');
+        alert('Failed to generate report: ' + error.message);
+    } finally {
+        // Hide loading indicator
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
     }
 }
 
@@ -108,6 +194,12 @@ function displayReport(data) {
     // Display main report data
     const tbody = document.getElementById('reportData');
     tbody.innerHTML = '';
+
+    if (!data.entries || data.entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No data found matching the criteria</td></tr>';
+        document.getElementById('reportResults').style.display = 'block';
+        return;
+    }
 
     data.entries.forEach(entry => {
         const row = document.createElement('tr');
@@ -163,6 +255,11 @@ function generateAccountGroups(entries) {
     const tbody = document.getElementById('accountGroupData');
     tbody.innerHTML = '';
 
+    if (Object.keys(groupedByAccount).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No account data available</td></tr>';
+        return;
+    }
+
     Object.values(groupedByAccount).forEach(data => {
         const balance = data.debit - data.credit;
         const row = document.createElement('tr');
@@ -201,6 +298,11 @@ function generateCategoryGroups(entries) {
     // Generate rows
     const tbody = document.getElementById('categoryGroupData');
     tbody.innerHTML = '';
+
+    if (Object.keys(groupedByCategory).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No category data available</td></tr>';
+        return;
+    }
 
     Object.values(groupedByCategory).forEach(data => {
         const balance = data.debit - data.credit;

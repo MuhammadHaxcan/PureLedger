@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchCategories(projectId) {
-        fetch(`/api/common/categories/${projectId}`)
+        fetch(`/DeliveryChallan/GetCategoriesByProject?projectId=${projectId}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Error loading categories');
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchAccounts(categoryId) {
-        fetch(`/api/common/accounts/${categoryId}`)
+        fetch(`/DeliveryChallan/GetAccountsByCategory?categoryId=${categoryId}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Error loading accounts');
@@ -546,15 +546,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const transporterSelect = document.getElementById('transporterAccount');
         transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
 
-        // First fetch the transporter category ID from a new endpoint
-        fetch('/api/common/settings/transporterCategoryId')
+        // First fetch the transporter category ID from the new endpoint
+        fetch('/DeliveryChallan/GetTransporterCategoryId')
             .then(response => response.json())
             .then(data => {
-                // Now use the dynamic category ID instead of hardcoded 2
+                // Now use the dynamic category ID
                 const transporterCategoryId = data.value;
                 
                 // Fetch transporter accounts with the dynamic category ID
-                return fetch(`/api/common/accounts/${transporterCategoryId}`);
+                return fetch(`/DeliveryChallan/GetAccountsByCategory?categoryId=${transporterCategoryId}`);
             })
             .then(response => {
                 if (!response.ok) {

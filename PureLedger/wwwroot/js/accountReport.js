@@ -11,8 +11,8 @@
             // Enable account dropdown
             $('#accountId').prop('disabled', false);
 
-            // Load accounts for this category
-            $.get('/api/common/accounts/' + categoryId, function (accounts) {
+            // Load accounts for this category - using ReportingController endpoint instead of API
+            $.get('/Reporting/GetAccountsByCategory', { categoryId: categoryId }, function (accounts) {
                 let options = '<option value="">All Accounts</option>';
                 accounts.forEach(account => {
                     options += `<option value="${account.id}">${account.name}</option>`;
@@ -253,4 +253,25 @@
             </tfoot>
         `);
     }
+    
+    // When project changes, fetch categories for that project
+    $('#projectId').on('change', function() {
+        const projectId = $(this).val();
+        if (projectId) {
+            // Use the new endpoint in ReportingController
+            $.get('/Reporting/GetCategoriesByProject', { projectId: projectId }, function(categories) {
+                let options = '<option value="">All Categories</option>';
+                categories.forEach(c => {
+                    options += `<option value="${c.id}">${c.name}</option>`;
+                });
+                $('#categoryId').html(options).prop('disabled', false);
+                $('#accountId').html('<option value="">All Accounts</option>').prop('disabled', true);
+            }).fail(function(error) {
+                showAlert('danger', 'Failed to load categories: ' + (error.responseText || 'Unknown error'));
+            });
+        } else {
+            $('#categoryId').html('<option value="">All Categories</option>').prop('disabled', true);
+            $('#accountId').html('<option value="">All Accounts</option>').prop('disabled', true);
+        }
+    });
 });
