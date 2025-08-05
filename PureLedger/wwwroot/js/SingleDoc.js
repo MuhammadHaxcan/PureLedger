@@ -10,7 +10,7 @@
     });
 
     // Handle Go button click
-    $('#btnGo').on('click', async function () {
+    $('#btnGo').on('click', function () {
         const id = $('#voucherId').val().trim();
         const type = $('#voucherType').val();
 
@@ -25,46 +25,51 @@
         }
 
         // Show loading state
-        $(this).html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Validating...');
-        $(this).prop('disabled', true);
+        const $btn = $(this);
+        $btn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Validating...');
+        $btn.prop('disabled', true);
 
-        try {
-            // First, validate using AJAX
-            const validateUrl = `/Reporting/ValidateVoucher?journalVoucherId=${id}&type=${type}`;
-            const response = await fetch(validateUrl);
-            const result = await response.json();
+        // Use PureLedger utility for AJAX
+        PureLedger.get('/Reporting/ValidateVoucher', { 
+                journalVoucherId: id, 
+                type: type 
+            })
+            .done(function(result) {
+                if (result.exists) {
+                    // If valid, open print page in new tab
+                    // Use the base path from PureLedger utility to construct the URL
+                    const basePath = PureLedger.getCurrentBasePath();
+                    const printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+                    window.open(printUrl, '_blank');
 
-            if (result.exists) {
-                // If valid, open print page in new tab
-                const printUrl = `/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
-                window.open(printUrl, '_blank');
+                    // Add to recent docs history
+                    addToRecentDocs(id, type);
 
-                // Add to recent docs history
-                addToRecentDocs(id, type);
+                    // Reset the form
+                    $('#voucherId').val('');
 
-                // Reset the form
-                $('#voucherId').val('');
+                    // Show success message
+                    showAlert('success', 'Document found and opened for printing.');
+                } else {
+                    // Show error message on the same page
+                    const errorMessage = type === "DC"
+                        ? "No Delivery Challan exists for this Voucher ID."
+                        : (type === "INV"
+                            ? "No Invoice exists for this Voucher ID."
+                            : "No Journal Voucher found for this ID.");
 
-                // Show success message
-                showAlert('success', 'Document found and opened for printing.');
-            } else {
-                // Show error message on the same page
-                const errorMessage = type === "DC"
-                    ? "No Delivery Challan exists for this Voucher ID."
-                    : (type === "INV"
-                        ? "No Invoice exists for this Voucher ID."
-                        : "No Journal Voucher found for this ID.");
-
-                showAlert('danger', errorMessage);
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            showAlert('danger', 'An error occurred while validating the voucher.');
-        } finally {
-            // Restore button state
-            $(this).html('<i class="fas fa-search me-1"></i> Find Document');
-            $(this).prop('disabled', false);
-        }
+                    showAlert('danger', errorMessage);
+                }
+            })
+            .fail(function(xhr, status, error) {
+                console.error('Error validating voucher:', error);
+                showAlert('danger', 'An error occurred while validating the voucher.');
+            })
+            .always(function() {
+                // Restore button state
+                $btn.html('<i class="fas fa-search me-1"></i> Find Document');
+                $btn.prop('disabled', false);
+            });
     });
 
     // Function to show alerts
@@ -181,7 +186,9 @@
             const id = $(this).data('id');
             const type = $(this).data('type');
 
-            const printUrl = `/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+            // Use the base path from PureLedger utility to construct the URL
+            const basePath = PureLedger.getCurrentBasePath();
+            const printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
             window.open(printUrl, '_blank');
         });
     }

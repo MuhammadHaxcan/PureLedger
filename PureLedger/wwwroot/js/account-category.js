@@ -6,22 +6,20 @@
         $categorySelect.append($('<option>', { value: '', text: 'Select Category' }));
 
         if (projectId) {
-            $.ajax({
-                url: '/MetaData/GetCategoriesByProject',
-                type: 'GET',
-                data: { projectId: projectId },
-                success: function (categories) {
+            // Use PureLedger utility for AJAX
+            PureLedger.get('/MetaData/GetCategoriesByProject', { projectId: projectId })
+                .done(function (categories) {
                     $.each(categories, function (i, category) {
                         $categorySelect.append($('<option>', {
                             value: category.categoryId,
                             text: category.categoryName
                         }));
                     });
-                },
-                error: function () {
-                    alert('Failed to load categories.');
-                }
-            });
+                })
+                .fail(function (xhr, status, error) {
+                    console.error('Error loading categories:', error);
+                    alert('Failed to load categories. Please try again.');
+                });
         }
     });
 });

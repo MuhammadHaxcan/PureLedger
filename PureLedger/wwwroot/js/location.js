@@ -3,40 +3,52 @@
     const locationForm = document.getElementById('locationForm');
 
     if (locationForm) {
-        locationForm.addEventListener('submit', async function (e) {
+        locationForm.addEventListener('submit', function (e) {
             e.preventDefault();
 
             // Get form data
             const formData = new FormData(locationForm);
 
-            try {
-                // Send AJAX request
-                const response = await fetch('/MetaData/Location', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
+            // Show loading state
+            const submitButton = locationForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...';
 
-                const result = await response.json();
-
-                if (result.success) {
-                    // Add the new location to the list
-                    addLocationToList(result.location);
-
-                    // Reset form
-                    locationForm.reset();
-
-                    // Show success message
-                    showSuccessMessage(result.message);
-                } else {
-                    // Display validation errors
-                    displayValidationErrors(result.errors);
+            // Use PureLedger utility for AJAX
+            PureLedger.ajax('/MetaData/Location', {
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
-            } catch (error) {
-                console.error('Error:', error);
-            }
+            })
+                .done(function(result) {
+                    if (result.success) {
+                        // Add the new location to the list
+                        addLocationToList(result.location);
+
+                        // Reset form
+                        locationForm.reset();
+
+                        // Show success message
+                        showSuccessMessage(result.message);
+                    } else {
+                        // Display validation errors
+                        displayValidationErrors(result.errors);
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error:', error);
+                    showErrorMessage('An error occurred while saving the location.');
+                })
+                .always(function() {
+                    // Restore button state
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                });
         });
     }
 
@@ -73,7 +85,30 @@
         alertDiv.className = 'alert alert-success alert-dismissible fade show';
         alertDiv.role = 'alert';
         alertDiv.innerHTML = `
-            ${message}
+            <i class="fas fa-check-circle me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+
+        // Find location for alert (before the form card)
+        const formCard = document.querySelector('.card');
+        const container = formCard.parentElement.parentElement;
+        container.insertBefore(alertDiv, container.firstChild);
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            const bsAlert = bootstrap.Alert.getOrCreateInstance(alertDiv);
+            bsAlert.close();
+        }, 5000);
+    }
+
+    // Function to show error message
+    function showErrorMessage(message) {
+        // Create error alert
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+        alertDiv.role = 'alert';
+        alertDiv.innerHTML = `
+            <i class="fas fa-exclamation-circle me-2"></i>${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
 
@@ -110,7 +145,7 @@
                 });
 
                 alertDiv.innerHTML = `
-                    ${errorMessages}
+                    <i class="fas fa-exclamation-circle me-2"></i>${errorMessages}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 `;
 

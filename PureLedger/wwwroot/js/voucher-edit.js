@@ -18,7 +18,7 @@
 
     // Function to fetch voucher summary
     function fetchVoucherSummary(voucherId) {
-        $.get('/Home/GetVoucherSummary', { voucherId: voucherId })
+        PureLedger.get('/Home/GetVoucherSummary', { voucherId: voucherId })
             .done(function (data) {
                 if (data && data.entries && data.entries.length > 0) {
                     currentVoucherId = data.jvId;
@@ -30,10 +30,11 @@
                     $('#noVoucherMsg').show();
                 }
             })
-            .fail(function () {
+            .fail(function (xhr, status, error) {
                 $('#voucherSummaryContainer').hide();
                 $('#noVoucherMsg').show();
                 showAlert('danger', 'Failed to fetch voucher data. Please try again.');
+                console.error('Error fetching voucher summary:', error);
             });
     }
 
@@ -84,7 +85,7 @@
         const entryId = $(this).data('entry-id');
 
         // Fetch entry details
-        $.get('/Home/GetJournalEntry', { entryId: entryId })
+        PureLedger.get('/Home/GetJournalEntry', { entryId: entryId })
             .done(function (data) {
                 // Reset form
                 $('#editEntryForm')[0].reset();
@@ -128,8 +129,9 @@
                 // Show modal
                 editModal.show();
             })
-            .fail(function () {
+            .fail(function (xhr, status, error) {
                 showAlert('danger', 'Error loading entry details.');
+                console.error('Error loading entry details:', error);
             });
     });
 
@@ -141,13 +143,13 @@
         const formData = new FormData(this);
 
         // Submit data using AJAX with FormData
-        $.ajax({
-            url: '/Home/UpdateJournalEntry',
-            type: 'POST',
+        PureLedger.ajax('/Home/UpdateJournalEntry', {
+            method: 'POST',
             data: formData,
             processData: false,
-            contentType: false,
-            success: function (result) {
+            contentType: false
+        })
+            .done(function (result) {
                 if (result.success) {
                     // Hide modal
                     editModal.hide();
@@ -167,11 +169,11 @@
                         showAlert('danger', 'An error occurred while saving changes.');
                     }
                 }
-            },
-            error: function () {
+            })
+            .fail(function (xhr, status, error) {
                 showAlert('danger', 'An error occurred while saving changes.');
-            }
-        });
+                console.error('Error updating entry:', error);
+            });
     });
 
     // Format currency
@@ -190,26 +192,34 @@
     // Load Drop Downs for the combo boxes
     function loadDropdowns(projectId, selectedCategoryId, selectedAccountId) {
         // Load Categories by ProjectId
-        $.get(`/Home/GetCategoriesByProject?projectId=${projectId}`, function (categories) {
-            const $category = $('#editCategory');
-            $category.empty().append('<option value="">Select Category</option>');
-            categories.forEach(c => {
-                const selected = c.id == selectedCategoryId ? 'selected' : '';
-                $category.append(`<option value="${c.id}" ${selected}>${c.name}</option>`);
-            });
-
-            // Now load accounts based on selected category
-            if (selectedCategoryId) {
-                $.get(`/Home/GetAccountsByCategory?categoryId=${selectedCategoryId}`, function (accounts) {
-                    const $account = $('#editAccount');
-                    $account.empty().append('<option value="">Select Account</option>');
-                    accounts.forEach(a => {
-                        const selected = a.id == selectedAccountId ? 'selected' : '';
-                        $account.append(`<option value="${a.id}" ${selected}>${a.name}</option>`);
-                    });
+        PureLedger.get('/Home/GetCategoriesByProject', { projectId: projectId })
+            .done(function (categories) {
+                const $category = $('#editCategory');
+                $category.empty().append('<option value="">Select Category</option>');
+                categories.forEach(c => {
+                    const selected = c.id == selectedCategoryId ? 'selected' : '';
+                    $category.append(`<option value="${c.id}" ${selected}>${c.name}</option>`);
                 });
-            }
-        });
+
+                // Now load accounts based on selected category
+                if (selectedCategoryId) {
+                    PureLedger.get('/Home/GetAccountsByCategory', { categoryId: selectedCategoryId })
+                        .done(function (accounts) {
+                            const $account = $('#editAccount');
+                            $account.empty().append('<option value="">Select Account</option>');
+                            accounts.forEach(a => {
+                                const selected = a.id == selectedAccountId ? 'selected' : '';
+                                $account.append(`<option value="${a.id}" ${selected}>${a.name}</option>`);
+                            });
+                        })
+                        .fail(function (xhr, status, error) {
+                            console.error('Error loading accounts:', error);
+                        });
+                }
+            })
+            .fail(function (xhr, status, error) {
+                console.error('Error loading categories:', error);
+            });
     }
 
     // Handle category change
@@ -219,11 +229,15 @@
         $account.empty().append('<option value="">Select Account</option>');
 
         if (categoryId) {
-            $.get(`/Home/GetAccountsByCategory?categoryId=${categoryId}`, function (accounts) {
-                accounts.forEach(a => {
-                    $account.append(`<option value="${a.id}">${a.name}</option>`);
+            PureLedger.get('/Home/GetAccountsByCategory', { categoryId: categoryId })
+                .done(function (accounts) {
+                    accounts.forEach(a => {
+                        $account.append(`<option value="${a.id}">${a.name}</option>`);
+                    });
+                })
+                .fail(function (xhr, status, error) {
+                    console.error('Error loading accounts:', error);
                 });
-            });
         }
     });
 
@@ -263,7 +277,7 @@
             cancelButtonText: 'Cancel'
         }).then((result) => {
             if (result.isConfirmed) {
-                $.post('/Home/DeleteJournalEntry', { entryId })
+                PureLedger.post('/Home/DeleteJournalEntry', { entryId: entryId })
                     .done(function (response) {
                         if (response.success) {
                             Swal.fire({
@@ -278,8 +292,9 @@
                             Swal.fire('Error', response.message || 'Could not delete the entry.', 'error');
                         }
                     })
-                    .fail(function () {
+                    .fail(function (xhr, status, error) {
                         Swal.fire('Error', 'An error occurred while deleting the entry.', 'error');
+                        console.error('Error deleting entry:', error);
                     });
             }
         });

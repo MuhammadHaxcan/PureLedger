@@ -11,16 +11,19 @@
             // Enable account dropdown
             $('#accountId').prop('disabled', false);
 
-            // Load accounts for this category - using ReportingController endpoint instead of API
-            $.get('/Reporting/GetAccountsByCategory', { categoryId: categoryId }, function (accounts) {
-                let options = '<option value="">All Accounts</option>';
-                accounts.forEach(account => {
-                    options += `<option value="${account.id}">${account.name}</option>`;
+            // Load accounts for this category using PureLedger utility
+            PureLedger.get('/Reporting/GetAccountsByCategory', { categoryId: categoryId })
+                .done(function(accounts) {
+                    let options = '<option value="">All Accounts</option>';
+                    accounts.forEach(account => {
+                        options += `<option value="${account.id}">${account.name}</option>`;
+                    });
+                    $('#accountId').html(options);
+                })
+                .fail(function(xhr, status, error) {
+                    showAlert('danger', 'Failed to load accounts: ' + (error || 'Unknown error'));
+                    console.error('Error loading accounts:', error);
                 });
-                $('#accountId').html(options);
-            }).fail(function (error) {
-                showAlert('danger', 'Failed to load accounts: ' + (error.responseText || 'Unknown error'));
-            });
         } else {
             $('#accountId').prop('disabled', true);
             $('#accountId').html('<option value="">All Accounts</option>');
@@ -42,126 +45,132 @@
 
         $('#reportData').html('<tr><td colspan="6" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>');
 
-        $.get('/Reporting/GetAccountReportData', { projectId, categoryId, accountId }, function (data) {
-            // Destroy existing DataTable if it exists
-            if (dataTable) {
-                dataTable.destroy();
-                dataTable = null;
-            }
-
-            if (!data || data.length === 0) {
-                $('#reportData').html('<tr><td colspan="6" class="text-center">No data found</td></tr>');
-                updateReportSummary(0);
-                return;
-            }
-
-            let rows = '';
-            let totalDebit = 0;
-            let totalCredit = 0;
-            let totalBalance = 0;
-
-            data.forEach(r => {
-                const debit = parseFloat(r.totalDebit) || 0;
-                const credit = parseFloat(r.totalCredit) || 0;
-                const balance = parseFloat(r.netBalance) || 0;
-
-                totalDebit += debit;
-                totalCredit += credit;
-                totalBalance += balance;
-
-                // Determine if balance should be highlighted as negative
-                const balanceClass = balance < 0 ? 'negative-balance' : '';
-
-                rows += `<tr>
-                    <td>${r.accountId}</td>
-                    <td>${r.categoryName || '-'}</td>
-                    <td>${r.accountName}</td>
-                    <td class="text-end">${formatCurrency(debit)}</td>
-                    <td class="text-end">${formatCurrency(credit)}</td>
-                    <td class="text-end ${balanceClass}">${formatCurrency(balance)}</td>
-                </tr>`;
-            });
-
-            $('#reportData').html(rows);
-            updateReportSummary(data.length);
-
-            // Initialize DataTable with improved configuration
-            dataTable = $('#accountReportTable').DataTable({
-                "order": [[2, "asc"]],
-                "language": {
-                    "emptyTable": "No accounts available",
-                    "search": "Search accounts:",
-                    "info": "Showing _START_ to _END_ of _TOTAL_ accounts",
-                    "lengthMenu": "Show _MENU_ accounts"
-                },
-                "pageLength": 25,
-                "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-                "dom": 'lBfrtip',
-                "buttons": [
-                    {
-                        extend: 'excel',
-                        text: '<i class="fas fa-file-excel"></i> Excel',
-                        className: 'btn btn-sm btn-success',
-                        title: 'Account Report ' + new Date().toLocaleDateString(),
-                        footer: true,
-                        exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5]
-                        }
-                    },
-                    {
-                        extend: 'pdf',
-                        text: '<i class="fas fa-file-pdf"></i> PDF',
-                        className: 'btn btn-sm btn-danger',
-                        title: 'Account Report ' + new Date().toLocaleDateString(),
-                        footer: true,
-                        exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5]
-                        }
-                    },
-                    {
-                        extend: 'print',
-                        text: '<i class="fas fa-print"></i> Print',
-                        className: 'btn btn-sm btn-info',
-                        title: 'Account Report ' + new Date().toLocaleDateString(),
-                        footer: true,
-                        exportOptions: {
-                            columns: [0, 1, 2, 3, 4, 5]
-                        }
-                    }
-                ],
-                "footerCallback": function (row, data, start, end, display) {
-                    const api = this.api();
-                    function parseValue(value) {
-                        if (typeof value === 'string') {
-                            return parseFloat(value.replace(/,/g, '')) || 0;
-                        }
-                        if (typeof value === 'number') {
-                            return value;
-                        }
-                        return 0;
-                    }
-                    // Calculate column sums for debit, credit, and balance
-                    const debitTotal = api.column(3, { page: 'current' }).data()
-                        .reduce((acc, val) => acc + parseValue(val), 0);
-
-                    const creditTotal = api.column(4, { page: 'current' }).data()
-                        .reduce((acc, val) => acc + parseValue(val), 0);
-
-                    const balanceTotal = api.column(5, { page: 'current' }).data()
-                        .reduce((acc, val) => acc + parseValue(val), 0);
-
-                    $(api.column(3).footer()).html(formatCurrency(debitTotal));
-                    $(api.column(4).footer()).html(formatCurrency(creditTotal));
-                    $(api.column(5).footer()).html(formatCurrency(balanceTotal));
-                }
-            });
-
-            // Update the summary
-            updateReportSummary(data.length, totalDebit, totalCredit, totalBalance);
+        PureLedger.get('/Reporting/GetAccountReportData', { 
+            projectId: projectId, 
+            categoryId: categoryId, 
+            accountId: accountId 
         })
-            .fail(function (error) {
+            .done(function(data) {
+                // Destroy existing DataTable if it exists
+                if (dataTable) {
+                    dataTable.destroy();
+                    dataTable = null;
+                }
+
+                if (!data || data.length === 0) {
+                    $('#reportData').html('<tr><td colspan="6" class="text-center">No data found</td></tr>');
+                    updateReportSummary(0);
+                    return;
+                }
+
+                let rows = '';
+                let totalDebit = 0;
+                let totalCredit = 0;
+                let totalBalance = 0;
+
+                data.forEach(r => {
+                    const debit = parseFloat(r.totalDebit) || 0;
+                    const credit = parseFloat(r.totalCredit) || 0;
+                    const balance = parseFloat(r.netBalance) || 0;
+
+                    totalDebit += debit;
+                    totalCredit += credit;
+                    totalBalance += balance;
+
+                    // Determine if balance should be highlighted as negative
+                    const balanceClass = balance < 0 ? 'negative-balance' : '';
+
+                    rows += `<tr>
+                        <td>${r.accountId}</td>
+                        <td>${r.categoryName || '-'}</td>
+                        <td>${r.accountName}</td>
+                        <td class="text-end">${formatCurrency(debit)}</td>
+                        <td class="text-end">${formatCurrency(credit)}</td>
+                        <td class="text-end ${balanceClass}">${formatCurrency(balance)}</td>
+                    </tr>`;
+                });
+
+                $('#reportData').html(rows);
+                updateReportSummary(data.length);
+
+                // Initialize DataTable with improved configuration
+                dataTable = $('#accountReportTable').DataTable({
+                    "order": [[2, "asc"]],
+                    "language": {
+                        "emptyTable": "No accounts available",
+                        "search": "Search accounts:",
+                        "info": "Showing _START_ to _END_ of _TOTAL_ accounts",
+                        "lengthMenu": "Show _MENU_ accounts"
+                    },
+                    "pageLength": 25,
+                    "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                    "dom": 'lBfrtip',
+                    "buttons": [
+                        {
+                            extend: 'excel',
+                            text: '<i class="fas fa-file-excel"></i> Excel',
+                            className: 'btn btn-sm btn-success',
+                            title: 'Account Report ' + new Date().toLocaleDateString(),
+                            footer: true,
+                            exportOptions: {
+                                columns: [0, 1, 2, 3, 4, 5]
+                            }
+                        },
+                        {
+                            extend: 'pdf',
+                            text: '<i class="fas fa-file-pdf"></i> PDF',
+                            className: 'btn btn-sm btn-danger',
+                            title: 'Account Report ' + new Date().toLocaleDateString(),
+                            footer: true,
+                            exportOptions: {
+                                columns: [0, 1, 2, 3, 4, 5]
+                            }
+                        },
+                        {
+                            extend: 'print',
+                            text: '<i class="fas fa-print"></i> Print',
+                            className: 'btn btn-sm btn-info',
+                            title: 'Account Report ' + new Date().toLocaleDateString(),
+                            footer: true,
+                            exportOptions: {
+                                columns: [0, 1, 2, 3, 4, 5]
+                            }
+                        }
+                    ],
+                    "footerCallback": function (row, data, start, end, display) {
+                        const api = this.api();
+                        function parseValue(value) {
+                            if (typeof value === 'string') {
+                                return parseFloat(value.replace(/,/g, '')) || 0;
+                            }
+                            if (typeof value === 'number') {
+                                return value;
+                            }
+                            return 0;
+                        }
+                        // Calculate column sums for debit, credit, and balance
+                        const debitTotal = api.column(3, { page: 'current' }).data()
+                            .reduce((acc, val) => acc + parseValue(val), 0);
+
+                        const creditTotal = api.column(4, { page: 'current' }).data()
+                            .reduce((acc, val) => acc + parseValue(val), 0);
+
+                        const balanceTotal = api.column(5, { page: 'current' }).data()
+                            .reduce((acc, val) => acc + parseValue(val), 0);
+
+                        $(api.column(3).footer()).html(formatCurrency(debitTotal));
+                        $(api.column(4).footer()).html(formatCurrency(creditTotal));
+                        $(api.column(5).footer()).html(formatCurrency(balanceTotal));
+                    }
+                });
+
+                // Update the summary
+                updateReportSummary(data.length, totalDebit, totalCredit, totalBalance);
+            })
+            .fail(function(xhr, status, error) {
                 $('#reportData').html('<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>');
-                showAlert('danger', 'Failed to load report data: ' + (error.responseText || 'Unknown error'));
+                showAlert('danger', 'Failed to load report data: ' + (error || 'Unknown error'));
+                console.error('Error loading report data:', error);
                 updateReportSummary(0);
             });
     }
@@ -211,7 +220,7 @@
         }
     });
 
-    // Show alert function (similar to Tags.cshtml)
+    // Show alert function
     function showAlert(type, message) {
         const icon = type === 'success' ? 'check-circle' :
             type === 'warning' ? 'exclamation-triangle' :
@@ -258,17 +267,20 @@
     $('#projectId').on('change', function() {
         const projectId = $(this).val();
         if (projectId) {
-            // Use the new endpoint in ReportingController
-            $.get('/Reporting/GetCategoriesByProject', { projectId: projectId }, function(categories) {
-                let options = '<option value="">All Categories</option>';
-                categories.forEach(c => {
-                    options += `<option value="${c.id}">${c.name}</option>`;
+            // Use PureLedger utility for AJAX
+            PureLedger.get('/Reporting/GetCategoriesByProject', { projectId: projectId })
+                .done(function(categories) {
+                    let options = '<option value="">All Categories</option>';
+                    categories.forEach(c => {
+                        options += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                    $('#categoryId').html(options).prop('disabled', false);
+                    $('#accountId').html('<option value="">All Accounts</option>').prop('disabled', true);
+                })
+                .fail(function(xhr, status, error) {
+                    showAlert('danger', 'Failed to load categories: ' + (error || 'Unknown error'));
+                    console.error('Error loading categories:', error);
                 });
-                $('#categoryId').html(options).prop('disabled', false);
-                $('#accountId').html('<option value="">All Accounts</option>').prop('disabled', true);
-            }).fail(function(error) {
-                showAlert('danger', 'Failed to load categories: ' + (error.responseText || 'Unknown error'));
-            });
         } else {
             $('#categoryId').html('<option value="">All Categories</option>').prop('disabled', true);
             $('#accountId').html('<option value="">All Accounts</option>').prop('disabled', true);

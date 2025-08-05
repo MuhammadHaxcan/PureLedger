@@ -1,13 +1,19 @@
-using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Services;
 using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
+
+// Register DbContext factory
+builder.Services.AddSingleton<SubrouteDbContextFactory>();
+
+// Register all services
 builder.Services.AddScoped<JournalEntryValidationService>();
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IJournalVoucherRepository, JournalVoucherRepository>();
@@ -32,11 +38,15 @@ builder.Services.AddScoped<IDeliveryChallanEntryRepository, DeliveryChallanEntry
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
 builder.Services.AddScoped<IMetaDataService, MetaDataService>();
-builder.Services.AddScoped<ICommonApiService, CommonApiService>();
 
-// Add LedgerDbContext with SQL Server and Windows Authentication
-builder.Services.AddDbContext<LedgerDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("LedgerDb")));
+// Register LedgerDbContext per request, using the subroute from HttpContext.Items
+builder.Services.AddScoped<LedgerDbContext>(provider =>
+{
+    var httpContextAccessor = provider.GetRequiredService<IHttpContextAccessor>();
+    var factory = provider.GetRequiredService<SubrouteDbContextFactory>();
+    var subroute = httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
+    return factory.CreateDbContext(subroute);
+});
 
 var app = builder.Build();
 
@@ -53,10 +63,11 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseSubrouteMiddleware();
 app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Entry}/{id?}");
-
+    pattern: "{prefix}/{controller=Home}/{action=Entry}/{id?}",
+    constraints: new { prefix = "route1|route2" });
 app.Run();

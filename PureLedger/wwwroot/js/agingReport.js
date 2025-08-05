@@ -45,27 +45,28 @@
         $('#reportData').html('<tr><td colspan="4" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>');
         $('#reportResults').show();
 
-        try {
-            const queryParams = new URLSearchParams({
-                referenceDate: referenceDate,
-                projectId: projectId || '',
-                categoryId: categoryId
+        const params = {
+            referenceDate: referenceDate,
+            projectId: projectId || '',
+            categoryId: categoryId
+        };
+
+        PureLedger.get('/Reporting/GetAgingReportData', params)
+            .done(function(data) {
+                displayReport(data);
+                showAlert('success', 'Report generated successfully');
+            })
+            .fail(function(xhr, status, error) {
+                console.error('Error generating report:', error);
+                let errorMessage = 'Error generating report';
+                try {
+                    errorMessage += ': ' + xhr.responseText;
+                } catch (e) {
+                    errorMessage += ': ' + error;
+                }
+                $('#reportData').html(`<tr><td colspan="4" class="text-center text-danger">${errorMessage}</td></tr>`);
+                showAlert('danger', 'Failed to generate report: ' + error);
             });
-
-            const response = await fetch(`/Reporting/GetAgingReportData?${queryParams}`);
-
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}: ${await response.text()}`);
-            }
-
-            const data = await response.json();
-            displayReport(data);
-            showAlert('success', 'Report generated successfully');
-        } catch (error) {
-            console.error('Error generating report:', error);
-            $('#reportData').html(`<tr><td colspan="4" class="text-center text-danger">Error generating report: ${error.message}</td></tr>`);
-            showAlert('danger', 'Failed to generate report: ' + error.message);
-        }
     }
 
     function displayReport(data) {

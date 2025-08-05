@@ -77,14 +77,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function fetchCategories(projectId) {
-        fetch(`/DeliveryChallan/GetCategoriesByProject?projectId=${projectId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Error loading categories');
-                }
-                return response.json();
-            })
-            .then(data => {
+        PureLedger.get('/DeliveryChallan/GetCategoriesByProject', { projectId: projectId })
+            .done(function(data) {
                 categorySelect.disabled = false;
                 data.forEach(category => {
                     const option = document.createElement('option');
@@ -93,21 +87,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     categorySelect.appendChild(option);
                 });
             })
-            .catch(error => {
+            .fail(function(xhr, status, error) {
                 console.error('Error loading categories:', error);
                 showAlert('danger', 'Error loading categories. Please try again.');
             });
     }
 
     function fetchAccounts(categoryId) {
-        fetch(`/DeliveryChallan/GetAccountsByCategory?categoryId=${categoryId}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Error loading accounts');
-                }
-                return response.json();
-            })
-            .then(data => {
+        PureLedger.get('/DeliveryChallan/GetAccountsByCategory', { categoryId: categoryId })
+            .done(function(data) {
                 accountSelect.disabled = false;
                 data.forEach(account => {
                     const option = document.createElement('option');
@@ -116,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     accountSelect.appendChild(option);
                 });
             })
-            .catch(error => {
+            .fail(function(xhr, status, error) {
                 console.error('Error loading accounts:', error);
                 showAlert('danger', 'Error loading accounts. Please try again.');
             });
@@ -129,31 +117,29 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         resultsTable.innerHTML = '<tr><td colspan="6" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>';
 
-        const params = new URLSearchParams({
+        const params = {
             SinceDate: sinceDate.value,
             ToDate: toDate.value
-        });
+        };
 
-        if (projectSelect.value) params.append('ProjectId', projectSelect.value);
-        if (categorySelect.value) params.append('CategoryId', categorySelect.value);
-        if (accountSelect.value) params.append('AccountId', accountSelect.value);
+        if (projectSelect.value) params.ProjectId = projectSelect.value;
+        if (categorySelect.value) params.CategoryId = categorySelect.value;
+        if (accountSelect.value) params.AccountId = accountSelect.value;
 
-        fetch(`/DeliveryChallan/GetFilteredEntries?${params.toString()}`)
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(`Server returned ${response.status}: ${text}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
+        PureLedger.get('/DeliveryChallan/GetFilteredEntries', params)
+            .done(function(data) {
                 renderResults(data);
                 initializeDataTable();
             })
-            .catch(error => {
-                resultsTable.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error loading data: ${error.message}</td></tr>`;
-                showAlert('danger', 'Error loading entries: ' + error.message);
+            .fail(function(xhr, status, error) {
+                let errorMessage = 'Error loading data';
+                try {
+                    errorMessage += ': ' + xhr.responseText;
+                } catch (e) {
+                    errorMessage += ': ' + error;
+                }
+                resultsTable.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${errorMessage}</td></tr>`;
+                showAlert('danger', 'Error loading entries: ' + error);
             });
     }
 
@@ -294,16 +280,8 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log(`Loading voucher entries for voucher: ${voucherId}, selected entry: ${entryId}`);
 
         // Load voucher entries
-        fetch(`/DeliveryChallan/GetVoucherEntries?voucherId=${voucherId}`)
-            .then(res => {
-                if (!res.ok) {
-                    return res.text().then(text => {
-                        throw new Error(`Server returned ${res.status}: ${text}`);
-                    });
-                }
-                return res.json();
-            })
-            .then(entries => {
+        PureLedger.get('/DeliveryChallan/GetVoucherEntries', { voucherId: voucherId })
+            .done(function(entries) {
                 const entriesTable = document.getElementById('dcEntriesTable');
                 entriesTable.innerHTML = '';
 
@@ -387,9 +365,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }
             })
-            .catch(error => {
+            .fail(function(xhr, status, error) {
                 console.error('Error loading voucher entries:', error);
-                showAlert('danger', 'Error loading voucher entries: ' + error.message);
+                showAlert('danger', 'Error loading voucher entries: ' + error);
             });
     }
 
@@ -453,16 +431,8 @@ document.addEventListener('DOMContentLoaded', function () {
         loadVoucherEntries(voucherId, entryId);
 
         // Check for existing challan
-        fetch(`/DeliveryChallan/CheckExistingChallan?voucherId=${voucherId}`)
-            .then(res => {
-                if (!res.ok) {
-                    return res.text().then(text => {
-                        throw new Error(`Server returned ${res.status}: ${text}`);
-                    });
-                }
-                return res.json();
-            })
-            .then(data => {
+        PureLedger.get('/DeliveryChallan/CheckExistingChallan', { voucherId: voucherId })
+            .done(function(data) {
                 const challanId = document.getElementById('dcChallanId');
                 if (data.exists) {
                     document.getElementById('existingChallanMessage').classList.remove('d-none');
@@ -486,9 +456,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('dcOtherRef').value = '';
                 }
             })
-            .catch(error => {
+            .fail(function(xhr, status, error) {
                 console.error('Error checking existing challan:', error);
-                showAlert('danger', 'Error checking existing challan: ' + error.message);
+                showAlert('danger', 'Error checking existing challan: ' + error);
             });
 
         // Add cartage button to modal footer
@@ -547,24 +517,15 @@ document.addEventListener('DOMContentLoaded', function () {
         transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
 
         // First fetch the transporter category ID from the new endpoint
-        fetch('/DeliveryChallan/GetTransporterCategoryId')
-            .then(response => response.json())
-            .then(data => {
+        PureLedger.get('/DeliveryChallan/GetTransporterCategoryId')
+            .done(function(data) {
                 // Now use the dynamic category ID
                 const transporterCategoryId = data.value;
                 
                 // Fetch transporter accounts with the dynamic category ID
-                return fetch(`/DeliveryChallan/GetAccountsByCategory?categoryId=${transporterCategoryId}`);
+                return PureLedger.get('/DeliveryChallan/GetAccountsByCategory', { categoryId: transporterCategoryId });
             })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(`Server returned ${response.status}: ${text}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(transporters => {
+            .then(function(transporters) {
                 transporters.forEach(t => {
                     const option = document.createElement('option');
                     option.value = t.id;
@@ -572,305 +533,266 @@ document.addEventListener('DOMContentLoaded', function () {
                     transporterSelect.appendChild(option);
                 });
             })
-            .catch(error => {
+            .fail(function(xhr, status, error) {
                 console.error('Error loading transporters:', error);
-                showAlert('danger', 'Error loading transporters: ' + error.message);
+                showAlert('danger', 'Error loading transporters: ' + error);
             });
     }
 
     function loadLocations() {
-        fetch('/DeliveryChallan/GetLocations')
-            .then(res => {
-                if (!res.ok) {
-                    return res.text().then(text => {
-                        throw new Error(`Server returned ${res.status}: ${text}`);
-                    });
-                }
-                return res.json();
-            })
-            .then(locations => {
+        PureLedger.get('/DeliveryChallan/GetLocations')
+            .done(function(locations) {
                 const locationSelect = document.getElementById('dcLocation');
                 locationSelect.innerHTML = '<option value="">Select Location</option>';
                 locations.forEach(loc => {
                     const opt = document.createElement('option');
                     opt.value = loc.locationId;
-                    opt.textContent = loc.locationName; // <-- Corrected here
+                    opt.textContent = loc.locationName;
                     locationSelect.appendChild(opt);
                 });
             })
-            .catch(error => {
+            .fail(function(xhr, status, error) {
                 console.error('Error loading locations:', error);
-                showAlert('danger', 'Error loading locations: ' + error.message);
+                showAlert('danger', 'Error loading locations: ' + error);
             });
     }
 
     // Utility to show loading state on a button and disable others
-function setButtonLoadingExclusive(activeBtn, loadingText, allBtns) {
-    allBtns.forEach(btn => {
-        if (btn && btn !== activeBtn) {
-            btn.disabled = true;
+    function setButtonLoadingExclusive(activeBtn, loadingText, allBtns) {
+        allBtns.forEach(btn => {
+            if (btn && btn !== activeBtn) {
+                btn.disabled = true;
+            }
+        });
+        if (activeBtn) {
+            activeBtn.disabled = true;
+            activeBtn.dataset.originalHtml = activeBtn.innerHTML;
+            activeBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${loadingText}`;
         }
-    });
-    if (activeBtn) {
-        activeBtn.disabled = true;
-        activeBtn.dataset.originalHtml = activeBtn.innerHTML;
-        activeBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${loadingText}`;
     }
-}
-function resetButtonLoadingExclusive(activeBtn, allBtns) {
-    allBtns.forEach(btn => {
-        if (btn) btn.disabled = false;
-    });
-    if (activeBtn && activeBtn.dataset.originalHtml) {
-        activeBtn.innerHTML = activeBtn.dataset.originalHtml;
-        delete activeBtn.dataset.originalHtml;
+    function resetButtonLoadingExclusive(activeBtn, allBtns) {
+        allBtns.forEach(btn => {
+            if (btn) btn.disabled = false;
+        });
+        if (activeBtn && activeBtn.dataset.originalHtml) {
+            activeBtn.innerHTML = activeBtn.dataset.originalHtml;
+            delete activeBtn.dataset.originalHtml;
+        }
     }
-}
 
-// Get references to all action buttons
-const postSingleBtn = document.getElementById('postSingleBtn');
-const postAllBtn = document.getElementById('postAllBtn');
-const addCartageBtn = document.getElementById('addCartageBtn');
-const actionBtns = [postSingleBtn, postAllBtn, addCartageBtn];
+    // Get references to all action buttons
+    const postSingleBtn = document.getElementById('postSingleBtn');
+    const postAllBtn = document.getElementById('postAllBtn');
+    const addCartageBtn = document.getElementById('addCartageBtn');
+    const actionBtns = [postSingleBtn, postAllBtn, addCartageBtn];
 
-// Post Single button handler
-if (postSingleBtn) {
-    postSingleBtn.addEventListener('click', function () {
-        if (postSingleBtn.disabled) return; // Prevent double submit
-        setButtonLoadingExclusive(postSingleBtn, 'Posting...', actionBtns);
+    // Post Single button handler
+    if (postSingleBtn) {
+        postSingleBtn.addEventListener('click', function () {
+            if (postSingleBtn.disabled) return; // Prevent double submit
+            setButtonLoadingExclusive(postSingleBtn, 'Posting...', actionBtns);
 
-        // Get the current voucher ID
-        const voucherId = document.getElementById('dcJournalVoucherId').value;
+            // Get the current voucher ID
+            const voucherId = document.getElementById('dcJournalVoucherId').value;
 
-        // Get the specific entry ID either from the form or from the selected checkbox
-        let entryId = document.getElementById('dcJournalEntryId').value;
-        if (!entryId) {
-            const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
-            if (!selected) {
-                showAlert('warning', 'Please select an unprocessed entry to process');
+            // Get the specific entry ID either from the form or from the selected checkbox
+            let entryId = document.getElementById('dcJournalEntryId').value;
+            if (!entryId) {
+                const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
+                if (!selected) {
+                    showAlert('warning', 'Please select an unprocessed entry to process');
+                    resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+                    return;
+                }
+                entryId = selected.dataset.entryId;
+            }
+            const locationId = document.getElementById('dcLocation').value;
+            const dcDate = document.getElementById('dcDate').value;
+            const remarks = document.getElementById('dcRemarks').value;
+            const otherRef = document.getElementById('dcOtherRef').value;
+            if (!locationId) {
+                showAlert('warning', 'Please select a location');
                 resetButtonLoadingExclusive(postSingleBtn, actionBtns);
                 return;
             }
-            entryId = selected.dataset.entryId;
-        }
-        const locationId = document.getElementById('dcLocation').value;
-        const dcDate = document.getElementById('dcDate').value;
-        const remarks = document.getElementById('dcRemarks').value;
-        const otherRef = document.getElementById('dcOtherRef').value;
-        if (!locationId) {
-            showAlert('warning', 'Please select a location');
-            resetButtonLoadingExclusive(postSingleBtn, actionBtns);
-            return;
-        }
-        const data = {
-            JournalEntryId: parseInt(entryId),
-            LocationId: parseInt(locationId),
-            DCDate: dcDate,
-            Remarks: remarks,
-            OtherReference: otherRef
-        };
-        fetch('/DeliveryChallan/PostSingleEntry', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-            .then(res => {
-                if (!res.ok) {
-                    return res.text().then(text => {
-                        throw new Error(`Server returned ${res.status}: ${text}`);
-                    });
-                }
-                return res.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-                    document.getElementById('dcJournalEntryId').value = '';
-                    document.getElementById('dcJournalVoucherId').value = '';
-                    currentModalData = { voucherId: null, entryId: null };
-                    loadFilteredEntries();
-                    showAlert('success', 'Entry processed successfully');
-                } else {
-                    showAlert('danger', data.message || 'Error processing entry');
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                showAlert('danger', 'Error: ' + err.message);
-            })
-            .finally(() => {
-                resetButtonLoadingExclusive(postSingleBtn, actionBtns);
-            });
-    });
-}
+            const data = {
+                JournalEntryId: parseInt(entryId),
+                LocationId: parseInt(locationId),
+                DCDate: dcDate,
+                Remarks: remarks,
+                OtherReference: otherRef
+            };
 
-// Post All button handler
-if (postAllBtn) {
-    postAllBtn.addEventListener('click', function () {
-        if (postAllBtn.disabled) return;
-        setButtonLoadingExclusive(postAllBtn, 'Posting...', actionBtns);
+            PureLedger.post('/DeliveryChallan/PostSingleEntry', data)
+                .done(function(data) {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                        document.getElementById('dcJournalEntryId').value = '';
+                        document.getElementById('dcJournalVoucherId').value = '';
+                        currentModalData = { voucherId: null, entryId: null };
+                        loadFilteredEntries();
+                        showAlert('success', 'Entry processed successfully');
+                    } else {
+                        showAlert('danger', data.message || 'Error processing entry');
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error processing entry:', error);
+                    showAlert('danger', 'Error: ' + error);
+                })
+                .always(function() {
+                    resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+                });
+        });
+    }
 
-        const voucherId = document.getElementById('dcJournalVoucherId').value;
-        if (!voucherId) {
-            showAlert('warning', 'No voucher selected');
-            resetButtonLoadingExclusive(postAllBtn, actionBtns);
-            return;
-        }
-        const locationId = document.getElementById('dcLocation').value;
-        if (!locationId) {
-            showAlert('warning', 'Please select a location');
-            resetButtonLoadingExclusive(postAllBtn, actionBtns);
-            return;
-        }
-        const dcDate = document.getElementById('dcDate').value;
-        const remarks = document.getElementById('dcRemarks').value;
-        const otherRef = document.getElementById('dcOtherRef').value;
-        const data = {
-            JournalVoucherId: parseInt(voucherId),
-            LocationId: parseInt(locationId),
-            DCDate: dcDate,
-            Remarks: remarks,
-            OtherReference: otherRef
-        };
-        fetch('/DeliveryChallan/ProcessAll', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error('Server returned ' + response.status + ': ' + text);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-                    document.getElementById('dcJournalEntryId').value = '';
-                    document.getElementById('dcJournalVoucherId').value = '';
-                    currentModalData = { voucherId: null, entryId: null };
-                    loadFilteredEntries();
-                    showAlert('success', data.message || 'Entries processed successfully');
-                } else {
-                    showAlert('danger', data.message || 'Error processing entries');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('danger', 'Error processing entries: ' + error.message);
-            })
-            .finally(() => {
+    // Post All button handler
+    if (postAllBtn) {
+        postAllBtn.addEventListener('click', function () {
+            if (postAllBtn.disabled) return;
+            setButtonLoadingExclusive(postAllBtn, 'Posting...', actionBtns);
+
+            const voucherId = document.getElementById('dcJournalVoucherId').value;
+            if (!voucherId) {
+                showAlert('warning', 'No voucher selected');
                 resetButtonLoadingExclusive(postAllBtn, actionBtns);
-            });
-    });
-}
+                return;
+            }
+            const locationId = document.getElementById('dcLocation').value;
+            if (!locationId) {
+                showAlert('warning', 'Please select a location');
+                resetButtonLoadingExclusive(postAllBtn, actionBtns);
+                return;
+            }
+            const dcDate = document.getElementById('dcDate').value;
+            const remarks = document.getElementById('dcRemarks').value;
+            const otherRef = document.getElementById('dcOtherRef').value;
+            const data = {
+                JournalVoucherId: parseInt(voucherId),
+                LocationId: parseInt(locationId),
+                DCDate: dcDate,
+                Remarks: remarks,
+                OtherReference: otherRef
+            };
 
-// Add cartage button handler
-if (addCartageBtn) {
-    addCartageBtn.addEventListener('click', function () {
-        if (addCartageBtn.disabled) return;
-        setButtonLoadingExclusive(addCartageBtn, 'Processing...', actionBtns);
+            PureLedger.post('/DeliveryChallan/ProcessAll', data)
+                .done(function(data) {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                        document.getElementById('dcJournalEntryId').value = '';
+                        document.getElementById('dcJournalVoucherId').value = '';
+                        currentModalData = { voucherId: null, entryId: null };
+                        loadFilteredEntries();
+                        showAlert('success', data.message || 'Entries processed successfully');
+                    } else {
+                        showAlert('danger', data.message || 'Error processing entries');
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error processing entries:', error);
+                    showAlert('danger', 'Error processing entries: ' + error);
+                })
+                .always(function() {
+                    resetButtonLoadingExclusive(postAllBtn, actionBtns);
+                });
+        });
+    }
 
-        const voucherId = document.getElementById('cartageJournalVoucherId').value;
-        const entryId = document.getElementById('cartageEntryId').value;
-        const transporterId = document.getElementById('transporterAccount').value;
-        const amount = document.getElementById('cartageAmount').value;
-        const postToCustomer = document.getElementById('postToCustomer').checked;
-        const dcDate = document.getElementById('dcDate').value;
-        const dcRemarks = document.getElementById('dcRemarks').value;
-        const dcStation = document.getElementById('dcStation')?.value || '';
-        const dcOtherRef = document.getElementById('dcOtherRef').value;
-        const dcLocation = document.getElementById('dcLocation').value;
-        if (!transporterId || !amount) {
-            showAlert('warning', 'Please fill in all required fields');
-            resetButtonLoadingExclusive(addCartageBtn, actionBtns);
-            return;
-        }
-        if (!dcLocation) {
-            showAlert('warning', 'Please select a location');
-            resetButtonLoadingExclusive(addCartageBtn, actionBtns);
-            return;
-        }
-        const data = {
-            journalVoucherId: parseInt(voucherId),
-            entryId: parseInt(entryId),
-            transporterId: parseInt(transporterId),
-            amount: parseFloat(amount),
-            postToCustomer: postToCustomer,
-            dcDate: dcDate,
-            dcRemarks: dcRemarks,
-            dcStation: dcStation,
-            dcOtherRef: dcOtherRef,
-            dcLocation: parseInt(dcLocation)
-        };
-        fetch('/DeliveryChallan/AddCartage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(`Server returned ${response.status}: ${text}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(result => {
-                if (result.success) {
-                    bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
-                    bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
-                    document.getElementById('dcJournalEntryId').value = '';
-                    document.getElementById('dcJournalVoucherId').value = '';
-                    document.getElementById('cartageJournalVoucherId').value = '';
-                    document.getElementById('cartageEntryId').value = '';
-                    currentModalData = { voucherId: null, entryId: null };
-                    loadFilteredEntries();
-                    showAlert('success', 'Cartage added and delivery challan processed successfully');
-                } else {
-                    showAlert('danger', result.message || 'Error processing cartage');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showAlert('danger', 'Error processing cartage: ' + error.message);
-            })
-            .finally(() => {
+    // Add cartage button handler
+    if (addCartageBtn) {
+        addCartageBtn.addEventListener('click', function () {
+            if (addCartageBtn.disabled) return;
+            setButtonLoadingExclusive(addCartageBtn, 'Processing...', actionBtns);
+
+            const voucherId = document.getElementById('cartageJournalVoucherId').value;
+            const entryId = document.getElementById('cartageEntryId').value;
+            const transporterId = document.getElementById('transporterAccount').value;
+            const amount = document.getElementById('cartageAmount').value;
+            const postToCustomer = document.getElementById('postToCustomer').checked;
+            const dcDate = document.getElementById('dcDate').value;
+            const dcRemarks = document.getElementById('dcRemarks').value;
+            const dcStation = document.getElementById('dcStation')?.value || '';
+            const dcOtherRef = document.getElementById('dcOtherRef').value;
+            const dcLocation = document.getElementById('dcLocation').value;
+
+            if (!transporterId || !amount) {
+                showAlert('warning', 'Please fill in all required fields');
                 resetButtonLoadingExclusive(addCartageBtn, actionBtns);
-            });
+                return;
+            }
+            if (!dcLocation) {
+                showAlert('warning', 'Please select a location');
+                resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+                return;
+            }
+
+            const data = {
+                journalVoucherId: parseInt(voucherId),
+                entryId: parseInt(entryId),
+                transporterId: parseInt(transporterId),
+                amount: parseFloat(amount),
+                postToCustomer: postToCustomer,
+                dcDate: dcDate,
+                dcRemarks: dcRemarks,
+                dcStation: dcStation,
+                dcOtherRef: dcOtherRef,
+                dcLocation: parseInt(dcLocation)
+            };
+
+            PureLedger.post('/DeliveryChallan/AddCartage', data)
+                .done(function(result) {
+                    if (result.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
+                        bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
+                        document.getElementById('dcJournalEntryId').value = '';
+                        document.getElementById('dcJournalVoucherId').value = '';
+                        document.getElementById('cartageJournalVoucherId').value = '';
+                        document.getElementById('cartageEntryId').value = '';
+                        currentModalData = { voucherId: null, entryId: null };
+                        loadFilteredEntries();
+                        showAlert('success', 'Cartage added and delivery challan processed successfully');
+                    } else {
+                        showAlert('danger', result.message || 'Error processing cartage');
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error processing cartage:', error);
+                    showAlert('danger', 'Error processing cartage: ' + error);
+                })
+                .always(function() {
+                    resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+                });
+        });
+    }
+
+    // Show alert function
+    function showAlert(type, message) {
+        const icon = type === 'success' ? 'check-circle' :
+            type === 'warning' ? 'exclamation-triangle' :
+                'exclamation-circle';
+
+        const alert = $(`
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <i class="fas fa-${icon} me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `);
+
+        $('#alertArea').append(alert);
+
+        // Auto dismiss after 5 seconds
+        setTimeout(function () {
+            alert.alert('close');
+        }, 5000);
+    }
+
+    // Initialize the page
+    console.log('Initializing Delivery Challan page');
+    loadFilteredEntries();
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-}
-
-// Show alert function (similar to Tags.cshtml)
-function showAlert(type, message) {
-    const icon = type === 'success' ? 'check-circle' :
-        type === 'warning' ? 'exclamation-triangle' :
-            'exclamation-circle';
-
-    const alert = $(`
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-            <i class="fas fa-${icon} me-2"></i>${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    `);
-
-    $('#alertArea').append(alert);
-
-    // Auto dismiss after 5 seconds
-    setTimeout(function () {
-        alert.alert('close');
-    }, 5000);
-}
-
-// Initialize the page
-console.log('Initializing Delivery Challan page');
-loadFilteredEntries();
-
-// Initialize tooltips
-const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl);
-});
 });

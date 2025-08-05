@@ -79,12 +79,24 @@ $(document).ready(function () {
             $accountSelect.empty().append('<option value="">Select Account</option>');
 
             if (projectId) {
-                // Updated to use HomeController endpoint instead of API endpoint
-                $.get(`/Home/GetCategoriesByProject?projectId=${projectId}`, function (categories) {
-                    categories.forEach(c => {
-                        $categorySelect.append(new Option(c.name, c.id));
+                // Show loading indicator
+                $categorySelect.append('<option value="" disabled selected>Loading...</option>');
+                
+                // Use PureLedger utility for AJAX
+                PureLedger.get('/Home/GetCategoriesByProject', { projectId: projectId })
+                    .done(function(categories) {
+                        $categorySelect.empty().append('<option value="">Select Category</option>');
+                        
+                        if (categories && categories.length > 0) {
+                            categories.forEach(c => {
+                                $categorySelect.append(new Option(c.name, c.id));
+                            });
+                        }
+                    })
+                    .fail(function(xhr, status, error) {
+                        console.error('Error loading categories:', error);
+                        $categorySelect.empty().append('<option value="">Select Category</option>');
                     });
-                });
             }
         });
     });
@@ -99,14 +111,26 @@ $(document).ready(function () {
         $row[0].removeAttribute('data-account-type');
 
         if (categoryId) {
-            // Updated to use HomeController endpoint instead of API endpoint
-            $.get(`/Home/GetAccountsByCategory?categoryId=${categoryId}`, function (accounts) {
-                accounts.forEach(a => {
-                    const $option = $(new Option(a.name, a.id));
-                    $option.data('account-type', a.accountTypeName || '');
-                    $accountSelect.append($option);
+            // Show loading indicator
+            $accountSelect.append('<option value="" disabled selected>Loading...</option>');
+            
+            // Use PureLedger utility for AJAX
+            PureLedger.get('/Home/GetAccountsByCategory', { categoryId: categoryId })
+                .done(function(accounts) {
+                    $accountSelect.empty().append('<option value="">Select Account</option>');
+                    
+                    if (accounts && accounts.length > 0) {
+                        accounts.forEach(a => {
+                            const $option = $(new Option(a.name, a.id));
+                            $option.data('account-type', a.accountTypeName || '');
+                            $accountSelect.append($option);
+                        });
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error loading accounts:', error);
+                    $accountSelect.empty().append('<option value="">Select Account</option>');
                 });
-            });
         }
     });
 
@@ -119,19 +143,24 @@ $(document).ready(function () {
         $row[0].setAttribute('data-account-type', $selected.data('account-type') || '');
 
         if (accountId) {
-            $.get('/Home/GetProductDetails', { accountId }, function (product) {
-                if (product?.saleRate) {
-                    $row.find('.rate-input').val(product.saleRate);
-                }
-                if (product?.pkg) {
-                    $row[0].setAttribute('data-pkg', product.pkg);
-                    $row.find('.pkg-input').val(product.pkg);
-                    updateRowCalculations($row[0]);
-                } else {
-                    $row[0].removeAttribute('data-pkg');
-                    $row.find('.pkg-input').val('');
-                }
-            });
+            // Use PureLedger utility for AJAX
+            PureLedger.get('/Home/GetProductDetails', { accountId: accountId })
+                .done(function(product) {
+                    if (product?.saleRate) {
+                        $row.find('.rate-input').val(product.saleRate);
+                    }
+                    if (product?.pkg) {
+                        $row[0].setAttribute('data-pkg', product.pkg);
+                        $row.find('.pkg-input').val(product.pkg);
+                        updateRowCalculations($row[0]);
+                    } else {
+                        $row[0].removeAttribute('data-pkg');
+                        $row.find('.pkg-input').val('');
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error loading product details:', error);
+                });
         }
     });
 
@@ -158,22 +187,28 @@ $(document).ready(function () {
         const $suggestions = $input.closest('.tag-multibox').siblings('.tag-suggestions');
 
         if (term.length > 0) {
-            $.get('/MetaData/SearchTags', { term }, function (data) {
-                $suggestions.empty();
+            // Use PureLedger utility for AJAX
+            PureLedger.get('/MetaData/SearchTags', { term: term })
+                .done(function(data) {
+                    $suggestions.empty();
 
-                if (data.length > 0) {
-                    data.forEach(tag => {
-                        $suggestions.append(
-                            `<a class="dropdown-item" href="#" data-id="${tag.id}" data-name="${tag.text}">
-                                ${tag.text}
-                            </a>`
-                        );
-                    });
-                    $suggestions.addClass('show');
-                } else {
+                    if (data.length > 0) {
+                        data.forEach(tag => {
+                            $suggestions.append(
+                                `<a class="dropdown-item" href="#" data-id="${tag.id}" data-name="${tag.text}">
+                                    ${tag.text}
+                                </a>`
+                            );
+                        });
+                        $suggestions.addClass('show');
+                    } else {
+                        $suggestions.removeClass('show');
+                    }
+                })
+                .fail(function(xhr, status, error) {
+                    console.error('Error searching tags:', error);
                     $suggestions.removeClass('show');
-                }
-            });
+                });
         } else {
             $suggestions.removeClass('show');
         }
@@ -429,12 +464,18 @@ $(document).ready(function () {
             $categorySelect.empty().append('<option value="">Select Category</option>');
 
             if (projectId) {
-                // Updated to use HomeController endpoint instead of API endpoint
-                $.get(`/Home/GetCategoriesByProject?projectId=${projectId}`, function (categories) {
-                    categories.forEach(c => {
-                        $categorySelect.append(new Option(c.name, c.id));
+                // Use PureLedger utility for AJAX
+                PureLedger.get('/Home/GetCategoriesByProject', { projectId: projectId })
+                    .done(function(categories) {
+                        if (categories && categories.length > 0) {
+                            categories.forEach(c => {
+                                $categorySelect.append(new Option(c.name, c.id));
+                            });
+                        }
+                    })
+                    .fail(function(xhr, status, error) {
+                        console.error('Error loading categories for new row:', error);
                     });
-                });
             }
         }
     }

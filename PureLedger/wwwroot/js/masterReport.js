@@ -44,9 +44,7 @@ function initColumnToggles() {
     });
 }
 
-// Change the loadCategoriesForProject function to handle potential issues better
-
-async function loadCategoriesForProject() {
+function loadCategoriesForProject() {
     const projectId = document.getElementById('projectId').value;
     const categorySelect = document.getElementById('categoryId');
     
@@ -59,44 +57,38 @@ async function loadCategoriesForProject() {
         return;
     }
     
-    try {
-        // Call the ReportingController endpoint to get categories for the selected project
-        const response = await fetch(`/Reporting/GetCategoriesByProject?projectId=${projectId}`);
-        
-        // Log raw response for debugging
-        console.log(`Categories response status: ${response.status}`);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Error response: ${errorText}`);
-            throw new Error(`Server returned ${response.status}: ${errorText}`);
-        }
-        
-        const categories = await response.json();
-        console.log(`Received ${categories.length} categories:`, categories);
-        
-        // Enable the select
-        categorySelect.disabled = false;
-        
-        if (categories && categories.length > 0) {
-            categories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category.id;
-                option.textContent = category.name;
-                categorySelect.appendChild(option);
-            });
-        } else {
-            console.warn('No categories received from server');
-        }
-    } catch (error) {
-        console.error('Error loading categories:', error);
-        // No fallback - just show the error
-        alert('Failed to load categories. Please try again or contact support.');
-    }
+    // Show loading indicator in the select
+    categorySelect.innerHTML = '<option value="" disabled selected>Loading categories...</option>';
+    
+    // Use PureLedger utility for AJAX
+    PureLedger.get('/Reporting/GetCategoriesByProject', { projectId: projectId })
+        .done(function(categories) {
+            // Reset the select first
+            categorySelect.innerHTML = '<option value="">All Categories</option>';
+            categorySelect.disabled = false;
+            
+            console.log(`Received ${categories.length} categories:`, categories);
+            
+            if (categories && categories.length > 0) {
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.id;
+                    option.textContent = category.name;
+                    categorySelect.appendChild(option);
+                });
+            } else {
+                console.warn('No categories received from server');
+            }
+        })
+        .fail(function(xhr, status, error) {
+            console.error('Error loading categories:', error);
+            categorySelect.innerHTML = '<option value="">All Categories</option>';
+            categorySelect.disabled = false;
+            alert('Failed to load categories. Please try again or contact support.');
+        });
 }
 
-// Also update the loadAccountsForCategory function to provide better fallback
-async function loadAccountsForCategory() {
+function loadAccountsForCategory() {
     const categoryId = document.getElementById('categoryId').value;
     const accountSelect = document.getElementById('accountId');
 
@@ -107,27 +99,24 @@ async function loadAccountsForCategory() {
         return;
     }
 
-    try {
-        // Call the ReportingController endpoint to get accounts
-        const response = await fetch(`/Reporting/GetAccountsByCategory?categoryId=${categoryId}`);
-        console.log(`Accounts response status: ${response.status}`);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Error response: ${errorText}`);
-            throw new Error(`Server returned ${response.status}: ${errorText}`);
-        }
-        
-        const accounts = await response.json();
-        console.log(`Received ${accounts.length} accounts:`, accounts);
-        
-        accountSelect.disabled = false;
-        updateAccountDropdown(accounts);
-    } catch (error) {
-        console.error('Error loading accounts:', error);
-        // No fallback - just show the error and leave dropdown empty/disabled
-        alert('Failed to load accounts. Please try again or contact support.');
-    }
+    // Show loading indicator
+    accountSelect.innerHTML = '<option value="" disabled selected>Loading accounts...</option>';
+    
+    // Use PureLedger utility for AJAX
+    PureLedger.get('/Reporting/GetAccountsByCategory', { categoryId: categoryId })
+        .done(function(accounts) {
+            console.log(`Received ${accounts.length} accounts:`, accounts);
+            
+            accountSelect.innerHTML = '<option value="">All Accounts</option>';
+            accountSelect.disabled = false;
+            updateAccountDropdown(accounts);
+        })
+        .fail(function(xhr, status, error) {
+            console.error('Error loading accounts:', error);
+            accountSelect.innerHTML = '<option value="">All Accounts</option>';
+            accountSelect.disabled = false;
+            alert('Failed to load accounts. Please try again or contact support.');
+        });
 }
 
 function updateAccountDropdown(accounts) {
@@ -145,9 +134,10 @@ function updateAccountDropdown(accounts) {
 function resetAccountDropdown() {
     const accountSelect = document.getElementById('accountId');
     accountSelect.innerHTML = '<option value="">All Accounts</option>';
+    accountSelect.disabled = true;
 }
 
-async function generateReport() {
+function generateReport() {
     // Show loading indicator
     const resultsSection = document.getElementById('reportResults');
     resultsSection.style.display = 'none';
@@ -163,31 +153,31 @@ async function generateReport() {
     const categoryId = document.getElementById('categoryId').value;
     const accountId = document.getElementById('accountId').value;
 
-    // Build query parameters
-    const params = new URLSearchParams();
-    if (startDate) params.append('StartDate', startDate);
-    if (endDate) params.append('EndDate', endDate);
-    if (projectId) params.append('ProjectId', projectId);
-    if (categoryId) params.append('CategoryId', categoryId);
-    if (accountId) params.append('AccountId', accountId);
+    // Build parameters object
+    const params = {
+        StartDate: startDate,
+        EndDate: endDate
+    };
+    
+    if (projectId) params.ProjectId = projectId;
+    if (categoryId) params.CategoryId = categoryId;
+    if (accountId) params.AccountId = accountId;
 
-    try {
-        // Call API to get report data
-        const response = await fetch(`/Reporting/GetMasterReportData?${params}`);
-        if (!response.ok) {
-            throw new Error(`Server returned ${response.status}: ${await response.text()}`);
-        }
-        const data = await response.json();
-        displayReport(data);
-    } catch (error) {
-        console.error('Error generating report:', error);
-        alert('Failed to generate report: ' + error.message);
-    } finally {
-        // Hide loading indicator
-        if (loadingIndicator) {
-            loadingIndicator.style.display = 'none';
-        }
-    }
+    // Use PureLedger utility for AJAX
+    PureLedger.get('/Reporting/GetMasterReportData', params)
+        .done(function(data) {
+            displayReport(data);
+        })
+        .fail(function(xhr, status, error) {
+            console.error('Error generating report:', error);
+            alert('Failed to generate report: ' + error);
+        })
+        .always(function() {
+            // Hide loading indicator
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+        });
 }
 
 function displayReport(data) {

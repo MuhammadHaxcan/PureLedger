@@ -112,50 +112,5 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
-    <script>
-        $(document).ready(function() {
-            // Handle showing/hiding account type specific fields
-            $('#accountGroupSelect').change(function() {
-                var selectedText = $(this).find('option:selected').text().toLowerCase().trim();
-
-                if (selectedText === 'account') {
-                    $('#accountDataFields').show();
-                    $('#productDataFields').hide();
-                } else if (selectedText === 'product') {
-                    $('#productDataFields').show();
-                    $('#accountDataFields').hide();
-                } else {
-                    $('#accountDataFields').hide();
-                    $('#productDataFields').hide();
-                }
-            });
-
-            // Trigger change event on page load to set initial visibility
-            $('#accountGroupSelect').trigger('change');
-
-            // Project selection: fetch categories
-            $('#ProjectId').change(function() {
-                var projectId = $(this).val();
-                var $categorySelect = $('#CategoryId');
-                $categorySelect.empty();
-                $categorySelect.append($('<option>', { value: '', text: '-- Select Category --' }));
-
-                if (projectId) {
-                    $.ajax({
-                        url: '@Url.Action("GetCategoriesByProject", "MetaData")',
-                        type: 'POST',
-                        data: { projectId: projectId },
-                        success: function(categories) {
-                            $.each(categories, function(i, category) {
-                                $categorySelect.append($('<option>', {
-                                    value: category.categoryId,
-                                    text: category.categoryName
-                                }));
-                            });
-                        }
-                    });
-                }
-            });
-        });
-    </script>
+    <script src="~/js/account.js" asp-append-version="true"></script>
 }
