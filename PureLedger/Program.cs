@@ -15,25 +15,9 @@ builder.Services.AddSingleton<SubrouteDbContextFactory>();
 
 // Register all services
 builder.Services.AddScoped<JournalEntryValidationService>();
-builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
-builder.Services.AddScoped<IJournalVoucherRepository, JournalVoucherRepository>();
-builder.Services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
-builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
-builder.Services.AddScoped<IAccountRepository, AccountRepository>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
-
-// Register repositories
-builder.Services.AddScoped<ITagRepository, TagRepository>();
-builder.Services.AddScoped<IAccountGroupRepository, AccountGroupRepository>();
-builder.Services.AddScoped<IAccountDataRepository, AccountDataRepository>();
-builder.Services.AddScoped<IProductDataRepository, ProductDataRepository>();
-builder.Services.AddScoped<IAccountTypeRepository, AccountTypeRepository>();
-builder.Services.AddScoped<ILocationRepository, LocationRepository>();
-builder.Services.AddScoped<IDeliveryChallanVoucherRepository, DeliveryChallanVoucherRepository>();
-builder.Services.AddScoped<IDeliveryChallanEntryRepository, DeliveryChallanEntryRepository>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
@@ -47,6 +31,9 @@ builder.Services.AddScoped<LedgerDbContext>(provider =>
     var subroute = httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
     return factory.CreateDbContext(subroute);
 });
+
+// Register UnitOfWork - this will create all repositories internally with the same DbContext
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 var app = builder.Build();
 

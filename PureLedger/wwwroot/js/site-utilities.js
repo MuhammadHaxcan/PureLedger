@@ -34,9 +34,19 @@ const PureLedger = {
     },
 
     post: function (url, data) {
-        return this.ajax(url, {
+        const basePath = this.getCurrentBasePath();
+        const fullUrl = url.startsWith('/') ?
+            `${basePath}${url}` :
+            `${basePath}/${url}`;
+
+        console.log(`PureLedger.post - Full URL: ${fullUrl}`);
+
+        return $.ajax({
+            url: fullUrl,
             method: 'POST',
-            data: data
+            data: JSON.stringify(data), // Serialize to JSON
+            contentType: 'application/json',
+            dataType: 'json'
         });
     }
 };

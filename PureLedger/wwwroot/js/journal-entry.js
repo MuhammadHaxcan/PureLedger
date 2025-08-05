@@ -12,6 +12,15 @@ const utils = {
 
 // Document ready handlers
 $(document).ready(function () {
+    // Add form action correction (after the utility functions declaration)
+    // This ensures the form posts to the correct URL with the route prefix
+    const formElement = document.getElementById('entryForm');
+    if (formElement) {
+        const basePath = PureLedger.getCurrentBasePath();
+        formElement.setAttribute('action', basePath + '/Home/Entry');
+        console.log("Form action set to:", formElement.action);
+    }
+
     // Row counter for adding new rows
     let rowCounter = 0;
 

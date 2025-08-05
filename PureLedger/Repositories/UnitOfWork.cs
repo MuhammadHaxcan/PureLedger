@@ -9,87 +9,44 @@ namespace PureLedger.Repositories
 {
     public class UnitOfWork : IUnitOfWork
     {
-        private readonly SubrouteDbContextFactory _dbContextFactory;
-        private readonly IHttpContextAccessor _httpContextAccessor;
-        private LedgerDbContext _dbContext;
+        private readonly LedgerDbContext _dbContext;
 
-        // Add all required repositories
-        private IProjectRepository _projects;
-        private IJournalVoucherRepository _journalVouchers;
-        private IJournalEntryRepository _journalEntries;
-        private ICategoryRepository _categories;
-        private IAccountRepository _accounts;
-        private ITagRepository _tags;
-        private IAccountGroupRepository _accountGroups;
-        private IAccountDataRepository _accountDatas;
-        private IProductDataRepository _productDatas;
-        private IAccountTypeRepository _accountTypes;
-        private ILocationRepository _locations;
-        private IDeliveryChallanVoucherRepository _deliveryChallanVouchers;
-        private IDeliveryChallanEntryRepository _deliveryChallanEntries;
+        // Add all required repositories as lazy-initialized properties
+        private IProjectRepository? _projects;
+        private IJournalVoucherRepository? _journalVouchers;
+        private IJournalEntryRepository? _journalEntries;
+        private ICategoryRepository? _categories;
+        private IAccountRepository? _accounts;
+        private ITagRepository? _tags;
+        private IAccountGroupRepository? _accountGroups;
+        private IAccountDataRepository? _accountDatas;
+        private IProductDataRepository? _productDatas;
+        private IAccountTypeRepository? _accountTypes;
+        private ILocationRepository? _locations;
+        private IDeliveryChallanVoucherRepository? _deliveryChallanVouchers;
+        private IDeliveryChallanEntryRepository? _deliveryChallanEntries;
 
-        public UnitOfWork(
-            SubrouteDbContextFactory dbContextFactory,
-            IHttpContextAccessor httpContextAccessor,
-            IProjectRepository projects,
-            IJournalVoucherRepository journalVouchers,
-            IJournalEntryRepository journalEntries,
-            ICategoryRepository categories,
-            IAccountRepository accounts,
-            ITagRepository tags,
-            IAccountGroupRepository accountGroups,
-            IAccountDataRepository accountDatas,
-            IProductDataRepository productDatas,
-            IAccountTypeRepository accountTypes,
-            ILocationRepository locations,
-            IDeliveryChallanVoucherRepository deliveryChallanVouchers,
-            IDeliveryChallanEntryRepository deliveryChallanEntries)
+        public UnitOfWork(LedgerDbContext dbContext)
         {
-            _dbContextFactory = dbContextFactory;
-            _httpContextAccessor = httpContextAccessor;
-
-            // Get the subroute from HttpContext
-            var subrouteName =
-                _httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
-
-            // Log which subroute we're using
-            Console.WriteLine($"UnitOfWork initializing with subroute: {subrouteName}");
-
-            // Create the context with the appropriate connection
-            _dbContext = _dbContextFactory.CreateDbContext(subrouteName);
-
-            // Initialize repositories
-            _projects = projects;
-            _journalVouchers = journalVouchers;
-            _journalEntries = journalEntries;
-            _categories = categories;
-            _accounts = accounts;
-            _tags = tags;
-            _accountGroups = accountGroups;
-            _accountDatas = accountDatas;
-            _productDatas = productDatas;
-            _accountTypes = accountTypes;
-            _locations = locations;
-            _deliveryChallanVouchers = deliveryChallanVouchers;
-            _deliveryChallanEntries = deliveryChallanEntries;
+            _dbContext = dbContext;
         }
 
         public LedgerDbContext DbContext => _dbContext;
 
-        // Implement all required properties from IUnitOfWork interface
-        public IProjectRepository Projects => _projects;
-        public IJournalVoucherRepository JournalVouchers => _journalVouchers;
-        public IJournalEntryRepository JournalEntries => _journalEntries;
-        public ICategoryRepository Categories => _categories;
-        public IAccountRepository Accounts => _accounts;
-        public ITagRepository Tags => _tags;
-        public IAccountGroupRepository AccountGroups => _accountGroups;
-        public IAccountDataRepository AccountDatas => _accountDatas;
-        public IProductDataRepository ProductDatas => _productDatas;
-        public IAccountTypeRepository AccountTypes => _accountTypes;
-        public ILocationRepository Locations => _locations;
-        public IDeliveryChallanVoucherRepository DeliveryChallanVouchers => _deliveryChallanVouchers;
-        public IDeliveryChallanEntryRepository DeliveryChallanEntries => _deliveryChallanEntries;
+        // Implement all required properties from IUnitOfWork interface with lazy initialization
+        public IProjectRepository Projects => _projects ??= new ProjectRepository(_dbContext);
+        public IJournalVoucherRepository JournalVouchers => _journalVouchers ??= new JournalVoucherRepository(_dbContext);
+        public IJournalEntryRepository JournalEntries => _journalEntries ??= new JournalEntryRepository(_dbContext);
+        public ICategoryRepository Categories => _categories ??= new CategoryRepository(_dbContext);
+        public IAccountRepository Accounts => _accounts ??= new AccountRepository(_dbContext);
+        public ITagRepository Tags => _tags ??= new TagRepository(_dbContext);
+        public IAccountGroupRepository AccountGroups => _accountGroups ??= new AccountGroupRepository(_dbContext);
+        public IAccountDataRepository AccountDatas => _accountDatas ??= new AccountDataRepository(_dbContext);
+        public IProductDataRepository ProductDatas => _productDatas ??= new ProductDataRepository(_dbContext);
+        public IAccountTypeRepository AccountTypes => _accountTypes ??= new AccountTypeRepository(_dbContext);
+        public ILocationRepository Locations => _locations ??= new LocationRepository(_dbContext);
+        public IDeliveryChallanVoucherRepository DeliveryChallanVouchers => _deliveryChallanVouchers ??= new DeliveryChallanVoucherRepository(_dbContext);
+        public IDeliveryChallanEntryRepository DeliveryChallanEntries => _deliveryChallanEntries ??= new DeliveryChallanEntryRepository(_dbContext);
 
         public async Task<int> SaveChangesAsync()
         {

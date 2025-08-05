@@ -206,10 +206,18 @@ namespace PureLedger.Services
                 var result = await _unitOfWork.DeliveryChallanVouchers.AddAsync(deliveryChallanVoucher);
                 await _unitOfWork.SaveChangesAsync();
 
-                _logger.LogInformation("Created new delivery challan voucher with ID {DeliveryChallanId} for journal voucher ID {JournalVoucherId}",
-                    result.DeliveryChallanVoucherId, journalVoucherId);
+                // **CRITICAL FIX**: Refresh the entity from the database to get the proper ID
+                var savedVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
+                if (savedVoucher == null)
+                {
+                    _logger.LogError("Failed to retrieve saved delivery challan voucher for journal voucher ID {JournalVoucherId}", journalVoucherId);
+                    throw new InvalidOperationException($"Failed to save delivery challan voucher for journal voucher ID {journalVoucherId}");
+                }
 
-                return result;
+                _logger.LogInformation("Created new delivery challan voucher with ID {DeliveryChallanId} for journal voucher ID {JournalVoucherId}",
+                    savedVoucher.DeliveryChallanVoucherId, journalVoucherId);
+
+                return savedVoucher;
             }
             catch (Exception ex)
             {

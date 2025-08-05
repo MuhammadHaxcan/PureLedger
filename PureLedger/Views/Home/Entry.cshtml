@@ -254,6 +254,25 @@
             let submitBtn = $('#submitBtn');
             let submitPrintBtn = $('#submitPrintBtn');
             let formAction = $('#formAction');
+            
+            // Correct form action if needed
+            const basePath = PureLedger.getCurrentBasePath();
+            console.log("Current base path:", basePath);
+            
+            // Ensure form posts to the correct URL
+            if (form.length && basePath) {
+                // Remove any duplicate prefixes that might exist
+                let formAction = form.attr('action');
+                if (formAction) {
+                    // Remove any existing prefixes to avoid duplication
+                    if (formAction.includes('/route1/') || formAction.includes('/route2/')) {
+                        formAction = formAction.replace(/\/route[12]\//, '/');
+                    }
+                    // Set the correct action with prefix
+                    form.attr('action', basePath + formAction);
+                    console.log("Form action set to:", form.attr('action'));
+                }
+            }
 
             submitBtn.on('click', function () {
                 formAction.val('submit');
@@ -272,6 +291,9 @@
 
                 submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Submitting...');
                 submitPrintBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Submitting...');
+                
+                // Log the actual form action for debugging
+                console.log("Submitting form to:", this.action);
             });
         });
     </script>
