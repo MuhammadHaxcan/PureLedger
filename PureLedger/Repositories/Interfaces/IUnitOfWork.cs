@@ -19,6 +19,7 @@ namespace PureLedger.Repositories.Interfaces
         ILocationRepository Locations { get; }
         IDeliveryChallanVoucherRepository DeliveryChallanVouchers { get; }
         IDeliveryChallanEntryRepository DeliveryChallanEntries { get; }
+        IJournalVoucherReferenceRepository JournalVoucherReferences { get; }
 
         Task<int> SaveChangesAsync();
         

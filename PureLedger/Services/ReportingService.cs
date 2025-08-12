@@ -47,7 +47,8 @@ namespace PureLedger.Services
             var entries = GetProcessedEntries(dcVoucher.Entries);
             var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-            var cartageEntry = await _unitOfWork.JournalEntries.GetCartageEntryByJournalVoucherIdAsync(dcVoucher.JournalVoucherId);
+            var cartageEntries = await _unitOfWork.JournalEntries.GetCartageEntriesByJournalVoucherIdAsync(dcVoucher.JournalVoucherId);
+            var cartageEntry = cartageEntries.FirstOrDefault();
 
             var viewModel = CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsCompleted, cartageEntry);
             viewModel.Adda = locationNames;
@@ -68,7 +69,8 @@ namespace PureLedger.Services
             var customerInfo = GetCustomerAccountName(voucher);
             var typeLabel = isPartial ? "DC - Partial" : voucherType;
 
-            var cartageEntry = await _unitOfWork.JournalEntries.GetCartageEntryByJournalVoucherIdAsync(voucher.JournalVoucherId);
+            var cartageEntries = await _unitOfWork.JournalEntries.GetCartageEntriesByJournalVoucherIdAsync(voucher.JournalVoucherId);
+            var cartageEntry = cartageEntries.FirstOrDefault();
 
             return CreateVoucherViewModel(voucher.JournalVoucherId, typeLabel, project.ProjectName, voucher.EntryDate,
                 entries, customerInfo, isPartial, cartageEntry);

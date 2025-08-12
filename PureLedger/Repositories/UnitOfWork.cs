@@ -25,6 +25,7 @@ namespace PureLedger.Repositories
         private ILocationRepository? _locations;
         private IDeliveryChallanVoucherRepository? _deliveryChallanVouchers;
         private IDeliveryChallanEntryRepository? _deliveryChallanEntries;
+        private IJournalVoucherReferenceRepository? _journalVoucherReferences;
 
         public UnitOfWork(LedgerDbContext dbContext)
         {
@@ -47,6 +48,7 @@ namespace PureLedger.Repositories
         public ILocationRepository Locations => _locations ??= new LocationRepository(_dbContext);
         public IDeliveryChallanVoucherRepository DeliveryChallanVouchers => _deliveryChallanVouchers ??= new DeliveryChallanVoucherRepository(_dbContext);
         public IDeliveryChallanEntryRepository DeliveryChallanEntries => _deliveryChallanEntries ??= new DeliveryChallanEntryRepository(_dbContext);
+        public IJournalVoucherReferenceRepository JournalVoucherReferences => _journalVoucherReferences ??= new JournalVoucherReferenceRepository(_dbContext);
 
         public async Task<int> SaveChangesAsync()
         {

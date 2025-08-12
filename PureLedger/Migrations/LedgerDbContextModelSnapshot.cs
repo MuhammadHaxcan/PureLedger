@@ -355,9 +355,6 @@ namespace PureLedger.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalVoucherId"));
 
-                    b.Property<int?>("CartageVoucherId")
-                        .HasColumnType("int");
-
                     b.Property<DateOnly>("CreditableDate")
                         .HasColumnType("date");
 
@@ -372,11 +369,36 @@ namespace PureLedger.Migrations
 
                     b.HasKey("JournalVoucherId");
 
-                    b.HasIndex("CartageVoucherId");
-
                     b.HasIndex("ProjectId");
 
                     b.ToTable("JournalVouchers");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.JournalVoucherReference", b =>
+                {
+                    b.Property<int>("JournalVoucherReferenceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalVoucherReferenceId"));
+
+                    b.Property<int>("MainVoucherId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("ReferencedVoucherId")
+                        .HasColumnType("int");
+
+                    b.HasKey("JournalVoucherReferenceId");
+
+                    b.HasIndex("MainVoucherId");
+
+                    b.HasIndex("ReferencedVoucherId");
+
+                    b.ToTable("JournalVoucherReferences");
                 });
 
             modelBuilder.Entity("PureLedger.Models.Location", b =>
@@ -617,19 +639,32 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
                 {
-                    b.HasOne("PureLedger.Models.JournalVoucher", "CartageVoucher")
-                        .WithMany()
-                        .HasForeignKey("CartageVoucherId");
-
                     b.HasOne("PureLedger.Models.Project", "Project")
                         .WithMany()
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CartageVoucher");
-
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.JournalVoucherReference", b =>
+                {
+                    b.HasOne("PureLedger.Models.JournalVoucher", "MainVoucher")
+                        .WithMany("OutgoingReferences")
+                        .HasForeignKey("MainVoucherId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.JournalVoucher", "ReferencedVoucher")
+                        .WithMany("IncomingReferences")
+                        .HasForeignKey("ReferencedVoucherId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("MainVoucher");
+
+                    b.Navigation("ReferencedVoucher");
                 });
 
             modelBuilder.Entity("PureLedger.Models.ProductData", b =>
@@ -667,7 +702,11 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
                 {
+                    b.Navigation("IncomingReferences");
+
                     b.Navigation("JournalEntries");
+
+                    b.Navigation("OutgoingReferences");
                 });
 
             modelBuilder.Entity("PureLedger.Models.Project", b =>

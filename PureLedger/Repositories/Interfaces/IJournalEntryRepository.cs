@@ -18,6 +18,6 @@ namespace PureLedger.Repositories.Interfaces
         Task<decimal> GetAccountBalanceUpToVoucherAsync(int accountId, int maxVoucherId);
         Task<List<JournalEntry>> GetJournalEntriesByFiltersAsync(List<int> accountIds, int? categoryId, int? projectId);
         Task<List<JournalEntry>> GetEntriesForMasterReportAsync(DateOnly startDate, DateOnly endDate, int? projectId, int? categoryId, int? accountId);
-        Task<JournalEntry?> GetCartageEntryByJournalVoucherIdAsync(int journalVoucherId);
+        Task<List<JournalEntry>> GetCartageEntriesByJournalVoucherIdAsync(int journalVoucherId);
     }
 }

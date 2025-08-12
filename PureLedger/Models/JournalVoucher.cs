@@ -25,10 +25,6 @@ namespace PureLedger.Models
         
         public bool IsCompleted { get; set; }
 
-        // New property to reference cartage voucher
-        [ForeignKey("CartageVoucher")]
-        public int? CartageVoucherId { get; set; }
-
         [NotMapped]
         public decimal TotalDebit => JournalEntries?.Sum(e => e.Debit) ?? 0;
 
@@ -39,8 +35,9 @@ namespace PureLedger.Models
         public virtual Project Project { get; set; }
         public virtual ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
         
-        // New navigation property for cartage voucher reference
-        public virtual JournalVoucher? CartageVoucher { get; set; }
+        // New reference collections
+        public virtual ICollection<JournalVoucherReference> OutgoingReferences { get; set; } = new List<JournalVoucherReference>();
+        public virtual ICollection<JournalVoucherReference> IncomingReferences { get; set; } = new List<JournalVoucherReference>();
     }
     
     public class DateAfterAttribute : ValidationAttribute

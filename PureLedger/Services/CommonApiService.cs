@@ -43,14 +43,11 @@ namespace PureLedger.Services
 
         public async Task<JournalEntry?> GetCartageEntryByJournalVoucherIdAsync(int journalVoucherId)
         {
-            var voucher = await _journalVoucherRepository.GetWithEntriesAsync(journalVoucherId);
-            if (voucher == null || !voucher.CartageVoucherId.HasValue)
-                return null;
-
-            var cartageVoucherId = voucher.CartageVoucherId.Value;
-
-            var entries = await _journalEntryRepository.GetByCartageId(cartageVoucherId);
-            return entries; // or any specific logic to pick one
+            // Use the new method that works with JournalVoucherReferences
+            var cartageEntries = await _journalEntryRepository.GetCartageEntriesByJournalVoucherIdAsync(journalVoucherId);
+            
+            // Return the first entry if any are found, otherwise null
+            return cartageEntries.FirstOrDefault();
         }
     }
 }

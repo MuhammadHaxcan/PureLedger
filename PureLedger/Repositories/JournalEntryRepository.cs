@@ -208,17 +208,29 @@ namespace PureLedger.Repositories
             return await query.ToListAsync();
         }
 
-        public async Task<JournalEntry?> GetCartageEntryByJournalVoucherIdAsync(int journalVoucherId)
+        public async Task<List<JournalEntry>> GetCartageEntriesByJournalVoucherIdAsync(int journalVoucherId)
         {
-            var voucher = await _context.JournalVouchers
-                .FirstOrDefaultAsync(v => v.JournalVoucherId == journalVoucherId);
+            // Get all cartage references for this voucher
+            var cartageReferences = await _context.JournalVoucherReferences
+                .Where(r => r.MainVoucherId == journalVoucherId && r.ReferenceType == "Cartage")
+                .ToListAsync();
                 
-            if (voucher == null || !voucher.CartageVoucherId.HasValue)
-                return null;
+            if (cartageReferences == null || !cartageReferences.Any())
+                return new List<JournalEntry>();
 
-            var cartageVoucherId = voucher.CartageVoucherId.Value;
+            List<JournalEntry> cartageEntries = new List<JournalEntry>();
+            
+            // Process each referenced cartage voucher
+            foreach (var reference in cartageReferences)
+            {
+                var cartageEntry = await GetByCartageId(reference.ReferencedVoucherId);
+                if (cartageEntry != null)
+                {
+                    cartageEntries.Add(cartageEntry);
+                }
+            }
 
-            return await GetByCartageId(cartageVoucherId);
+            return cartageEntries;
         }
     }
 }

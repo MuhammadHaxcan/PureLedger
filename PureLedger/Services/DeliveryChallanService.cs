@@ -387,10 +387,7 @@ namespace PureLedger.Services
                     await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
 
                     // NEW CODE: If this voucher has a cartage voucher reference, process that cartage voucher
-                    if (voucher.CartageVoucherId.HasValue)
-                    {
-                        await ProcessCartageVoucherAsync(voucher.CartageVoucherId.Value);
-                    }
+                    await ProcessCartageVoucherAsync(voucher.JournalVoucherId);
                 }
 
                 // NEW CODE: Mark the corresponding delivery challan voucher as completed
@@ -429,33 +426,39 @@ namespace PureLedger.Services
         }
 
         // Add this new method to process the cartage voucher
-        private async Task ProcessCartageVoucherAsync(int cartageVoucherId)
+        private async Task ProcessCartageVoucherAsync(int mainVoucherId)
         {
             try
             {
-                var cartageVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(cartageVoucherId);
-                if (cartageVoucher == null)
-                {
-                    _logger.LogError("Cartage voucher with ID {CartageVoucherId} not found", cartageVoucherId);
-                    return;
-                }
-
-                // Mark all entries as processed
-                foreach (var entry in cartageVoucher.JournalEntries)
-                {
-                    entry.IsProcessed = true;
-                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
-                }
-
-                // Mark the cartage voucher as completed
-                cartageVoucher.IsCompleted = true;
-                await _unitOfWork.JournalVouchers.UpdateAsync(cartageVoucher);
+                // Find all cartage vouchers referenced by this voucher
+                var references = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAndTypeAsync(mainVoucherId, "Cartage");
                 
-                _logger.LogInformation("Processed cartage voucher with ID {CartageVoucherId}", cartageVoucherId);
+                foreach (var reference in references)
+                {
+                    var cartageVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(reference.ReferencedVoucherId);
+                    if (cartageVoucher == null)
+                    {
+                        _logger.LogError("Referenced cartage voucher with ID {CartageVoucherId} not found", reference.ReferencedVoucherId);
+                        continue;
+                    }
+
+                    // Mark all entries as processed
+                    foreach (var entry in cartageVoucher.JournalEntries)
+                    {
+                        entry.IsProcessed = true;
+                        await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                    }
+
+                    // Mark the cartage voucher as completed
+                    cartageVoucher.IsCompleted = true;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(cartageVoucher);
+                    
+                    _logger.LogInformation("Processed cartage voucher with ID {CartageVoucherId}", reference.ReferencedVoucherId);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing cartage voucher with ID {CartageVoucherId}", cartageVoucherId);
+                _logger.LogError(ex, "Error processing cartage vouchers for main voucher with ID {MainVoucherId}", mainVoucherId);
             }
         }
 
@@ -528,8 +531,7 @@ namespace PureLedger.Services
                     originalJV.ProjectId, debitAccountId, transporterId, entry, amount);
                     
                 // Set the reference in the original voucher
-                originalJV.CartageVoucherId = cartageVoucher.JournalVoucherId;
-                await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
+                await CreateJournalVoucherReferenceAsync(originalJV.JournalVoucherId, cartageVoucher.JournalVoucherId, "Cartage");
 
                 // Update journal voucher processed status
                 await UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
@@ -778,6 +780,20 @@ namespace PureLedger.Services
                 _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
                 throw;
             }
+        }
+
+        private async Task<JournalVoucherReference> CreateJournalVoucherReferenceAsync(int mainVoucherId, int referencedVoucherId, string referenceType)
+        {
+            var reference = new JournalVoucherReference
+            {
+                MainVoucherId = mainVoucherId,
+                ReferencedVoucherId = referencedVoucherId,
+                ReferenceType = referenceType
+            };
+            
+            var result = await _unitOfWork.JournalVoucherReferences.AddAsync(reference);
+            await _unitOfWork.SaveChangesAsync();
+            return result;
         }
     }
 }

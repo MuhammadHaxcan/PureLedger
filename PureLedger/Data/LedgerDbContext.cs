@@ -22,6 +22,7 @@ namespace PureLedger.Data
         public DbSet<Location> Locations { get; set; }
         public DbSet<DeliveryChallanVoucher> DeliveryChallanVouchers { get; set; }
         public DbSet<DeliveryChallanEntry> DeliveryChallanEntries { get; set; }
+        public DbSet<JournalVoucherReference> JournalVoucherReferences { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -125,6 +126,19 @@ namespace PureLedger.Data
                 new AccountGroup { AccountGroupId = 1, AccountGroupName = "Account" },
                 new AccountGroup { AccountGroupId = 2, AccountGroupName = "Product" }
             );
+
+            // Configure JournalVoucherReference relationships
+            modelBuilder.Entity<JournalVoucherReference>()
+                .HasOne(r => r.MainVoucher)
+                .WithMany(v => v.OutgoingReferences)
+                .HasForeignKey(r => r.MainVoucherId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<JournalVoucherReference>()
+                .HasOne(r => r.ReferencedVoucher)
+                .WithMany(v => v.IncomingReferences)
+                .HasForeignKey(r => r.ReferencedVoucherId)
+                .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }

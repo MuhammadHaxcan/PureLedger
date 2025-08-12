@@ -385,6 +385,7 @@ namespace PureLedger.Controllers
         }
 
         // POST: /MetaData/GetCategoriesByProject
+        [HttpGet]
         [HttpPost]
         public async Task<IActionResult> GetCategoriesByProject(int projectId)
         {
