@@ -344,8 +344,6 @@
             padding: 1.25rem;
         }
 
-        }
-
         /* For Firefox and IE */
         select::-ms-expand {
             display: none;
@@ -364,47 +362,29 @@
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="navbar-collapse collapse d-lg-inline-flex justify-content-between">
+                    @* Replace the static navigation with our dynamic component *@
+                    @await Component.InvokeAsync("NavigationMenu")
+                    
                     <ul class="navbar-nav">
-                        <!-- Home Dropdown -->
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-home me-1"></i> Home
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" asp-controller="Home" asp-action="Entry"><i class="fas fa-plus-circle"></i> New Entry</a></li>
-                                <li><a class="dropdown-item" asp-controller="Home" asp-action="voucherentry"><i class="fas fa-edit"></i> Edit Entry</a></li>
-                                <li><a class="dropdown-item" asp-controller="Home" asp-action="ModifiedEntries"><i class="fas fa-history"></i> Modified Entries</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" asp-controller="DeliveryChallan" asp-action="index"><i class="fas fa-truck"></i> Delivery Challan</a></li>
-                            </ul>
-                        </li>
-
-                        <!-- Metadata Dropdown -->
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-database me-1"></i> Metadata
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Projects"><i class="fas fa-project-diagram"></i> Projects</a></li>
-                                <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Categories"><i class="fas fa-sitemap"></i> Categories</a></li>
-                                <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Accounts"><i class="fas fa-users"></i> Accounts</a></li>
-                                <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Tags"><i class="fas fa-tags"></i> Tags</a></li>
-                                <li><a class="dropdown-item" asp-controller="MetaData" asp-action="Locations"><i class="fas fa-map-marker-alt"></i> Locations</a></li>
-                            </ul>
-                        </li>
-
-                        <!-- Reporting Dropdown -->
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-chart-bar me-1"></i> Reports
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" asp-controller="Reporting" asp-action="SingleDoc"><i class="fas fa-file-alt"></i> Single Document</a></li>
-                                <li><a class="dropdown-item" asp-controller="Reporting" asp-action="AgingReport"><i class="fas fa-calendar-alt"></i> Aging Report</a></li>
-                                <li><a class="dropdown-item" asp-controller="Reporting" asp-action="AccountReport"><i class="fas fa-user-circle"></i> Account Report</a></li>
-                                <li><a class="dropdown-item" asp-controller="Reporting" asp-action="MasterReport"><i class="fas fa-file-invoice"></i> Master Report</a></li>
-                            </ul>
-                        </li>
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-user-circle me-1"></i> @User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" asp-controller="Admin" asp-action="EditProfile"><i class="fas fa-user-edit"></i> Edit Profile</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" asp-controller="Account" asp-action="Logout"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                                </ul>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link px-3" asp-controller="Account" asp-action="Login"><i class="fas fa-sign-in-alt me-1"></i> Login</a>
+                            </li>
+                        }
                     </ul>
                 </div>
             </div>
@@ -416,7 +396,6 @@
             @RenderBody()
         </main>
     </div>
-
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

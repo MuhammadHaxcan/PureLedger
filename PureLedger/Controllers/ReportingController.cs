@@ -1,11 +1,13 @@
 ﻿// Controllers/ReportingController.cs
 using Microsoft.AspNetCore.Mvc;
+using PureLedger.Attributes;
 using PureLedger.Services;
 using PureLedger.ViewModels;
 using System.Threading.Tasks;
 
 namespace PureLedger.Controllers
 {
+    [ControllerAccess]
     public class ReportingController : Controller
     {
         private readonly IReportingService _reportingService;

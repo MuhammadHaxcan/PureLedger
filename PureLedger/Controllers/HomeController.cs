@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using PureLedger.Attributes;
 using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Services;
@@ -8,6 +9,7 @@ using System.Diagnostics;
 
 namespace PureLedger.Controllers
 {
+    [ControllerAccess]
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;

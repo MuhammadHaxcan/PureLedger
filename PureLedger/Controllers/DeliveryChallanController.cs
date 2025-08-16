@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.ViewModels;
 
 namespace PureLedger.Controllers
 {
+    [ControllerAccess]
     public class DeliveryChallanController : Controller
     {
         private readonly IDeliveryChallanService _deliveryChallanService;

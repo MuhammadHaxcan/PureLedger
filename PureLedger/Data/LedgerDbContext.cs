@@ -23,6 +23,11 @@ namespace PureLedger.Data
         public DbSet<DeliveryChallanVoucher> DeliveryChallanVouchers { get; set; }
         public DbSet<DeliveryChallanEntry> DeliveryChallanEntries { get; set; }
         public DbSet<JournalVoucherReference> JournalVoucherReferences { get; set; }
+        
+        // Authentication tables
+        public DbSet<User> Users { get; set; }
+        public DbSet<UserProject> UserProjects { get; set; }
+        public DbSet<UserControllerAccess> UserControllerAccess { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -112,6 +117,25 @@ namespace PureLedger.Data
                 .HasForeignKey(dce => dce.LocationId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            // User relationships
+            modelBuilder.Entity<UserProject>()
+                .HasOne(up => up.User)
+                .WithMany(u => u.UserProjects)
+                .HasForeignKey(up => up.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserProject>()
+                .HasOne(up => up.Project)
+                .WithMany()
+                .HasForeignKey(up => up.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            modelBuilder.Entity<UserControllerAccess>()
+                .HasOne(uca => uca.User)
+                .WithMany(u => u.ControllerAccess)
+                .HasForeignKey(uca => uca.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // Seed AccountType data
             modelBuilder.Entity<AccountType>().HasData(
                 new AccountType { AccountTypeId = 1, AccountTypeName = "Assets" },
@@ -139,6 +163,21 @@ namespace PureLedger.Data
                 .WithMany(v => v.IncomingReferences)
                 .HasForeignKey(r => r.ReferencedVoucherId)
                 .OnDelete(DeleteBehavior.NoAction);
+                
+            // Seed default admin user (password: admin123)
+            modelBuilder.Entity<User>().HasData(
+                new User { 
+                    UserId = 1, 
+                    Username = "admin",
+                    PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa", // Pre-generated hash for "admin123"
+                    FullName = "System Administrator",
+                    Email = "admin@example.com",
+                    IsAdmin = true,
+                    Subroute = "Default",
+                    IsActive = true,
+                    CreatedDate = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc) // Fixed date
+                }
+            );
         }
     }
 }

@@ -1,8 +1,13 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
-using PureLedger.Services;
+using PureLedger.Middleware;
 using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
-using PureLedger.Middleware;
+using PureLedger.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,30 +15,75 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
 
-// Register DbContext factory
-builder.Services.AddSingleton<SubrouteDbContextFactory>();
+// Configure authentication
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.HttpOnly = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(24);
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+        options.SlidingExpiration = true;
+        
+        // Add this to prevent redirect loops
+        options.Cookie.Name = "PureLedgerAuth"; 
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnRedirectToLogin = context =>
+            {
+                // Check if already on login page to prevent loops
+                if (context.Request.Path.StartsWithSegments("/Account/Login"))
+                {
+                    // Don't redirect if already on login page
+                    context.Response.StatusCode = 200;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+// Register LedgerDbContext directly with connection string from configuration
+builder.Services.AddDbContext<LedgerDbContext>(options => 
+    options.UseSqlServer(builder.Configuration.GetConnectionString("LedgerDb")));
 
 // Register all services
 builder.Services.AddScoped<JournalEntryValidationService>();
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
 builder.Services.AddScoped<IMetaDataService, MetaDataService>();
 
-// Register LedgerDbContext per request, using the subroute from HttpContext.Items
-builder.Services.AddScoped<LedgerDbContext>(provider =>
-{
-    var httpContextAccessor = provider.GetRequiredService<IHttpContextAccessor>();
-    var factory = provider.GetRequiredService<SubrouteDbContextFactory>();
-    var subroute = httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
-    return factory.CreateDbContext(subroute);
-});
-
 // Register UnitOfWork - this will create all repositories internally with the same DbContext
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+// Add session support
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{   
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+// Configure MVC options for global authorization filter
+builder.Services.Configure<MvcOptions>(options =>
+{
+    // Create a policy that allows anonymous access
+    var policy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+        
+    // Global authorization filter applied to all controllers
+    // Individual controllers/actions can override with [AllowAnonymous]
+    options.Filters.Add(new AuthorizeFilter(policy));
+});
 
 var app = builder.Build();
 
@@ -50,11 +100,31 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
-app.UseSubrouteMiddleware();
+// Add session and authentication - IMPORTANT: order matters here
+app.UseSession();
+app.UseAuthentication(); // Must come before UseAuthorization
 app.UseAuthorization();
 
+// Move the custom middleware after the built-in auth middleware
+app.UseMiddleware<PureLedger.Middleware.AuthorizationMiddleware>();
+
+// Simplified route pattern
 app.MapControllerRoute(
     name: "default",
-    pattern: "{prefix}/{controller=Home}/{action=Entry}/{id?}",
-    constraints: new { prefix = "route1|route2" });
+    pattern: "{controller=Home}/{action=Entry}/{id?}");
+    
+// Add redirect for root URL to provide a better landing experience
+app.MapGet("/", context => {
+    // Don't redirect if already authenticated
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        context.Response.Redirect("/Home/Entry");
+        return Task.CompletedTask;
+    }
+    
+    // Simple redirect without ReturnUrl to prevent loops
+    context.Response.Redirect("/Account/Login");
+    return Task.CompletedTask;
+}).AllowAnonymous();
+
 app.Run();

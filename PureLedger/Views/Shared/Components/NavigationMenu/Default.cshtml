@@ -1,0 +1,68 @@
+@model PureLedger.ViewComponents.NavigationViewModel
+
+@{
+    // Define navigation items with their controllers and actions
+    var navItems = new List<(string Title, string Icon, string Controller, string[] Actions)>
+    {
+        ("Home", "fas fa-home", "Home", new[] { "Entry", "voucherentry", "ModifiedEntries" }),
+        ("Metadata", "fas fa-database", "MetaData", new[] { "Projects", "Categories", "Accounts", "Tags", "Locations" }),
+        ("Reports", "fas fa-chart-bar", "Reporting", new[] { "SingleDoc", "AgingReport", "AccountReport", "MasterReport" }),
+        ("Delivery Challan", "fas fa-truck", "DeliveryChallan", new[] { "Index" })
+    };
+}
+
+<ul class="navbar-nav">
+    @foreach (var item in navItems)
+    {
+        @if (Model.IsAdmin || Model.AccessibleControllers.Contains(item.Controller))
+        {
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="@item.Icon me-1"></i> @item.Title
+                </a>
+                <ul class="dropdown-menu">
+                    @if (item.Controller == "Home")
+                    {
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Entry"><i class="fas fa-plus-circle"></i> New Entry</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="voucherentry"><i class="fas fa-edit"></i> Edit Entry</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="ModifiedEntries"><i class="fas fa-history"></i> Modified Entries</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" asp-controller="DeliveryChallan" asp-action="index"><i class="fas fa-truck"></i> Delivery Challan</a></li>
+                    }
+                    @if (item.Controller == "MetaData")
+                    {
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Projects"><i class="fas fa-project-diagram"></i> Projects</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Categories"><i class="fas fa-sitemap"></i> Categories</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Accounts"><i class="fas fa-users"></i> Accounts</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Tags"><i class="fas fa-tags"></i> Tags</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Locations"><i class="fas fa-map-marker-alt"></i> Locations</a></li>
+                    }
+                    @if (item.Controller == "Reporting")
+                    {
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="SingleDoc"><i class="fas fa-file-alt"></i> Single Document</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="AgingReport"><i class="fas fa-calendar-alt"></i> Aging Report</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="AccountReport"><i class="fas fa-user-circle"></i> Account Report</a></li>
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="MasterReport"><i class="fas fa-file-invoice"></i> Master Report</a></li>
+                    }
+                    @if (item.Controller == "DeliveryChallan")
+                    {
+                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Index"><i class="fas fa-truck"></i> Delivery Challan</a></li>
+                    }
+                </ul>
+            </li>
+        }
+    }
+
+    @if (Model.IsAdmin)
+    {
+        <!-- Admin Dropdown -->
+        <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-user-shield me-1"></i> Admin
+            </a>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" asp-controller="Admin" asp-action="Index"><i class="fas fa-users-cog"></i> User Management</a></li>
+            </ul>
+        </li>
+    }
+</ul>

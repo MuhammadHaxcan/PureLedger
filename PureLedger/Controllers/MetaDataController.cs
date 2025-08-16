@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services;
 
 namespace PureLedger.Controllers
 {
+    [ControllerAccess]
     public class MetaDataController : Controller
     {
         private readonly MetaDataValidationService _validationService;

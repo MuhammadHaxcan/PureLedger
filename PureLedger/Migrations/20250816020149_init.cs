@@ -81,6 +81,27 @@ namespace PureLedger.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Users",
+                columns: table => new
+                {
+                    UserId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Username = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    FullName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    IsAdmin = table.Column<bool>(type: "bit", nullable: false),
+                    Subroute = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LastLoginDate = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Users", x => x.UserId);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Categories",
                 columns: table => new
                 {
@@ -116,22 +137,63 @@ namespace PureLedger.Migrations
                     ProjectId = table.Column<int>(type: "int", nullable: false),
                     EntryDate = table.Column<DateOnly>(type: "date", nullable: false),
                     CreditableDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    IsCompleted = table.Column<bool>(type: "bit", nullable: false),
-                    CartageVoucherId = table.Column<int>(type: "int", nullable: true)
+                    IsCompleted = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_JournalVouchers", x => x.JournalVoucherId);
                     table.ForeignKey(
-                        name: "FK_JournalVouchers_JournalVouchers_CartageVoucherId",
-                        column: x => x.CartageVoucherId,
-                        principalTable: "JournalVouchers",
-                        principalColumn: "JournalVoucherId");
-                    table.ForeignKey(
                         name: "FK_JournalVouchers_Projects_ProjectId",
                         column: x => x.ProjectId,
                         principalTable: "Projects",
                         principalColumn: "ProjectId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserControllerAccess",
+                columns: table => new
+                {
+                    UserControllerAccessId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    Controller = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    HasAccess = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserControllerAccess", x => x.UserControllerAccessId);
+                    table.ForeignKey(
+                        name: "FK_UserControllerAccess_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserProjects",
+                columns: table => new
+                {
+                    UserProjectId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    ProjectId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserProjects", x => x.UserProjectId);
+                    table.ForeignKey(
+                        name: "FK_UserProjects_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "ProjectId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserProjects_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -179,6 +241,31 @@ namespace PureLedger.Migrations
                     table.ForeignKey(
                         name: "FK_DeliveryChallanVouchers_JournalVouchers_JournalVoucherId",
                         column: x => x.JournalVoucherId,
+                        principalTable: "JournalVouchers",
+                        principalColumn: "JournalVoucherId");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "JournalVoucherReferences",
+                columns: table => new
+                {
+                    JournalVoucherReferenceId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MainVoucherId = table.Column<int>(type: "int", nullable: false),
+                    ReferencedVoucherId = table.Column<int>(type: "int", nullable: false),
+                    ReferenceType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_JournalVoucherReferences", x => x.JournalVoucherReferenceId);
+                    table.ForeignKey(
+                        name: "FK_JournalVoucherReferences_JournalVouchers_MainVoucherId",
+                        column: x => x.MainVoucherId,
+                        principalTable: "JournalVouchers",
+                        principalColumn: "JournalVoucherId");
+                    table.ForeignKey(
+                        name: "FK_JournalVoucherReferences_JournalVouchers_ReferencedVoucherId",
+                        column: x => x.ReferencedVoucherId,
                         principalTable: "JournalVouchers",
                         principalColumn: "JournalVoucherId");
                 });
@@ -352,6 +439,11 @@ namespace PureLedger.Migrations
                     { 5, "Expense" }
                 });
 
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "UserId", "CreatedDate", "Email", "FullName", "IsActive", "IsAdmin", "LastLoginDate", "PasswordHash", "Subroute", "Username" },
+                values: new object[] { 1, new DateTime(2025, 8, 16, 2, 1, 49, 16, DateTimeKind.Utc).AddTicks(4127), "admin@example.com", "System Administrator", true, true, null, "$2a$11$f.Fn/tltNBg/nciexH/FDuBSYYCrqR8i/Fb2AwJYvD1PZUxpLIzZC", "Default", "admin" });
+
             migrationBuilder.CreateIndex(
                 name: "IX_AccountDatas_AccountId",
                 table: "AccountDatas",
@@ -364,9 +456,9 @@ namespace PureLedger.Migrations
                 column: "AccountGroupId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Accounts_AccountName",
+                name: "IX_Accounts_AccountName_CategoryId",
                 table: "Accounts",
-                column: "AccountName",
+                columns: new[] { "AccountName", "CategoryId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -380,9 +472,9 @@ namespace PureLedger.Migrations
                 column: "AccountTypeId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Categories_CategoryName",
+                name: "IX_Categories_CategoryName_ProjectId",
                 table: "Categories",
-                column: "CategoryName",
+                columns: new[] { "CategoryName", "ProjectId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -431,9 +523,14 @@ namespace PureLedger.Migrations
                 column: "JournalEntryTagId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_JournalVouchers_CartageVoucherId",
-                table: "JournalVouchers",
-                column: "CartageVoucherId");
+                name: "IX_JournalVoucherReferences_MainVoucherId",
+                table: "JournalVoucherReferences",
+                column: "MainVoucherId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_JournalVoucherReferences_ReferencedVoucherId",
+                table: "JournalVoucherReferences",
+                column: "ReferencedVoucherId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_JournalVouchers_ProjectId",
@@ -463,6 +560,27 @@ namespace PureLedger.Migrations
                 table: "Tags",
                 column: "TagName",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserControllerAccess_UserId",
+                table: "UserControllerAccess",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserProjects_ProjectId",
+                table: "UserProjects",
+                column: "ProjectId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserProjects_UserId",
+                table: "UserProjects",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_Username",
+                table: "Users",
+                column: "Username",
+                unique: true);
         }
 
         /// <inheritdoc />
@@ -478,7 +596,16 @@ namespace PureLedger.Migrations
                 name: "JournalEntryTags");
 
             migrationBuilder.DropTable(
+                name: "JournalVoucherReferences");
+
+            migrationBuilder.DropTable(
                 name: "ProductDatas");
+
+            migrationBuilder.DropTable(
+                name: "UserControllerAccess");
+
+            migrationBuilder.DropTable(
+                name: "UserProjects");
 
             migrationBuilder.DropTable(
                 name: "DeliveryChallanVouchers");
@@ -491,6 +618,9 @@ namespace PureLedger.Migrations
 
             migrationBuilder.DropTable(
                 name: "Tags");
+
+            migrationBuilder.DropTable(
+                name: "Users");
 
             migrationBuilder.DropTable(
                 name: "Accounts");
