@@ -1,6 +1,13 @@
 ﻿@model PureLedger.ViewModels.UserViewModel
 @{
     ViewData["Title"] = "Edit User";
+    
+    // Get all controllers and their actions from ViewBag
+    var controllerActionsMap = ViewBag.ControllerActions as Dictionary<string, List<string>> 
+        ?? new Dictionary<string, List<string>>();
+        
+    // Get the projects the current user can manage
+    var accessibleProjects = ViewBag.Projects as List<Project> ?? new List<Project>();
 }
 
 <div class="container-fluid">
@@ -70,15 +77,16 @@
                     </div>
                 </div>
 
+                <!-- Only show projects the current user can access -->
                 <div class="form-group mb-3">
                     <label class="form-label">Assign Projects</label>
                     <div class="card">
                         <div class="card-body" style="max-height: 200px; overflow-y: auto;">
-                            @foreach (var project in ViewBag.Projects)
+                            @foreach (var project in accessibleProjects)
                             {
                                 <div class="form-check">
                                     <input type="checkbox" name="ProjectIds" value="@project.ProjectId"
-                                           class="form-check-input"
+                                           class="form-check-input" 
                                            @(Model.ProjectIds.Contains(project.ProjectId) ? "checked" : "") />
                                     <label class="form-check-label">@project.ProjectName</label>
                                 </div>

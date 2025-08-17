@@ -9,8 +9,9 @@ namespace PureLedger.Attributes
     {
         public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            // Skip check for admin users
-            if (context.HttpContext.User.IsInRole("Admin"))
+            // Skip check for Account controller and admin users
+            if (context.Controller.GetType().Name == "AccountController" || 
+                context.HttpContext.User.IsInRole("Admin"))
             {
                 await next();
                 return;
@@ -20,15 +21,30 @@ namespace PureLedger.Attributes
             if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out int userId))
             {
                 var controllerName = context.RouteData.Values["controller"]?.ToString();
+                var actionName = context.RouteData.Values["action"]?.ToString();
                 
-                if (!string.IsNullOrEmpty(controllerName))
+                if (!string.IsNullOrEmpty(controllerName) && !string.IsNullOrEmpty(actionName))
                 {
                     // Get the AuthService from DI
                     var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
                     
-                    // Check if user has access to this controller
-                    bool hasAccess = await authService.HasControllerAccessAsync(userId, controllerName);
+                    // Check project access if projectId is in route data or action parameters
+                    if (context.RouteData.Values.TryGetValue("projectId", out var projectIdObj) ||
+                        context.ActionArguments.TryGetValue("projectId", out projectIdObj))
+                    {
+                        if (projectIdObj != null && int.TryParse(projectIdObj.ToString(), out int projectId))
+                        {
+                            bool hasProjectAccess = await authService.HasProjectAccessAsync(userId, projectId);
+                            if (!hasProjectAccess)
+                            {
+                                context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
+                                return;
+                            }
+                        }
+                    }
                     
+                    // Strict action-specific access check
+                    bool hasAccess = await authService.HasActionAccessAsync(userId, controllerName, actionName);
                     if (hasAccess)
                     {
                         await next();
@@ -41,4 +57,4 @@ namespace PureLedger.Attributes
             context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
         }
     }
-}   
+}

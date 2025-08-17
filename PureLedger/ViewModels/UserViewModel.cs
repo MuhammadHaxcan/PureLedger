@@ -33,5 +33,14 @@ namespace PureLedger.ViewModels
         public List<int> ProjectIds { get; set; } = new List<int>();
         
         public List<string> ControllerAccess { get; set; } = new List<string>();
+        
+        // For action-level access in format "Controller|Action"
+        public List<string> ActionAccess { get; set; } = new List<string>();
+        
+        // Helper property to check if a specific action is allowed
+        public bool HasActionAccess(string controller, string action)
+        {
+            return ActionAccess.Contains($"{controller}|{action}");
+        }
     }
 }

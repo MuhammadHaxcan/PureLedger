@@ -578,6 +578,10 @@ namespace PureLedger.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserControllerAccessId"));
 
+                    b.Property<string>("Action")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Controller")
                         .IsRequired()
                         .HasMaxLength(50)

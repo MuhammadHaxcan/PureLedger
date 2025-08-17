@@ -1,6 +1,10 @@
 ﻿@model PureLedger.ViewModels.UserViewModel
 @{
     ViewData["Title"] = "Create User";
+    
+    // Get all controllers and their actions from ViewBag
+    var controllerActionsMap = ViewBag.ControllerActions as Dictionary<string, List<string>> 
+        ?? new Dictionary<string, List<string>>();
 }
 
 <div class="container-fluid">
@@ -85,10 +89,29 @@
                         <div class="card-body" style="max-height: 200px; overflow-y: auto;">
                             @foreach (var controller in ViewBag.Controllers ?? new string[] { "Home", "MetaData", "Reporting", "DeliveryChallan" })
                             {
-                                <div class="form-check">
-                                    <input type="checkbox" name="ControllerAccess" value="@controller"
-                                           class="form-check-input" checked />
-                                    <label class="form-check-label">@controller</label>
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input type="checkbox" name="ControllerAccess" id="controller_@controller" 
+                                               value="@controller" class="form-check-input controller-checkbox" 
+                                               data-controller="@controller" />
+                                        <label class="form-check-label fw-bold" for="controller_@controller">@controller</label>
+                                    </div>
+                                    
+                                    <!-- Show actions for this controller -->
+                                    @if (controllerActionsMap.TryGetValue(controller, out List<string> actions))
+                                    {
+                                        <div class="ms-4 mt-2 actions-container" id="actions_@controller">
+                                            @foreach (var action in actions)
+                                            {
+                                                <div class="form-check">
+                                                    <input type="checkbox" name="ActionAccess" id="action_@(controller)_@(action)" 
+                                                           value="@(controller)|@(action)" class="form-check-input action-checkbox" 
+                                                           data-controller="@controller" data-action="@action" />
+                                                    <label class="form-check-label" for="action_@(controller)_@(action)">@action</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>
@@ -112,4 +135,39 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+    
+    <script>
+        $(document).ready(function() {
+            // Toggle action checkboxes based on controller checkbox
+            $('.controller-checkbox').change(function() {
+                var controllerId = $(this).data('controller');
+                var isChecked = $(this).prop('checked');
+                
+                // Find all action checkboxes for this controller
+                $('input.action-checkbox[data-controller="' + controllerId + '"]').prop('checked', isChecked);
+                
+                // Toggle visibility of actions container
+                $('#actions_' + controllerId).slideToggle(isChecked);
+            });
+            
+            // Initialize visibility
+            $('.controller-checkbox').each(function() {
+                var controllerId = $(this).data('controller');
+                var isChecked = $(this).prop('checked');
+                
+                if (!isChecked) {
+                    $('#actions_' + controllerId).hide();
+                }
+            });
+            
+            // When an action is checked, ensure its controller is checked too
+            $('.action-checkbox').change(function() {
+                var controllerId = $(this).data('controller');
+                
+                if ($(this).prop('checked')) {
+                    $('#controller_' + controllerId).prop('checked', true);
+                }
+            });
+        });
+    </script>
 }

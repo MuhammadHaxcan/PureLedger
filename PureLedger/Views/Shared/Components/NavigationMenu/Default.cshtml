@@ -2,51 +2,97 @@
 
 @{
     // Define navigation items with their controllers and actions
-    var navItems = new List<(string Title, string Icon, string Controller, string[] Actions)>
+    var navigationMap = new List<(string Title, string Icon, string Controller, List<(string Action, string Title, string Icon)> Actions)>
     {
-        ("Home", "fas fa-home", "Home", new[] { "Entry", "voucherentry", "ModifiedEntries" }),
-        ("Metadata", "fas fa-database", "MetaData", new[] { "Projects", "Categories", "Accounts", "Tags", "Locations" }),
-        ("Reports", "fas fa-chart-bar", "Reporting", new[] { "SingleDoc", "AgingReport", "AccountReport", "MasterReport" }),
-        ("Delivery Challan", "fas fa-truck", "DeliveryChallan", new[] { "Index" })
+        ("Home", "fas fa-home", "Home", new List<(string, string, string)> 
+        { 
+            ("Entry", "New Entry", "fas fa-plus-circle"),
+            ("voucherentry", "Edit Entry", "fas fa-edit"),
+            ("ModifiedEntries", "Modified Entries", "fas fa-history") 
+        }),
+        
+        ("Metadata", "fas fa-database", "MetaData", new List<(string, string, string)>
+        {
+            ("Projects", "Projects", "fas fa-project-diagram"),
+            ("Categories", "Categories", "fas fa-sitemap"),
+            ("Accounts", "Accounts", "fas fa-users"),
+            ("Tags", "Tags", "fas fa-tags"),
+            ("Locations", "Locations", "fas fa-map-marker-alt")
+        }),
+        
+        ("Reports", "fas fa-chart-bar", "Reporting", new List<(string, string, string)>
+        {
+            ("SingleDoc", "Single Document", "fas fa-file-alt"),
+            ("AgingReport", "Aging Report", "fas fa-calendar-alt"),
+            ("AccountReport", "Account Report", "fas fa-user-circle"),
+            ("MasterReport", "Master Report", "fas fa-file-invoice")
+        }),
+        
+        ("Delivery Challan", "fas fa-truck", "DeliveryChallan", new List<(string, string, string)>
+        {
+            ("Index", "Delivery Challan", "fas fa-truck")
+        })
     };
 }
 
 <ul class="navbar-nav">
-    @foreach (var item in navItems)
+    @foreach (var navItem in navigationMap)
     {
-        @if (Model.IsAdmin || Model.AccessibleControllers.Contains(item.Controller))
+        // First, determine if we should show this section at all
+        bool showSection = Model.IsAdmin || Model.AccessibleControllers.Contains(navItem.Controller);
+        
+        // If not admin and no controller access, check if any specific actions are accessible
+        if (!showSection && Model.AccessibleActions.TryGetValue(navItem.Controller, out var accessibleActions))
+        {
+            // Only show section if user has access to at least one action
+            showSection = accessibleActions.Count > 0;
+        }
+        
+        // Special case for DeliveryChallan under Home menu
+        bool showDeliveryChallan = false;
+        if (navItem.Controller == "Home")
+        {
+            showDeliveryChallan = Model.IsAdmin || 
+                Model.AccessibleControllers.Contains("DeliveryChallan") ||
+                (Model.AccessibleActions.TryGetValue("DeliveryChallan", out var challanActions) && 
+                challanActions.Contains("Index"));
+                
+            // If user only has access to DeliveryChallan but nothing in Home, show the Home section anyway
+            if (showDeliveryChallan && !showSection)
+            {
+                showSection = true;
+            }
+        }
+        
+        if (showSection)
         {
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="@item.Icon me-1"></i> @item.Title
+                    <i class="@navItem.Icon me-1"></i> @navItem.Title
                 </a>
                 <ul class="dropdown-menu">
-                    @if (item.Controller == "Home")
+                    @foreach (var action in navItem.Actions)
                     {
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Entry"><i class="fas fa-plus-circle"></i> New Entry</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="voucherentry"><i class="fas fa-edit"></i> Edit Entry</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="ModifiedEntries"><i class="fas fa-history"></i> Modified Entries</a></li>
+                        // Use the CanAccessAction helper method to determine if this action should be shown
+                        if (Model.CanAccessAction(navItem.Controller, action.Action))
+                        {
+                            <li>
+                                <a class="dropdown-item" asp-controller="@navItem.Controller" asp-action="@action.Action">
+                                    <i class="@action.Icon"></i> @action.Title
+                                </a>    
+                            </li>
+                        }
+                    }
+
+                    @* Special case for DeliveryChallan under Home menu *@
+                    @if (navItem.Controller == "Home" && showDeliveryChallan)
+                    {
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" asp-controller="DeliveryChallan" asp-action="index"><i class="fas fa-truck"></i> Delivery Challan</a></li>
-                    }
-                    @if (item.Controller == "MetaData")
-                    {
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Projects"><i class="fas fa-project-diagram"></i> Projects</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Categories"><i class="fas fa-sitemap"></i> Categories</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Accounts"><i class="fas fa-users"></i> Accounts</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Tags"><i class="fas fa-tags"></i> Tags</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Locations"><i class="fas fa-map-marker-alt"></i> Locations</a></li>
-                    }
-                    @if (item.Controller == "Reporting")
-                    {
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="SingleDoc"><i class="fas fa-file-alt"></i> Single Document</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="AgingReport"><i class="fas fa-calendar-alt"></i> Aging Report</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="AccountReport"><i class="fas fa-user-circle"></i> Account Report</a></li>
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="MasterReport"><i class="fas fa-file-invoice"></i> Master Report</a></li>
-                    }
-                    @if (item.Controller == "DeliveryChallan")
-                    {
-                        <li><a class="dropdown-item" asp-controller="@item.Controller" asp-action="Index"><i class="fas fa-truck"></i> Delivery Challan</a></li>
+                        <li>
+                            <a class="dropdown-item" asp-controller="DeliveryChallan" asp-action="Index">
+                                <i class="fas fa-truck"></i> Delivery Challan
+                            </a>
+                        </li>
                     }
                 </ul>
             </li>
