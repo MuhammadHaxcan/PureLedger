@@ -11,15 +11,18 @@ namespace PureLedger.Controllers
     public class DeliveryChallanController : Controller
     {
         private readonly IDeliveryChallanService _deliveryChallanService;
+        private readonly ICurrentUserService _currentUserService;
         private readonly ILogger<DeliveryChallanController> _logger;
         private readonly IConfiguration _configuration;
 
         public DeliveryChallanController(
             IDeliveryChallanService deliveryChallanService,
+            ICurrentUserService currentUserService,
             ILogger<DeliveryChallanController> logger,
             IConfiguration configuration)
         {
             _deliveryChallanService = deliveryChallanService;
+            _currentUserService = currentUserService;
             _logger = logger;
             _configuration = configuration;
         }
@@ -30,7 +33,10 @@ namespace PureLedger.Controllers
         {
             try
             {
-                var projects = await _deliveryChallanService.GetAllProjectsAsync();
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _deliveryChallanService.GetAllProjectsForUserAsync(userId.Value)
+                    : new List<Project>();
                 ViewBag.Projects = projects;
 
                 var model = new DeliveryChallanFilterViewModel

@@ -19,9 +19,40 @@ namespace PureLedger.Repositories
             return await _context.Projects.ToListAsync();
         }
 
+        public async Task<List<Project>> GetAllForUserAsync(int userId)
+        {
+            // Check if user is admin
+            var user = await _context.Users.FindAsync(userId);
+            if (user?.IsAdmin == true)
+            {
+                return await GetAllAsync();
+            }
+
+            // Return only projects the user has access to
+            return await _context.Projects
+                .Where(p => _context.UserProjects.Any(up => up.UserId == userId && up.ProjectId == p.ProjectId))
+                .ToListAsync();
+        }
+
         public async Task<Project?> GetByIdAsync(int id)
         {
             return await _context.Projects.FindAsync(id);
+        }
+
+        public async Task<Project?> GetByIdForUserAsync(int id, int userId)
+        {
+            // Check if user is admin
+            var user = await _context.Users.FindAsync(userId);
+            if (user?.IsAdmin == true)
+            {
+                return await GetByIdAsync(id);
+            }
+
+            // Return project only if user has access to it
+            return await _context.Projects
+                .Where(p => p.ProjectId == id &&
+                           _context.UserProjects.Any(up => up.UserId == userId && up.ProjectId == p.ProjectId))
+                .FirstOrDefaultAsync();
         }
 
         public async Task<Project> AddAsync(Project project)
@@ -36,6 +67,20 @@ namespace PureLedger.Repositories
             _context.Projects.Update(project);
             await _context.SaveChangesAsync();
             return project;
+        }
+
+        public async Task<bool> UserHasAccessToProjectAsync(int userId, int projectId)
+        {
+            // Check if user is admin
+            var user = await _context.Users.FindAsync(userId);
+            if (user?.IsAdmin == true)
+            {
+                return true;
+            }
+
+            // Check if user has explicit access to the project
+            return await _context.UserProjects
+                .AnyAsync(up => up.UserId == userId && up.ProjectId == projectId);
         }
     }
 }

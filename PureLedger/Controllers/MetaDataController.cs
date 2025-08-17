@@ -11,15 +11,18 @@ namespace PureLedger.Controllers
     {
         private readonly MetaDataValidationService _validationService;
         private readonly IMetaDataService _metaDataService;
+        private readonly ICurrentUserService _currentUserService;
         private readonly ILogger<MetaDataController> _logger;
 
         public MetaDataController(
             MetaDataValidationService validationService,
             IMetaDataService metaDataService,
+            ICurrentUserService currentUserService,
             ILogger<MetaDataController> logger)
         {
             _validationService = validationService;
             _metaDataService = metaDataService;
+            _currentUserService = currentUserService;
             _logger = logger;
         }
 
@@ -28,8 +31,13 @@ namespace PureLedger.Controllers
         // GET: /MetaData/Projects
         public async Task<IActionResult> Projects()
         {
-            var projects = await _metaDataService.GetAllProjectsAsync();
-            return View(projects);
+            var userId = _currentUserService.GetCurrentUserId();
+            if (userId.HasValue)
+            {
+                var projects = await _metaDataService.GetAllProjectsForUserAsync(userId.Value);
+                return View(projects);
+            }
+            return View(new List<Project>());
         }
 
         // GET: /MetaData/CreateProject
@@ -121,9 +129,12 @@ namespace PureLedger.Controllers
         // GET: /MetaData/CreateCategory
         public async Task<IActionResult> CreateCategory()
         {
-            ViewBag.Projects = new SelectList(
-                await _metaDataService.GetAllProjectsForCategoriesAsync(),
-                "ProjectId", "ProjectName");
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                : new List<Project>();
+                
+            ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName");
             ViewBag.AccountTypes = new SelectList(
                 await _metaDataService.GetAllAccountTypesAsync(),
                 "AccountTypeId", "AccountTypeName");
@@ -143,9 +154,12 @@ namespace PureLedger.Controllers
                     ModelState.AddModelError("", error);
                 }
 
-                ViewBag.Projects = new SelectList(
-                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
-                    "ProjectId", "ProjectName", category.ProjectId);
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                    : new List<Project>();
+                    
+                ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
                     "AccountTypeId", "AccountTypeName", category.AccountTypeId);
@@ -161,9 +175,12 @@ namespace PureLedger.Controllers
                     ModelState.AddModelError("", error);
                 }
 
-                ViewBag.Projects = new SelectList(
-                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
-                    "ProjectId", "ProjectName", category.ProjectId);
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                    : new List<Project>();
+                    
+                ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
                     "AccountTypeId", "AccountTypeName", category.AccountTypeId);
@@ -184,9 +201,12 @@ namespace PureLedger.Controllers
                 return NotFound();
             }
 
-            ViewBag.Projects = new SelectList(
-                await _metaDataService.GetAllProjectsForCategoriesAsync(),
-                "ProjectId", "ProjectName", category.ProjectId);
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                : new List<Project>();
+                
+            ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
             ViewBag.AccountTypes = new SelectList(
                 await _metaDataService.GetAllAccountTypesAsync(),
                 "AccountTypeId", "AccountTypeName", category.AccountTypeId);
@@ -207,9 +227,12 @@ namespace PureLedger.Controllers
                     ModelState.AddModelError("", error);
                 }
 
-                ViewBag.Projects = new SelectList(
-                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
-                    "ProjectId", "ProjectName", category.ProjectId);
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                    : new List<Project>();
+                    
+                ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
                     "AccountTypeId", "AccountTypeName", category.AccountTypeId);
@@ -223,9 +246,12 @@ namespace PureLedger.Controllers
                 foreach (var error in updateErrors)
                     ModelState.AddModelError("", error);
 
-                ViewBag.Projects = new SelectList(
-                    await _metaDataService.GetAllProjectsForCategoriesAsync(),
-                    "ProjectId", "ProjectName", category.ProjectId);
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                    : new List<Project>();
+                    
+                ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
                     "AccountTypeId", "AccountTypeName", category.AccountTypeId);
@@ -251,9 +277,12 @@ namespace PureLedger.Controllers
         // GET: /MetaData/CreateAccount
         public async Task<IActionResult> CreateAccount()
         {
-            ViewBag.Projects = new SelectList(
-                await _metaDataService.GetProjectsForAccountsAsync(),
-                "ProjectId", "ProjectName");
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _metaDataService.GetProjectsForAccountsForUserAsync(userId.Value)
+                : new List<Project>();
+                
+            ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName");
             ViewBag.Categories = new SelectList(new List<object>(), "categoryId", "categoryName");
             ViewBag.AccountGroups = new SelectList(
                 await _metaDataService.GetAccountGroupsAsync(),
@@ -272,9 +301,12 @@ namespace PureLedger.Controllers
 
             if (errors.Count > 0)
             {
-                ViewBag.Projects = new SelectList(
-                    await _metaDataService.GetProjectsForAccountsAsync(),
-                    "ProjectId", "ProjectName", selectedProjectId);
+                var userIdForProjects = _currentUserService.GetCurrentUserId();
+                var projectsForAccounts = userIdForProjects.HasValue
+                    ? await _metaDataService.GetProjectsForAccountsForUserAsync(userIdForProjects.Value)
+                    : new List<Project>();
+                    
+                ViewBag.Projects = new SelectList(projectsForAccounts, "ProjectId", "ProjectName", selectedProjectId);
 
                 var categories = selectedProjectId > 0
                     ? await _metaDataService.GetCategoriesByProjectAsync(selectedProjectId)
@@ -299,9 +331,12 @@ namespace PureLedger.Controllers
                 {
                     ModelState.AddModelError("", error);
                 }
-                ViewBag.Projects = new SelectList(
-                    await _metaDataService.GetProjectsForAccountsAsync(),
-                    "ProjectId", "ProjectName", selectedProjectId);
+                var userIdForProjects = _currentUserService.GetCurrentUserId();
+                var projectsForAccounts = userIdForProjects.HasValue
+                    ? await _metaDataService.GetProjectsForAccountsForUserAsync(userIdForProjects.Value)
+                    : new List<Project>();
+                    
+                ViewBag.Projects = new SelectList(projectsForAccounts, "ProjectId", "ProjectName", selectedProjectId);
 
                 var categories = selectedProjectId > 0
                     ? await _metaDataService.GetCategoriesByProjectAsync(selectedProjectId)

@@ -15,14 +15,17 @@ namespace PureLedger.Controllers
         private readonly ILogger<HomeController> _logger;
         private readonly JournalEntryService _journalService;
         private readonly JournalEntryValidationService _validator;
+        private readonly ICurrentUserService _currentUserService;
 
         public HomeController(
             JournalEntryService journalService,
             JournalEntryValidationService validator,
+            ICurrentUserService currentUserService,
             ILogger<HomeController> logger)
         {
             _journalService = journalService;
             _validator = validator;
+            _currentUserService = currentUserService;
             _logger = logger;
         }
 
@@ -253,9 +256,18 @@ namespace PureLedger.Controllers
         #region Helper Methods
         private async Task LoadProjectsData(int? selectedProjectId = null)
         {
-            var projects = await _journalService.GetAllProjectsAsync();
-            ViewBag.Projects = projects;
-            ViewBag.SelectedProjectId = selectedProjectId;
+            var userId = _currentUserService.GetCurrentUserId();
+            if (userId.HasValue)
+            {
+                var projects = await _journalService.GetAllProjectsForUserAsync(userId.Value);
+                ViewBag.Projects = projects;
+                ViewBag.SelectedProjectId = selectedProjectId;
+            }
+            else
+            {
+                ViewBag.Projects = new List<Project>();
+                ViewBag.SelectedProjectId = selectedProjectId;
+            }
         }
 
         private IActionResult JsonSuccess(object? data = null)

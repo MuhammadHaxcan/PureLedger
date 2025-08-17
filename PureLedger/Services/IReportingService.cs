@@ -11,6 +11,7 @@ namespace PureLedger.Services
         Task<List<AgingReportViewModel>> GetAgingReportAsync(AgingReportRequest request);
         Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request);
         Task<List<Project>> GetAllProjectsAsync();
+        Task<List<Project>> GetAllProjectsForUserAsync(int userId);
         Task<List<Category>> GetAllCategoriesAsync();
         Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId);
         Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request);

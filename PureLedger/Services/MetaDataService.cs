@@ -23,6 +23,11 @@ namespace PureLedger.Services
             return await _unitOfWork.Projects.GetAllAsync();
         }
 
+        public async Task<List<Project>> GetAllProjectsForUserAsync(int userId)
+        {
+            return await _unitOfWork.Projects.GetAllForUserAsync(userId);
+        }
+
         public async Task<Project?> GetProjectByIdAsync(int id)
         {
             return await _unitOfWork.Projects.GetByIdAsync(id);
@@ -109,6 +114,11 @@ namespace PureLedger.Services
         public async Task<List<Project>> GetAllProjectsForCategoriesAsync()
         {
             return await _unitOfWork.Projects.GetAllAsync();
+        }
+
+        public async Task<List<Project>> GetAllProjectsForCategoriesForUserAsync(int userId)
+        {
+            return await _unitOfWork.Projects.GetAllForUserAsync(userId);
         }
 
         public async Task<List<AccountType>> GetAllAccountTypesAsync()
@@ -214,6 +224,11 @@ namespace PureLedger.Services
         public async Task<List<Project>> GetProjectsForAccountsAsync()
         {
             return await _unitOfWork.Projects.GetAllAsync();
+        }
+
+        public async Task<List<Project>> GetProjectsForAccountsForUserAsync(int userId)
+        {
+            return await _unitOfWork.Projects.GetAllForUserAsync(userId);
         }
 
         public async Task<Account?> GetAccountByIdAsync(int id)

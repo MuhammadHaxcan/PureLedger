@@ -7,6 +7,7 @@ namespace PureLedger.Services
     {
         #region Entity Retrieval
         Task<List<Project>> GetAllProjectsAsync();
+        Task<List<Project>> GetAllProjectsForUserAsync(int userId);
         Task<List<Models.Location>> GetAllLocationsAsync();
         Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
         

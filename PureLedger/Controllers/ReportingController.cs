@@ -1,6 +1,7 @@
 ﻿// Controllers/ReportingController.cs
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
+using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.ViewModels;
 using System.Threading.Tasks;
@@ -11,10 +12,12 @@ namespace PureLedger.Controllers
     public class ReportingController : Controller
     {
         private readonly IReportingService _reportingService;
+        private readonly ICurrentUserService _currentUserService;
 
-        public ReportingController(IReportingService reportingService)
+        public ReportingController(IReportingService reportingService, ICurrentUserService currentUserService)
         {
             _reportingService = reportingService;
+            _currentUserService = currentUserService;
         }
 
         [HttpGet]
@@ -58,7 +61,10 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> AgingReport()
         {
             // Fetch projects and categories from your services/repositories
-            var projects = await _reportingService.GetAllProjectsAsync();
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
+                : new List<PureLedger.Models.Project>();
             var categories = await _reportingService.GetAllCategoriesAsync();
 
             var viewModel = new AgingReportPageViewModel
@@ -80,7 +86,10 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> AccountReport()
         {
-            var projects = await _reportingService.GetAllProjectsAsync();
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
+                : new List<PureLedger.Models.Project>();
             var categories = await _reportingService.GetAllCategoriesAsync();
             return View(new AgingReportPageViewModel
             {
@@ -99,7 +108,10 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> MasterReport()
         {
-            var projects = await _reportingService.GetAllProjectsAsync();
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
+                : new List<PureLedger.Models.Project>();
             var categories = await _reportingService.GetAllCategoriesAsync();
 
             var viewModel = new MasterReportPageViewModel

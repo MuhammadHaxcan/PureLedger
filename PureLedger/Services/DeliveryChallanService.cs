@@ -30,6 +30,9 @@ namespace PureLedger.Services
         public async Task<List<Project>> GetAllProjectsAsync() =>
             await _unitOfWork.Projects.GetAllAsync();
 
+        public async Task<List<Project>> GetAllProjectsForUserAsync(int userId) =>
+            await _unitOfWork.Projects.GetAllForUserAsync(userId);
+
         public async Task<List<Location>> GetAllLocationsAsync() =>
             await _unitOfWork.Locations.GetAllAsync();
 
