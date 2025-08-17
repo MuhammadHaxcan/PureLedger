@@ -14,16 +14,6 @@ namespace PureLedger.Controllers
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AdminController> _logger;
         
-        // Common controller names in the application
-        private readonly string[] _availableControllers = new[] 
-        { 
-            "Home", 
-            "MetaData", 
-            "Reporting", 
-            "DeliveryChallan", 
-            "Account" 
-        };
-
         // Map of controllers and their actions for access control
         private readonly Dictionary<string, List<string>> _controllerActions = new()
         {
@@ -55,22 +45,19 @@ namespace PureLedger.Controllers
         {
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
             ViewBag.Projects = await _authService.GetUserProjectsAsync(userId);
-            ViewBag.Controllers = _availableControllers;
             ViewBag.ControllerActions = _controllerActions;
             return View(new UserViewModel());
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(UserViewModel model, string[] controllerAccess, string[] actionAccess)
+        public async Task<IActionResult> Create(UserViewModel model, string[] accessPermissions)
         {
-            // Update the model
-            model.ControllerAccess = controllerAccess?.ToList() ?? new List<string>();
-            model.ActionAccess = actionAccess?.ToList() ?? new List<string>();
+            // Update the model with access permissions
+            model.AccessPermissions = accessPermissions?.ToList() ?? new List<string>();
             
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
             ViewBag.Projects = await _authService.GetUserProjectsAsync(userId);
-            ViewBag.Controllers = _availableControllers;
             ViewBag.ControllerActions = _controllerActions;
             
             if (!ModelState.IsValid)
@@ -105,14 +92,28 @@ namespace PureLedger.Controllers
                 return NotFound();
             }
             
-            // Get user's projects and controller access
+            // Get user's projects and access permissions
             var userProjects = await _authService.GetUserProjectsAsync(user.UserId);
             var controllerAccess = await _authService.GetUserControllerAccessAsync(user.UserId);
             var actionAccess = await _authService.GetUserActionAccessAsync(user.UserId);
             
             ViewBag.Projects = await _authService.GetUserProjectsAsync(currentUserId);
-            ViewBag.Controllers = _availableControllers;
             ViewBag.ControllerActions = _controllerActions;
+            
+            // Build access permissions list
+            var accessPermissions = new List<string>();
+            
+            // Add controller-level access
+            accessPermissions.AddRange(controllerAccess);
+            
+            // Add action-level access
+            foreach (var controllerActionPair in actionAccess)
+            {
+                foreach (var action in controllerActionPair.Value)
+                {
+                    accessPermissions.Add($"{controllerActionPair.Key}|{action}");
+                }
+            }
             
             var model = new UserViewModel
             {
@@ -123,11 +124,7 @@ namespace PureLedger.Controllers
                 IsAdmin = user.IsAdmin,
                 IsActive = user.IsActive,
                 ProjectIds = userProjects.Select(p => p.ProjectId).ToList(),
-                ControllerAccess = controllerAccess,
-                // Convert action access format
-                ActionAccess = actionAccess.SelectMany(pair => 
-                    pair.Value.Select(action => $"{pair.Key}|{action}")
-                ).ToList()
+                AccessPermissions = accessPermissions
             };
             
             return View(model);
@@ -135,11 +132,10 @@ namespace PureLedger.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(UserViewModel model, string[] controllerAccess, string[] actionAccess)
+        public async Task<IActionResult> Edit(UserViewModel model, string[] accessPermissions)
         {
             var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
             ViewBag.Projects = await _authService.GetUserProjectsAsync(currentUserId);
-            ViewBag.Controllers = _availableControllers;
             ViewBag.ControllerActions = _controllerActions;
             
             if (!ModelState.IsValid)
@@ -147,8 +143,7 @@ namespace PureLedger.Controllers
                 return View(model);
             }
             
-            model.ControllerAccess = controllerAccess?.ToList() ?? new List<string>();
-            model.ActionAccess = actionAccess?.ToList() ?? new List<string>();
+            model.AccessPermissions = accessPermissions?.ToList() ?? new List<string>();
             
             var result = await _authService.UpdateUserAsync(model);
             if (result)

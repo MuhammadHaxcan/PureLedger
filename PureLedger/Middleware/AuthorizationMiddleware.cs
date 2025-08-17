@@ -60,65 +60,39 @@ namespace PureLedger.Middleware
                             if (!hasProjectAccess)
                             {
                                 _logger.LogWarning("Access denied: User {UserId} attempted to access project {ProjectId} without permission", userId, projectId);
-                                context.Response.Redirect("/Account/AccessDenied");
+                                await HandleAccessDenied(context);
                                 return;
                             }
                         }
                     }
                     
-                    // Check if user has access to this specific action
+                    // Check access permissions - simplified approach
+                    bool hasAccess = false;
+                    
                     if (!string.IsNullOrEmpty(action))
                     {
-                        // Check for action-specific permission ONLY - don't check controller permission
-                        bool hasAccess = false;
+                        // Check for specific action access first
+                        hasAccess = await authService.HasActionAccessAsync(userId, controller, action);
                         
-                        // First check for specific action permission
-                        var actionPermission = await GetSpecificActionPermission(authService, userId, controller, action);
-                        if (actionPermission)
-                        {
-                            hasAccess = true;
-                        }
-
-                        
+                        // If no specific action access, check controller-level access
                         if (!hasAccess)
                         {
-                            _logger.LogWarning("Access denied: User {UserId} attempted to access {Controller}/{Action} without permission", 
-                                userId, controller, action);
-                            
-                            // Check if this is an AJAX request
-                            if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest")
-                            {
-                                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                                await context.Response.WriteAsJsonAsync(new { error = "Access denied" });
-                            }
-                            else
-                            {
-                                context.Response.Redirect("/Account/AccessDenied");
-                            }
-                            return;
+                            hasAccess = await authService.HasControllerAccessAsync(userId, controller);
                         }
                     }
-                    // Fall back to controller-level access if no action is specified
                     else
                     {
-                        bool hasControllerAccess = await authService.HasControllerAccessAsync(userId, controller);
-                        if (!hasControllerAccess)
-                        {
-                            _logger.LogWarning("Access denied: User {UserId} attempted to access controller {Controller} without permission", 
-                                userId, controller);
-                            
-                            // Check if this is an AJAX request
-                            if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest")
-                            {
-                                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                                await context.Response.WriteAsJsonAsync(new { error = "Access denied" });
-                            }
-                            else
-                            {
-                                context.Response.Redirect("/Account/AccessDenied");
-                            }
-                            return;
-                        }
+                        // No action specified, check controller-level access
+                        hasAccess = await authService.HasControllerAccessAsync(userId, controller);
+                    }
+
+                    if (!hasAccess)
+                    {
+                        _logger.LogWarning("Access denied: User {UserId} attempted to access {Controller}/{Action} without permission", 
+                            userId, controller, action ?? "default");
+                        
+                        await HandleAccessDenied(context);
+                        return;
                     }
 
                     // Log successful access for debugging
@@ -144,16 +118,18 @@ namespace PureLedger.Middleware
             await _next(context);
         }
 
-        // Helper method to check for action-specific permission without controller fallback
-        private async Task<bool> GetSpecificActionPermission(IAuthService authService, int userId, string controller, string action)
+        private async Task HandleAccessDenied(HttpContext context)
         {
-            // Get all user action permissions for this controller
-            var userActionsDict = await authService.GetUserActionAccessAsync(userId);
-            if (userActionsDict.TryGetValue(controller, out var actions))
+            // Check if this is an AJAX request
+            if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest")
             {
-                return actions.Contains(action);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "Access denied" });
             }
-            return false;
+            else
+            {
+                context.Response.Redirect("/Account/AccessDenied");
+            }
         }
     }
 

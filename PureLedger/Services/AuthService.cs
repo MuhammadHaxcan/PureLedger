@@ -1,7 +1,6 @@
-using Microsoft.EntityFrameworkCore;
-using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.ViewModels;
+using PureLedger.Repositories.Interfaces;
 using System.Security.Claims;
 
 namespace PureLedger.Services
@@ -15,10 +14,10 @@ namespace PureLedger.Services
         Task UpdateLastLoginAsync(User user);
         Task<bool> HasProjectAccessAsync(int userId, int projectId);
         Task<bool> HasControllerAccessAsync(int userId, string controller);
-        Task<bool> HasActionAccessAsync(int userId, string controller, string action); // New method
+        Task<bool> HasActionAccessAsync(int userId, string controller, string action);
         Task<List<Project>> GetUserProjectsAsync(int userId);
         Task<List<string>> GetUserControllerAccessAsync(int userId);
-        Task<Dictionary<string, List<string>>> GetUserActionAccessAsync(int userId); // New method
+        Task<Dictionary<string, List<string>>> GetUserActionAccessAsync(int userId);
         Task<bool> CreateUserAsync(UserViewModel model);
         Task<bool> UpdateUserAsync(UserViewModel model);
         Task<bool> DeleteUserAsync(int userId);
@@ -29,16 +28,16 @@ namespace PureLedger.Services
     public class AuthService : IAuthService
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly LedgerDbContext _dbContext;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AuthService> _logger;
 
         public AuthService(
             IHttpContextAccessor httpContextAccessor,
-            LedgerDbContext dbContext,
+            IUnitOfWork unitOfWork,
             ILogger<AuthService> logger)
         {
             _httpContextAccessor = httpContextAccessor;
-            _dbContext = dbContext;
+            _unitOfWork = unitOfWork;
             _logger = logger;
         }
 
@@ -70,18 +69,12 @@ namespace PureLedger.Services
 
         public async Task<User?> GetUserByUsernameAsync(string username)
         {
-            return await _dbContext.Users
-                .Include(u => u.UserProjects)
-                .Include(u => u.ControllerAccess)
-                .FirstOrDefaultAsync(u => u.Username == username);
+            return await _unitOfWork.Users.GetByUsernameWithAccessAsync(username);
         }
 
         public async Task<User?> GetUserByIdAsync(int userId)
         {
-            return await _dbContext.Users
-                .Include(u => u.UserProjects)
-                .Include(u => u.ControllerAccess)
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+            return await _unitOfWork.Users.GetByIdWithAccessAsync(userId);
         }
 
         public async Task<bool> CheckPasswordAsync(User user, string password)
@@ -96,157 +89,38 @@ namespace PureLedger.Services
         public async Task UpdateLastLoginAsync(User user)
         {
             user.LastLoginDate = DateTime.UtcNow;
-            _dbContext.Users.Update(user);
-            await _dbContext.SaveChangesAsync();
+            await _unitOfWork.Users.UpdateAsync(user);
         }
 
         public async Task<bool> HasProjectAccessAsync(int userId, int projectId)
         {
-            var user = await _dbContext.Users
-                .Include(u => u.UserProjects)
-                .FirstOrDefaultAsync(u => u.UserId == userId);
-                
-            if (user == null)
-                return false;
-
-            // Admin has access to all projects
-            if (user.IsAdmin)
-                return true;
-
-            // Check explicit project assignments
-            return await _dbContext.UserProjects
-                .AnyAsync(up => up.UserId == userId && up.ProjectId == projectId);
+            return await _unitOfWork.Users.HasProjectAccessAsync(userId, projectId);
         }
 
         public async Task<bool> HasControllerAccessAsync(int userId, string controller)
         {
-            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-            if (user == null)
-                return false;
-
-            // Admin has access to all controllers
-            if (user.IsAdmin)
-                return true;
-
-            // Check if user has explicit access to the controller
-            var controllerAccess = await _dbContext.UserControllerAccess
-                .Where(uca => uca.UserId == userId && 
-                       uca.Controller == controller && 
-                       uca.Action == null &&
-                       uca.HasAccess) // Important: must have HasAccess set to true
-                .FirstOrDefaultAsync();
-
-            // Only return true if explicitly granted access
-            return controllerAccess != null;
+            return await _unitOfWork.UserControllerAccess.HasControllerAccessAsync(userId, controller);
         }
 
-        // New method to check action-specific access
         public async Task<bool> HasActionAccessAsync(int userId, string controller, string action)
         {
-            var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId);
-            if (user == null)
-                return false;
-
-            // Admin has access to all actions
-            if (user.IsAdmin)
-                return true;
-
-            // First check if there's specific access defined for this action
-            var actionAccess = await _dbContext.UserControllerAccess
-                .Where(uca => uca.UserId == userId && 
-                       uca.Controller == controller && 
-                       uca.Action == action && 
-                       uca.HasAccess) // Important: must have HasAccess set to true
-                .FirstOrDefaultAsync();
-
-            if (actionAccess != null)
-            {
-                return true;
-            }
-
-            // If no action-specific access is defined, fall back to controller-level access
-            return await HasControllerAccessAsync(userId, controller);
+            return await _unitOfWork.UserControllerAccess.HasActionAccessAsync(userId, controller, action);
         }
 
-        // Method to get all controller access for a user
         public async Task<List<string>> GetUserControllerAccessAsync(int userId)
         {
-            var user = await _dbContext.Users
-                .Include(u => u.ControllerAccess)
-                .FirstOrDefaultAsync(u => u.UserId == userId);
-
-            if (user == null)
-                return new List<string>();
-                
-            // If admin, return all controllers
-            if (user.IsAdmin)
-            {
-                // Get all unique controller names from the database
-                return await _dbContext.UserControllerAccess
-                    .Select(uca => uca.Controller)
-                    .Distinct()
-                    .ToListAsync();
-            }
-
-            // Return controller names that the user has access to
-            return user.ControllerAccess
-                .Where(ca => ca.HasAccess && ca.Action == null)
-                .Select(ca => ca.Controller)
-                .Distinct()
-                .ToList();
+            return await _unitOfWork.UserControllerAccess.GetUserControllersAsync(userId);
         }
 
-        // New method to get controller and action access for a user
         public async Task<Dictionary<string, List<string>>> GetUserActionAccessAsync(int userId)
         {
-            var user = await _dbContext.Users
-                .Include(u => u.ControllerAccess.Where(ca => ca.Action != null && ca.HasAccess)) // Only include actions that are granted
-                .FirstOrDefaultAsync(u => u.UserId == userId);
-
-            var result = new Dictionary<string, List<string>>();
-            
-            if (user == null)
-                return result;
-
-            // If admin, return all controller actions
-            if (user.IsAdmin)
-            {
-                // Get all controller/action pairs
-                var allControllerActions = await _dbContext.UserControllerAccess
-                    .Where(uca => uca.Action != null)
-                    .GroupBy(uca => uca.Controller)
-                    .Select(g => new { 
-                        Controller = g.Key, 
-                        Actions = g.Select(uca => uca.Action).Where(a => a != null).ToList() 
-                    })
-                    .ToListAsync();
-                
-                foreach (var item in allControllerActions)
-                {
-                    result[item.Controller] = item.Actions!;
-                }
-                
-                return result;
-            }
-            
-            // Get actions grouped by controller that the user has access to
-            var accessibleActions = user.ControllerAccess
-                .Where(ca => ca.HasAccess && ca.Action != null)
-                .GroupBy(ca => ca.Controller)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(ca => ca.Action!)
-                          .Where(a => !string.IsNullOrEmpty(a))
-                          .ToList()
-                );
-            
-            return accessibleActions;
+            return await _unitOfWork.UserControllerAccess.GetUserActionsAsync(userId);
         }
 
         public async Task<bool> CreateUserAsync(UserViewModel model)
         {
             // Check if username already exists
-            if (await _dbContext.Users.AnyAsync(u => u.Username == model.Username))
+            if (await _unitOfWork.Users.UsernameExistsAsync(model.Username))
                 return false;
 
             var subroute = _httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
@@ -264,15 +138,14 @@ namespace PureLedger.Services
             };
 
             // Add the user to the database
-            _dbContext.Users.Add(newUser);
-            await _dbContext.SaveChangesAsync();
+            await _unitOfWork.Users.AddAsync(newUser);
 
             // Add project access if provided
             if (model.ProjectIds != null && model.ProjectIds.Count > 0)
             {
                 foreach (var projectId in model.ProjectIds)
                 {
-                    _dbContext.UserProjects.Add(new UserProject
+                    await _unitOfWork.UserProjects.AddAsync(new UserProject
                     {
                         UserId = newUser.UserId,
                         ProjectId = projectId
@@ -280,47 +153,31 @@ namespace PureLedger.Services
                 }
             }
 
-            // Add controller access if provided
-            if (model.ControllerAccess != null && model.ControllerAccess.Count > 0)
+            // Add access permissions
+            if (model.AccessPermissions != null && model.AccessPermissions.Count > 0)
             {
-                foreach (var controller in model.ControllerAccess)
+                foreach (var permission in model.AccessPermissions)
                 {
-                    _dbContext.UserControllerAccess.Add(new UserControllerAccess
+                    var parts = permission.Split('|');
+                    var controller = parts[0];
+                    var action = parts.Length > 1 ? parts[1] : null;
+
+                    await _unitOfWork.UserControllerAccess.AddAsync(new UserControllerAccess
                     {
                         UserId = newUser.UserId,
                         Controller = controller,
-                        Action = null, // Granting access to the entire controller
+                        Action = action,
                         HasAccess = true
                     });
                 }
             }
 
-            // Add action-specific access if provided
-            if (model.ActionAccess != null)
-            {
-                foreach (var entry in model.ActionAccess)
-                {
-                    var parts = entry.Split('|', 2); // Format: "Controller|Action"
-                    if (parts.Length == 2)
-                    {
-                        _dbContext.UserControllerAccess.Add(new UserControllerAccess
-                        {
-                            UserId = newUser.UserId,
-                            Controller = parts[0],
-                            Action = parts[1],
-                            HasAccess = true
-                        });
-                    }
-                }
-            }
-
-            await _dbContext.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> UpdateUserAsync(UserViewModel model)
         {
-            var user = await _dbContext.Users.FindAsync(model.UserId);
+            var user = await _unitOfWork.Users.GetByIdAsync(model.UserId);
             if (user == null)
                 return false;
 
@@ -339,24 +196,21 @@ namespace PureLedger.Services
             if (!string.IsNullOrEmpty(model.Password))
                 user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password);
 
-            _dbContext.Users.Update(user);
+            await _unitOfWork.Users.UpdateAsync(user);
             
-            // Only update these if the current user is an admin
+            // Only update access permissions if the current user is an admin
             if (IsCurrentUserAdmin())
             {
                 // Update project access if provided
                 if (model.ProjectIds != null)
                 {
                     // Remove existing project access
-                    var existingProjects = await _dbContext.UserProjects
-                        .Where(up => up.UserId == user.UserId)
-                        .ToListAsync();
-                    _dbContext.UserProjects.RemoveRange(existingProjects);
+                    await _unitOfWork.UserProjects.DeleteByUserIdAsync(user.UserId);
 
                     // Add new project access
                     foreach (var projectId in model.ProjectIds)
                     {
-                        _dbContext.UserProjects.Add(new UserProject
+                        await _unitOfWork.UserProjects.AddAsync(new UserProject
                         {
                             UserId = user.UserId,
                             ProjectId = projectId
@@ -364,105 +218,65 @@ namespace PureLedger.Services
                     }
                 }
 
-                // Handle controller and action access updates
-                // 1. Remove all existing access
-                var existingAccess = await _dbContext.UserControllerAccess
-                    .Where(ca => ca.UserId == user.UserId)
-                    .ToListAsync();
-                _dbContext.UserControllerAccess.RemoveRange(existingAccess);
+                // Remove existing access
+                await _unitOfWork.UserControllerAccess.DeleteByUserIdAsync(user.UserId);
 
-                // 2. Add new controller-level access
-                if (model.ControllerAccess != null)
+                // Add new access permissions
+                if (model.AccessPermissions != null && model.AccessPermissions.Count > 0)
                 {
-                    foreach (var controller in model.ControllerAccess)
+                    foreach (var permission in model.AccessPermissions)
                     {
-                        _dbContext.UserControllerAccess.Add(new UserControllerAccess
+                        var parts = permission.Split('|');
+                        var controller = parts[0];
+                        var action = parts.Length > 1 ? parts[1] : null;
+
+                        await _unitOfWork.UserControllerAccess.AddAsync(new UserControllerAccess
                         {
                             UserId = user.UserId,
                             Controller = controller,
-                            Action = null, // Controller-level access
+                            Action = action,
                             HasAccess = true
                         });
                     }
                 }
-
-                // 3. Add new action-specific access
-                if (model.ActionAccess != null)
-                {
-                    foreach (var entry in model.ActionAccess)
-                    {
-                        var parts = entry.Split('|', 2); // Format: "Controller|Action"
-                        if (parts.Length == 2)
-                        {
-                            _dbContext.UserControllerAccess.Add(new UserControllerAccess
-                            {
-                                UserId = user.UserId,
-                                Controller = parts[0],
-                                Action = parts[1],
-                                HasAccess = true
-                            });
-                        }
-                    }
-                }
             }
 
-            await _dbContext.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> DeleteUserAsync(int userId)
         {
-            var user = await _dbContext.Users.FindAsync(userId);
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
             if (user == null)
                 return false;
 
             // Don't allow deleting the last admin user
             if (user.IsAdmin)
             {
-                var adminCount = await _dbContext.Users.CountAsync(u => u.IsAdmin);
+                var adminCount = await _unitOfWork.Users.GetAdminCountAsync();
                 if (adminCount <= 1)
                     return false;
             }
 
-            _dbContext.Users.Remove(user);
-            await _dbContext.SaveChangesAsync();
-            return true;
+            return await _unitOfWork.Users.DeleteAsync(userId);
         }
 
         public async Task<bool> IsSubrouteAdminAsync(string username, string subroute)
         {
-            var user = await _dbContext.Users
-                .FirstOrDefaultAsync(u => u.Username == username && u.Subroute == subroute);
+            var users = await _unitOfWork.Users.GetBySubrouteAsync(subroute);
+            var user = users.FirstOrDefault(u => u.Username == username);
             
             return user?.IsAdmin ?? false;
         }
 
         public async Task<List<User>> GetUsersBySubrouteAsync(string subroute)
         {
-            return await _dbContext.Users
-                .Where(u => u.Subroute == subroute)
-                .ToListAsync();
+            return await _unitOfWork.Users.GetBySubrouteAsync(subroute);
         }
 
-        // New method to get projects for a user
         public async Task<List<Project>> GetUserProjectsAsync(int userId)
         {
-            var user = await _dbContext.Users
-                .Include(u => u.UserProjects)
-                .FirstOrDefaultAsync(u => u.UserId == userId);
-
-            if (user == null)
-                return new List<Project>();
-
-            // Admin: return all projects
-            if (user.IsAdmin)
-                return await _dbContext.Projects.ToListAsync();
-
-            // Return only projects the user has access to
-            var projectIds = user.UserProjects.Select(up => up.ProjectId).ToList();
-            return await _dbContext.Projects
-                .Where(p => projectIds.Contains(p.ProjectId))
-                .ToListAsync();
+            return await _unitOfWork.Users.GetUserProjectsAsync(userId);
         }
 
         private bool IsCurrentUserAdmin()

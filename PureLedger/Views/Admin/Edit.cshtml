@@ -96,16 +96,48 @@
                 </div>
 
                 <div class="form-group mb-3">
-                    <label class="form-label">Controller Access</label>
+                    <label class="form-label">Access Permissions</label>
                     <div class="card">
-                        <div class="card-body" style="max-height: 200px; overflow-y: auto;">
-                            @foreach (var controller in ViewBag.Controllers ?? new string[] { "Home", "MetaData", "Reporting", "DeliveryChallan" })
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var controller in controllerActionsMap.Keys)
                             {
-                                <div class="form-check">
-                                    <input type="checkbox" name="ControllerAccess" value="@controller"
-                                           class="form-check-input"
-                                           @(Model.ControllerAccess != null && Model.ControllerAccess.Contains(controller) ? "checked" : "") />
-                                    <label class="form-check-label">@controller</label>
+                                <div class="mb-4 border-bottom pb-3">
+                                    <!-- Controller Header with Full Access Option -->
+                                    <div class="d-flex align-items-center mb-2">
+                                        <h6 class="mb-0 me-3">
+                                            <i class="fas fa-layer-group me-1 text-primary"></i>@controller
+                                        </h6>
+                                        <div class="form-check">
+                                            <input type="checkbox" name="accessPermissions" id="controller_@controller" 
+                                                   value="@controller" class="form-check-input controller-checkbox" 
+                                                   data-controller="@controller"
+                                                   @(Model.HasControllerAccess(controller) ? "checked" : "") />
+                                            <label class="form-check-label text-success fw-bold" for="controller_@controller">
+                                                Grant Full Access
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Always show actions for this controller -->
+                                    <div class="ms-3">
+                                        <small class="text-muted mb-2 d-block">Or select specific actions:</small>
+                                        <div class="row">
+                                            @foreach (var action in controllerActionsMap[controller])
+                                            {
+                                                <div class="col-md-6 col-lg-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input type="checkbox" name="accessPermissions" id="action_@(controller)_@(action)" 
+                                                               value="@(controller)|@(action)" class="form-check-input action-checkbox" 
+                                                               data-controller="@controller" data-action="@action"
+                                                               @(Model.HasActionAccess(controller, action) ? "checked" : "") />
+                                                        <label class="form-check-label" for="action_@(controller)_@(action)">
+                                                            <i class="fas fa-cog me-1 text-secondary"></i>@action
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -129,4 +161,45 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize the state based on current selections
+            $('.controller-checkbox').each(function() {
+                var controllerId = $(this).data('controller');
+                var totalActions = $('input.action-checkbox[data-controller="' + controllerId + '"]').length;
+                var checkedActions = $('input.action-checkbox[data-controller="' + controllerId + '"]:checked').length;
+                
+                // If all actions are checked, ensure controller checkbox is checked
+                if (checkedActions === totalActions && totalActions > 0) {
+                    $(this).prop('checked', true);
+                }
+            });
+            
+            // When controller checkbox (full access) is checked, check all its actions
+            $('.controller-checkbox').change(function() {
+                var controllerId = $(this).data('controller');
+                var isChecked = $(this).prop('checked');
+                
+                // Check/uncheck all action checkboxes for this controller
+                $('input.action-checkbox[data-controller="' + controllerId + '"]').prop('checked', isChecked);
+            });
+            
+            // When an action is checked/unchecked, update the controller checkbox accordingly
+            $('.action-checkbox').change(function() {
+                var controllerId = $(this).data('controller');
+                var totalActions = $('input.action-checkbox[data-controller="' + controllerId + '"]').length;
+                var checkedActions = $('input.action-checkbox[data-controller="' + controllerId + '"]:checked').length;
+                
+                // If all actions are checked, check the controller checkbox
+                // If no actions are checked, uncheck the controller checkbox
+                // If some actions are checked, leave controller checkbox unchecked (partial selection)
+                if (checkedActions === totalActions) {
+                    $('#controller_' + controllerId).prop('checked', true);
+                } else {
+                    $('#controller_' + controllerId).prop('checked', false);
+                }
+            });
+        });
+    </script>
 }

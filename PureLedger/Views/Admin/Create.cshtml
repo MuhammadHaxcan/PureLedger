@@ -84,34 +84,46 @@
                 </div>
 
                 <div class="form-group mb-3">
-                    <label class="form-label">Controller Access</label>
+                    <label class="form-label">Access Permissions</label>
                     <div class="card">
-                        <div class="card-body" style="max-height: 200px; overflow-y: auto;">
-                            @foreach (var controller in ViewBag.Controllers ?? new string[] { "Home", "MetaData", "Reporting", "DeliveryChallan" })
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var controller in controllerActionsMap.Keys)
                             {
-                                <div class="mb-2">
-                                    <div class="form-check">
-                                        <input type="checkbox" name="ControllerAccess" id="controller_@controller" 
-                                               value="@controller" class="form-check-input controller-checkbox" 
-                                               data-controller="@controller" />
-                                        <label class="form-check-label fw-bold" for="controller_@controller">@controller</label>
+                                <div class="mb-4 border-bottom pb-3">
+                                    <!-- Controller Header with Full Access Option -->
+                                    <div class="d-flex align-items-center mb-2">
+                                        <h6 class="mb-0 me-3">
+                                            <i class="fas fa-layer-group me-1 text-primary"></i>@controller
+                                        </h6>
+                                        <div class="form-check">
+                                            <input type="checkbox" name="accessPermissions" id="controller_@controller" 
+                                                   value="@controller" class="form-check-input controller-checkbox" 
+                                                   data-controller="@controller" />
+                                            <label class="form-check-label text-success fw-bold" for="controller_@controller">
+                                                Grant Full Access
+                                            </label>
+                                        </div>
                                     </div>
                                     
-                                    <!-- Show actions for this controller -->
-                                    @if (controllerActionsMap.TryGetValue(controller, out List<string> actions))
-                                    {
-                                        <div class="ms-4 mt-2 actions-container" id="actions_@controller">
-                                            @foreach (var action in actions)
+                                    <!-- Always show actions for this controller -->
+                                    <div class="ms-3">
+                                        <small class="text-muted mb-2 d-block">Or select specific actions:</small>
+                                        <div class="row">
+                                            @foreach (var action in controllerActionsMap[controller])
                                             {
-                                                <div class="form-check">
-                                                    <input type="checkbox" name="ActionAccess" id="action_@(controller)_@(action)" 
-                                                           value="@(controller)|@(action)" class="form-check-input action-checkbox" 
-                                                           data-controller="@controller" data-action="@action" />
-                                                    <label class="form-check-label" for="action_@(controller)_@(action)">@action</label>
+                                                <div class="col-md-6 col-lg-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input type="checkbox" name="accessPermissions" id="action_@(controller)_@(action)" 
+                                                               value="@(controller)|@(action)" class="form-check-input action-checkbox" 
+                                                               data-controller="@controller" data-action="@action" />
+                                                        <label class="form-check-label" for="action_@(controller)_@(action)">
+                                                            <i class="fas fa-cog me-1 text-secondary"></i>@action
+                                                        </label>
+                                                    </div>
                                                 </div>
                                             }
                                         </div>
-                                    }
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -138,34 +150,28 @@
     
     <script>
         $(document).ready(function() {
-            // Toggle action checkboxes based on controller checkbox
+            // When controller checkbox (full access) is checked, check all its actions
             $('.controller-checkbox').change(function() {
                 var controllerId = $(this).data('controller');
                 var isChecked = $(this).prop('checked');
                 
-                // Find all action checkboxes for this controller
+                // Check/uncheck all action checkboxes for this controller
                 $('input.action-checkbox[data-controller="' + controllerId + '"]').prop('checked', isChecked);
-                
-                // Toggle visibility of actions container
-                $('#actions_' + controllerId).slideToggle(isChecked);
             });
             
-            // Initialize visibility
-            $('.controller-checkbox').each(function() {
-                var controllerId = $(this).data('controller');
-                var isChecked = $(this).prop('checked');
-                
-                if (!isChecked) {
-                    $('#actions_' + controllerId).hide();
-                }
-            });
-            
-            // When an action is checked, ensure its controller is checked too
+            // When an action is checked/unchecked, update the controller checkbox accordingly
             $('.action-checkbox').change(function() {
                 var controllerId = $(this).data('controller');
+                var totalActions = $('input.action-checkbox[data-controller="' + controllerId + '"]').length;
+                var checkedActions = $('input.action-checkbox[data-controller="' + controllerId + '"]:checked').length;
                 
-                if ($(this).prop('checked')) {
+                // If all actions are checked, check the controller checkbox
+                // If no actions are checked, uncheck the controller checkbox
+                // If some actions are checked, leave controller checkbox unchecked (partial selection)
+                if (checkedActions === totalActions) {
                     $('#controller_' + controllerId).prop('checked', true);
+                } else {
+                    $('#controller_' + controllerId).prop('checked', false);
                 }
             });
         });

@@ -20,7 +20,7 @@ namespace PureLedger.ViewComponents
     
             if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out userId))
             {
-                // Get user's controller and action access
+                // Get user's access permissions
                 var controllerAccess = await _authService.GetUserControllerAccessAsync(userId);
                 var actionAccess = await _authService.GetUserActionAccessAsync(userId);
         
@@ -64,14 +64,34 @@ namespace PureLedger.ViewComponents
             if (IsAdmin)
                 return true;
                 
-            //// Check controller-level access first
-            //if (AccessibleControllers.Contains(controller))
-            //    return true;
+            // Check controller-level access first
+            if (AccessibleControllers.Contains(controller))
+                return true;
                 
             // Check action-specific access
             if (AccessibleActions.TryGetValue(controller, out var actions))
             {
                 return actions.Contains(action);
+            }
+                
+            return false;
+        }
+        
+        // Helper method to check if user has any access to a controller (either controller-level or action-level)
+        public bool CanAccessController(string controller)
+        {
+            // Admin always has access
+            if (IsAdmin)
+                return true;
+                
+            // Check controller-level access
+            if (AccessibleControllers.Contains(controller))
+                return true;
+                
+            // Check if user has any action-level access for this controller
+            if (AccessibleActions.TryGetValue(controller, out var actions))
+            {
+                return actions.Count > 0;
             }
                 
             return false;

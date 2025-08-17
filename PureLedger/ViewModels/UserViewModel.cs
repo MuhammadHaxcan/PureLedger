@@ -32,15 +32,50 @@ namespace PureLedger.ViewModels
 
         public List<int> ProjectIds { get; set; } = new List<int>();
         
-        public List<string> ControllerAccess { get; set; } = new List<string>();
+        // Simplified access control - store controller-action pairs together
+        // Format: "Controller" for controller-level access, "Controller|Action" for action-level access
+        public List<string> AccessPermissions { get; set; } = new List<string>();
         
-        // For action-level access in format "Controller|Action"
-        public List<string> ActionAccess { get; set; } = new List<string>();
+        // Helper methods for access checking
+        public bool HasControllerAccess(string controller)
+        {
+            return AccessPermissions.Contains(controller);
+        }
         
-        // Helper property to check if a specific action is allowed
         public bool HasActionAccess(string controller, string action)
         {
-            return ActionAccess.Contains($"{controller}|{action}");
+            return AccessPermissions.Contains($"{controller}|{action}");
+        }
+        
+        public bool HasAnyAccess(string controller, string? action = null)
+        {
+            if (string.IsNullOrEmpty(action))
+                return HasControllerAccess(controller);
+            
+            return HasActionAccess(controller, action) || HasControllerAccess(controller);
+        }
+        
+        // Get all controllers that have access (either controller-level or action-level)
+        public List<string> GetAccessibleControllers()
+        {
+            var controllers = new HashSet<string>();
+            
+            foreach (var permission in AccessPermissions)
+            {
+                var parts = permission.Split('|');
+                controllers.Add(parts[0]);
+            }
+            
+            return controllers.ToList();
+        }
+        
+        // Get actions for a specific controller
+        public List<string> GetControllerActions(string controller)
+        {
+            return AccessPermissions
+                .Where(p => p.StartsWith($"{controller}|"))
+                .Select(p => p.Split('|')[1])
+                .ToList();
         }
     }
 }

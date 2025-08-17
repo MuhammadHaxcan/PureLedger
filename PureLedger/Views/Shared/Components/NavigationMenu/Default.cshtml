@@ -26,72 +26,45 @@
             ("AgingReport", "Aging Report", "fas fa-calendar-alt"),
             ("AccountReport", "Account Report", "fas fa-user-circle"),
             ("MasterReport", "Master Report", "fas fa-file-invoice")
-        })
+        }),
         
+        ("Delivery", "fas fa-truck", "DeliveryChallan", new List<(string, string, string)>
+        {
+            ("Index", "Delivery Challan", "fas fa-truck")
+        })
     };
 }
 
 <ul class="navbar-nav">
     @foreach (var navItem in navigationMap)
     {
-        // First, determine if we should show this section at all
-        bool showSection = Model.IsAdmin || Model.AccessibleControllers.Contains(navItem.Controller);
+        // Check if user has access to this controller or any of its actions
+        bool hasControllerAccess = Model.CanAccessController(navItem.Controller);
         
-        // If not admin and no controller access, check if any specific actions are accessible
-        if (!showSection && Model.AccessibleActions.TryGetValue(navItem.Controller, out var accessibleActions))
+        if (hasControllerAccess)
         {
-            // Only show section if user has access to at least one action
-            showSection = accessibleActions.Count > 0;
-        }
-        
-        // Special case for DeliveryChallan under Home menu
-        bool showDeliveryChallan = false;
-        if (navItem.Controller == "Home")
-        {
-            showDeliveryChallan = Model.IsAdmin || 
-                Model.AccessibleControllers.Contains("DeliveryChallan") ||
-                (Model.AccessibleActions.TryGetValue("DeliveryChallan", out var challanActions) && 
-                challanActions.Contains("Index"));
-                
-            // If user only has access to DeliveryChallan but nothing in Home, show the Home section anyway
-            if (showDeliveryChallan && !showSection)
+            // Get accessible actions for this controller
+            var accessibleActions = navItem.Actions.Where(action => Model.CanAccessAction(navItem.Controller, action.Action)).ToList();
+            
+            // Only show the menu if there are accessible actions
+            if (accessibleActions.Any())
             {
-                showSection = true;
-            }
-        }
-        
-        if (showSection)
-        {
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="@navItem.Icon me-1"></i> @navItem.Title
-                </a>
-                <ul class="dropdown-menu">
-                    @foreach (var action in navItem.Actions)
-                    {
-                        // Use the CanAccessAction helper method to determine if this action should be shown
-                        if (Model.CanAccessAction(navItem.Controller, action.Action))
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle px-3" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="@navItem.Icon me-1"></i> @navItem.Title
+                    </a>
+                    <ul class="dropdown-menu">
+                        @foreach (var action in accessibleActions)
                         {
                             <li>
                                 <a class="dropdown-item" asp-controller="@navItem.Controller" asp-action="@action.Action">
-                                    <i class="@action.Icon"></i> @action.Title
+                                    <i class="@action.Icon me-1"></i> @action.Title
                                 </a>    
                             </li>
                         }
-                    }
-
-                    @* Special case for DeliveryChallan under Home menu *@
-                    @if (navItem.Controller == "Home" && showDeliveryChallan)
-                    {
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item" asp-controller="DeliveryChallan" asp-action="Index">
-                                <i class="fas fa-truck"></i> Delivery Challan
-                            </a>
-                        </li>
-                    }
-                </ul>
-            </li>
+                    </ul>
+                </li>
+            }
         }
     }
 
@@ -103,7 +76,7 @@
                 <i class="fas fa-user-shield me-1"></i> Admin
             </a>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" asp-controller="Admin" asp-action="Index"><i class="fas fa-users-cog"></i> User Management</a></li>
+                <li><a class="dropdown-item" asp-controller="Admin" asp-action="Index"><i class="fas fa-users-cog me-1"></i> User Management</a></li>
             </ul>
         </li>
     }
