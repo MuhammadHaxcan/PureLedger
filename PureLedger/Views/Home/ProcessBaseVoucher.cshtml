@@ -1,0 +1,120 @@
+@model PureLedger.ViewModels.BaseVoucherProcessingViewModel
+@{
+    ViewData["Title"] = "Process Base Voucher";
+    var modelStateIsValid = ViewData.ModelState.IsValid;
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-cogs me-2"></i>Process Base Voucher JV-@Model.BaseVoucherId</h2>
+        <a href="@Url.Action("BaseVouchers", "Home")" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Base Vouchers
+        </a>
+    </div>
+
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i> Select items to include in the new derived voucher. You can process all or part of each entry.
+    </div>
+
+    @if (!modelStateIsValid)
+    {
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            <ul>
+                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <li>@error.ErrorMessage</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <form id="processingForm" method="post" asp-action="CreateDerivedVoucher" asp-controller="Home">
+        <input type="hidden" asp-for="BaseVoucherId" />
+        <input type="hidden" asp-for="ProjectId" />
+
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">Available Entries</h6>
+                <div>
+                    <button type="button" id="selectAllBtn" class="btn btn-sm btn-outline-primary me-1">
+                        <i class="fas fa-check-square me-1"></i> Select All
+                    </button>
+                    <button type="button" id="deselectAllBtn" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-square me-1"></i> Deselect All
+                    </button>
+                    <button type="button" id="maxQuantityBtn" class="btn btn-sm btn-outline-info ms-1">
+                        <i class="fas fa-fill me-1"></i> Max Quantities
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="entriesTable">
+                        <thead class="table-primary">
+                            <tr>
+                                <th width="5%">Select</th>
+                                <th width="10%">Entry ID</th>
+                                <th width="25%">Account</th>
+                                <th width="25%">Description</th>
+                                <th width="10%">Available</th>
+                                <th width="15%">Process Qty</th>
+                                <th width="10%">Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < Model.Entries.Count; i++)
+                            {
+                                var entry = Model.Entries[i];
+                                var isProcessed = entry.IsProcessed;
+                                var entryId = entry.EntryId;
+                                var availableQty = entry.AvailableQuantity;
+                                
+                                <tr class="entry-row @(isProcessed ? "bg-light" : "")">
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input entry-select" 
+                                               data-entry-id="@entryId" 
+                                               @(isProcessed ? "disabled" : "") />
+                                    </td>
+                                    <td>
+                                        @entryId
+                                        <input type="hidden" name="Entries[@i].EntryId" value="@entryId" />
+                                        <input type="hidden" name="Entries[@i].Description" value="@entry.Description" />
+                                        <input type="hidden" name="Entries[@i].AccountName" value="@entry.AccountName" />
+                                        <input type="hidden" name="Entries[@i].AvailableQuantity" value="@availableQty" />
+                                        <input type="hidden" name="Entries[@i].Rate" value="@entry.Rate" />
+                                    </td>
+                                    <td>@entry.AccountName</td>
+                                    <td>@entry.Description</td>
+                                    <td>@availableQty</td>
+                                    <td>
+                                        <input type="number" class="form-control process-qty" 
+                                               name="Entries[@i].ProcessQuantity" 
+                                               value="@entry.ProcessQuantity"
+                                               min="0" max="@availableQty" 
+                                               @(isProcessed ? "disabled" : "") />
+                                    </td>
+                                    <td>@entry.Rate</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <div>
+                <span class="fw-bold me-2">Selected Items:</span>
+                <span id="selectedCount" class="badge bg-primary">0</span>
+            </div>
+            <button type="submit" class="btn btn-success" id="submitBtn">
+                <i class="fas fa-share-alt me-1"></i> Create Derived Voucher
+            </button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/js/process-voucher.js" asp-append-version="true"></script>
+}

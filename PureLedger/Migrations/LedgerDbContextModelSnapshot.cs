@@ -361,6 +361,9 @@ namespace PureLedger.Migrations
                     b.Property<DateOnly>("EntryDate")
                         .HasColumnType("date");
 
+                    b.Property<bool>("IsBaseVoucher")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
 

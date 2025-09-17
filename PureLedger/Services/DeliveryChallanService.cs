@@ -129,8 +129,11 @@ namespace PureLedger.Services
                 var vouchers = await _unitOfWork.JournalVouchers.GetFilteredVouchersAsync(
                     sinceDate, toDate, projectId, !accountId.HasValue && !categoryId.HasValue);
 
-                // Process only unprocessed vouchers
-                var unprocessedVouchers = vouchers.Where(v => !v.IsCompleted).ToList();
+                // Process only unprocessed vouchers that are NOT base vouchers
+                var unprocessedVouchers = vouchers.Where(v => !v.IsCompleted && !v.IsBaseVoucher).ToList();
+
+                _logger.LogInformation("Found {TotalCount} vouchers, {UnprocessedCount} unprocessed non-base vouchers", 
+                    vouchers.Count, unprocessedVouchers.Count);
 
                 // Process each voucher sequentially to avoid DbContext concurrency issues
                 foreach (var voucher in unprocessedVouchers)

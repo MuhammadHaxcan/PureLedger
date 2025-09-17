@@ -63,7 +63,7 @@ namespace PureLedger.Controllers
                 if (action == "submit_print")
                 {
                     // Redirect to the print page with the new JV id
-                    return Redirect($"https://localhost:7062/Reporting/PrintVoucher?journalVoucherId={journalVoucher.JournalVoucherId}&type=JV");
+                    return Redirect($"https://localhost:5221/Reporting/PrintVoucher?journalVoucherId={journalVoucher.JournalVoucherId}&type=JV");
                 }
                 else
                 {
@@ -250,6 +250,115 @@ namespace PureLedger.Controllers
             {
                 _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
                 return Json(new { error = "Error loading accounts" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> BaseVouchers()
+        {
+            try
+            {
+                var baseVouchers = await _journalService.GetAllBaseVouchersAsync();
+                
+                // Log some diagnostic info
+                foreach (var voucher in baseVouchers)
+                {
+                    int unprocessedEntries = voucher.JournalEntries?.Count(e => !e.IsProcessed && e.Quantity > 0) ?? 0;
+                    int totalEntries = voucher.JournalEntries?.Count ?? 0;
+                    
+                    _logger.LogInformation("Base voucher {VoucherId}: {UnprocessedEntries}/{TotalEntries} entries available", 
+                        voucher.JournalVoucherId, unprocessedEntries, totalEntries);
+                }
+                
+                return View(baseVouchers);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving base vouchers");
+                return View(new List<JournalVoucher>());
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ProcessBaseVoucher(int id)
+        {
+            try
+            {
+                var voucher = await _journalService.GetBaseVoucherWithUnprocessedEntriesAsync(id);
+                if (voucher == null)
+                {
+                    _logger.LogWarning("Base voucher with ID {Id} not found", id);
+                    return NotFound();
+                }
+                
+                var model = new BaseVoucherProcessingViewModel 
+                { 
+                    BaseVoucherId = id,
+                    ProjectId = voucher.ProjectId,
+                    Entries = voucher.JournalEntries
+                        .OrderBy(e => e.IsProcessed) // Unprocessed entries first
+                        .ThenBy(e => e.JournalEntryId)
+                        .Select(e => new BaseVoucherEntryViewModel 
+                        {
+                            EntryId = e.JournalEntryId,
+                            Description = e.Description,
+                            AccountName = e.Account?.AccountName,
+                            AvailableQuantity = e.IsProcessed ? 0 : e.Quantity,
+                            ProcessQuantity = 0,  // Default to 0, user will set this
+                            Rate = e.Rate
+                        })
+                        .ToList()
+                };
+                
+                _logger.LogInformation("Prepared processing model for base voucher {Id} with {EntryCount} entries", 
+                    id, model.Entries.Count);
+                return View(model);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error preparing base voucher {Id} for processing", id);
+                return RedirectToAction(nameof(BaseVouchers));
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateDerivedVoucher(BaseVoucherProcessingViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                _logger.LogWarning("Invalid model state when creating derived voucher");
+                return View("ProcessBaseVoucher", model);
+            }
+            
+            try 
+            {
+                // Filter to only include entries with ProcessQuantity > 0
+                var entriesToProcess = model.Entries.Where(e => e.ProcessQuantity > 0).ToList();
+                
+                if (!entriesToProcess.Any())
+                {
+                    ModelState.AddModelError("", "Please select at least one entry to process.");
+                    return View("ProcessBaseVoucher", model);
+                }
+                
+                _logger.LogInformation("Creating derived voucher from base voucher {Id} with {EntryCount} entries", 
+                    model.BaseVoucherId, entriesToProcess.Count);
+                    
+                var derivedVoucherId = await _journalService.CreateDerivedVoucherAsync(
+                    model.BaseVoucherId,
+                    entriesToProcess);
+                    
+                _logger.LogInformation("Created derived voucher {DerivedId} from base voucher {BaseId}", 
+                    derivedVoucherId, model.BaseVoucherId);
+                    
+                TempData["Success"] = $"Successfully created derived voucher JV-{derivedVoucherId}";
+                return RedirectToAction("VoucherEntry", new { jvId = derivedVoucherId });
+            }
+            catch (Exception ex) 
+            {
+                _logger.LogError(ex, "Error creating derived voucher from base voucher {Id}", model.BaseVoucherId);
+                ModelState.AddModelError("", ex.Message);
+                return View("ProcessBaseVoucher", model);
             }
         }
 

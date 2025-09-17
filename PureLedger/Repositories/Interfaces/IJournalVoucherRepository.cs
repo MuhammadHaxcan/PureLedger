@@ -15,5 +15,7 @@ namespace PureLedger.Repositories.Interfaces
             bool includeEntries);
         Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync();
         Task<bool> DeleteAsync(int journalVoucherId);
+        Task<List<JournalVoucher>> GetAllBaseVouchersAsync();
+        Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id);
     }
 }

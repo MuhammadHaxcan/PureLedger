@@ -7,5 +7,6 @@
         public int CreditDays { get; set; }
         public DateOnly DueDate { get; set; }
         public List<JournalEntryRowModel> Entries { get; set; } = new List<JournalEntryRowModel>();
+        public bool IsBaseVoucher { get; set; } = false;
     }
 }

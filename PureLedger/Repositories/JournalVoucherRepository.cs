@@ -108,5 +108,24 @@ namespace PureLedger.Repositories
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
+        {
+            return await _context.JournalVouchers
+                .Where(v => v.IsBaseVoucher)
+                .Include(v => v.Project)
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .ToListAsync();
+        }
+
+        public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
+        {
+            return await _context.JournalVouchers
+                .Where(v => v.IsBaseVoucher && v.JournalVoucherId == id)
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .FirstOrDefaultAsync();
+        }
     }
 }

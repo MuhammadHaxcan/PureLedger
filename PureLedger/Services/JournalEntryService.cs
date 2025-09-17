@@ -73,6 +73,7 @@ namespace PureLedger.Services
                     ProjectId = model.ProjectId,
                     EntryDate = DateOnly.FromDateTime(DateTime.Now),
                     IsCompleted = false,
+                    IsBaseVoucher = model.IsBaseVoucher, // Add this line to set the IsBaseVoucher property
                     CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
                 };
 
@@ -401,6 +402,126 @@ namespace PureLedger.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                throw;
+            }
+        }
+
+        public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
+        {
+            try
+            {
+                // Get base vouchers with their entries
+                var baseVouchers = await _unitOfWork.JournalVouchers.GetAllBaseVouchersAsync();
+                
+                // If entries aren't properly loaded for some vouchers, load them explicitly
+                foreach (var voucher in baseVouchers)
+                {
+                    if (voucher.JournalEntries == null || !voucher.JournalEntries.Any())
+                    {
+                        _logger.LogWarning("Voucher {VoucherId} has no entries loaded, loading them explicitly", 
+                            voucher.JournalVoucherId);
+                            
+                        // Load entries for this voucher
+                        var entriesForVoucher = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
+                            voucher.JournalVoucherId, null, null);
+                        
+                        // Initialize JournalEntries if null
+                        if (voucher.JournalEntries == null)
+                            voucher.JournalEntries = new List<JournalEntry>();
+                        
+                        // Add entries to the collection
+                        if (entriesForVoucher.Any())
+                        {
+                            foreach (var entry in entriesForVoucher)
+                            {
+                                voucher.JournalEntries.Add(entry);
+                            }
+                        }
+                    }
+                }
+                
+                _logger.LogInformation("Retrieved {Count} base vouchers with their entries", baseVouchers.Count);
+                return baseVouchers;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving base vouchers");
+                throw;
+            }
+        }
+
+        public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id) {
+            return await _unitOfWork.JournalVouchers.GetBaseVoucherWithUnprocessedEntriesAsync(id);
+        }
+
+        public async Task<int> CreateDerivedVoucherAsync(int baseVoucherId, List<BaseVoucherEntryViewModel> entriesToProcess) {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try {
+                var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
+                if (baseVoucher == null || !baseVoucher.IsBaseVoucher)
+                    throw new InvalidOperationException("Base voucher not found");
+                    
+                // Create new derived voucher
+                var derivedVoucher = new JournalVoucher {
+                    ProjectId = baseVoucher.ProjectId,
+                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
+                    CreditableDate = DateOnly.FromDateTime(DateTime.Now),
+                    IsCompleted = false
+                };
+                
+                derivedVoucher = await _unitOfWork.JournalVouchers.AddAsync(derivedVoucher);
+                await _unitOfWork.SaveChangesAsync();
+                
+                // Add reference from base to derived
+                await _unitOfWork.JournalVoucherReferences.AddAsync(new JournalVoucherReference {
+                    MainVoucherId = baseVoucherId,
+                    ReferencedVoucherId = derivedVoucher.JournalVoucherId,
+                    ReferenceType = "DerivedVoucher"
+                });
+                
+                // Process entries
+                foreach (var entryToProcess in entriesToProcess) {
+                    var baseEntry = baseVoucher.JournalEntries
+                        .FirstOrDefault(e => e.JournalEntryId == entryToProcess.EntryId);
+                        
+                    if (baseEntry == null || baseEntry.IsProcessed || entryToProcess.ProcessQuantity <= 0 || 
+                        entryToProcess.ProcessQuantity > baseEntry.Quantity)
+                        continue;
+                        
+                    // Create new entry for derived voucher
+                    var newEntry = new JournalEntry {
+                        JournalVoucherId = derivedVoucher.JournalVoucherId,
+                        AccountId = baseEntry.AccountId,
+                        CategoryId = baseEntry.CategoryId,
+                        Description = baseEntry.Description,
+                        Quantity = entryToProcess.ProcessQuantity,
+                        Rate = baseEntry.Rate,
+                        DiscountPercent = baseEntry.DiscountPercent,
+                        // Calculate values proportionally
+                        Discount = (int)(baseEntry.Discount * (entryToProcess.ProcessQuantity / (double)baseEntry.Quantity)),
+                        Debit = (int)(baseEntry.Debit * (entryToProcess.ProcessQuantity / (double)baseEntry.Quantity)),
+                        Credit = (int)(baseEntry.Credit * (entryToProcess.ProcessQuantity / (double)baseEntry.Quantity)),
+                        Rbp = baseEntry.Rbp,
+                        IsProcessed = false
+                    };
+                    
+                    await _unitOfWork.JournalEntries.AddAsync(newEntry);
+                    
+                    // Update base entry
+                    baseEntry.Quantity -= entryToProcess.ProcessQuantity;
+                    if (baseEntry.Quantity <= 0) {
+                        baseEntry.IsProcessed = true;
+                    }
+                    await _unitOfWork.JournalEntries.UpdateAsync(baseEntry);
+                }
+                
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                return derivedVoucher.JournalVoucherId;
+            }
+            catch (Exception) {
+                await transaction.RollbackAsync();
                 throw;
             }
         }

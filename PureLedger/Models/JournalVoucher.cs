@@ -24,18 +24,25 @@ namespace PureLedger.Models
         public DateOnly CreditableDate { get; set; }
         
         public bool IsCompleted { get; set; }
+        
+        // New property to identify base vouchers
+        public bool IsBaseVoucher { get; set; } = false;
 
         [NotMapped]
         public decimal TotalDebit => JournalEntries?.Sum(e => e.Debit) ?? 0;
 
         [NotMapped]
         public decimal TotalCredit => JournalEntries?.Sum(e => e.Credit) ?? 0;
+        
+        // Computed property to check if this voucher has derived vouchers
+        [NotMapped]
+        public bool HasDerivedVouchers => OutgoingReferences?.Any(r => r.ReferenceType == "DerivedVoucher") ?? false;
 
         // Navigation properties
         public virtual Project Project { get; set; }
         public virtual ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
         
-        // New reference collections
+        // Reference collections
         public virtual ICollection<JournalVoucherReference> OutgoingReferences { get; set; } = new List<JournalVoucherReference>();
         public virtual ICollection<JournalVoucherReference> IncomingReferences { get; set; } = new List<JournalVoucherReference>();
     }
