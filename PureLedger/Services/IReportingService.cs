@@ -17,5 +17,6 @@ namespace PureLedger.Services
         Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request);
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
+        Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, string type);
     }
 }

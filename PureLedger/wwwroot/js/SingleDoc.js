@@ -2,6 +2,18 @@
     // Initialize any stored recent documents
     initializeRecentDocs();
 
+    // Show/hide journal voucher filter based on voucher type selection
+    $('#voucherType').on('change', function () {
+        const selectedType = $(this).val();
+
+        // Show JV filter only when Journal Voucher type is selected
+        if (selectedType === 'JV') {
+            $('#jvFilterContainer').fadeIn(300);
+        } else {
+            $('#jvFilterContainer').fadeOut(300);
+        }
+    });
+
     // Handle Enter key press in inputs
     $('#voucherId').keypress(function (e) {
         if (e.which === 13) {
@@ -13,6 +25,7 @@
     $('#btnGo').on('click', function () {
         const id = $('#voucherId').val().trim();
         const type = $('#voucherType').val();
+        const filter = type === 'JV' ? $('#jvFilter').val() : 'all'; // Get the filter value only for JV type
 
         if (!id || !Number.isInteger(Number(id)) || Number(id) < 1) {
             showAlert('warning', 'Please enter a valid Voucher ID.');
@@ -30,20 +43,28 @@
         $btn.prop('disabled', true);
 
         // Use PureLedger utility for AJAX
-        PureLedger.get('/Reporting/ValidateVoucher', { 
-                journalVoucherId: id, 
-                type: type 
-            })
-            .done(function(result) {
+        PureLedger.get('/Reporting/ValidateVoucher', {
+            journalVoucherId: id,
+            type: type
+        })
+            .done(function (result) {
                 if (result.exists) {
                     // If valid, open print page in new tab
                     // Use the base path from PureLedger utility to construct the URL
                     const basePath = PureLedger.getCurrentBasePath();
-                    const printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+
+                    // Include the filter parameter for journal vouchers
+                    let printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+
+                    // Add filter parameter only for Journal Voucher type
+                    if (type === 'JV') {
+                        printUrl += `&filter=${filter}`;
+                    }
+
                     window.open(printUrl, '_blank');
 
                     // Add to recent docs history
-                    addToRecentDocs(id, type);
+                    addToRecentDocs(id, type, filter);
 
                     // Reset the form
                     $('#voucherId').val('');
@@ -61,11 +82,11 @@
                     showAlert('danger', errorMessage);
                 }
             })
-            .fail(function(xhr, status, error) {
+            .fail(function (xhr, status, error) {
                 console.error('Error validating voucher:', error);
                 showAlert('danger', 'An error occurred while validating the voucher.');
             })
-            .always(function() {
+            .always(function () {
                 // Restore button state
                 $btn.html('<i class="fas fa-search me-1"></i> Find Document');
                 $btn.prop('disabled', false);
@@ -117,7 +138,7 @@
         }
     }
 
-    function addToRecentDocs(id, type) {
+    function addToRecentDocs(id, type, filter) {
         try {
             const docs = getRecentDocs();
 
@@ -132,6 +153,7 @@
             docs.unshift({
                 id: id,
                 type: type,
+                filter: type === 'JV' ? filter : null, // Store filter only for JV
                 date: new Date().toISOString()
             });
 
@@ -163,15 +185,24 @@
                 doc.type === 'DC' ? 'Delivery Challan' :
                     'Invoice';
 
+            // Include filter info for journal vouchers
+            let filterInfo = '';
+            if (doc.type === 'JV' && doc.filter) {
+                const filterLabel = doc.filter === 'debit' ? 'Debit Only' :
+                    doc.filter === 'credit' ? 'Credit Only' : 'All Entries';
+                filterInfo = ` (${filterLabel})`;
+            }
+
             const row = $(`
                 <tr>
                     <td>${doc.id}</td>
-                    <td>${typeLabel}</td>
+                    <td>${typeLabel}${filterInfo}</td>
                     <td>${formattedDate}</td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-primary print-again-btn" 
                                 data-id="${doc.id}" 
-                                data-type="${doc.type}">
+                                data-type="${doc.type}"
+                                data-filter="${doc.filter || 'all'}">
                             <i class="fas fa-print me-1"></i> Print
                         </button>
                     </td>
@@ -185,10 +216,19 @@
         $('.print-again-btn').on('click', function () {
             const id = $(this).data('id');
             const type = $(this).data('type');
+            const filter = $(this).data('filter') || 'all';
 
             // Use the base path from PureLedger utility to construct the URL
             const basePath = PureLedger.getCurrentBasePath();
-            const printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+
+            // Include the filter parameter for journal vouchers
+            let printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+
+            // Add filter parameter only for Journal Voucher type
+            if (type === 'JV') {
+                printUrl += `&filter=${filter}`;
+            }
+
             window.open(printUrl, '_blank');
         });
     }

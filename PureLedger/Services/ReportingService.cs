@@ -488,5 +488,27 @@ namespace PureLedger.Services
             var categories = await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
             return categories;
         }
+
+        // Add this new method to check if a voucher is a base voucher
+        public async Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, string type)
+        {
+            // First check if the voucher exists
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null)
+            {
+                return (false, false);
+            }
+
+            // For types other than "JV", check if we can get a valid report
+            if (type != "JV")
+            {
+                // For DC and INV types, check if we can get a report
+                var report = await GetSingleDocReportAsync(journalVoucherId, type);
+                return (report != null, voucher.IsBaseVoucher);
+            }
+
+            // For JV type, just check if it's a base voucher
+            return (true, voucher.IsBaseVoucher);
+        }
     }
 }

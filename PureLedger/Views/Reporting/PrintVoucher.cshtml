@@ -13,15 +13,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>
         @(
-            isInv ? "Invoice #" + Model.JvId :
-            isDC ? "Delivery Challan #" + Model.JvId :
-            "Journal Voucher #" + Model.JvId
-        ) 
+                isInv ? "Invoice #" + Model.JvId :
+                isDC ? "Delivery Challan #" + Model.JvId :
+                "Journal Voucher #" + Model.JvId
+                )
     </title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="~/css/PrintVoucher.css" rel="stylesheet" asp-append-version="true" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Pass filter value from server to client
+        var currentFilter = '@(ViewBag.Filter ?? "all")';
+    </script>
 </head>
 <body data-voucher-type="@Model.VoucherType" data-voucher-id="@Model.JvId">
     <div class="container-fluid print-container">
@@ -40,10 +44,10 @@
                     <div>
                         <h2 class="mb-0">
                             @(
-                                isInv ? "Invoice" :
-                                isDC ? "Delivery Challan" :
-                                "Journal Voucher"
-                            ) #@Model.JvId
+                                                        isInv ? "Invoice" :
+                                                        isDC ? "Delivery Challan" :
+                                                        "Journal Voucher"
+                                                        ) #@Model.JvId
                         </h2>
                         <div class="text-muted">
                             @if (isInv)
@@ -122,7 +126,7 @@
                                     <th class="text-end">PKG</th>
                                     <th class="text-end">Rate</th>
                                     <th class="text-end">DISC %</th>
-                                    <th class="text-end">NET</th>
+                                    <th class="text-end">NET Rate</th>
                                     <th class="text-end">AMOUNT</th>
                                 </tr>
                             </thead>
@@ -131,14 +135,28 @@
                                     int sr = 1;
                                     foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
                                     {
+                                        // Calculate discount percentage
+                                        decimal discountPercent = 0;
+                                        if (entry.LineTotal > 0)
+                                        {
+                                            discountPercent = (entry.Discount / entry.LineTotal) * 100;
+                                        }
+
+                                        // Calculate net rate after discount
+                                        decimal netRate = entry.Rate;
+                                        if (entry.Rate > 0)
+                                        {
+                                            netRate = entry.Rate * (1 - (discountPercent / 100));
+                                        }
+
                                         <tr>
                                             <td>@(sr++)</td>
                                             <td>@entry.AccountName</td>
                                             <td class="text-end">@entry.Quantity</td>
                                             <td class="text-end">@entry.PKG</td>
                                             <td class="text-end">@entry.Rate.ToString("N2")</td>
-                                            <td class="text-end">@entry.Discount</td>
-                                            <td class="text-end">@entry.NetRate.ToString("N2")</td>
+                                            <td class="text-end">@discountPercent.ToString("N2")%</td>
+                                            <td class="text-end">@netRate.ToString("N2")</td>
                                             <td class="text-end">@entry.Credit.ToString("N2")</td>
                                         </tr>
                                     }
@@ -320,7 +338,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="document-footer mt-4 text-center">
                     <small class="text-muted">
                         Document ID: @Model.JvId | Generated on: @DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
