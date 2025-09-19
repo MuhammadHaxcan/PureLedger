@@ -516,25 +516,28 @@ document.addEventListener('DOMContentLoaded', function () {
         const transporterSelect = document.getElementById('transporterAccount');
         transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
 
-        // First fetch the transporter category ID from the new endpoint
+        // Get the transporter category ID first
         PureLedger.get('/DeliveryChallan/GetTransporterCategoryId')
-            .done(function(data) {
-                // Now use the dynamic category ID
+            .done(function (data) {
                 const transporterCategoryId = data.value;
-                
-                // Fetch transporter accounts with the dynamic category ID
-                return PureLedger.get('/DeliveryChallan/GetAccountsByCategory', { categoryId: transporterCategoryId });
+
+                // Then fetch accounts with that category ID
+                PureLedger.get('/DeliveryChallan/GetAccountsByCategory', { categoryId: transporterCategoryId })
+                    .done(function (transporters) {
+                        transporters.forEach(t => {
+                            const option = document.createElement('option');
+                            option.value = t.id;
+                            option.textContent = t.name;
+                            transporterSelect.appendChild(option);
+                        });
+                    })
+                    .fail(function (xhr, status, error) {
+                        console.error('Error loading transporters:', error);
+                        showAlert('danger', 'Error loading transporters: ' + error);
+                    });
             })
-            .then(function(transporters) {
-                transporters.forEach(t => {
-                    const option = document.createElement('option');
-                    option.value = t.id;
-                    option.textContent = t.name;
-                    transporterSelect.appendChild(option);
-                });
-            })
-            .fail(function(xhr, status, error) {
-                console.error('Error loading transporters:', error);
+            .fail(function (xhr, status, error) {
+                console.error('Error getting transporter category ID:', error);
                 showAlert('danger', 'Error loading transporters: ' + error);
             });
     }
