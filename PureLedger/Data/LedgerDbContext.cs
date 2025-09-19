@@ -33,9 +33,9 @@ namespace PureLedger.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Many-to-many: JournalEntry <-> Tag via JournalEntryTag
+            // Remove the incorrect composite key and foreign key configuration for JournalEntryTag
             modelBuilder.Entity<JournalEntryTag>()
-                .HasKey(jet => new { jet.JournalEntryId, jet.JournalEntryTagId });
+                .HasKey(jet => jet.JournalEntryTagId);
 
             modelBuilder.Entity<JournalEntryTag>()
                 .HasOne(jet => jet.JournalEntry)
@@ -45,7 +45,7 @@ namespace PureLedger.Data
             modelBuilder.Entity<JournalEntryTag>()
                 .HasOne(jet => jet.Tag)
                 .WithMany(t => t.JournalEntryTags)
-                .HasForeignKey(jet => jet.JournalEntryTagId);
+                .HasForeignKey(jet => jet.TagId);
 
             // JournalEntries to Category relationship - use NO ACTION to break cascade path
             modelBuilder.Entity<JournalEntry>()

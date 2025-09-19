@@ -14,7 +14,7 @@
         @if (ViewBag.Error != null)
         {
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <i class="fas fa-exclamation-circle me-2"></i>@ViewBag.Error
+                <i class="fas fa-exclamation-circle me-2"></i>@Html.Raw(ViewBag.Error)
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         }
@@ -148,10 +148,8 @@
                                                autocomplete="off"
                                                data-index="0" />
                                     </div>
-                                    <input type="hidden"
-                                           class="tag-hidden-input"
-                                           id="Entries_0__Tags"
-                                           name="Entries[0].Tags" />
+                                    <!-- Container for tag hidden inputs -->
+                                    <div class="tag-hidden-inputs"></div>
                                     <div class="tag-suggestions dropdown-menu" style="width:100%;"></div>
                                 </td>
                                 <td>
@@ -295,6 +293,11 @@
             });
 
             form.on('submit', function (e) {
+                // Debug tag inputs
+                console.log("Tag inputs being submitted:", $('input[name$="].Tags"]').map(function() {
+                    return {name: $(this).attr('name'), value: $(this).val()};
+                }).get());
+                
                 if (submitBtn.prop('disabled') || submitPrintBtn.prop('disabled')) {
                     e.preventDefault();
                     return false;

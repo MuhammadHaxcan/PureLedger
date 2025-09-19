@@ -90,19 +90,19 @@ $(document).ready(function () {
             if (projectId) {
                 // Show loading indicator
                 $categorySelect.append('<option value="" disabled selected>Loading...</option>');
-                
+
                 // Use PureLedger utility for AJAX
                 PureLedger.get('/Home/GetCategoriesByProject', { projectId: projectId })
-                    .done(function(categories) {
+                    .done(function (categories) {
                         $categorySelect.empty().append('<option value="">Select Category</option>');
-                        
+
                         if (categories && categories.length > 0) {
                             categories.forEach(c => {
                                 $categorySelect.append(new Option(c.name, c.id));
                             });
                         }
                     })
-                    .fail(function(xhr, status, error) {
+                    .fail(function (xhr, status, error) {
                         console.error('Error loading categories:', error);
                         $categorySelect.empty().append('<option value="">Select Category</option>');
                     });
@@ -122,12 +122,12 @@ $(document).ready(function () {
         if (categoryId) {
             // Show loading indicator
             $accountSelect.append('<option value="" disabled selected>Loading...</option>');
-            
+
             // Use PureLedger utility for AJAX
             PureLedger.get('/Home/GetAccountsByCategory', { categoryId: categoryId })
-                .done(function(accounts) {
+                .done(function (accounts) {
                     $accountSelect.empty().append('<option value="">Select Account</option>');
-                    
+
                     if (accounts && accounts.length > 0) {
                         accounts.forEach(a => {
                             const $option = $(new Option(a.name, a.id));
@@ -136,7 +136,7 @@ $(document).ready(function () {
                         });
                     }
                 })
-                .fail(function(xhr, status, error) {
+                .fail(function (xhr, status, error) {
                     console.error('Error loading accounts:', error);
                     $accountSelect.empty().append('<option value="">Select Account</option>');
                 });
@@ -154,7 +154,7 @@ $(document).ready(function () {
         if (accountId) {
             // Use PureLedger utility for AJAX
             PureLedger.get('/Home/GetProductDetails', { accountId: accountId })
-                .done(function(product) {
+                .done(function (product) {
                     if (product?.saleRate) {
                         $row.find('.rate-input').val(product.saleRate);
                     }
@@ -167,7 +167,7 @@ $(document).ready(function () {
                         $row.find('.pkg-input').val('');
                     }
                 })
-                .fail(function(xhr, status, error) {
+                .fail(function (xhr, status, error) {
                     console.error('Error loading product details:', error);
                 });
         }
@@ -198,7 +198,7 @@ $(document).ready(function () {
         if (term.length > 0) {
             // Use PureLedger utility for AJAX
             PureLedger.get('/MetaData/SearchTags', { term: term })
-                .done(function(data) {
+                .done(function (data) {
                     $suggestions.empty();
 
                     if (data.length > 0) {
@@ -214,7 +214,7 @@ $(document).ready(function () {
                         $suggestions.removeClass('show');
                     }
                 })
-                .fail(function(xhr, status, error) {
+                .fail(function (xhr, status, error) {
                     console.error('Error searching tags:', error);
                     $suggestions.removeClass('show');
                 });
@@ -223,19 +223,20 @@ $(document).ready(function () {
         }
     });
 
+    // Updated tag suggestion click handler
     $(document).on('click', '.tag-suggestions .dropdown-item', function (e) {
         e.preventDefault();
 
         const $item = $(this);
         const tagId = $item.data('id');
         const tagName = $item.data('name');
+        const $row = $item.closest('tr');
         const $tagBox = $item.closest('td').find('.tag-multibox');
         const $input = $tagBox.find('.tag-search-input');
-        const $hiddenInput = $item.closest('td').find('.tag-hidden-input');
 
         // Create tag chip
         const $chip = $(`
-            <div class="tag-chip me-1 mb-1">
+            <div class="tag-chip me-1 mb-1" data-tag-id="${tagId}">
                 <span>${tagName}</span>
                 <a href="#" class="tag-chip-remove ms-1" data-id="${tagId}" data-name="${tagName}">
                     <i class="fas fa-times"></i>
@@ -249,42 +250,54 @@ $(document).ready(function () {
         // Clear the input
         $input.val('');
 
-        // Update hidden input
-        updateHiddenTagsInput($hiddenInput);
+        // Update hidden inputs for tags
+        updateTagInputs($row);
 
         // Hide suggestions
         $item.closest('.tag-suggestions').removeClass('show');
     });
 
+    // Updated remove tag handler
     $(document).on('click', '.tag-chip-remove', function (e) {
         e.preventDefault();
 
         const $remove = $(this);
         const $chip = $remove.closest('.tag-chip');
-        const $hiddenInput = $chip.closest('td').find('.tag-hidden-input');
+        const $row = $chip.closest('tr');
 
         // Remove the chip
         $chip.remove();
 
-        // Update hidden input
-        updateHiddenTagsInput($hiddenInput);
+        // Update hidden inputs
+        updateTagInputs($row);
     });
 
-    function updateHiddenTagsInput($hiddenInput) {
-        const $tagBox = $hiddenInput.closest('td').find('.tag-multibox');
-        const tags = [];
+    // New function to update tag inputs
+    function updateTagInputs($row) {
+        const rowIndex = $row.attr('id').split('-')[1];
+        const $tagBox = $row.find('.tag-multibox');
+        const $container = $row.find('.tag-hidden-inputs');
 
+        // Clear existing tag inputs
+        $container.empty();
+
+        // Create new hidden inputs for each tag
         $tagBox.find('.tag-chip').each(function () {
-            const $chip = $(this);
-            const $remove = $chip.find('.tag-chip-remove');
+            const tagId = $(this).data('tag-id') || $(this).find('.tag-chip-remove').data('id');
 
-            tags.push({
-                id: $remove.data('id'),
-                name: $remove.data('name')
-            });
+            if (tagId) {
+                const $input = $('<input>')
+                    .attr('type', 'hidden')
+                    .attr('name', `Entries[${rowIndex}].Tags`)
+                    .attr('value', tagId);
+
+                $container.append($input);
+            }
         });
 
-        $hiddenInput.val(JSON.stringify(tags));
+        // Log for debugging
+        console.log(`Updated tags for row ${rowIndex}:`,
+            $container.find('input').map(function () { return $(this).val(); }).get());
     }
 
     // Calculation functionality
@@ -413,6 +426,7 @@ $(document).ready(function () {
         updateTotals();
     });
 
+    // Updated resetRowElements function
     function resetRowElements($row, index) {
         // Reset inputs
         $row.find('input').each(function () {
@@ -454,11 +468,8 @@ $(document).ready(function () {
         // Clear tag chips
         $row.find('.tag-chip').remove();
 
-        // Update hidden input for tags
-        const $hiddenInput = $row.find('.tag-hidden-input');
-        $hiddenInput.attr('id', `Entries_${index}__Tags`);
-        $hiddenInput.attr('name', `Entries[${index}].Tags`);
-        $hiddenInput.val('');
+        // Clear tag hidden inputs container
+        $row.find('.tag-hidden-inputs').empty();
 
         // Remove data attributes
         $row[0].removeAttribute('data-pkg');
@@ -475,14 +486,14 @@ $(document).ready(function () {
             if (projectId) {
                 // Use PureLedger utility for AJAX
                 PureLedger.get('/Home/GetCategoriesByProject', { projectId: projectId })
-                    .done(function(categories) {
+                    .done(function (categories) {
                         if (categories && categories.length > 0) {
                             categories.forEach(c => {
                                 $categorySelect.append(new Option(c.name, c.id));
                             });
                         }
                     })
-                    .fail(function(xhr, status, error) {
+                    .fail(function (xhr, status, error) {
                         console.error('Error loading categories for new row:', error);
                     });
             }
@@ -497,6 +508,14 @@ $(document).ready(function () {
             $(this).closest('tr').remove();
             updateTotals();
         }
+    });
+
+    // Form submission debugging for tags
+    $('#entryForm').on('submit', function (e) {
+        // Log all tag inputs to verify they're properly included in submission
+        console.log('Tags being submitted:', $('input[name$="].Tags"]').map(function () {
+            return { name: $(this).attr('name'), value: $(this).val() };
+        }).get());
     });
 
     // Initialize first row

@@ -298,14 +298,24 @@ namespace PureLedger.Controllers
                     Entries = voucher.JournalEntries
                         .OrderBy(e => e.IsProcessed) // Unprocessed entries first
                         .ThenBy(e => e.JournalEntryId)
-                        .Select(e => new BaseVoucherEntryViewModel 
+                        .Select(e => new PureLedger.ViewModels.BaseVoucherEntryViewModel 
                         {
                             EntryId = e.JournalEntryId,
                             Description = e.Description,
                             AccountName = e.Account?.AccountName,
+                            AccountId = e.AccountId,
+                            CategoryId = e.CategoryId, // Include CategoryId
                             AvailableQuantity = e.IsProcessed ? 0 : e.Quantity,
                             ProcessQuantity = 0,  // Default to 0, user will set this
-                            Rate = e.Rate
+                            Rate = e.Rate,
+                            Debit = e.Debit,
+                            Credit = e.Credit,
+                            Percent = e.DiscountPercent ?? 0, // Include discount percent
+                            Disc = e.Discount, // Include discount amount
+                            Rbp = e.Rbp, // Include Rbp
+                            AccountGroupId = e.Account?.AccountGroupId ?? 0,
+                            // Include tags if present
+                            Tags = e.JournalEntryTags?.Select(t => t.TagId).ToList()
                         })
                         .ToList()
                 };
@@ -329,25 +339,34 @@ namespace PureLedger.Controllers
                 _logger.LogWarning("Invalid model state when creating derived voucher");
                 return View("ProcessBaseVoucher", model);
             }
-            
-            try 
+
+            try
             {
-                // Filter to only include entries with ProcessQuantity > 0
-                var entriesToProcess = model.Entries.Where(e => e.ProcessQuantity > 0).ToList();
-                
+                var entriesToProcess = model.Entries
+                    .Where(e => e.ProcessQuantity > 0)
+                    .ToList();
+
+                // Add entries where AccountGroupId == 1
+                entriesToProcess.AddRange(
+                    model.Entries.Where(e => e.AccountGroupId == 1)
+                );
                 if (!entriesToProcess.Any())
                 {
                     ModelState.AddModelError("", "Please select at least one entry to process.");
                     return View("ProcessBaseVoucher", model);
                 }
-                
-                _logger.LogInformation("Creating derived voucher from base voucher {Id} with {EntryCount} entries", 
+
+                _logger.LogInformation("Creating derived voucher from base voucher {Id} with {EntryCount} entries",
                     model.BaseVoucherId, entriesToProcess.Count);
-                    
+
                 var derivedVoucherId = await _journalService.CreateDerivedVoucherAsync(
                     model.BaseVoucherId,
-                    entriesToProcess);
-                    
+                    entriesToProcess,
+                    model.AccountEntryAmount,
+                    model.AccountEntryIsDebit,
+                    model.CreditableDate // <-- Pass the creditable date
+                );
+
                 _logger.LogInformation("Created derived voucher {DerivedId} from base voucher {BaseId}", 
                     derivedVoucherId, model.BaseVoucherId);
                     

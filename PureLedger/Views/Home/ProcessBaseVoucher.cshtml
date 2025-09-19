@@ -32,7 +32,12 @@
     <form id="processingForm" method="post" asp-action="CreateDerivedVoucher" asp-controller="Home">
         <input type="hidden" asp-for="BaseVoucherId" />
         <input type="hidden" asp-for="ProjectId" />
-
+        
+        <!-- Hidden fields for account entry balancing -->
+        <input type="hidden" asp-for="AccountEntryAmount" id="AccountEntryAmount" value="0" />
+        <input type="hidden" asp-for="AccountEntryIsDebit" id="AccountEntryIsDebit" value="false" />
+        <input type="hidden" asp-for="AccountEntryIncluded" id="AccountEntryIncluded" value="true" />
+        
         <div class="card shadow mb-4">
             <div class="card-header py-3 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">Available Entries</h6>
@@ -54,12 +59,14 @@
                         <thead class="table-primary">
                             <tr>
                                 <th width="5%">Select</th>
-                                <th width="10%">Entry ID</th>
-                                <th width="25%">Account</th>
-                                <th width="25%">Description</th>
-                                <th width="10%">Available</th>
-                                <th width="15%">Process Qty</th>
-                                <th width="10%">Rate</th>
+                                <th width="8%">Entry ID</th>
+                                <th width="20%">Account</th>
+                                <th width="22%">Description</th>
+                                <th width="8%">Available</th>
+                                <th width="10%">Process Qty</th>
+                                <th width="7%">Rate</th>
+                                <th width="10%">Debit</th>
+                                <th width="10%">Credit</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -69,12 +76,19 @@
                                 var isProcessed = entry.IsProcessed;
                                 var entryId = entry.EntryId;
                                 var availableQty = entry.AvailableQuantity;
+                                var isDebit = entry.Debit > 0;
+                                var isAccountEntry = entry.AccountGroupId == 1;
+                                var rowClass = isProcessed ? "bg-light" : (isAccountEntry ? "table-info" : "");
                                 
-                                <tr class="entry-row @(isProcessed ? "bg-light" : "")">
+                                <tr class="entry-row @rowClass" 
+                                    data-entry-id="@entryId"
+                                    data-is-account="@(isAccountEntry ? "true" : "false")" 
+                                    data-is-debit="@(isDebit ? "true" : "false")">
                                     <td class="text-center">
                                         <input type="checkbox" class="form-check-input entry-select" 
-                                               data-entry-id="@entryId" 
-                                               @(isProcessed ? "disabled" : "") />
+                                               @(isProcessed ? "disabled" : "")
+                                               data-is-account="@(isAccountEntry ? "true" : "false")"
+                                               @(isAccountEntry && !isProcessed ? "checked" : "") />
                                     </td>
                                     <td>
                                         @entryId
@@ -83,23 +97,70 @@
                                         <input type="hidden" name="Entries[@i].AccountName" value="@entry.AccountName" />
                                         <input type="hidden" name="Entries[@i].AvailableQuantity" value="@availableQty" />
                                         <input type="hidden" name="Entries[@i].Rate" value="@entry.Rate" />
+                                        <input type="hidden" name="Entries[@i].Debit" value="@entry.Debit" />
+                                        <input type="hidden" name="Entries[@i].Credit" value="@entry.Credit" />
+                                        <input type="hidden" name="Entries[@i].AccountGroupId" value="@entry.AccountGroupId" />
+                                        <input type="hidden" name="Entries[@i].AccountId" value="@entry.AccountId" />
+                                        <input type="hidden" name="Entries[@i].CategoryId" value="@entry.CategoryId" />
+                                        <input type="hidden" name="Entries[@i].Percent" value="@entry.Percent" />
+                                        <input type="hidden" name="Entries[@i].Disc" value="@entry.Disc" />
+                                        <input type="hidden" name="Entries[@i].Rbp" value="@entry.Rbp" />
+                                        
+                                        <!-- For tags, if you use them -->
+                                        @foreach (var tagId in entry.Tags ?? Enumerable.Empty<int>())
+                                        {
+                                            <input type="hidden" name="Entries[@i].Tags" value="@tagId" />
+                                        }
+                                        
+                                        <!-- For account entries, add hidden fields -->
+                                        @if (isAccountEntry) 
+                                        {
+                                            <input type="hidden" name="Entries[@i].AccountEntryAmount" value="0" class="account-entry-amount" />
+                                            <input type="hidden" name="Entries[@i].AccountEntryIsDebit" value="false" class="account-entry-is-debit" />
+                                        }
                                     </td>
-                                    <td>@entry.AccountName</td>
+                                    <td>
+                                        @entry.AccountName
+                                        @if (isAccountEntry)
+                                        {
+                                            <span class="badge bg-info ms-1">Account</span>
+                                        }
+                                    </td>
                                     <td>@entry.Description</td>
                                     <td>@availableQty</td>
                                     <td>
                                         <input type="number" class="form-control process-qty" 
                                                name="Entries[@i].ProcessQuantity" 
-                                               value="@entry.ProcessQuantity"
+                                               value="@(isAccountEntry && !isProcessed ? availableQty : entry.ProcessQuantity)"
                                                min="0" max="@availableQty" 
                                                @(isProcessed ? "disabled" : "") />
                                     </td>
                                     <td>@entry.Rate</td>
+                                    <td class="entry-debit">0</td>
+                                    <td class="entry-credit">0</td>
                                 </tr>
                             }
                         </tbody>
+                        <tfoot class="table-secondary fw-bold">
+                            <tr>
+                                <td colspan="7" class="text-end">Totals:</td>
+                                <td id="totalDebit">0</td>
+                                <td id="totalCredit">0</td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label class="form-label" for="CreditableDate">Creditable Date</label>
+                <input class="form-control"
+                       id="CreditableDate"
+                       name="CreditableDate"
+                       type="date"
+                       value="@(DateTime.Now.ToString("yyyy-MM-dd"))" required />
             </div>
         </div>
 
@@ -111,7 +172,7 @@
             <button type="submit" class="btn btn-success" id="submitBtn">
                 <i class="fas fa-share-alt me-1"></i> Create Derived Voucher
             </button>
-        </div>
+        </div>  
     </form>
 </div>
 

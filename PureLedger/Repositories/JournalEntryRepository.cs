@@ -39,18 +39,30 @@ namespace PureLedger.Repositories
 
         public async Task AddTagsAsync(int entryId, IEnumerable<int> tagIds)
         {
-            foreach (var tagId in tagIds.Where(t => t > 0))
+            // Get existing tag IDs for this entry to avoid duplicates
+            var existingTagIds = await _context.JournalEntryTags
+                .Where(jet => jet.JournalEntryId == entryId)
+                .Select(jet => jet.TagId)
+                .ToListAsync();
+
+            var newTagIds = tagIds
+                .Where(t => t > 0 && !existingTagIds.Contains(t))
+                .Distinct()
+                .ToList();
+
+            if (newTagIds.Count == 0)
+                return;
+
+            var journalEntryTags = newTagIds.Select(tagId => new JournalEntryTag
             {
-                var journalEntryTag = new JournalEntryTag
-                {
-                    TagId = tagId,
-                    JournalEntryId = entryId
-                };
-                _context.JournalEntryTags.Add(journalEntryTag);
-            }
+                TagId = tagId,
+                JournalEntryId = entryId
+            });
+
+            _context.JournalEntryTags.AddRange(journalEntryTags);
             await _context.SaveChangesAsync();
         }
-        
+
         public async Task<List<JournalEntry>> GetEntriesByVoucherIdAsync(
             int voucherId,
             int? categoryId,
