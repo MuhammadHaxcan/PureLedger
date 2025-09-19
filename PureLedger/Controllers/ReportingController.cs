@@ -27,7 +27,7 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> PrintVoucher(int journalVoucherId, string type)
+        public async Task<IActionResult> PrintVoucher(int journalVoucherId, string type, string filter = "all")
         {
             if (!IsValidInput(journalVoucherId, type, out IActionResult errorResult))
                 return errorResult;
@@ -39,11 +39,16 @@ namespace PureLedger.Controllers
             // For Invoice, calculate running balance for the customer account
             if (type == "INV" && !string.IsNullOrEmpty(report.CustomerAccountName))
             {
-                // You may need to use AccountId instead of AccountName for accuracy
                 var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(
                     journalVoucherId
                 );
                 ViewBag.CustomerRunningBalance = balance;
+            }
+
+            // Pass filter to view for Journal Vouchers
+            if (type == "JV")
+            {
+                ViewBag.Filter = filter;
             }
 
             ViewBag.Type = type;
