@@ -62,8 +62,13 @@ namespace PureLedger.Controllers
 
                 if (action == "submit_print")
                 {
-                    // Redirect to the print page with the new JV id
-                    return Redirect($"https://localhost:5221/Reporting/PrintVoucher?journalVoucherId={journalVoucher.JournalVoucherId}&type=JV");
+                    // Redirect to the print page with the new JV id using URL helper
+                    // This creates a proper, dynamic URL rather than hardcoding it
+                    return RedirectToAction("PrintVoucher", "Reporting", 
+                        new { 
+                            journalVoucherId = journalVoucher.JournalVoucherId, 
+                            type = "JV" 
+                        });
                 }
                 else
                 {
