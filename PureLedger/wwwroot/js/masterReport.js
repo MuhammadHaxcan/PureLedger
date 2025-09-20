@@ -7,6 +7,9 @@
 
     // Initialize column toggles
     initColumnToggles();
+    
+    // Initialize search functionality
+    initSearchFunctionality();
 
     // Initialize category selection change handler
     document.getElementById('categoryId').addEventListener('change', loadAccountsForCategory);
@@ -31,17 +34,111 @@ function initColumnToggles() {
             });
         });
     });
+}
 
-    // Search functionality
-    document.getElementById('reportSearch').addEventListener('keyup', function () {
-        const searchText = this.value.toLowerCase();
-        const rows = document.getElementById('reportData').getElementsByTagName('tr');
-
-        for (let row of rows) {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchText) ? '' : 'none';
+function initSearchFunctionality() {
+    // Global search functionality
+    const globalSearchInput = document.getElementById('globalReportSearch');
+    if (globalSearchInput) {
+        globalSearchInput.addEventListener('keyup', performSearch);
+        
+        // Clear search button
+        const clearButton = document.getElementById('clearSearch');
+        if (clearButton) {
+            clearButton.addEventListener('click', function() {
+                globalSearchInput.value = '';
+                performSearch();
+            });
         }
-    });
+    }
+    
+    // Existing report search functionality
+    const reportSearch = document.getElementById('reportSearch');
+    if (reportSearch) {
+        reportSearch.addEventListener('keyup', function () {
+            const searchText = this.value.toLowerCase();
+            filterReportData(searchText);
+        });
+    }
+}
+
+// Unified search function for both search inputs
+function performSearch() {
+    const searchText = document.getElementById('globalReportSearch').value.toLowerCase();
+    filterReportData(searchText);
+    
+    // Also filter the account and category summary tables
+    filterSummaryData('accountGroupData', searchText);
+    filterSummaryData('categoryGroupData', searchText);
+    
+    // Update the in-table search box if it exists
+    const reportSearch = document.getElementById('reportSearch');
+    if (reportSearch) {
+        reportSearch.value = searchText;
+    }
+}
+
+function filterReportData(searchText) {
+    const rows = document.getElementById('reportData').getElementsByTagName('tr');
+    let hasVisibleRows = false;
+
+    for (let row of rows) {
+        const text = row.textContent.toLowerCase();
+        const isVisible = text.includes(searchText);
+        row.style.display = isVisible ? '' : 'none';
+        if (isVisible) hasVisibleRows = true;
+    }
+    
+    // Show no data message if all rows are filtered out
+    if (!hasVisibleRows && rows.length > 0) {
+        const noDataRow = document.createElement('tr');
+        noDataRow.id = 'noSearchResults';
+        noDataRow.innerHTML = '<td colspan="7" class="text-center">No matching records found</td>';
+        
+        // Remove previous no results message if exists
+        const previousNoResults = document.getElementById('noSearchResults');
+        if (previousNoResults) previousNoResults.remove();
+        
+        // Add no results message if search text isn't empty
+        if (searchText.length > 0) {
+            document.getElementById('reportData').appendChild(noDataRow);
+        }
+    } else {
+        // Remove no results message if we have visible rows
+        const previousNoResults = document.getElementById('noSearchResults');
+        if (previousNoResults) previousNoResults.remove();
+    }
+}
+
+function filterSummaryData(tableId, searchText) {
+    const rows = document.getElementById(tableId).getElementsByTagName('tr');
+    let hasVisibleRows = false;
+
+    for (let row of rows) {
+        const text = row.textContent.toLowerCase();
+        const isVisible = text.includes(searchText);
+        row.style.display = isVisible ? '' : 'none';
+        if (isVisible) hasVisibleRows = true;
+    }
+    
+    // Handle no visible rows
+    if (!hasVisibleRows && rows.length > 0 && searchText.length > 0) {
+        const noDataRowId = 'noResults' + tableId;
+        const noDataRow = document.createElement('tr');
+        noDataRow.id = noDataRowId;
+        noDataRow.innerHTML = '<td colspan="5" class="text-center">No matching records found</td>';
+        
+        // Remove previous no results message if exists
+        const previousNoResults = document.getElementById(noDataRowId);
+        if (previousNoResults) previousNoResults.remove();
+        
+        document.getElementById(tableId).appendChild(noDataRow);
+    } else {
+        // Remove no results message if we have visible rows
+        const noDataRowId = 'noResults' + tableId;
+        const previousNoResults = document.getElementById(noDataRowId);
+        if (previousNoResults) previousNoResults.remove();
+    }
 }
 
 function loadCategoriesForProject() {

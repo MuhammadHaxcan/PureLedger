@@ -534,7 +534,7 @@ namespace PureLedger.Services
 
                 // Create cartage journal voucher and entries as the last step
                 var cartageVoucher = await CreateCartageJournalVoucherAsync(
-                    originalJV.ProjectId, debitAccountId, transporterId, entry, amount);
+                    originalJV.ProjectId, debitAccountId, transporterId, entry, amount, dcOtherRef);
                     
                 // Set the reference in the original voucher
                 await CreateJournalVoucherReferenceAsync(originalJV.JournalVoucherId, cartageVoucher.JournalVoucherId, "Cartage");
@@ -557,7 +557,7 @@ namespace PureLedger.Services
         }
 
         private async Task<JournalVoucher> CreateCartageJournalVoucherAsync(
-            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, int amount)
+            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, int amount, string otherref)
         {
             try
             {
@@ -584,8 +584,8 @@ namespace PureLedger.Services
                 // Create both entries at once to avoid gaps
                 var entries = new List<JournalEntry>
                 {
-                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, debitCategoryId, originalEntry, amount),
-                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, originalEntry, amount)
+                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, debitCategoryId, originalEntry, amount,otherref),
+                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, originalEntry, amount,otherref)
                 };
 
                 // Add entries in batch
@@ -606,14 +606,14 @@ namespace PureLedger.Services
             }
         }
 
-        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount)
+        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount,string otherref)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = accountId,
                 CategoryId = categoryId,
-                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}",
+                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId} OtherRef-{otherref}",
                 Quantity = 1,
                 Rate = amount,
                 Debit = amount,
@@ -625,14 +625,14 @@ namespace PureLedger.Services
             };
         }
 
-        private JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount)
+        private JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount, string otherref)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = transporterId,
                 CategoryId = _transporterCategoryId, // Use the instance field
-                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}",
+                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId} OtherRef-{otherref}",
                 Quantity = 1,
                 Rate = amount,
                 Debit = 0,

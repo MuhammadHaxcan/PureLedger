@@ -69,16 +69,12 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('dcJournalEntryId').value = '';
             document.getElementById('dcChallanId').value = '';
             currentModalData = { voucherId: null, entryId: null };
-
-            // Clear any selected checkboxes
-            const checkboxes = document.querySelectorAll('.entry-checkbox:not([disabled])');
-            checkboxes.forEach(cb => cb.checked = false);
         });
     }
 
     function fetchCategories(projectId) {
         PureLedger.get('/DeliveryChallan/GetCategoriesByProject', { projectId: projectId })
-            .done(function(data) {
+            .done(function (data) {
                 categorySelect.disabled = false;
                 data.forEach(category => {
                     const option = document.createElement('option');
@@ -87,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     categorySelect.appendChild(option);
                 });
             })
-            .fail(function(xhr, status, error) {
+            .fail(function (xhr, status, error) {
                 console.error('Error loading categories:', error);
                 showAlert('danger', 'Error loading categories. Please try again.');
             });
@@ -95,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function fetchAccounts(categoryId) {
         PureLedger.get('/DeliveryChallan/GetAccountsByCategory', { categoryId: categoryId })
-            .done(function(data) {
+            .done(function (data) {
                 accountSelect.disabled = false;
                 data.forEach(account => {
                     const option = document.createElement('option');
@@ -104,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     accountSelect.appendChild(option);
                 });
             })
-            .fail(function(xhr, status, error) {
+            .fail(function (xhr, status, error) {
                 console.error('Error loading accounts:', error);
                 showAlert('danger', 'Error loading accounts. Please try again.');
             });
@@ -127,11 +123,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (accountSelect.value) params.AccountId = accountSelect.value;
 
         PureLedger.get('/DeliveryChallan/GetFilteredEntries', params)
-            .done(function(data) {
+            .done(function (data) {
                 renderResults(data);
                 initializeDataTable();
             })
-            .fail(function(xhr, status, error) {
+            .fail(function (xhr, status, error) {
                 let errorMessage = 'Error loading data';
                 try {
                     errorMessage += ': ' + xhr.responseText;
@@ -276,101 +272,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function loadVoucherEntries(voucherId, entryId) {
-        console.log(`Loading voucher entries for voucher: ${voucherId}, selected entry: ${entryId}`);
-
-        // Load voucher entries
-        PureLedger.get('/DeliveryChallan/GetVoucherEntries', { voucherId: voucherId })
-            .done(function(entries) {
-                const entriesTable = document.getElementById('dcEntriesTable');
-                entriesTable.innerHTML = '';
-
-                // Count unprocessed entries for UI feedback
-                let unprocessedCount = 0;
-
-                entries.forEach(entry => {
-                    if (entry.quantity > 0) {
-                        const row = document.createElement('tr');
-                        row.dataset.entryId = entry.entryId;
-
-                        // Mark rows differently if they're already processed
-                        if (entry.isProcessed) {
-                            row.classList.add('table-success');
-                        } else {
-                            unprocessedCount++;
-                        }
-
-                        // Check if this is the selected entry
-                        const isSelected = entry.entryId == entryId && !entry.isProcessed;
-
-                        row.innerHTML = `
-                            <td>${entry.accountName || '-'}</td>
-                            <td>${entry.description || '-'}</td>
-                            <td>${entry.quantity}</td>
-                            <td class="text-center">
-                                <div class="form-check d-flex justify-content-center">
-                                    <input type="checkbox" class="form-check-input entry-checkbox" data-entry-id="${entry.entryId}" 
-                                        ${entry.isProcessed ? 'disabled checked' : ''}
-                                        ${isSelected ? 'checked' : ''}>
-                                </div>
-                            </td>
-                        `;
-                        entriesTable.appendChild(row);
-                    }
-                });
-
-                // Add event listeners to checkboxes after they're created
-                document.querySelectorAll('.entry-checkbox:not([disabled])').forEach(checkbox => {
-                    checkbox.addEventListener('change', function () {
-                        const entryId = this.dataset.entryId;
-
-                        // Uncheck all other checkboxes
-                        document.querySelectorAll('.entry-checkbox:not([disabled])').forEach(cb => {
-                            if (cb !== this) {
-                                cb.checked = false;
-                            }
-                        });
-
-                        // Update hidden form field
-                        if (this.checked) {
-                            document.getElementById('dcJournalEntryId').value = entryId;
-                            console.log(`Selected entry ID updated to: ${entryId}`);
-                        } else {
-                            document.getElementById('dcJournalEntryId').value = '';
-                            console.log('Entry selection cleared');
-                        }
-                    });
-                });
-
-                // If an entry was specified but no checkbox is checked, make sure form field is updated
-                const checkedBox = document.querySelector('.entry-checkbox:checked:not([disabled])');
-                if (checkedBox) {
-                    document.getElementById('dcJournalEntryId').value = checkedBox.dataset.entryId;
-                    console.log(`Initial entry ID set to: ${checkedBox.dataset.entryId}`);
-                } else if (entryId && !document.querySelector(`.entry-checkbox[data-entry-id="${entryId}"]:disabled`)) {
-                    // If the specified entry isn't checked (and isn't disabled), make sure it's not in the form
-                    document.getElementById('dcJournalEntryId').value = '';
-                    console.log('No entry selected');
-                }
-
-                // Update UI based on process status
-                const postAllBtn = document.getElementById('postAllBtn');
-                if (postAllBtn) {
-                    if (unprocessedCount === 0) {
-                        postAllBtn.disabled = true;
-                        postAllBtn.title = 'All entries already processed';
-                    } else {
-                        postAllBtn.disabled = false;
-                        postAllBtn.title = '';
-                    }
-                }
-            })
-            .fail(function(xhr, status, error) {
-                console.error('Error loading voucher entries:', error);
-                showAlert('danger', 'Error loading voucher entries: ' + error);
-            });
-    }
-
     window.openDeliveryChallanModal = function (voucherId, entryId) {
         console.log(`Opening modal for voucher: ${voucherId}, entry: ${entryId}`);
 
@@ -394,45 +295,18 @@ document.addEventListener('DOMContentLoaded', function () {
             entryIdField.value = entryId;
         }
 
-        // Show the all entries view and create the table structure
+        // Remove available entries view completely
         const allEntriesView = document.getElementById('allEntriesView');
-        allEntriesView.classList.remove('d-none');
-
-        // Create the entries table structure if it doesn't exist
-        if (!document.getElementById('dcEntriesTable')) {
-            allEntriesView.innerHTML = `
-                <div class="card mt-3">
-                    <div class="card-header py-2 bg-light">
-                        <h6 class="m-0 font-weight-bold">Available Entries</h6>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Account</th>
-                                        <th>Description</th>
-                                        <th>Quantity</th>
-                                        <th class="text-center" style="width: 80px;">Select</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dcEntriesTable">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
+        if (allEntriesView) {
+            allEntriesView.innerHTML = '';
+            allEntriesView.classList.add('d-none');
         }
 
         loadLocations();
 
-        // Load voucher entries
-        loadVoucherEntries(voucherId, entryId);
-
         // Check for existing challan
         PureLedger.get('/DeliveryChallan/CheckExistingChallan', { voucherId: voucherId })
-            .done(function(data) {
+            .done(function (data) {
                 const challanId = document.getElementById('dcChallanId');
                 if (data.exists) {
                     document.getElementById('existingChallanMessage').classList.remove('d-none');
@@ -456,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('dcOtherRef').value = '';
                 }
             })
-            .fail(function(xhr, status, error) {
+            .fail(function (xhr, status, error) {
                 console.error('Error checking existing challan:', error);
                 showAlert('danger', 'Error checking existing challan: ' + error);
             });
@@ -544,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function loadLocations() {
         PureLedger.get('/DeliveryChallan/GetLocations')
-            .done(function(locations) {
+            .done(function (locations) {
                 const locationSelect = document.getElementById('dcLocation');
                 locationSelect.innerHTML = '<option value="">Select Location</option>';
                 locations.forEach(loc => {
@@ -554,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     locationSelect.appendChild(opt);
                 });
             })
-            .fail(function(xhr, status, error) {
+            .fail(function (xhr, status, error) {
                 console.error('Error loading locations:', error);
                 showAlert('danger', 'Error loading locations: ' + error);
             });
@@ -598,17 +472,14 @@ document.addEventListener('DOMContentLoaded', function () {
             // Get the current voucher ID
             const voucherId = document.getElementById('dcJournalVoucherId').value;
 
-            // Get the specific entry ID either from the form or from the selected checkbox
+            // Get the specific entry ID
             let entryId = document.getElementById('dcJournalEntryId').value;
             if (!entryId) {
-                const selected = document.querySelector('.entry-checkbox:checked:not([disabled])');
-                if (!selected) {
-                    showAlert('warning', 'Please select an unprocessed entry to process');
-                    resetButtonLoadingExclusive(postSingleBtn, actionBtns);
-                    return;
-                }
-                entryId = selected.dataset.entryId;
+                showAlert('warning', 'No entry selected to process');
+                resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+                return;
             }
+
             const locationId = document.getElementById('dcLocation').value;
             const dcDate = document.getElementById('dcDate').value;
             const remarks = document.getElementById('dcRemarks').value;
@@ -627,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             PureLedger.post('/DeliveryChallan/PostSingleEntry', data)
-                .done(function(data) {
+                .done(function (data) {
                     if (data.success) {
                         bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
                         document.getElementById('dcJournalEntryId').value = '';
@@ -639,11 +510,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         showAlert('danger', data.message || 'Error processing entry');
                     }
                 })
-                .fail(function(xhr, status, error) {
+                .fail(function (xhr, status, error) {
                     console.error('Error processing entry:', error);
                     showAlert('danger', 'Error: ' + error);
                 })
-                .always(function() {
+                .always(function () {
                     resetButtonLoadingExclusive(postSingleBtn, actionBtns);
                 });
         });
@@ -679,7 +550,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             PureLedger.post('/DeliveryChallan/ProcessAll', data)
-                .done(function(data) {
+                .done(function (data) {
                     if (data.success) {
                         bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
                         document.getElementById('dcJournalEntryId').value = '';
@@ -691,11 +562,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         showAlert('danger', data.message || 'Error processing entries');
                     }
                 })
-                .fail(function(xhr, status, error) {
+                .fail(function (xhr, status, error) {
                     console.error('Error processing entries:', error);
                     showAlert('danger', 'Error processing entries: ' + error);
                 })
-                .always(function() {
+                .always(function () {
                     resetButtonLoadingExclusive(postAllBtn, actionBtns);
                 });
         });
@@ -743,7 +614,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             PureLedger.post('/DeliveryChallan/AddCartage', data)
-                .done(function(result) {
+                .done(function (result) {
                     if (result.success) {
                         bootstrap.Modal.getInstance(document.getElementById('cartageModal')).hide();
                         bootstrap.Modal.getInstance(document.getElementById('deliveryChallanModal')).hide();
@@ -758,11 +629,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         showAlert('danger', result.message || 'Error processing cartage');
                     }
                 })
-                .fail(function(xhr, status, error) {
+                .fail(function (xhr, status, error) {
                     console.error('Error processing cartage:', error);
                     showAlert('danger', 'Error processing cartage: ' + error);
                 })
-                .always(function() {
+                .always(function () {
                     resetButtonLoadingExclusive(addCartageBtn, actionBtns);
                 });
         });
