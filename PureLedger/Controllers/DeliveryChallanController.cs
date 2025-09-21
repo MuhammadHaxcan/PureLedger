@@ -228,14 +228,27 @@ namespace PureLedger.Controllers
                 var deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                     journalEntry.JournalVoucherId, model.DCDate, model.OtherReference);
 
-                // Create delivery challan entry (pass the date!)
+                // Create delivery challan entry
                 var deliveryChallanEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
                     deliveryChallanVoucher.DeliveryChallanVoucherId,
                     model.JournalEntryId,
                     model.LocationId,
                     model.Remarks,
                     model.OtherReference,
-                    model.DCDate); // <-- Pass the date here
+                    model.DCDate);
+
+                // Process FOR charges if included
+                if (model.IncludeForCharges && model.ForAmount > 0)
+                {
+                    await _deliveryChallanService.ProcessForChargesAsync(
+                        journalEntry.JournalVoucherId,
+                        model.JournalEntryId, 
+                        model.ForAmount,
+                        model.DCDate);
+                    
+                    _logger.LogInformation("Processed FOR charges of {Amount} for journal entry {EntryId}", 
+                        model.ForAmount, model.JournalEntryId);
+                }
 
                 // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalEntry.JournalVoucherId);
@@ -280,14 +293,27 @@ namespace PureLedger.Controllers
                 var deliveryChallanVoucher = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
                     journalVoucherId, model.DCDate, model.OtherReference);
 
-                // Process all entries and pass the date from the model
+                // Process all entries
                 var results = await ProcessEntriesBatchAsync(
                     deliveryChallanVoucher.DeliveryChallanVoucherId,
                     unprocessedEntries,
                     model.LocationId,
                     model.Remarks,
                     model.OtherReference,
-                    model.DCDate);  // Pass the date from the model
+                    model.DCDate);
+
+                // Process FOR charges if included
+                if (model.IncludeForCharges && model.ForAmount > 0)
+                {
+                    await _deliveryChallanService.ProcessForChargesAsync(
+                        journalVoucherId,
+                        null, // No specific entry ID for batch processing
+                        model.ForAmount,
+                        model.DCDate);
+                    
+                    _logger.LogInformation("Processed FOR charges of {Amount} for journal voucher {VoucherId}", 
+                        model.ForAmount, journalVoucherId);
+                }
 
                 // Update the voucher processed status
                 await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalVoucherId);
@@ -312,6 +338,21 @@ namespace PureLedger.Controllers
             try
             {
                 var result = await _deliveryChallanService.ProcessCartageAndDeliveryAsync(model);
+
+                // Process FOR charges if included
+                if (model.IncludeForCharges && model.ForAmount > 0)
+                {
+                    await _deliveryChallanService.ProcessForChargesAsync(
+                        model.JournalVoucherId,
+                        model.EntryId,
+                        model.ForAmount,
+                        model.DcDate);
+                    
+                    _logger.LogInformation("Processed FOR charges of {Amount} for journal voucher {VoucherId} with cartage", 
+                        model.ForAmount, model.JournalVoucherId);
+                }
+
+                await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(model.JournalVoucherId);
 
                 return JsonSuccess("Cartage added and delivery challan processed successfully", new
                 {

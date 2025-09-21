@@ -203,6 +203,26 @@
                         </div>
                     </div>
 
+                    <!-- Add this after the Other Reference field and before the allEntriesView div in the deliveryChallanModal -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="includeForCharges">
+                                <label class="form-check-label" for="includeForCharges">
+                                    <strong>Include FOR Charges</strong>
+                                    <small class="text-muted ms-2">(Freight on Road)</small>
+                                </label>
+                            </div>
+                            <div id="forChargesContainer" class="d-none">
+                                <label for="forChargesAmount" class="form-label">FOR Charges Amount</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-money-bill-alt"></i></span>
+                                    <input type="number" class="form-control" id="forChargesAmount" name="ForAmount" min="0" step="1" value="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- All Entries View - This will be populated dynamically -->
                     <div id="allEntriesView" class="d-none">
                         <!-- Dynamic content will be inserted here -->

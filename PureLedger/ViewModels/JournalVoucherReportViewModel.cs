@@ -44,5 +44,16 @@ namespace PureLedger.ViewModels
         public string? ReceivedBy { get; set; }
 
         public JournalEntry? CartageEntry { get; set; }
+        
+        // Add these properties to JournalVoucherReportViewModel
+        public decimal ForChargesAmount { get; set; }
+        public List<JournalVoucherEntryReportModel> ForChargesEntries { get; set; } = new();
+
+        // Add these new properties
+        public decimal CartageAmount { get; set; }
+        public List<JournalVoucherEntryReportModel> CartageEntries { get; set; } = new();
+        
+        // Add a calculated property for effective total amount
+        public decimal EffectiveAmount => TotalAmount - ForChargesAmount - CartageAmount;
     }
 }

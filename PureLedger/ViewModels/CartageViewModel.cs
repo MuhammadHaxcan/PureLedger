@@ -18,7 +18,7 @@ public class CartageViewModel
     
     public bool PostToCustomer { get; set; }
     
-    public string? Reference { get; set; } // Fixed the typo from "Referece"
+    public string? Reference { get; set; }
     
     [Required]
     public DateOnly DcDate { get; set; }
@@ -29,4 +29,10 @@ public class CartageViewModel
     
     [Required]
     public int DcLocation { get; set; }
+    
+    // Add these new properties
+    public bool IncludeForCharges { get; set; }
+    
+    [Range(0, int.MaxValue)]
+    public int ForAmount { get; set; }
 }

@@ -169,18 +169,43 @@
                                     <th class="text-end"></th>
                                     <th class="text-end"></th>
                                     <th class="text-end"></th>
-                                    <th class="text-end">Current Balance</th>
+                                    <th class="text-end">Net Amount</th>
                                     <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
                                 </tr>
+                                @if (Model.ForChargesAmount > 0)
+                                {
+                                    <tr class="table-warning">
+                                        <td colspan="7" class="text-end"><strong>Less: FOR Charges</strong></td>
+                                        <td class="text-end">@Model.ForChargesAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                                @if (Model.CartageAmount > 0)
+                                {
+                                    <tr class="table-warning">
+                                        <td colspan="7" class="text-end"><strong>Less: Cartage</strong></td>
+                                        <td class="text-end">@Model.CartageAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                                @if (Model.ForChargesAmount > 0 || Model.CartageAmount > 0)
+                                {
+                                    <tr class="table-info">
+                                        <td colspan="7" class="text-end"><strong>Final Amount</strong></td>
+                                        <td class="text-end"><strong>@((Model.TotalAmount - Model.ForChargesAmount - Model.CartageAmount).ToString("N2"))</strong></td>
+                                    </tr>
+                                }
                             </tfoot>
                         </table>
                     </div>
 
+                    <!-- Customer Running Balance display -->
                     <div class="row mb-2">
                         <div class="col-md-6 offset-md-6">
                             <div class="alert alert-secondary text-end">
                                 <strong>Customer Running Balance:</strong>
-                                @((ViewBag.CustomerRunningBalance is decimal bal ? bal.ToString("N2") : "N/A"))
+                                @{
+                                    var balance = ViewBag.CustomerRunningBalance is decimal bal ? bal : 0m;
+                                    <span id="customerRunningBalance">@balance.ToString("N2")</span>
+                                }
                             </div>
                         </div>
                     </div>

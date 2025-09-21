@@ -64,5 +64,12 @@ namespace PureLedger.Services
 
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
+
+        // New method for processing FOR charges
+        Task<JournalVoucher> ProcessForChargesAsync(
+            int journalVoucherId,
+            int? entryId,
+            int amount,
+            DateOnly dcDate);
     }
 }

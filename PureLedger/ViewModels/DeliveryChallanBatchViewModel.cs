@@ -19,5 +19,11 @@ namespace PureLedger.ViewModels
         
         [Required]
         public DateOnly DCDate { get; set; }
+        
+        // Add these new properties
+        public bool IncludeForCharges { get; set; }
+        
+        [Range(0, int.MaxValue)]
+        public int ForAmount { get; set; }
     }
 }

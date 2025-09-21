@@ -39,10 +39,22 @@ namespace PureLedger.Controllers
             // For Invoice, calculate running balance for the customer account
             if (type == "INV" && !string.IsNullOrEmpty(report.CustomerAccountName))
             {
-                var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(
-                    journalVoucherId
-                );
-                ViewBag.CustomerRunningBalance = balance;
+                try
+                {
+                    // Get the customer's running balance
+                    var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(journalVoucherId);
+                    ViewBag.CustomerRunningBalance = balance;
+                    
+                    // Debug info
+                    Console.WriteLine($"Customer balance for voucher {journalVoucherId}: {balance}");
+                    Console.WriteLine($"Invoice totals: Amount={report.TotalAmount}, FOR={report.ForChargesAmount}, " +
+                        $"Cartage={report.CartageAmount}, Net={report.TotalAmount - report.ForChargesAmount - report.CartageAmount}");
+                }
+                catch (Exception ex)
+                {   
+                    Console.WriteLine($"Error calculating balance for voucher {journalVoucherId}: {ex.Message}");
+                    ViewBag.CustomerRunningBalance = 0m;
+                }
             }
 
             // Pass filter to view for Journal Vouchers

@@ -434,6 +434,21 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    // Add event listener for FOR charges checkbox
+    const includeForChargesCheckbox = document.getElementById('includeForCharges');
+    const forChargesContainer = document.getElementById('forChargesContainer');
+
+    if (includeForChargesCheckbox && forChargesContainer) {
+        includeForChargesCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+                forChargesContainer.classList.remove('d-none');
+            } else {
+                forChargesContainer.classList.add('d-none');
+                document.getElementById('forChargesAmount').value = "0";
+            }
+        });
+    }
+
     // Utility to show loading state on a button and disable others
     function setButtonLoadingExclusive(activeBtn, loadingText, allBtns) {
         allBtns.forEach(btn => {
@@ -489,12 +504,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 resetButtonLoadingExclusive(postSingleBtn, actionBtns);
                 return;
             }
+
+            // Get FOR charges data
+            const includeForCharges = document.getElementById('includeForCharges').checked;
+            const forChargesAmount = includeForCharges ?
+                parseInt(document.getElementById('forChargesAmount').value || "0") : 0;
+
+            if (includeForCharges && forChargesAmount <= 0) {
+                showAlert('warning', 'Please enter a valid amount for FOR charges');
+                resetButtonLoadingExclusive(postSingleBtn, actionBtns);
+                return;
+            }
+
             const data = {
                 JournalEntryId: parseInt(entryId),
                 LocationId: parseInt(locationId),
                 DCDate: dcDate,
                 Remarks: remarks,
-                OtherReference: otherRef
+                OtherReference: otherRef,
+                IncludeForCharges: includeForCharges,
+                ForAmount: forChargesAmount
             };
 
             PureLedger.post('/DeliveryChallan/PostSingleEntry', data)
@@ -541,12 +570,26 @@ document.addEventListener('DOMContentLoaded', function () {
             const dcDate = document.getElementById('dcDate').value;
             const remarks = document.getElementById('dcRemarks').value;
             const otherRef = document.getElementById('dcOtherRef').value;
+
+            // Get FOR charges data
+            const includeForCharges = document.getElementById('includeForCharges').checked;
+            const forChargesAmount = includeForCharges ?
+                parseInt(document.getElementById('forChargesAmount').value || "0") : 0;
+
+            if (includeForCharges && forChargesAmount <= 0) {
+                showAlert('warning', 'Please enter a valid amount for FOR charges');
+                resetButtonLoadingExclusive(postAllBtn, actionBtns);
+                return;
+            }
+
             const data = {
                 JournalVoucherId: parseInt(voucherId),
                 LocationId: parseInt(locationId),
                 DCDate: dcDate,
                 Remarks: remarks,
-                OtherReference: otherRef
+                OtherReference: otherRef,
+                IncludeForCharges: includeForCharges,
+                ForAmount: forChargesAmount
             };
 
             PureLedger.post('/DeliveryChallan/ProcessAll', data)
@@ -589,13 +632,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const dcOtherRef = document.getElementById('dcOtherRef').value;
             const dcLocation = document.getElementById('dcLocation').value;
 
-            if (!transporterId || !amount) {
-                showAlert('warning', 'Please fill in all required fields');
-                resetButtonLoadingExclusive(addCartageBtn, actionBtns);
-                return;
-            }
-            if (!dcLocation) {
-                showAlert('warning', 'Please select a location');
+            // Get FOR charges data
+            const includeForCharges = document.getElementById('includeForCharges').checked;
+            const forChargesAmount = includeForCharges ?
+                parseInt(document.getElementById('forChargesAmount').value || "0") : 0;
+
+            if (includeForCharges && forChargesAmount <= 0) {
+                showAlert('warning', 'Please enter a valid amount for FOR charges');
                 resetButtonLoadingExclusive(addCartageBtn, actionBtns);
                 return;
             }
@@ -610,7 +653,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 dcRemarks: dcRemarks,
                 dcStation: dcStation,
                 dcOtherRef: dcOtherRef,
-                dcLocation: parseInt(dcLocation)
+                dcLocation: parseInt(dcLocation),
+                includeForCharges: includeForCharges,
+                forAmount: forChargesAmount
             };
 
             PureLedger.post('/DeliveryChallan/AddCartage', data)

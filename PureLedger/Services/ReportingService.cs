@@ -47,11 +47,35 @@ namespace PureLedger.Services
             var entries = GetProcessedEntries(dcVoucher.Entries);
             var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
-            var cartageEntries = await _unitOfWork.JournalEntries.GetCartageEntriesByJournalVoucherIdAsync(dcVoucher.JournalVoucherId);
-            var cartageEntry = cartageEntries.FirstOrDefault();
+            // Get all related references
+            var forChargesData = await GetForChargesDataAsync(journalVoucherId);
+            var cartageData = await GetCartageDataAsync(journalVoucherId);
 
-            var viewModel = CreateVoucherViewModel(dcVoucher.JournalVoucherId, voucherType, project.ProjectName, dcVoucher.DCDate, entries, customerInfo, !dcVoucher.JournalVoucher.IsCompleted, cartageEntry);
+            // Create view model with the basic data
+            var viewModel = CreateVoucherViewModel(
+                dcVoucher.JournalVoucherId, 
+                voucherType, 
+                project.ProjectName, 
+                dcVoucher.DCDate, 
+                entries, 
+                customerInfo, 
+                !dcVoucher.JournalVoucher.IsCompleted, 
+                null);
+
+            // Set additional properties
             viewModel.Adda = locationNames;
+            viewModel.ForChargesAmount = forChargesData.TotalAmount;
+            viewModel.ForChargesEntries = forChargesData.Entries;
+            viewModel.CartageAmount = cartageData.TotalAmount;
+            viewModel.CartageEntries = cartageData.Entries;
+
+            // Make sure these values are accurate
+            viewModel.TotalAmount = entries.Sum(e => e.Credit);
+            
+            // Log values for debugging
+            Console.WriteLine($"Voucher {journalVoucherId}: Total={viewModel.TotalAmount}, " +
+                $"FOR={viewModel.ForChargesAmount}, Cartage={viewModel.CartageAmount}, " +
+                $"Effective={viewModel.EffectiveAmount}");
 
             return viewModel;
         }
@@ -124,6 +148,60 @@ namespace PureLedger.Services
             return $"{name} ({phone}, {address}, {city})";
         }
 
+        // Add a new method to fetch FOR charges data
+        private async Task<(decimal TotalAmount, List<JournalVoucherEntryReportModel> Entries)> GetForChargesDataAsync(int journalVoucherId)
+        {
+            // Get all FOR charges references
+            var references = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAndTypeAsync(journalVoucherId, "ForCharges");
+            
+            decimal totalAmount = 0;
+            var forChargesEntries = new List<JournalVoucherEntryReportModel>();
+            
+            foreach (var reference in references)
+            {
+                var forVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(reference.ReferencedVoucherId);
+                if (forVoucher == null) continue;
+                
+                // For FOR charges, we want the debit entry for the customer - this is the cost charged to the customer
+                var debitEntry = forVoucher.JournalEntries.FirstOrDefault(e => e.Debit > 0);
+                if (debitEntry != null)
+                {
+                    totalAmount += debitEntry.Debit;
+                    forChargesEntries.Add(MapToEntryReportModel(debitEntry));
+                    Console.WriteLine($"Found FOR charge entry: Amount={debitEntry.Debit}, Description={debitEntry.Description}");
+                }
+            }
+            
+            return (totalAmount, forChargesEntries);
+        }
+
+        // Add method to get cartage data
+        private async Task<(decimal TotalAmount, List<JournalVoucherEntryReportModel> Entries)> GetCartageDataAsync(int journalVoucherId)
+        {
+            // Get all Cartage references
+            var references = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAndTypeAsync(journalVoucherId, "Cartage");
+            
+            decimal totalAmount = 0;
+            var cartageEntries = new List<JournalVoucherEntryReportModel>();
+            
+            foreach (var reference in references)
+            {
+                var cartageVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(reference.ReferencedVoucherId);
+                if (cartageVoucher == null) continue;
+                
+                // For cartage, we want the credit entry amount - this is the cost charged to the customer
+                var creditEntry = cartageVoucher.JournalEntries.FirstOrDefault(e => e.Credit > 0);
+                if (creditEntry != null)
+                {
+                    totalAmount += creditEntry.Credit;
+                    cartageEntries.Add(MapToEntryReportModel(creditEntry));
+                    Console.WriteLine($"Found cartage entry: Amount={creditEntry.Credit}, Description={creditEntry.Description}");
+                }
+            }
+            
+            return (totalAmount, cartageEntries);
+        }
+
         private JournalVoucherReportViewModel CreateVoucherViewModel(
             int jvId, string type, string projectName, DateOnly date,
             List<JournalVoucherEntryReportModel> entries, string accountName, bool isPartial, JournalEntry? cartageEntry)
@@ -146,6 +224,8 @@ namespace PureLedger.Services
                 TotalQuantity = entries.Sum(e => e.Quantity),
                 TotalActualAmount = entries.Sum(e => e.LineTotal),
                 TotalAmount = entries.Sum(e => e.Credit),
+                ForChargesAmount = 0, // Will be set by the calling method
+                ForChargesEntries = new List<JournalVoucherEntryReportModel>(), // Will be set by the calling method
                 AuthorizedBy = "",
                 ReceivedBy = "",
                 IsPartial = isPartial
@@ -376,9 +456,29 @@ namespace PureLedger.Services
 
             int customerAccountId = customerEntry.AccountId;
 
-            // Efficient direct query to calculate balance up to specific voucher ID
-            return await _unitOfWork.JournalEntries.GetAccountBalanceUpToVoucherAsync(
+            // Get the balance up to but not including this voucher
+            var baseBalance = await _unitOfWork.JournalEntries.GetAccountBalanceUpToVoucherAsync(
                 customerAccountId, journalVoucherId);
+            
+            // Get all referenced vouchers (FOR charges and Cartage)
+            var forChargesData = await GetForChargesDataAsync(journalVoucherId);
+            var cartageData = await GetCartageDataAsync(journalVoucherId);
+            
+            // Calculate the effective current transaction
+            decimal currentTransactionAmount = customerEntry.Debit - customerEntry.Credit;
+            
+            // Adjust for referenced vouchers - they should be considered part of this transaction
+            // We add or subtract based on whether they create debits or credits for the customer
+            
+            // FOR charges create debit entries for the customer, so they increase the balance
+            currentTransactionAmount += forChargesData.TotalAmount;
+            
+            // Cartage may create debit entries for the customer depending on how it's set up
+            // For now, assuming cartage also creates debits for the customer
+            currentTransactionAmount += cartageData.TotalAmount;
+            
+            // Return the balance including the current transaction and its references
+            return baseBalance + currentTransactionAmount;
         }
 
         public async Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request)
