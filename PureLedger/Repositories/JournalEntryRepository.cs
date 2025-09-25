@@ -127,12 +127,13 @@ namespace PureLedger.Repositories
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int accountId, int maxVoucherId)
         {
-            // Calculate the balance directly in the database with a single query
+            // Calculate the base balance directly in the database
             var balance = await _context.JournalEntries
-                .Where(je => 
-                    je.AccountId == accountId && 
+                .Where(je =>
+                    je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
-                    je.JournalVoucherId <= maxVoucherId)
+                    je.JournalVoucherId < maxVoucherId  // Get balance up to but not including this voucher
+                )
                 .Select(je => new { je.Debit, je.Credit })
                 .ToListAsync();
 

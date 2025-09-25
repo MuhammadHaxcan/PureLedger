@@ -1,0 +1,64 @@
+﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
+
+<!-- Voucher Information -->
+<div class="voucher-info mb-4">
+    <div class="row">
+        <div class="col-md-6">
+            <table class="info-table">
+                <tr>
+                    <td><strong>Project:</strong></td>
+                    <td>@Model.ProjectName</td>
+                </tr>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <table class="info-table">
+                <tr>
+                    <td><strong>Booker:</strong></td>
+                    <td>@Model.BookerName</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Journal Voucher Entries Table -->
+<div class="table-responsive mb-4">
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>Account</th>
+                <th>Description</th>
+                <th class="text-end">Qty</th>
+                <th class="text-end">Rate</th>
+                <th class="text-end">Line Total</th>
+                <th class="text-end">Debit</th>
+                <th class="text-end">Credit</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entry in Model.Entries)
+            {
+                <tr>
+                    <td>@entry.AccountName</td>
+                    <td>@entry.Description</td>
+                    <td class="text-end">@entry.Quantity</td>
+                    <td class="text-end">@entry.Rate.ToString("N2")</td>
+                    <td class="text-end">@entry.LineTotal.ToString("N2")</td>
+                    <td class="text-end">@entry.Debit.ToString("N2")</td>
+                    <td class="text-end">@entry.Credit.ToString("N2")</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr class="table-active">
+                <th colspan="2" class="text-end">Totals</th>
+                <th class="text-end">@Model.TotalQuantity</th>
+                <th class="text-end"></th>
+                <th class="text-end">@Model.TotalActualAmount.ToString("N2")</th>
+                <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+                <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+            </tr>
+        </tfoot>
+    </table>
+</div>

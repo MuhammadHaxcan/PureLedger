@@ -108,7 +108,7 @@ namespace PureLedger.Data
                 .HasOne(dce => dce.JournalEntry)
                 .WithMany()
                 .HasForeignKey(dce => dce.JournalEntryId)
-                .OnDelete(DeleteBehavior.NoAction);
+                .OnDelete(DeleteBehavior.Cascade);
 
             // DeliveryChallanEntry to Location relationship
             modelBuilder.Entity<DeliveryChallanEntry>()

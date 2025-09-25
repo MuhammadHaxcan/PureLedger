@@ -1,10 +1,8 @@
-﻿// Controllers/ReportingController.cs
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.ViewModels;
-using System.Threading.Tasks;
 
 namespace PureLedger.Controllers
 {
@@ -19,6 +17,8 @@ namespace PureLedger.Controllers
             _reportingService = reportingService;
             _currentUserService = currentUserService;
         }
+
+        #region Voucher Reports
 
         [HttpGet]
         public IActionResult SingleDoc()
@@ -36,28 +36,11 @@ namespace PureLedger.Controllers
             if (report == null)
                 return HandleVoucherNotFound(journalVoucherId, type);
 
-            // For Invoice, calculate running balance for the customer account
             if (type == "INV" && !string.IsNullOrEmpty(report.CustomerAccountName))
             {
-                try
-                {
-                    // Get the customer's running balance
-                    var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(journalVoucherId);
-                    ViewBag.CustomerRunningBalance = balance;
-                    
-                    // Debug info
-                    Console.WriteLine($"Customer balance for voucher {journalVoucherId}: {balance}");
-                    Console.WriteLine($"Invoice totals: Amount={report.TotalAmount}, FOR={report.ForChargesAmount}, " +
-                        $"Cartage={report.CartageAmount}, Net={report.TotalAmount - report.ForChargesAmount - report.CartageAmount}");
-                }
-                catch (Exception ex)
-                {   
-                    Console.WriteLine($"Error calculating balance for voucher {journalVoucherId}: {ex.Message}");
-                    ViewBag.CustomerRunningBalance = 0m;
-                }
+                await AddCustomerBalanceToViewBag(journalVoucherId);
             }
 
-            // Pass filter to view for Journal Vouchers
             if (type == "JV")
             {
                 ViewBag.Filter = filter;
@@ -70,26 +53,18 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> ValidateVoucher(int journalVoucherId, string type)
         {
-            bool exists = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type) != null;
-            return Json(new { exists });
+            var result = await _reportingService.ValidateVoucherAsync(journalVoucherId, type);
+            return Json(new { exists = result.Exists, isBaseVoucher = result.IsBaseVoucher });
         }
+
+        #endregion
+
+        #region Aging Report
 
         [HttpGet]
         public async Task<IActionResult> AgingReport()
         {
-            // Fetch projects and categories from your services/repositories
-            var userId = _currentUserService.GetCurrentUserId();
-            var projects = userId.HasValue
-                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
-                : new List<PureLedger.Models.Project>();
-            var categories = await _reportingService.GetAllCategoriesAsync();
-
-            var viewModel = new AgingReportPageViewModel
-            {
-                Projects = projects.Select(p => new ProjectViewModel { Id = p.ProjectId.ToString(), Name = p.ProjectName }).ToList(),
-                Categories = categories.Select(c => new CategoryViewModel { Id = c.CategoryId.ToString(), Name = c.CategoryName }).ToList()
-            };
-
+            var viewModel = await CreateReportBaseViewModel<AgingReportPageViewModel>();
             return View(viewModel);
         }
 
@@ -100,19 +75,15 @@ namespace PureLedger.Controllers
             return Json(report);
         }
 
+        #endregion
+
+        #region Account Report
+
         [HttpGet]
         public async Task<IActionResult> AccountReport()
         {
-            var userId = _currentUserService.GetCurrentUserId();
-            var projects = userId.HasValue
-                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
-                : new List<PureLedger.Models.Project>();
-            var categories = await _reportingService.GetAllCategoriesAsync();
-            return View(new AgingReportPageViewModel
-            {
-                Projects = projects.Select(p => new ProjectViewModel { Id = p.ProjectId.ToString(), Name = p.ProjectName }).ToList(),
-                Categories = categories.Select(c => new CategoryViewModel { Id = c.CategoryId.ToString(), Name = c.CategoryName }).ToList()
-            });
+            var viewModel = await CreateReportBaseViewModel<AgingReportPageViewModel>();
+            return View(viewModel);
         }
 
         [HttpGet]
@@ -122,21 +93,14 @@ namespace PureLedger.Controllers
             return Json(report);
         }
 
+        #endregion
+
+        #region Master Report
+
         [HttpGet]
         public async Task<IActionResult> MasterReport()
         {
-            var userId = _currentUserService.GetCurrentUserId();
-            var projects = userId.HasValue
-                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
-                : new List<PureLedger.Models.Project>();
-            var categories = await _reportingService.GetAllCategoriesAsync();
-
-            var viewModel = new MasterReportPageViewModel
-            {
-                Projects = projects.Select(p => new ProjectViewModel { Id = p.ProjectId.ToString(), Name = p.ProjectName }).ToList(),
-                Categories = categories.Select(c => new CategoryViewModel { Id = c.CategoryId.ToString(), Name = c.CategoryName }).ToList()
-            };
-
+            var viewModel = await CreateReportBaseViewModel<MasterReportPageViewModel>();
             return View(viewModel);
         }
 
@@ -147,21 +111,22 @@ namespace PureLedger.Controllers
             return Json(report);
         }
 
-        // New API endpoints to replace the ones from CommonApiController
+        #endregion
+
+        #region Lookup APIs
 
         [HttpGet]
         public async Task<IActionResult> GetCategoriesByProject(int projectId)
         {
             try
             {
-                // Get categories directly instead of trying to access project.Categories
                 var categories = await _reportingService.GetCategoriesByProjectAsync(projectId);
-                
+
                 if (categories == null || !categories.Any())
                 {
-                    return Json(new object[] { }); // Return empty array instead of 404
+                    return Json(new object[] { });
                 }
-                
+
                 var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
                 return Json(result);
             }
@@ -186,7 +151,9 @@ namespace PureLedger.Controllers
             }
         }
 
-        // --- Helpers ---
+        #endregion
+
+        #region Helper Methods
 
         private bool IsValidInput(int journalVoucherId, string type, out IActionResult errorResult)
         {
@@ -212,5 +179,60 @@ namespace PureLedger.Controllers
             TempData["Error"] = message;
             return RedirectToAction("SingleDoc");
         }
+
+        private async Task<T> CreateReportBaseViewModel<T>() where T : class, new()
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
+                : new List<Project>();
+            var categories = await _reportingService.GetAllCategoriesAsync();
+
+            var viewModel = new T();
+
+            var projectsProperty = typeof(T).GetProperty("Projects");
+            if (projectsProperty != null && projectsProperty.PropertyType == typeof(List<ProjectViewModel>))
+            {
+                var projectViewModels = projects.Select(p => new ProjectViewModel
+                {
+                    Id = p.ProjectId.ToString(),
+                    Name = p.ProjectName
+                }).ToList();
+
+                projectsProperty.SetValue(viewModel, projectViewModels);
+            }
+
+            var categoriesProperty = typeof(T).GetProperty("Categories");
+            if (categoriesProperty != null && categoriesProperty.PropertyType == typeof(List<CategoryViewModel>))
+            {
+                var categoryViewModels = categories.Select(c => new CategoryViewModel
+                {
+                    Id = c.CategoryId.ToString(),
+                    Name = c.CategoryName
+                }).ToList();
+
+                categoriesProperty.SetValue(viewModel, categoryViewModels);
+            }
+
+            return viewModel;
+        }
+
+        private async Task AddCustomerBalanceToViewBag(int journalVoucherId)
+        {
+            try
+            {
+                var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(journalVoucherId);
+                ViewBag.CustomerRunningBalance = balance;
+
+                Console.WriteLine($"Customer balance for voucher {journalVoucherId}: {balance}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error calculating balance for voucher {journalVoucherId}: {ex.Message}");
+                ViewBag.CustomerRunningBalance = 0m;
+            }
+        }
+
+        #endregion
     }
 }

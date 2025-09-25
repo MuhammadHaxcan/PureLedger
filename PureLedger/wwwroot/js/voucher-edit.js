@@ -5,6 +5,22 @@
     // Initialize Bootstrap modal
     editModal = new bootstrap.Modal(document.getElementById('editEntryModal'));
 
+    // NEW CODE: Check URL for jvId parameter and load it automatically
+    function getUrlParameter(name) {
+        name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+        var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+        var results = regex.exec(location.search);
+        return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+    }
+
+    // If jvId is in the URL, load it automatically
+    const urlVoucherId = getUrlParameter('jvId');
+    if (urlVoucherId) {
+        $('#voucherIdInput').val(urlVoucherId);
+        fetchVoucherSummary(urlVoucherId);
+    }
+    // END NEW CODE
+
     // Fetch voucher by ID
     $('#fetchVoucherBtn').on('click', function () {
         const voucherId = $('#voucherIdInput').val();
@@ -50,6 +66,11 @@
             totalDebit += parseFloat(entry.debit || 0);
             totalCredit += parseFloat(entry.credit || 0);
 
+            // Debug check for entryId
+            if (!entry.entryId) {
+                console.warn('Missing entryId for entry:', entry);
+            }
+
             const row = $('<tr>').append(
                 $('<td>').text(entry.accountName || ''),
                 $('<td>').text(entry.description || ''),
@@ -64,12 +85,12 @@
                         .addClass('btn btn-primary btn-sm me-1 btn-edit-entry')
                         .html('<i class="fas fa-edit"></i>')
                         .attr('title', 'Edit')
-                        .data('entry-id', entry.entryId),
+                        .attr('data-entry-id', entry.entryId), // Use attr() instead of data()
                     $('<button>')
                         .addClass('btn btn-danger btn-sm btn-delete-entry')
                         .html('<i class="fas fa-trash"></i>')
                         .attr('title', 'Delete')
-                        .data('entry-id', entry.entryId)
+                        .attr('data-entry-id', entry.entryId)  // Use attr() instead of data()
                 )
             );
             tbody.append(row);
@@ -277,7 +298,7 @@
             cancelButtonText: 'Cancel'
         }).then((result) => {
             if (result.isConfirmed) {
-                PureLedger.post('/Home/DeleteJournalEntry', { entryId: entryId })
+                $.post('/Home/DeleteJournalEntry', { entryId: entryId })
                     .done(function (response) {
                         if (response.success) {
                             Swal.fire({
@@ -293,8 +314,19 @@
                         }
                     })
                     .fail(function (xhr, status, error) {
-                        Swal.fire('Error', 'An error occurred while deleting the entry.', 'error');
-                        console.error('Error deleting entry:', error);
+                        let errorMessage = 'An error occurred while deleting the entry.';
+                        
+                        // Try to get more specific error message from server response
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (xhr.status === 409) {
+                            errorMessage = 'This entry cannot be deleted because it is referenced by other records.';
+                        } else if (xhr.status === 404) {
+                            errorMessage = 'Entry not found. It may have been already deleted.';
+                        }
+                        
+                        Swal.fire('Error', errorMessage, 'error');
+                        console.error('Error deleting entry:', error, xhr);
                     });
             }
         });

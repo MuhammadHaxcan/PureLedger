@@ -6,10 +6,12 @@
 }
 
 <div class="container-fluid">
+    <!-- Page Header -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2><i class="fas fa-book-open me-2"></i>Journal Entry</h2>
     </div>
 
+    <!-- Alert Area -->
     <div id="alertArea">
         @if (ViewBag.Error != null)
         {
@@ -28,17 +30,29 @@
         }
     </div>
 
+    <!-- Validation Alert (Hidden by default) -->
+    <div id="validationAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <span id="validationMessage"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
     <form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
+        <!-- Entry Details Card -->
         <div class="card shadow mb-3">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-info-circle me-2"></i>Entry Details</h6>
+            <div class="card-header py-2">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-info-circle me-2"></i>Entry Details
+                </h6>
             </div>
             <div class="card-body py-2">
                 <div class="row mb-2">
                     <div class="col-md-6 mb-2 mb-md-0">
                         <label class="form-label">Entry Date:</label>
                         <div class="input-group">
-                            <span class="input-group-text calendar-icon" style="cursor:pointer;"><i class="fas fa-calendar-alt"></i></span>
+                            <span class="input-group-text calendar-icon" style="cursor:pointer;">
+                                <i class="fas fa-calendar-alt"></i>
+                            </span>
                             <input class="form-control datepicker no-arrow"
                                    name="EntryDate"
                                    type="text"
@@ -47,17 +61,17 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label" for="ProjectId">Project</label>
+                        <label class="form-label" for="ProjectId">Project <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
                             <select class="form-select" id="ProjectId" name="ProjectId" required>
                                 <option value="">Select Project</option>
                                 @if (projects != null)
                                 {
-                                    foreach (var p in projects)
+                                    foreach (var project in projects)
                                     {
-                                        var selected = (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == p.ProjectId) ? "selected" : "";
-                                        <option value="@p.ProjectId" selected="@selected">@p.ProjectName</option>
+                                        var selected = (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == project.ProjectId) ? "selected" : "";
+                                        <option value="@project.ProjectId" selected="@selected">@project.ProjectName</option>
                                     }
                                 }
                             </select>
@@ -68,12 +82,7 @@
             </div>
         </div>
 
-        <div id="validationAlert" class="alert alert-danger alert-dismissible fade show d-none" role="alert">
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            <span id="validationMessage"></span>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-
+        <!-- Journal Entries Card -->
         <div class="card shadow mb-3">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">
@@ -88,13 +97,13 @@
                     <table class="table table-bordered align-middle mb-0">
                         <thead class="table-primary">
                             <tr>
-                                <th>Category</th>
-                                <th>Account</th>
+                                <th>Category <span class="text-danger">*</span></th>
+                                <th>Account <span class="text-danger">*</span></th>
                                 <th>PKG</th>
                                 <th>RBP</th>
                                 <th>Tags</th>
                                 <th>Description</th>
-                                <th>Qty</th>
+                                <th>Qty <span class="text-danger product-required-indicator d-none">*</span></th>
                                 <th>Rate</th>
                                 <th>%</th>
                                 <th>Discount</th>
@@ -104,6 +113,7 @@
                             </tr>
                         </thead>
                         <tbody id="entryRows">
+                            <!-- Initial row template -->
                             <tr id="entryRow-0" class="entry-row">
                                 <td>
                                     <select class="form-select form-select-sm category-select"
@@ -140,7 +150,6 @@
                                 </td>
                                 <td class="position-relative">
                                     <div class="tag-multibox d-flex flex-wrap align-items-center" style="min-height:31px;">
-                                        <!-- Chips will be appended here -->
                                         <input type="text"
                                                class="form-control form-control-sm tag-search-input border-0 flex-grow-1"
                                                style="min-width:100px;box-shadow:none;background:transparent;"
@@ -148,30 +157,69 @@
                                                autocomplete="off"
                                                data-index="0" />
                                     </div>
-                                    <!-- Container for tag hidden inputs -->
                                     <div class="tag-hidden-inputs"></div>
                                     <div class="tag-suggestions dropdown-menu" style="width:100%;"></div>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm des-input" id="Entries_0__Des" name="Entries[0].Des" placeholder="Description" />
+                                    <input class="form-control form-control-sm des-input" 
+                                           id="Entries_0__Des" 
+                                           name="Entries[0].Des" 
+                                           placeholder="Description" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm qty-input" id="Entries_0__Qty" name="Entries[0].Qty" type="number" min="0" step="1" placeholder="0" />
+                                    <input class="form-control form-control-sm qty-input" 
+                                           id="Entries_0__Qty" 
+                                           name="Entries[0].Qty" 
+                                           type="number" 
+                                           min="0" 
+                                           step="1" 
+                                           placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm rate-input" id="Entries_0__Rate" name="Entries[0].Rate" type="number" min="0" step="0.01" placeholder="0.00" />
+                                    <input class="form-control form-control-sm rate-input" 
+                                           id="Entries_0__Rate" 
+                                           name="Entries[0].Rate" 
+                                           type="number" 
+                                           min="0" 
+                                           step="0.01" 
+                                           placeholder="0.00" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm percent-input" id="Entries_0__Percent" name="Entries[0].Percent" type="number" min="0" max="100" step="0.01" placeholder="0" />
+                                    <input class="form-control form-control-sm percent-input" 
+                                           id="Entries_0__Percent" 
+                                           name="Entries[0].Percent" 
+                                           type="number" 
+                                           min="0" 
+                                           max="100" 
+                                           step="0.01" 
+                                           placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm disc-input" id="Entries_0__Disc" name="Entries[0].Disc" type="number" min="0" step="1" placeholder="0" />
+                                    <input class="form-control form-control-sm disc-input" 
+                                           id="Entries_0__Disc" 
+                                           name="Entries[0].Disc" 
+                                           type="number" 
+                                           min="0" 
+                                           step="1" 
+                                           placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm debit-input" id="Entries_0__Debit" name="Entries[0].Debit" type="number" min="0" step="1" placeholder="0" />
+                                    <input class="form-control form-control-sm debit-input" 
+                                           id="Entries_0__Debit" 
+                                           name="Entries[0].Debit" 
+                                           type="number" 
+                                           min="0" 
+                                           step="1" 
+                                           placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm credit-input" id="Entries_0__Credit" name="Entries[0].Credit" type="number" min="0" step="1" placeholder="0" />
+                                    <input class="form-control form-control-sm credit-input" 
+                                           id="Entries_0__Credit" 
+                                           name="Entries[0].Credit" 
+                                           type="number" 
+                                           min="0" 
+                                           step="1" 
+                                           placeholder="0" />
                                 </td>
                                 <td>
                                     <button type="button" class="btn btn-danger btn-sm remove-row-btn">
@@ -193,9 +241,12 @@
             </div>
         </div>
 
+        <!-- Additional Details Card -->
         <div class="card shadow mb-3">
             <div class="card-header py-2">
-                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-cog me-2"></i>Additional Details</h6>
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-cog me-2"></i>Additional Details
+                </h6>
             </div>
             <div class="card-body py-2">
                 <div class="row">
@@ -203,14 +254,26 @@
                         <label class="form-label" for="CreditDays">Credit Days</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-day"></i></span>
-                            <input class="form-control no-arrow" id="CreditDays" name="CreditDays" type="number" min="0" value="0" />
+                            <input class="form-control no-arrow" 
+                                   id="CreditDays" 
+                                   name="CreditDays" 
+                                   type="number" 
+                                   min="0" 
+                                   value="0" />
                         </div>
                     </div>
                     <div class="col-md-4 mb-2">
                         <label class="form-label" for="DueDate">Due Date</label>
                         <div class="input-group">
-                            <span class="input-group-text calendar-icon" style="cursor:pointer;"><i class="fas fa-calendar-check"></i></span>
-                            <input class="form-control datepicker" id="DueDate" name="DueDate" type="text" value="@today" readonly />
+                            <span class="input-group-text calendar-icon" style="cursor:pointer;">
+                                <i class="fas fa-calendar-check"></i>
+                            </span>
+                            <input class="form-control datepicker" 
+                                   id="DueDate" 
+                                   name="DueDate" 
+                                   type="text" 
+                                   value="@today" 
+                                   readonly />
                         </div>
                     </div>
                     <div class="col-md-4 mb-2">
@@ -224,14 +287,22 @@
                     </div>
                 </div>
                 
-                <!-- Add Base Voucher Checkbox -->
+                <!-- Base Voucher Checkbox -->
                 <div class="row mt-2">
                     <div class="col-12">
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="IsBaseVoucher" name="IsBaseVoucher" value="true" />
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="IsBaseVoucher" 
+                                   name="IsBaseVoucher" 
+                                   value="true" />
                             <label class="form-check-label" for="IsBaseVoucher">
-                                <span class="fw-bold text-primary"><i class="fas fa-layer-group me-1"></i>Mark as Base Voucher</span>
-                                <small class="text-muted ms-2">(Base vouchers can be used to create multiple derived vouchers)</small>
+                                <span class="fw-bold text-primary">
+                                    <i class="fas fa-layer-group me-1"></i>Mark as Base Voucher
+                                </span>
+                                <small class="text-muted ms-2">
+                                    (Base vouchers can be used to create multiple derived vouchers)
+                                </small>
                             </label>
                         </div>
                     </div>
@@ -239,6 +310,7 @@
             </div>
         </div>
 
+        <!-- Form Actions -->
         <div class="d-flex justify-content-between mb-3">
             <button type="button" class="btn btn-secondary" onclick="history.back()">
                 <i class="fas fa-arrow-left me-1"></i> Back
@@ -259,76 +331,17 @@
 @section Scripts {
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="~/js/journal-entry.js" asp-append-version="true"></script>
-    <script>
-        $(function () {
-            let form = $('#entryForm');
-            let submitBtn = $('#submitBtn');
-            let submitPrintBtn = $('#submitPrintBtn');
-            let formAction = $('#formAction');
-            
-            // Correct form action if needed
-            const basePath = PureLedger.getCurrentBasePath();
-            console.log("Current base path:", basePath);
-            
-            // Ensure form posts to the correct URL
-            if (form.length && basePath) {
-                // Remove any duplicate prefixes that might exist
-                let formAction = form.attr('action');
-                if (formAction) {
-                    // Remove any existing prefixes to avoid duplication
-                    if (formAction.includes('/route1/') || formAction.includes('/route2/')) {
-                        formAction = formAction.replace(/\/route[12]\//, '/');
-                    }
-                    // Set the correct action with prefix
-                    form.attr('action', basePath + formAction);
-                    console.log("Form action set to:", form.attr('action'));
-                }
-            }
-
-            submitBtn.on('click', function () {
-                formAction.val('submit');
-            });
-            submitPrintBtn.on('click', function () {
-                formAction.val('submit_print');
-            });
-
-            form.on('submit', function (e) {
-                // Debug tag inputs
-                console.log("Tag inputs being submitted:", $('input[name$="].Tags"]').map(function() {
-                    return {name: $(this).attr('name'), value: $(this).val()};
-                }).get());
-                
-                if (submitBtn.prop('disabled') || submitPrintBtn.prop('disabled')) {
-                    e.preventDefault();
-                    return false;
-                }
-                submitBtn.prop('disabled', true);
-                submitPrintBtn.prop('disabled', true);
-
-                submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Submitting...');
-                submitPrintBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Submitting...');
-                
-                // Log the actual form action for debugging
-                console.log("Submitting form to:", this.action);
-            });
-        });
-    </script>
 }
 
 <style>
-    /* Fix z-index for dropdowns */
-    .dropdown-menu {
-        z-index: 9999 !important;
-    }
-
-    /* Fix inputs in table */
+    /* Form Controls */
     .table .form-control-sm,
     .table .form-select-sm {
         padding: 0.25rem 0.5rem;
         font-size: 0.875rem;
     }
     
-    /* Remove dropdown arrows from all select elements */
+    /* Remove dropdown arrows */
     select.form-select {
         -webkit-appearance: none !important;
         -moz-appearance: none !important;
@@ -337,12 +350,11 @@
         padding-right: 0.75rem !important;
     }
     
-    /* For Firefox */
     select.form-select::-ms-expand {
         display: none;
     }
 
-    /* Multibox for tags */
+    /* Tag Multibox */
     .tag-multibox {
         min-height: 31px;
         border: 1px solid #ced4da;
@@ -352,32 +364,33 @@
         position: relative;
     }
 
-        .tag-multibox .tag-chip {
-            display: inline-flex;
-            align-items: center;
-            font-size: 0.85em;
-            background: #375a7f;
-            color: #fff;
-            border-radius: 4px;
-            padding: 0 4px;
-            margin-right: 2px;
-            margin-bottom: 2px;
-        }
+    .tag-multibox .tag-chip {
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.85em;
+        background: #375a7f;
+        color: #fff;
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-right: 2px;
+        margin-bottom: 2px;
+    }
 
-        .tag-multibox .tag-chip-remove {
-            color: #fff;
-            margin-left: 3px;
-        }
+    .tag-multibox .tag-chip-remove {
+        color: #fff;
+        margin-left: 3px;
+        cursor: pointer;
+    }
 
-        .tag-multibox .tag-search-input {
-            background: transparent;
-            color: #212529;
-            border: none;
-            outline: none;
-            min-width: 80px;
-            flex: 1 1 0;
-            box-shadow: none !important;
-        }
+    .tag-multibox .tag-search-input {
+        background: transparent;
+        color: #212529;
+        border: none;
+        outline: none;
+        min-width: 80px;
+        flex: 1 1 0;
+        box-shadow: none !important;
+    }
 
     .tag-suggestions {
         max-height: 200px;
@@ -385,7 +398,25 @@
         z-index: 9999;
     }
 
-    /* Datepicker appearance */
+    /* Validation Styles */
+    .required-field {
+        border-color: #375a7f !important;
+        background-color: rgba(55, 90, 127, 0.05) !important;
+    }
+
+    .is-invalid {
+        border-color: #dc3545 !important;
+    }
+
+    .invalid-feedback {
+        display: block;
+        width: 100%;
+        margin-top: 0.25rem;
+        font-size: 80%;
+        color: #dc3545;
+    }
+
+    /* Datepicker */
     .ui-datepicker {
         background-color: #fff;
         border: 1px solid #ced4da;
@@ -395,7 +426,7 @@
         z-index: 9999 !important;
     }
 
-    /* Card section padding reduced */
+    /* Card Padding */
     .card-header.py-2 {
         padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
@@ -404,5 +435,10 @@
     .card-body.py-2 {
         padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
+    }
+
+    /* Dropdown z-index fix */
+    .dropdown-menu {
+        z-index: 9999 !important;
     }
 </style>

@@ -5,7 +5,7 @@ namespace PureLedger.ViewModels
     public class JournalVoucherReportViewModel
     {
         public int JvId { get; set; }
-        public string? VoucherType { get; set; } // DC or JV
+        public string? VoucherType { get; set; } // DC or JV or INV
         public string? ProjectName { get; set; }
         public string? BookerName { get; set; }
         public DateOnly CreatedDate { get; set; }
@@ -13,14 +13,11 @@ namespace PureLedger.ViewModels
         // Additional Fields for Delivery Challan
         public bool IsPartial { get; set; } // Check if Partial DC
 
-        
-        
         // Particular Customer Data
         public string? CustomerAccountName { get; set; } // Customer account name (from JournalEntries with Quantity == 0)
         public string? CustomerAddress { get; set; }
         public string? CustomerCity { get; set; }
         public string? CustomerPhone { get; set; }
-
 
         //Particular Document Detail
         public DateOnly? DueDate { get; set; }
@@ -28,15 +25,22 @@ namespace PureLedger.ViewModels
         public int? Builty { get; set; }
         public string? Remarks { get; set; }
 
-
-
-        // All Entreis of that Entry
+        // All Entries of that Entry
         public List<JournalVoucherEntryReportModel> Entries { get; set; } = new List<JournalVoucherEntryReportModel>();
 
-        // Totals
-        public int TotalQuantity { get; set; }
-        public decimal TotalAmount { get; set; }
-        public decimal TotalActualAmount { get; set; }
+        // FOR Charges and Cartage related entries and amounts
+        public List<JournalVoucherEntryReportModel> ForChargesEntries { get; set; } = new List<JournalVoucherEntryReportModel>();
+        public List<JournalVoucherEntryReportModel> CartageEntries { get; set; } = new List<JournalVoucherEntryReportModel>();
+        public decimal ForChargesAmount { get; set; }
+        public decimal CartageAmount { get; set; }
+
+        // Totals as calculated properties
+        public int TotalQuantity => Entries.Sum(e => e.Quantity);
+        public decimal TotalAmount => Entries.Sum(e => e.LineTotal);
+        public decimal TotalActualAmount => Entries.Sum(e => e.ActualAmount);
+
+        // Effective amount after deducting FOR charges and cartage
+        public decimal EffectiveAmount => TotalAmount - ForChargesAmount - CartageAmount;
 
         // Footer fields
         public string? AccountName { get; set; }
@@ -44,16 +48,5 @@ namespace PureLedger.ViewModels
         public string? ReceivedBy { get; set; }
 
         public JournalEntry? CartageEntry { get; set; }
-        
-        // Add these properties to JournalVoucherReportViewModel
-        public decimal ForChargesAmount { get; set; }
-        public List<JournalVoucherEntryReportModel> ForChargesEntries { get; set; } = new();
-
-        // Add these new properties
-        public decimal CartageAmount { get; set; }
-        public List<JournalVoucherEntryReportModel> CartageEntries { get; set; } = new();
-        
-        // Add a calculated property for effective total amount
-        public decimal EffectiveAmount => TotalAmount - ForChargesAmount - CartageAmount;
     }
 }

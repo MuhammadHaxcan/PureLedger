@@ -70,7 +70,8 @@ namespace PureLedger.Repositories
                     a.ProductData.SaleRate,
                     a.ProductData.Pkg,
                     a.ProductData.PkgForm,
-                    a.ProductData.Type
+                    a.ProductData.Type,
+                    a.AccountGroupId
                 })
                 .FirstOrDefaultAsync();
         }

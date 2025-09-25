@@ -46,7 +46,7 @@ namespace PureLedger.Services
                 ProjectId = voucher.ProjectId,
                 CreditDays = voucher.EntryDate.Day - voucher.CreditableDate.Day,
                 DueDate = voucher.CreditableDate,
-                Booker = "", // Set if you have this info
+                Booker = "",
                 Entries = voucher.JournalEntries.Select(e => new JournalEntryRowModel
                 {
                     CategoryId = e.CategoryId,
@@ -67,23 +67,20 @@ namespace PureLedger.Services
         {
             try
             {
-                // Create journal voucher
+
                 var journalVoucher = new JournalVoucher
                 {
                     ProjectId = model.ProjectId,
                     EntryDate = DateOnly.FromDateTime(DateTime.Now),
                     IsCompleted = false,
-                    IsBaseVoucher = model.IsBaseVoucher, // Add this line to set the IsBaseVoucher property
+                    IsBaseVoucher = model.IsBaseVoucher,
                     CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
                 };
 
-                // Add voucher using repository
                 journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
 
-                // Create journal entries
                 await CreateJournalEntriesAsync(journalVoucher.JournalVoucherId, model.Entries);
 
-                // Update voucher status based on account groups
                 await UpdateVoucherStatusBasedOnAccountsAsync(journalVoucher.JournalVoucherId);
 
                 await _unitOfWork.SaveChangesAsync();
@@ -102,7 +99,7 @@ namespace PureLedger.Services
             {
                 try
                 {
-                    // Log the entry information including tags for debugging
+
                     _logger.LogInformation("Creating journal entry with AccountId={AccountId}, Tags={TagCount}",
                         entryModel.AccountId, entryModel.Tags?.Count ?? 0);
 
@@ -118,41 +115,38 @@ namespace PureLedger.Services
                         Discount = entryModel.Disc,
                         Debit = entryModel.Debit,
                         Credit = entryModel.Credit,
-                        Rbp = entryModel.Rbp,
+                        Rbp = entryModel.Rbp ?? "Y",
                         IsProcessed = false
                     };
 
-                    // Save the entry first
                     journalEntry = await _unitOfWork.JournalEntries.AddAsync(journalEntry);
-                    await _unitOfWork.SaveChangesAsync(); // Add this line to ensure the entry is saved before adding tags
+                    await _unitOfWork.SaveChangesAsync();
 
-                    // Process tags separately with better error handling
                     if (entryModel.Tags != null && entryModel.Tags.Any())
                     {
                         try
                         {
-                            _logger.LogInformation("Adding {TagCount} tags to entry {EntryId}", 
+                            _logger.LogInformation("Adding {TagCount} tags to entry {EntryId}",
                                 entryModel.Tags.Count, journalEntry.JournalEntryId);
-                                
-                            // Make sure we're not trying to add null tag IDs
+
                             var validTags = entryModel.Tags.Where(t => t > 0).ToList();
                             if (validTags.Any())
                             {
                                 await _unitOfWork.JournalEntries.AddTagsAsync(journalEntry.JournalEntryId, validTags);
-                                await _unitOfWork.SaveChangesAsync(); // Save after adding tags
+                                await _unitOfWork.SaveChangesAsync();
                             }
                         }
                         catch (Exception tagEx)
                         {
                             _logger.LogError(tagEx, "Error adding tags to entry {EntryId}", journalEntry.JournalEntryId);
-                            // Continue with entry creation even if tag association fails
+
                         }
                     }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error creating journal entry for account {AccountId}", entryModel.AccountId);
-                    throw; // Rethrow to handle in the controller
+                    throw;
                 }
             }
         }
@@ -162,10 +156,8 @@ namespace PureLedger.Services
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null) return;
 
-            // Get all account IDs from the entries
             var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
 
-            // Fetch accounts with their AccountGroupId
             var accounts = new List<Account>();
             foreach (var accountId in accountIds)
             {
@@ -174,14 +166,11 @@ namespace PureLedger.Services
                     accounts.Add(account);
             }
 
-            // Check if all accounts have AccountGroupId == 1
             bool allAccountGroup1 = accounts.All(a => a.AccountGroupId == 1);
 
-            // Update voucher and entries status
             voucher.IsCompleted = allAccountGroup1;
             await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
 
-            // Update entry processing status
             var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucherId, null, null);
             foreach (var entry in entries)
             {
@@ -201,13 +190,11 @@ namespace PureLedger.Services
             int? locationId = null;
             List<Location>? allLocations = null;
 
-            // Always fetch the account with details to get AccountGroupId
             var account = entry.AccountId > 0
                 ? await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId)
                 : null;
             int accountGroupId = account?.AccountGroupId ?? 0;
 
-            // Load additional data for AccountGroup 2
             if (accountGroupId == 2)
             {
                 var dcEntry = await _unitOfWork.DeliveryChallanEntries
@@ -249,12 +236,10 @@ namespace PureLedger.Services
                 if (entry == null)
                     return false;
 
-                // Map view model to entity
                 UpdateEntryFromViewModel(entry, model);
 
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
 
-                // Update DeliveryChallanEntry Location if needed
                 if (model.AccountGroupId == 2 && model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
                 {
                     await UpdateDeliveryChallanEntryLocationAsync(model.DeliveryChallanEntryId.Value, model.LocationId.Value);
@@ -280,7 +265,6 @@ namespace PureLedger.Services
             entry.Debit = model.Debit;
             entry.Credit = model.Credit;
 
-            // Update account and category if they were changed
             if (model.AccountId > 0 && model.AccountId != entry.AccountId)
             {
                 entry.AccountId = model.AccountId;
@@ -292,7 +276,7 @@ namespace PureLedger.Services
             }
 
             entry.IsEdited = true;
-            entry.ModifiedDateTime = DateTime.Now; // <-- Set modification time
+            entry.ModifiedDateTime = DateTime.Now;
 
         }
 
@@ -343,23 +327,21 @@ namespace PureLedger.Services
 
                 var voucherId = entry.JournalVoucherId;
 
-                // Get all entries for this voucher
                 var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
 
                 if (entries.Count == 1)
                 {
-                    // This is the last entry - delete entry, voucher, and related data
                     await DeleteVoucherWithLastEntryAsync(entryId, voucherId);
                 }
                 else
                 {
-                    // Just delete the entry
+
+                    await DeleteFromJournalEntryTagsAsync(entryId);
+
                     await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
-                    // Delete associated DeliveryChallanEntries
                     await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
 
-                    // Update voucher status
                     await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
                 }
 
@@ -373,22 +355,40 @@ namespace PureLedger.Services
             }
         }
 
+        private async Task DeleteFromJournalEntryTagsAsync(int entryId)
+        {
+            try
+            {
+                var entryWithTags = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
+                var links = entryWithTags?.JournalEntryTags?.ToList();
+                if (links == null || links.Count == 0)
+                    return;
+
+                entryWithTags!.JournalEntryTags.Clear();
+                await _unitOfWork.JournalEntries.UpdateAsync(entryWithTags);
+            }
+            catch (Exception ex)
+            {
+
+                _logger.LogWarning(ex, "Failed to explicitly remove JournalEntryTags for entry {EntryId}. Relying on cascade delete.", entryId);
+            }
+        }
+
         private async Task DeleteVoucherWithLastEntryAsync(int entryId, int voucherId)
         {
-            // Delete the entry
+
+            await DeleteFromJournalEntryTagsAsync(entryId);
+
             await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
-            // Delete related DeliveryChallanEntries
             await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
 
-            // Delete the delivery challan voucher if it exists
             var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
             if (deliveryChallanVoucher != null)
             {
                 await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
             }
 
-            // Delete the journal voucher
             await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
         }
 
@@ -422,12 +422,11 @@ namespace PureLedger.Services
             }
         }
 
-        // Add this method to JournalEntryService
         public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
         {
             try
             {
-                // Access the Categories repository directly to get categories by project ID
+
                 return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
             }
             catch (Exception ex)
@@ -441,26 +440,22 @@ namespace PureLedger.Services
         {
             try
             {
-                // Get base vouchers with their entries
+
                 var baseVouchers = await _unitOfWork.JournalVouchers.GetAllBaseVouchersAsync();
-                
-                // If entries aren't properly loaded for some vouchers, load them explicitly
+
                 foreach (var voucher in baseVouchers)
                 {
                     if (voucher.JournalEntries == null || !voucher.JournalEntries.Any())
                     {
-                        _logger.LogWarning("Voucher {VoucherId} has no entries loaded, loading them explicitly", 
+                        _logger.LogWarning("Voucher {VoucherId} has no entries loaded, loading them explicitly",
                             voucher.JournalVoucherId);
-                            
-                        // Load entries for this voucher
+
                         var entriesForVoucher = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
                             voucher.JournalVoucherId, null, null);
-                        
-                        // Initialize JournalEntries if null
+
                         if (voucher.JournalEntries == null)
                             voucher.JournalEntries = new List<JournalEntry>();
-                        
-                        // Add entries to the collection
+
                         if (entriesForVoucher.Any())
                         {
                             foreach (var entry in entriesForVoucher)
@@ -470,7 +465,7 @@ namespace PureLedger.Services
                         }
                     }
                 }
-                
+
                 _logger.LogInformation("Retrieved {Count} base vouchers with their entries", baseVouchers.Count);
                 return baseVouchers;
             }
@@ -481,7 +476,8 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id) {
+        public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
+        {
             return await _unitOfWork.JournalVouchers.GetBaseVoucherWithUnprocessedEntriesAsync(id);
         }
 
@@ -490,7 +486,7 @@ namespace PureLedger.Services
             List<BaseVoucherEntryViewModel> entriesToProcess,
             int accountEntryAmount = 0,
             bool accountEntryIsDebit = false,
-            DateOnly? creditableDate = null) // <-- Add parameter
+            DateOnly? creditableDate = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -499,7 +495,6 @@ namespace PureLedger.Services
                 if (baseVoucher == null || !baseVoucher.IsBaseVoucher)
                     throw new InvalidOperationException("Base voucher not found");
 
-                // Use the provided creditable date, or default to today
                 var derivedVoucher = new JournalVoucher
                 {
                     ProjectId = baseVoucher.ProjectId,
@@ -511,7 +506,6 @@ namespace PureLedger.Services
                 derivedVoucher = await _unitOfWork.JournalVouchers.AddAsync(derivedVoucher);
                 await _unitOfWork.SaveChangesAsync();
 
-                // Add reference from base to derived
                 await _unitOfWork.JournalVoucherReferences.AddAsync(new JournalVoucherReference
                 {
                     MainVoucherId = baseVoucherId,
@@ -519,10 +513,8 @@ namespace PureLedger.Services
                     ReferenceType = "DerivedVoucher"
                 });
 
-                // Track if we've already added an account entry
                 bool accountEntryAdded = false;
 
-                // Process entries
                 foreach (var entryToProcess in entriesToProcess)
                 {
                     var baseEntry = baseVoucher.JournalEntries
@@ -531,19 +523,15 @@ namespace PureLedger.Services
                     if (baseEntry == null || baseEntry.IsProcessed)
                         continue;
 
-                    // Get tag IDs from the base entry
                     var baseTagIds = baseEntry.JournalEntryTags?.Select(t => t.TagId).ToList() ?? new List<int>();
 
-                    // Check if this is an account entry
                     var account = await _unitOfWork.Accounts.GetByIdAsync(baseEntry.AccountId);
                     bool isAccountEntry = account != null && account.AccountGroupId == 1;
 
-                    // For non-account entries, validate the quantity
                     if (!isAccountEntry && (entryToProcess.ProcessQuantity <= 0 ||
                         entryToProcess.ProcessQuantity > baseEntry.Quantity))
                         continue;
 
-                    // For account entries, use the calculated balance values instead of proportional
                     if (isAccountEntry)
                     {
                         accountEntryAdded = true;
@@ -566,7 +554,6 @@ namespace PureLedger.Services
 
                         var savedEntry = await _unitOfWork.JournalEntries.AddAsync(newEntry);
 
-                        // Copy tags from base entry
                         if (baseTagIds.Any())
                         {
                             await _unitOfWork.JournalEntries.AddTagsAsync(savedEntry.JournalEntryId, baseTagIds);
@@ -575,7 +562,6 @@ namespace PureLedger.Services
                         continue;
                     }
 
-                    // For non-account entries
                     var newRegularEntry = new JournalEntry
                     {
                         JournalVoucherId = derivedVoucher.JournalVoucherId,
@@ -594,13 +580,11 @@ namespace PureLedger.Services
 
                     var savedRegularEntry = await _unitOfWork.JournalEntries.AddAsync(newRegularEntry);
 
-                    // Copy tags from base entry
                     if (baseTagIds.Any())
                     {
                         await _unitOfWork.JournalEntries.AddTagsAsync(savedRegularEntry.JournalEntryId, baseTagIds);
                     }
 
-                    // Update base entry
                     baseEntry.Quantity -= entryToProcess.ProcessQuantity;
                     if (baseEntry.Quantity <= 0)
                     {
@@ -608,7 +592,7 @@ namespace PureLedger.Services
                     }
                     await _unitOfWork.JournalEntries.UpdateAsync(baseEntry);
                 }
-                
+
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -621,25 +605,27 @@ namespace PureLedger.Services
             }
         }
 
-        // Helper method to get a default account ID for the account entry
         private async Task<int> GetDefaultAccountId(int projectId)
         {
-            try {
-                // Try to find an account with AccountGroupId == 1 in this project
+            try
+            {
+
                 var categories = await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
-                foreach (var category in categories) {
+                foreach (var category in categories)
+                {
                     var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(category.CategoryId);
                     var account = accounts.FirstOrDefault(a => a.AccountGroupId == 1);
-                    if (account != null) {
+                    if (account != null)
+                    {
                         return account.AccountId;
                     }
                 }
-                
-                // If not found, return a default
-                return 1; // Default account ID - you might want to change this
+
+                return 1;
             }
-            catch {
-                return 1; // Default account ID
+            catch
+            {
+                return 1;
             }
         }
     }

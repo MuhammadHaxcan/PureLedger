@@ -1,0 +1,74 @@
+﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
+
+<!-- Customer & Challan Information -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="customer-info">
+            <h5 class="info-heading">Customer Information</h5>
+            <table class="info-table">
+                <tr>
+                    <td><strong>Customer:</strong></td>
+                    <td>@Model.CustomerAccountName</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="challan-info">
+            <h5 class="info-heading">Challan Details</h5>
+            <table class="info-table">
+                <tr>
+                    <td><strong>Due Date:</strong></td>
+                    <td>@Model.CreatedDate</td>
+                </tr>
+                <tr>
+                    <td><strong>Adda:</strong></td>
+                    <td>@Model.Adda</td>
+                </tr>
+                <tr>
+                    <td><strong>Builty:</strong></td>
+                    <td>@Model.Builty</td>
+                </tr>
+                <tr>
+                    <td><strong>Remarks:</strong></td>
+                    <td>@Model.Remarks</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delivery Challan Items Table -->
+<div class="table-responsive mb-4">
+    <table class="table table-bordered table-striped">
+        <thead>
+            <tr>
+                <th>SR#</th>
+                <th>Product Name</th>
+                <th class="text-end">Quantity</th>
+                <th class="text-end">PKG</th>
+            </tr>
+        </thead>
+        <tbody>
+            @{
+                int sr = 1;
+                foreach (var entry in Model.Entries.Where(e => e.Quantity > 0))
+                {
+                    <tr>
+                        <td>@(sr++)</td>
+                        <td>@entry.AccountName</td>
+                        <td class="text-end">@entry.Quantity</td>
+                        <td class="text-end">@entry.PKG</td>
+                    </tr>
+                }
+            }
+        </tbody>
+        <tfoot>
+            <tr class="table-active">
+                <th colspan="2" class="text-end">Total</th>
+                <th class="text-end">@Model.TotalQuantity</th>
+                <th class="text-end"></th>
+            </tr>
+        </tfoot>
+    </table>
+</div>
