@@ -604,29 +604,5 @@ namespace PureLedger.Services
                 throw;
             }
         }
-
-        private async Task<int> GetDefaultAccountId(int projectId)
-        {
-            try
-            {
-
-                var categories = await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
-                foreach (var category in categories)
-                {
-                    var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(category.CategoryId);
-                    var account = accounts.FirstOrDefault(a => a.AccountGroupId == 1);
-                    if (account != null)
-                    {
-                        return account.AccountId;
-                    }
-                }
-
-                return 1;
-            }
-            catch
-            {
-                return 1;
-            }
-        }
     }
 }
