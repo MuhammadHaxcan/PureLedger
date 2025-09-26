@@ -54,7 +54,7 @@ class JournalEntryManager {
     setupEventHandlers() {
         // Calendar icon clicks
         $(document).on('click', '.calendar-icon', (e) => {
-            $(e.currentTarget).siblings('input.datepicker').focus();
+            $(e.currentTarget).siblings('input.datepicker')[0].focus();
         });
 
         // Credit days and entry date changes
@@ -220,6 +220,9 @@ class JournalEntryManager {
 
         try {
             await this.loadProductDetails($row, accountId);
+            
+            // After loading product details, manage input fields based on account group
+            this.manageInputsBasedOnAccountGroup($row);
         } catch (error) {
             console.error('Error loading product details:', error);
             this.showError('Failed to load product details.');
@@ -260,6 +263,33 @@ class JournalEntryManager {
         } catch (error) {
             console.error('Error loading product details:', error);
             throw error;
+        }
+    }
+
+    // Manage input fields based on account group
+    manageInputsBasedOnAccountGroup($row) {
+        const accountGroup = $row.attr('data-account-group') || '';
+        const $pkgInput = $row.find('.pkg-input');
+        const $rbpSelect = $row.find('.rbp-select');
+        const $qtyInput = $row.find('.qty-input');
+        const $rateInput = $row.find('.rate-input');
+        const $discInput = $row.find('.disc-input');
+        const $percentInput = $row.find('.percent-input');
+        $pkgInput.prop('disabled', true); 
+        
+        if (accountGroup === 'account') {
+            // Disable and clear fields for account group type "account"
+            $rbpSelect.prop('disabled', true).val('Y');
+            $qtyInput.prop('disabled', true).val('0');
+            $rateInput.prop('disabled', true).val('0');
+            $discInput.prop('disabled', true).val('0');
+            $percentInput.prop('disabled', true).val('0');
+        } else {
+            // Enable fields for other account groups (e.g., "product")
+            $qtyInput.prop('disabled', false);
+            $rateInput.prop('disabled', false);
+            $discInput.prop('disabled', false);
+            $percentInput.prop('disabled', false);
         }
     }
 
@@ -483,7 +513,7 @@ class JournalEntryManager {
     }
 
     // Update total amounts
-    updateTotals() {
+    updateTotals() {    
         let totalDebit = 0;
         let totalCredit = 0;
 
@@ -513,6 +543,11 @@ class JournalEntryManager {
         if (projectId) {
             const $categorySelect = $newRow.find('.category-select');
             this.loadCategories($categorySelect, projectId);
+            
+            // Set focus to the category select in the new row - fixed deprecated focus() method
+            setTimeout(() => {
+                $categorySelect[0].focus();
+            }, 50);
         }
 
         this.updateTotals();
@@ -761,7 +796,11 @@ class JournalEntryManager {
         $row.find('.qty-input, .rate-input')
             .removeClass('required-field is-invalid')
             .removeAttr('required')
+            .prop('disabled', false)  // Ensure inputs are enabled by default
             .next('.invalid-feedback').remove();
+            
+        $row.find('.disc-input, .percent-input')
+            .prop('disabled', false);  // Ensure inputs are enabled by default
     }
 
     // API helper method
@@ -843,7 +882,7 @@ class JournalEntryManager {
     }
 }
 
-// Initialize when document is ready
-$(document).ready(() => {
+// Initialize when document is ready - updated to non-deprecated syntax
+$(function() {
     window.journalEntryManager = new JournalEntryManager();
 });

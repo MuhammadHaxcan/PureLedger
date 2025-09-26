@@ -14,6 +14,14 @@
         </div>
     }
 
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">Account List</h6>
@@ -47,6 +55,9 @@
                                     <a asp-action="EditAccount" asp-route-id="@account.AccountId" class="btn btn-sm btn-info">
                                         <i class="fas fa-edit"></i> Edit
                                     </a>
+                                    <button class="btn btn-sm btn-danger delete-account-btn" data-id="@account.AccountId" data-name="@account.AccountName">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
                                 </td>
                             </tr>
                         }
@@ -57,10 +68,66 @@
     </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-labelledby="deleteAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteAccountModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the account "<span id="deleteAccountName"></span>"?</p>
+                <div id="deleteAccountError" class="alert alert-danger d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteAccountForm" asp-action="DeleteAccount" method="post">
+                    <input type="hidden" id="deleteAccountId" name="id" value="" />
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
     <script>
         $(document).ready(function() {
             $('#accountsTable').DataTable();
+            
+            // Handle delete account button click
+            $('.delete-account-btn').click(function() {
+                const accountId = $(this).data('id');
+                const accountName = $(this).data('name');
+                
+                $('#deleteAccountName').text(accountName);
+                $('#deleteAccountId').val(accountId);
+                $('#deleteAccountError').addClass('d-none');
+                $('#deleteAccountForm').show(); // Reset form visibility
+                
+                // Check if the account can be deleted
+                $.ajax({
+                    url: '@Url.Action("CanDeleteAccount")/' + accountId,
+                    type: 'GET',
+                    success: function(result) {
+                        if (result.canDelete) {
+                            $('#deleteAccountModal').modal('show');
+                        } else {
+                            $('#deleteAccountError').text(result.message).removeClass('d-none');
+                            $('#deleteAccountModal').modal('show');
+                            $('#deleteAccountForm').hide();
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Error checking account status:', xhr);
+                        $('#deleteAccountError').text('An error occurred while checking if the account can be deleted.').removeClass('d-none');
+                        $('#deleteAccountModal').modal('show');
+                        $('#deleteAccountForm').hide();
+                    }
+                });
+            });
         });
     </script>
 }

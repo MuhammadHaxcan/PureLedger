@@ -61,6 +61,20 @@ namespace PureLedger.Repositories
             return account;
         }
 
+        public async Task<bool> DeleteAsync(Account account)
+        {
+            try
+            {
+                _context.Accounts.Remove(account);
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public async Task<object?> GetProductDetailsAsync(int accountId)
         {
             return await _context.Accounts
@@ -93,6 +107,16 @@ namespace PureLedger.Repositories
             return await _context.Accounts
                 .Include(a => a.Category)
                 .Where(a => a.CategoryId == categoryId)
+                .ToListAsync();
+        }
+
+        // New method to check if account has associated journal entries
+        public async Task<List<int>> GetAssociatedJournalVoucherIds(int accountId)
+        {
+            return await _context.JournalEntries
+                .Where(je => je.AccountId == accountId)
+                .Select(je => je.JournalVoucherId)
+                .Distinct()
                 .ToListAsync();
         }
 

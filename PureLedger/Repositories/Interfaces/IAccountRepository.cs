@@ -10,11 +10,13 @@ namespace PureLedger.Repositories.Interfaces
         Task<Account?> GetByIdWithDetailsAsync(int id);
         Task<Account> AddAsync(Account account);
         Task<Account> UpdateAsync(Account account);
+        Task<bool> DeleteAsync(Account account);
         Task<object?> GetProductDetailsAsync(int accountId);
         Task<List<Account>> GetAllAsync();
         Task<Account?> GetByIdWithCategoryAsync(int id);
         Task<List<Account>> GetByCategoryIdWithCategoryAsync(int categoryId);
         Task<List<Account>> GetAccountsWithEntriesInProjectAsync(int projectId);
         Task<IEnumerable<Account>> GetAccountsByCategoryAndProjectAsync(int categoryId, int projectId);
+        Task<List<int>> GetAssociatedJournalVoucherIds(int accountId);
     }
 }

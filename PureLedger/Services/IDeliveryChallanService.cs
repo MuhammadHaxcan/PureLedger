@@ -71,5 +71,8 @@ namespace PureLedger.Services
             int? entryId,
             int amount,
             DateOnly dcDate);
+
+        Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
+
     }
 }

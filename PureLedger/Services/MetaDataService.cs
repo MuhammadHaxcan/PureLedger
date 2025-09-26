@@ -401,6 +401,36 @@ namespace PureLedger.Services
 
             return errors;
         }
+
+        public async Task<(bool Success, List<int> AssociatedVoucherIds)> DeleteAccountAsync(int id)
+        {
+            var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(id);
+            if (account == null)
+            {
+                return (false, new List<int>());
+            }
+
+            // Delete account data and product data if they exist
+            if (account.AccountData != null)
+            {
+                await _unitOfWork.AccountDatas.DeleteAsync(account.AccountData);
+            }
+
+            if (account.ProductData != null)
+            {
+                await _unitOfWork.ProductDatas.DeleteAsync(account.ProductData);
+            }
+
+            // Delete the account itself
+            var result = await _unitOfWork.Accounts.DeleteAsync(account);
+            return (result, new List<int>());
+        }
+
+        public async Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId)
+        {
+            // Returns a list of JournalVoucherIds associated with the given account
+            return await _unitOfWork.Accounts.GetAssociatedJournalVoucherIds(accountId);
+        }
         #endregion
 
         #region Tag Operations

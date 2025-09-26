@@ -10,20 +10,14 @@ namespace PureLedger.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<DeliveryChallanService> _logger;
-        private readonly int _transporterCategoryId;
-        private readonly IConfiguration _configuration;
 
         public DeliveryChallanService(
             IUnitOfWork unitOfWork,
-            ILogger<DeliveryChallanService> logger,
-            IConfiguration configuration)
+            ILogger<DeliveryChallanService> logger
+            )
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
-            _configuration = configuration;
-
-            _transporterCategoryId = configuration.GetValue<int>("AppSettings:TransporterCategoryId");
-            _logger.LogInformation("Transporter category ID set to {TransporterCategoryId}", _transporterCategoryId);
         }
 
         #region Entity Retrieval
@@ -561,7 +555,7 @@ namespace PureLedger.Services
         }
 
         private async Task<JournalVoucher> CreateCartageJournalVoucherAsync(
-            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, int amount, string otherref)
+            int projectId, int debitAccountId, int transporterId, JournalEntry originalEntry, int amount, string? otherref)
         {
             try
             {
@@ -583,10 +577,18 @@ namespace PureLedger.Services
 
                 int debitCategoryId = debitAccount.CategoryId;
 
+                var projectSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(originalEntry.JournalVoucher.ProjectId);
+                if (projectSettings == null)
+                    throw new InvalidOperationException("Project cartage settings not found for this project");
+
+                int CategoryId = projectSettings.CartageTransporterCategoryId;
+                if (CategoryId == 0)
+                    throw new InvalidOperationException("FOR Account ID is not set for this project");
+
                 var entries = new List<JournalEntry>
                 {
                     CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, debitCategoryId, originalEntry, amount,otherref),
-                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, originalEntry, amount,otherref)
+                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, originalEntry, amount, CategoryId,otherref)
                 };
 
                 foreach (var entry in entries)
@@ -606,14 +608,15 @@ namespace PureLedger.Services
             }
         }
 
-        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount, string otherref)
+        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount, string? otherref)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = accountId,
                 CategoryId = categoryId,
-                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId} OtherRef-{otherref}",
+                Description = $"Cartage Debit - Ref to JV-{originalEntry.JournalVoucherId}"
+                    + (!string.IsNullOrWhiteSpace(otherref) ? $" OtherRef-{otherref}" : ""),
                 Quantity = 1,
                 Rate = amount,
                 Debit = amount,
@@ -625,14 +628,15 @@ namespace PureLedger.Services
             };
         }
 
-        private JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount, string otherref)
+        private JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, JournalEntry originalEntry, int amount, int cartageCategoryId ,string? otherref)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = transporterId,
-                CategoryId = _transporterCategoryId,
-                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId} OtherRef-{otherref}",
+                CategoryId = cartageCategoryId,
+                Description = $"Cartage Credit - Ref to JV-{originalEntry.JournalVoucherId}"
+                    + (!string.IsNullOrWhiteSpace(otherref) ? $" OtherRef-{otherref}" : ""),
                 Quantity = 0,
                 Rate = amount,
                 Debit = 0,
@@ -725,44 +729,6 @@ namespace PureLedger.Services
             };
         }
 
-        private async Task CompleteVoucherIfAllGroup2ProcessedAsync(int journalVoucherId)
-        {
-            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
-            if (voucher == null || voucher.JournalEntries == null || !voucher.JournalEntries.Any())
-                return;
-
-            var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
-            var accounts = new Dictionary<int, int>();
-            foreach (var accountId in accountIds)
-            {
-                var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(accountId);
-                if (account != null && account.AccountGroup != null)
-                    accounts[accountId] = account.AccountGroup.AccountGroupId;
-            }
-
-            var group2Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 2).ToList();
-            bool allGroup2Processed = group2Entries.All(e => e.IsProcessed);
-
-            if (allGroup2Processed)
-            {
-
-                var group1Entries = voucher.JournalEntries.Where(e => accounts.TryGetValue(e.AccountId, out var groupId) && groupId == 1 && !e.IsProcessed).ToList();
-                foreach (var entry in group1Entries)
-                {
-                    entry.IsProcessed = true;
-                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
-                }
-
-                if (!voucher.IsCompleted)
-                {
-                    voucher.IsCompleted = true;
-                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-                }
-
-                await _unitOfWork.SaveChangesAsync();
-            }
-        }
-
         #endregion
 
         public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
@@ -811,9 +777,13 @@ namespace PureLedger.Services
                 if (originalJV == null)
                     throw new ArgumentException($"Original journal voucher with ID {journalVoucherId} not found");
 
-                int forAccountId = _configuration.GetValue<int>("AppSettings:ForAccountId");
+                var projectSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(originalJV.ProjectId);
+                if (projectSettings == null)
+                    throw new InvalidOperationException("Project cartage settings not found for this project");
+
+                int forAccountId = projectSettings.ForExpenseAccountId;
                 if (forAccountId == 0)
-                    throw new InvalidOperationException("FOR Account ID is not configured in AppSettings");
+                    throw new InvalidOperationException("FOR Account ID is not set for this project");
 
                 var forAccount = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(forAccountId);
                 if (forAccount == null)
@@ -903,6 +873,11 @@ namespace PureLedger.Services
                 _logger.LogError(ex, "Error processing FOR charges for journal voucher {JvId}", journalVoucherId);
                 throw;
             }
+        }
+
+        public async Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId)
+        {
+            return await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(projectId);
         }
     }
 }

@@ -111,14 +111,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if ($.fn.DataTable.isDataTable('#entriesTable')) {
             $('#entriesTable').DataTable().clear().destroy();
         }
+        // Check if project is selected
+        if (!projectSelect.value) {
+            resultsTable.innerHTML = `<tr id="noProjectMessageRow"><td colspan="6" class="text-center text-muted">Please select a project and click Search to view entries.</td></tr>`;
+            return;
+        }
         resultsTable.innerHTML = '<tr><td colspan="6" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>';
 
         const params = {
             SinceDate: sinceDate.value,
-            ToDate: toDate.value
+            ToDate: toDate.value,
+            ProjectId: projectSelect.value
         };
-
-        if (projectSelect.value) params.ProjectId = projectSelect.value;
         if (categorySelect.value) params.CategoryId = categorySelect.value;
         if (accountSelect.value) params.AccountId = accountSelect.value;
 
@@ -390,8 +394,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const transporterSelect = document.getElementById('transporterAccount');
         transporterSelect.innerHTML = '<option value="">Select Transporter</option>';
 
-        // Get the transporter category ID first
-        PureLedger.get('/DeliveryChallan/GetTransporterCategoryId')
+        // Get the selected project ID from the project select dropdown
+        const projectSelect = document.getElementById('projectSelect');
+        const projectId = projectSelect && projectSelect.value ? projectSelect.value : null;
+
+        // Get the transporter category ID for the selected project
+        PureLedger.get('/DeliveryChallan/GetTransporterCategoryId', { projectId: projectId })
             .done(function (data) {
                 const transporterCategoryId = data.value;
 
@@ -707,7 +715,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize the page
     console.log('Initializing Delivery Challan page');
-    loadFilteredEntries();
 
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));

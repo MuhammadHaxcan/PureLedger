@@ -1,0 +1,35 @@
+@model PureLedger.Models.ProjectCartageSettings
+@{
+    ViewData["Title"] = "Project Cartage Settings";
+}
+
+<h2>Project Cartage Settings</h2>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+}
+
+<form asp-action="ProjectCartageSettings" method="post" id="cartage-settings-form">
+    <div class="form-group">
+        <label asp-for="ProjectId">Project</label>
+        <select asp-for="ProjectId" class="form-control" asp-items="ViewBag.Projects" id="ProjectId"></select>
+    </div>
+    <div class="form-group">
+        <label>FOR Expense Category</label>
+        <select class="form-control" id="ForExpenseCategoryId" name="ForExpenseCategoryId"></select>
+    </div>
+    <div class="form-group">
+        <label asp-for="ForExpenseAccountId">FOR Expense Account</label>
+        <select asp-for="ForExpenseAccountId" class="form-control" id="ForExpenseAccountId"></select>
+    </div>
+    <div class="form-group">
+        <label>Cartage Transporter Category</label>
+        <select asp-for="CartageTransporterCategoryId" class="form-control" id="CartageTransporterCategoryId"></select>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>
+
+@section Scripts {
+    <script src="~/js/project-cartage-settings.js"></script>
+}

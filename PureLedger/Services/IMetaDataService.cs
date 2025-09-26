@@ -30,6 +30,8 @@ namespace PureLedger.Services
         Task<Account?> GetAccountByIdAsync(int id);
         Task<List<string>> CreateAccountAsync(Account account);
         Task<List<string>> UpdateAccountAsync(Account account);
+        Task<(bool Success, List<int> AssociatedVoucherIds)> DeleteAccountAsync(int id);
+        Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId);
 
         // Tag operations
         Task<List<Tag>> GetAllTagsAsync();

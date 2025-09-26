@@ -14,17 +14,14 @@ namespace PureLedger.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         private readonly JournalEntryService _journalService;
-        private readonly JournalEntryValidationService _validator;
         private readonly ICurrentUserService _currentUserService;
 
         public HomeController(
             JournalEntryService journalService,
-            JournalEntryValidationService validator,
             ICurrentUserService currentUserService,
             ILogger<HomeController> logger)
         {
             _journalService = journalService;
-            _validator = validator;
             _currentUserService = currentUserService;
             _logger = logger;
         }
@@ -47,14 +44,13 @@ namespace PureLedger.Controllers
         [HttpPost]
         public async Task<IActionResult> Entry(JournalEntryViewModel model, string action)
         {
-            var errors = await _validator.ValidateAsync(model);
-
-            if (errors.Any())
-            {
-                await LoadProjectsData(model.ProjectId);
-                ViewBag.Error = string.Join("<br/>", errors);
-                return View(model);
-            }
+            //var errors = await _validator.ValidateAsync(model);
+            //if (errors.Any())
+            //{
+            //    await LoadProjectsData(model.ProjectId);
+            //    ViewBag.Error = string.Join("<br/>", errors);
+            //    return View(model);
+            //}
 
             try
             {
@@ -202,7 +198,7 @@ namespace PureLedger.Controllers
                 Entries = voucher.JournalEntries.Select(e => new VoucherEntryDetailViewModel
                 {
                     EntryId = e.JournalEntryId,
-                    ModifyTime = e.ModifiedDateTime, // <-- Use the DB value
+                    ModifyTime = e.ModifiedDateTime,
                     Category = e.Category?.CategoryName ?? "",
                     Account = e.Account?.AccountName ?? "",
                     Quantity = e.Quantity,

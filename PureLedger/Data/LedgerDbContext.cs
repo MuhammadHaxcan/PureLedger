@@ -28,6 +28,7 @@ namespace PureLedger.Data
         public DbSet<User> Users { get; set; }
         public DbSet<UserProject> UserProjects { get; set; }
         public DbSet<UserControllerAccess> UserControllerAccess { get; set; }
+        public DbSet<ProjectCartageSettings> ProjectCartageSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -87,6 +88,10 @@ namespace PureLedger.Data
                 .WithOne(pd => pd.Account)
                 .HasForeignKey<ProductData>(pd => pd.AccountId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Account>()
+                .Navigation(a => a.ProductData)
+                .AutoInclude();
 
             // New relationships for Delivery Challan
             // DeliveryChallanVoucher to JournalVoucher relationship
@@ -172,12 +177,31 @@ namespace PureLedger.Data
                     PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa", // Pre-generated hash for "admin123"
                     FullName = "System Administrator",
                     Email = "admin@example.com",
-                    IsAdmin = true,
+                    IsAdmin = true, 
                     Subroute = "Default",
                     IsActive = true,
                     CreatedDate = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc) // Fixed date
                 }
             );
+
+            // ProjectCartageSettings relationships - break cascade to avoid multiple cascade paths
+            modelBuilder.Entity<ProjectCartageSettings>()
+                .HasOne(pcs => pcs.Project)
+                .WithMany()
+                .HasForeignKey(pcs => pcs.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProjectCartageSettings>()
+                .HasOne(pcs => pcs.ForExpenseAccount)
+                .WithMany()
+                .HasForeignKey(pcs => pcs.ForExpenseAccountId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<ProjectCartageSettings>()
+                .HasOne(pcs => pcs.CartageTransporterCategory)
+                .WithMany()
+                .HasForeignKey(pcs => pcs.CartageTransporterCategoryId)
+                .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }

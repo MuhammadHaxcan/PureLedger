@@ -29,6 +29,7 @@ namespace PureLedger.Repositories
         private IUserRepository? _users;
         private IUserControllerAccessRepository? _userControllerAccess;
         private IUserProjectRepository? _userProjects;
+        private IProjectCartageSettingsRepository? _projectCartageSettings;
 
         public UnitOfWork(LedgerDbContext dbContext)
         {
@@ -55,6 +56,7 @@ namespace PureLedger.Repositories
         public IUserRepository Users => _users ??= new UserRepository(_dbContext);
         public IUserControllerAccessRepository UserControllerAccess => _userControllerAccess ??= new UserControllerAccessRepository(_dbContext);
         public IUserProjectRepository UserProjects => _userProjects ??= new UserProjectRepository(_dbContext);
+        public IProjectCartageSettingsRepository ProjectCartageSettings => _projectCartageSettings ??= new ProjectCartageSettingsRepository(_dbContext);
 
         public async Task<int> SaveChangesAsync()
         {

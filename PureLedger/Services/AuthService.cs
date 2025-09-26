@@ -23,6 +23,13 @@ namespace PureLedger.Services
         Task<bool> DeleteUserAsync(int userId);
         Task<bool> IsSubrouteAdminAsync(string username, string subroute);
         Task<List<User>> GetUsersBySubrouteAsync(string subroute);
+        Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
+        Task<List<Project>> GetAllProjectsAsync();
+        Task<List<Account>> GetAllAccountsAsync();
+        Task<List<Category>> GetAllCategoriesAsync();
+        Task<bool> SaveProjectCartageSettingsAsync(ProjectCartageSettings settings);
+        Task<List<Category>> GetCategoriesByProjectAsync(int projectId);
+        Task<List<Account>> GetAccountsByCategoryAsync(int categoryId);
     }
 
     public class AuthService : IAuthService
@@ -277,6 +284,47 @@ namespace PureLedger.Services
         public async Task<List<Project>> GetUserProjectsAsync(int userId)
         {
             return await _unitOfWork.Users.GetUserProjectsAsync(userId);
+        }
+
+        // Get cartage settings for a project
+        public async Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId)
+        {
+            return await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(projectId);
+        }
+
+        // Get all projects
+        public async Task<List<Project>> GetAllProjectsAsync()
+        {
+            return await _unitOfWork.Projects.GetAllAsync();
+        }
+
+        // Get all accounts
+        public async Task<List<Account>> GetAllAccountsAsync()
+        {
+            return await _unitOfWork.Accounts.GetAllAsync();
+        }
+
+        // Get all categories
+        public async Task<List<Category>> GetAllCategoriesAsync()
+        {
+            return await _unitOfWork.Categories.GetAllAsync();
+        }
+
+        // Save or update cartage settings
+        public async Task<bool> SaveProjectCartageSettingsAsync(ProjectCartageSettings settings)
+        {
+            await _unitOfWork.ProjectCartageSettings.AddOrUpdateAsync(settings);
+            return true;
+        }
+
+        public async Task<List<Category>> GetCategoriesByProjectAsync(int projectId)
+        {
+            return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
+        }
+
+        public async Task<List<Account>> GetAccountsByCategoryAsync(int categoryId)
+        {
+            return await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
         }
 
         private bool IsCurrentUserAdmin()

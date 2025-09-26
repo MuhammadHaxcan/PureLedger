@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.ViewModels;
@@ -244,6 +245,64 @@ namespace PureLedger.Controllers
 
             ModelState.AddModelError("", "Error updating profile");
             return View(model);
+        }
+
+        // GET: /Admin/ProjectCartageSettings
+        [HttpGet]
+        public async Task<IActionResult> ProjectCartageSettings(int? projectId)
+        {
+            var projects = await _authService.GetAllProjectsAsync();
+            var accounts = await _authService.GetAllAccountsAsync();
+            var categories = await _authService.GetAllCategoriesAsync();
+
+            ProjectCartageSettings settings = null;
+            if (projectId.HasValue)
+            {
+                settings = await _authService.GetProjectCartageSettingsAsync(projectId.Value);
+            }
+
+            ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", projectId);
+            ViewBag.Accounts = new SelectList(accounts, "AccountId", "AccountName", settings?.ForExpenseAccountId);
+            ViewBag.Categories = new SelectList(categories, "CategoryId", "CategoryName", settings?.CartageTransporterCategoryId);
+
+            return View(settings ?? new ProjectCartageSettings { ProjectId = projectId ?? 0 });
+        }
+
+        // POST: /Admin/ProjectCartageSettings
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ProjectCartageSettings(ProjectCartageSettings model)
+        {
+            if (!ModelState.IsValid)
+            {
+                var projects = await _authService.GetAllProjectsAsync();
+                var accounts = await _authService.GetAllAccountsAsync();
+                var categories = await _authService.GetAllCategoriesAsync();
+
+                ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", model.ProjectId);
+                ViewBag.Accounts = new SelectList(accounts, "AccountId", "AccountName", model.ForExpenseAccountId);
+                ViewBag.Categories = new SelectList(categories, "CategoryId", "CategoryName", model.CartageTransporterCategoryId);
+
+                return View(model);
+            }
+
+            await _authService.SaveProjectCartageSettingsAsync(model);
+            TempData["SuccessMessage"] = "Project cartage settings updated successfully.";
+            return RedirectToAction(nameof(ProjectCartageSettings), new { projectId = model.ProjectId });
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetCategoriesByProject(int projectId)
+        {
+            var categories = await _authService.GetCategoriesByProjectAsync(projectId);
+            return Json(categories.Select(c => new { c.CategoryId, c.CategoryName }));
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetAccountsByCategory(int categoryId)
+        {
+            var accounts = await _authService.GetAccountsByCategoryAsync(categoryId);
+            return Json(accounts.Select(a => new { a.AccountId, a.AccountName }));
         }
     }
 }

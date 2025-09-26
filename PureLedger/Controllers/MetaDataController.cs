@@ -421,6 +421,65 @@ namespace PureLedger.Controllers
             return RedirectToAction(nameof(Accounts));
         }
 
+        // POST: /MetaData/DeleteAccount/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteAccount(int id)
+        {
+            var (success, associatedVoucherIds) = await _metaDataService.DeleteAccountAsync(id);
+            
+            if (!success)
+            {
+                if (associatedVoucherIds.Any())
+                {
+                    TempData["ErrorMessage"] = $"This account cannot be deleted because it is associated with journal voucher(s): {string.Join(", ", associatedVoucherIds.Take(5))}";
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "Failed to delete the account.";
+                }
+                return RedirectToAction(nameof(Accounts));
+            }
+
+            TempData["SuccessMessage"] = "Account deleted successfully.";
+            return RedirectToAction(nameof(Accounts));
+        }
+
+        // GET: /MetaData/CanDeleteAccount/5
+        [HttpGet]
+        public async Task<IActionResult> CanDeleteAccount(int id)
+        {
+            // Check if account exists
+            var account = await _metaDataService.GetAccountByIdAsync(id);
+            if (account == null)
+            {
+                return Json(new { canDelete = false, message = "Account not found." });
+            }
+
+            // Check for associated journal entries
+            var associatedVoucherIds = await _metaDataService.GetAssociatedVoucherIdsAsync(id);
+            
+            if (associatedVoucherIds.Any())
+            {
+                // Take just first few to avoid making message too long
+                var idsToShow = associatedVoucherIds.Count > 5 
+                    ? associatedVoucherIds.Take(5).ToList() 
+                    : associatedVoucherIds;
+                    
+                string idList = string.Join(", ", idsToShow);
+                string message = $"This account cannot be deleted because it is associated with journal voucher(s): {idList}";
+                
+                if (associatedVoucherIds.Count > 5)
+                {
+                    message += $" and {associatedVoucherIds.Count - 5} more";
+                }
+                
+                return Json(new { canDelete = false, message });
+            }
+            
+            return Json(new { canDelete = true });
+        }
+
         // POST: /MetaData/GetCategoriesByProject
         [HttpGet]
         [HttpPost]

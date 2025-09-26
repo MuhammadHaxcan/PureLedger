@@ -63,6 +63,12 @@ namespace PureLedger.Controllers
         {
             try
             {
+                // Defensive: Require project selection
+                if (!filter.ProjectId.HasValue || filter.ProjectId.Value == 0)
+                {
+                    return Json(new { vouchers = new List<object>() });
+                }
+
                 _logger.LogInformation("GetFilteredEntries called with parameters: SinceDate={SinceDate}, ToDate={ToDate}, ProjectId={ProjectId}, CategoryId={CategoryId}, AccountId={AccountId}",
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
 
@@ -189,11 +195,21 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetTransporterCategoryId()
+        public async Task<IActionResult> GetTransporterCategoryId(int? projectId)
         {
             try
             {
-                var transporterCategoryId = _configuration.GetValue<int>("AppSettings:TransporterCategoryId");
+                int? transporterCategoryId = null;
+
+                if (projectId.HasValue)
+                {
+                    var settings = await _deliveryChallanService.GetProjectCartageSettingsAsync(projectId.Value);
+                    if (settings != null)
+                    {
+                        transporterCategoryId = settings.CartageTransporterCategoryId;
+                    }
+                }
+
                 return Json(new { value = transporterCategoryId });
             }
             catch (Exception ex)

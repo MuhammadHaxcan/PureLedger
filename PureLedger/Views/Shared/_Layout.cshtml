@@ -123,7 +123,7 @@
         }
 
             .card:hover {
-                transform: translateY(-3px);
+                transform: none !important;
             }
 
         .card-header {
@@ -163,6 +163,7 @@
 
                 .table tbody tr:hover {
                     background-color: rgba(13, 110, 253, 0.05);
+                    transform: none !important;
                 }
 
         /* Button styles */
@@ -182,8 +183,8 @@
             .btn-primary:hover {
                 background-color: var(--accent-hover);
                 border-color: var(--accent-hover);
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(13, 110, 253, 0.25);
+                transform: none !important;
+                box-shadow: none !important;
             }
 
         .btn-secondary {
@@ -194,8 +195,8 @@
             .btn-secondary:hover {
                 background-color: #5a6268;
                 border-color: #545b62;
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(108, 117, 125, 0.25);
+                transform: none !important;
+                box-shadow: none !important;
             }
 
         .btn-info, .btn-warning, .btn-danger, .btn-success {
@@ -347,6 +348,43 @@
         /* For Firefox and IE */
         select::-ms-expand {
             display: none;
+        }
+
+        /* Remove spinner/arrows from number inputs */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        /* Remove hover transform effects from cards and other elements */
+        .card:hover {
+            transform: none !important;
+        }
+
+        .btn-primary:hover,
+        .btn-secondary:hover,
+        .btn:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .navbar-nav .nav-link:hover {
+            transform: none !important;
+        }
+
+        .dropdown-item:hover {
+            transform: none !important;
+        }
+
+        /* Override table row hover effect */
+        .table tbody tr:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+            transform: none !important;
         }
     </style>
 </head>

@@ -31,7 +31,6 @@
                 <th>Description</th>
                 <th class="text-end">Qty</th>
                 <th class="text-end">Rate</th>
-                <th class="text-end">Line Total</th>
                 <th class="text-end">Debit</th>
                 <th class="text-end">Credit</th>
             </tr>
@@ -44,7 +43,6 @@
                     <td>@entry.Description</td>
                     <td class="text-end">@entry.Quantity</td>
                     <td class="text-end">@entry.Rate.ToString("N2")</td>
-                    <td class="text-end">@entry.LineTotal.ToString("N2")</td>
                     <td class="text-end">@entry.Debit.ToString("N2")</td>
                     <td class="text-end">@entry.Credit.ToString("N2")</td>
                 </tr>
@@ -55,7 +53,6 @@
                 <th colspan="2" class="text-end">Totals</th>
                 <th class="text-end">@Model.TotalQuantity</th>
                 <th class="text-end"></th>
-                <th class="text-end">@Model.TotalActualAmount.ToString("N2")</th>
                 <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
                 <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
             </tr>

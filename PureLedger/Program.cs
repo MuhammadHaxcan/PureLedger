@@ -49,8 +49,6 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddDbContext<LedgerDbContext>(options => 
     options.UseSqlServer(builder.Configuration.GetConnectionString("LedgerDb")));
 
-// Register all services
-builder.Services.AddScoped<JournalEntryValidationService>();
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
@@ -85,6 +83,8 @@ builder.Services.Configure<MvcOptions>(options =>
     // Individual controllers/actions can override with [AllowAnonymous]
     options.Filters.Add(new AuthorizeFilter(policy));
 });
+
+builder.Services.AddScoped<IProjectCartageSettingsRepository, ProjectCartageSettingsRepository>();
 
 var app = builder.Build();
 
