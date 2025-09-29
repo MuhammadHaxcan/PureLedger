@@ -116,20 +116,34 @@
                             <!-- Initial row template -->
                             <tr id="entryRow-0" class="entry-row">
                                 <td>
-                                    <select class="form-select form-select-sm category-select"
-                                            id="Entries_0__CategoryId"
-                                            name="Entries[0].CategoryId"
-                                            required>
-                                        <option value="">Select Category</option>
-                                    </select>
+                                    <div class="select-container">
+                                        <input type="text"
+                                               class="form-control form-control-sm select-search category-search"
+                                               placeholder="Search category..."
+                                               autocomplete="off" />
+                                        <select class="form-select form-select-sm category-select d-none"
+                                                id="Entries_0__CategoryId"
+                                                name="Entries[0].CategoryId"
+                                                required>
+                                            <option value="">Select Category</option>
+                                        </select>
+                                        <div class="select-dropdown category-dropdown"></div>
+                                    </div>
                                 </td>
                                 <td>
-                                    <select class="form-select form-select-sm account-select"
-                                            id="Entries_0__AccountId"
-                                            name="Entries[0].AccountId"
-                                            required>
-                                        <option value="">Select Account</option>
-                                    </select>
+                                    <div class="select-container">
+                                        <input type="text"
+                                               class="form-control form-control-sm select-search account-search"
+                                               placeholder="Search account..."
+                                               autocomplete="off" />
+                                        <select class="form-select form-select-sm account-select d-none"
+                                                id="Entries_0__AccountId"
+                                                name="Entries[0].AccountId"
+                                                required>
+                                            <option value="">Select Account</option>
+                                        </select>
+                                        <div class="select-dropdown account-dropdown"></div>
+                                    </div>
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm pkg-input"
@@ -440,5 +454,62 @@
     /* Dropdown z-index fix */
     .dropdown-menu {
         z-index: 9999 !important;
+    }
+
+    /* Dropdown positioning and visibility fixes */
+    .table-responsive {
+        overflow: visible !important; /* Allow dropdowns to overflow */
+    }
+    
+    .table td {
+        position: relative; /* Enable proper dropdown positioning */
+    }
+
+    /* Enhanced Select Styling */
+    .select-container {
+        position: relative;
+    }
+
+    .select-search {
+        padding-right: 30px;
+        width: 100%;
+    }
+
+    .select-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: white;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+    }
+
+    .select-dropdown.show {
+        display: block;
+    }
+
+    .select-option {
+        padding: 0.5rem;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s;
+    }
+
+    .select-option:hover:not(.selected) {
+        background-color: #f8f9fa;
+    }
+
+    .select-option.selected {
+        background-color: #375a7f;
+        color: white;
+    }
+
+    .select-option.filtered-out {
+        display: none;
     }
 </style>

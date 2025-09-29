@@ -1,16 +1,11 @@
-﻿/**
- * Journal Entry Management System
- * Handles journal entry form, validation, calculations, and API interactions
- */
-
-class JournalEntryManager {
+﻿class JournalEntryManager {
     constructor() {
         this.rowCounter = 0;
         this.isSubmitting = false;
         this.init();
+        this.setupSelectSearch(); // Add this line
     }
 
-    // Initialize the journal entry system
     init() {
         this.setupFormAction();
         this.initializeDatePickers();
@@ -18,7 +13,6 @@ class JournalEntryManager {
         this.loadInitialData();
     }
 
-    // Setup form action with base path
     setupFormAction() {
         try {
             const formElement = document.getElementById('entryForm');
@@ -27,7 +21,6 @@ class JournalEntryManager {
             if (formElement && basePath) {
                 let formAction = formElement.getAttribute('action') || '/Home/Entry';
 
-                // Clean up any duplicate prefixes
                 formAction = formAction.replace(/\/route[12]\//, '/');
                 formElement.setAttribute('action', basePath + formAction);
 
@@ -38,7 +31,6 @@ class JournalEntryManager {
         }
     }
 
-    // Initialize date pickers
     initializeDatePickers() {
         $('.datepicker').datepicker({
             dateFormat: 'dd/mm/yy',
@@ -50,47 +42,45 @@ class JournalEntryManager {
         });
     }
 
-    // Setup all event handlers
     setupEventHandlers() {
-        // Calendar icon clicks
         $(document).on('click', '.calendar-icon', (e) => {
             $(e.currentTarget).siblings('input.datepicker')[0].focus();
         });
 
-        // Credit days and entry date changes
         $('#CreditDays, #EntryDate').on('input change', () => this.updateDueDate());
 
-        // Project selection
         $('#ProjectId').on('change', (e) => this.handleProjectChange(e.target.value));
 
-        // Category selection
         $(document).on('change', '.category-select', (e) => this.handleCategoryChange(e));
 
-        // Account selection
         $(document).on('change', '.account-select', (e) => this.handleAccountChange(e));
 
-        // Tag system handlers
         this.setupTagHandlers();
 
-        // Calculation handlers
         this.setupCalculationHandlers();
 
-        // Row management
         $('#addRowBtn').on('click', () => this.addNewRow());
         $(document).on('click', '.remove-row-btn', (e) => this.removeRow(e));
 
-        // Form submission
         $('#entryForm').on('submit', (e) => this.handleFormSubmit(e));
 
-        // Button action handlers
         $('#submitBtn').on('click', () => $('#formAction').val('submit'));
         $('#submitPrintBtn').on('click', () => $('#formAction').val('submit_print'));
 
-        // Clear validation on field changes
+        // Add new keyboard shortcut handler
+        $(document).on('keydown', (e) => {
+            if (e.altKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                this.addNewRow();
+            }
+        });
+
+        // Update the Add Row button text to include shortcut
+        $('#addRowBtn').html('<i class="fas fa-plus"></i> Add Row <span class="text-muted">[Alt+N]</span>');
+
         this.setupValidationClearance();
     }
 
-    // Load initial data if project is selected
     loadInitialData() {
         const projectId = $('#ProjectId').val();
         if (projectId) {
@@ -98,11 +88,9 @@ class JournalEntryManager {
         }
         this.updateDueDate();
         this.updateProductRequiredIndicator();
-        // Add initial base voucher checkbox state check
         this.updateBaseVoucherCheckbox();
     }
 
-    // Update due date based on entry date and credit days
     updateDueDate() {
         try {
             const creditDays = this.parseIntOrZero($('#CreditDays').val());
@@ -127,7 +115,6 @@ class JournalEntryManager {
         }
     }
 
-    // Handle project selection change
     async handleProjectChange(projectId) {
         if (!projectId) {
             this.clearAllDropdowns();
@@ -145,20 +132,30 @@ class JournalEntryManager {
         }
     }
 
-    // Load categories for a project
     async loadCategories($categorySelect, projectId) {
         try {
-            $categorySelect.empty().append('<option value="">Loading...</option>');
+            const $container = $categorySelect.closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            const $searchInput = $container.find('.select-search');
+            
+            $searchInput.val('').prop('disabled', true);
+            $dropdown.empty().append('<div class="select-option">Loading...</div>');
 
             const categories = await this.apiGet('/Home/GetCategoriesByProject', { projectId });
 
+            $dropdown.empty();
             $categorySelect.empty().append('<option value="">Select Category</option>');
 
             if (categories?.length > 0) {
                 categories.forEach(category => {
                     $categorySelect.append(new Option(category.name, category.id));
+                    $dropdown.append(
+                        `<div class="select-option" data-value="${category.id}">${category.name}</div>`
+                    );
                 });
             }
+            
+            $searchInput.prop('disabled', false);
         } catch (error) {
             console.error('Error loading categories:', error);
             $categorySelect.empty().append('<option value="">Error loading categories</option>');
@@ -166,7 +163,6 @@ class JournalEntryManager {
         }
     }
 
-    // Handle category selection change
     async handleCategoryChange(event) {
         const $row = $(event.target).closest('tr');
         const categoryId = event.target.value;
@@ -175,20 +171,26 @@ class JournalEntryManager {
         this.clearAccountRelatedData($row);
     }
 
-    // Load accounts for a category
     async loadAccounts($row, categoryId) {
         const $accountSelect = $row.find('.account-select');
+        const $container = $accountSelect.closest('.select-container');
+        const $dropdown = $container.find('.select-dropdown');
+        const $searchInput = $container.find('.select-search');
 
         try {
             if (!categoryId) {
                 $accountSelect.empty().append('<option value="">Select Account</option>');
+                $dropdown.empty();
+                $searchInput.val('').prop('disabled', true);
                 return;
             }
 
-            $accountSelect.empty().append('<option value="">Loading...</option>');
+            $searchInput.val('').prop('disabled', true);
+            $dropdown.empty().append('<div class="select-option">Loading...</div>');
 
             const accounts = await this.apiGet('/Home/GetAccountsByCategory', { categoryId });
 
+            $dropdown.empty();
             $accountSelect.empty().append('<option value="">Select Account</option>');
 
             if (accounts?.length > 0) {
@@ -196,8 +198,14 @@ class JournalEntryManager {
                     const $option = $(new Option(account.name, account.id));
                     $option.data('account-type', account.accountTypeName || '');
                     $accountSelect.append($option);
+                    
+                    $dropdown.append(
+                        `<div class="select-option" data-value="${account.id}">${account.name}</div>`
+                    );
                 });
             }
+            
+            $searchInput.prop('disabled', false);
         } catch (error) {
             console.error('Error loading accounts:', error);
             $accountSelect.empty().append('<option value="">Error loading accounts</option>');
@@ -205,28 +213,21 @@ class JournalEntryManager {
         }
     }
 
-    // Handle account selection change
     async handleAccountChange(event) {
         const $row = $(event.target).closest('tr');
         const accountId = event.target.value;
         const $selected = $(event.target).find('option:selected');
 
-        // Reset row state
         this.resetAccountRelatedFields($row);
 
         if (!accountId) return;
 
-        // Set account type
         const accountType = $selected.data('account-type') || '';
         $row[0].setAttribute('data-account-type', accountType);
 
         try {
             await this.loadProductDetails($row, accountId);
-            
-            // After loading product details, manage input fields based on account group
             this.manageInputsBasedOnAccountGroup($row);
-            
-            // Update base voucher checkbox state
             this.updateBaseVoucherCheckbox();
         } catch (error) {
             console.error('Error loading product details:', error);
@@ -234,24 +235,20 @@ class JournalEntryManager {
         }
     }
 
-    // Load product details for an account
     async loadProductDetails($row, accountId) {
         try {
             const product = await this.apiGet('/Home/GetProductDetails', { accountId });
 
             if (product) {
-                // Set sale rate
                 if (product.saleRate) {
                     $row.find('.rate-input').val(product.saleRate);
                 }
 
-                // Set PKG
                 if (product.pkg) {
                     $row[0].setAttribute('data-pkg', product.pkg);
                     $row.find('.pkg-input').val(product.pkg);
                 }
 
-                // Handle product account group
                 if (product.accountGroupId) {
                     const accountGroup = product.accountGroupId === 1 ? 'account' : 'product';
                     $row[0].setAttribute('data-account-group', accountGroup);
@@ -261,7 +258,6 @@ class JournalEntryManager {
                     }
                 }
 
-                // Update calculations
                 this.updateRowCalculations($row[0]);
                 this.updateProductRequiredIndicator();
             }
@@ -271,7 +267,6 @@ class JournalEntryManager {
         }
     }
 
-    // Manage input fields based on account group
     manageInputsBasedOnAccountGroup($row) {
         const accountGroup = $row.attr('data-account-group') || '';
         const $pkgInput = $row.find('.pkg-input');
@@ -283,14 +278,12 @@ class JournalEntryManager {
         $pkgInput.prop('disabled', true); 
         
         if (accountGroup === 'account') {
-            // Disable and clear fields for account group type "account"
             $rbpSelect.prop('disabled', true).val('Y');
             $qtyInput.prop('disabled', true).val('0');
             $rateInput.prop('disabled', true).val('0');
             $discInput.prop('disabled', true).val('0');
             $percentInput.prop('disabled', true).val('0');
         } else {
-            // Enable fields for other account groups (e.g., "product")
             $qtyInput.prop('disabled', false);
             $rateInput.prop('disabled', false);
             $discInput.prop('disabled', false);
@@ -298,9 +291,7 @@ class JournalEntryManager {
         }
     }
 
-    // Setup tag-related event handlers
     setupTagHandlers() {
-        // Tag input focus/blur
         $(document).on('focus', '.tag-search-input', (e) => {
             const $suggestions = $(e.target).closest('.tag-multibox').siblings('.tag-suggestions');
             $suggestions.addClass('show');
@@ -311,17 +302,13 @@ class JournalEntryManager {
             setTimeout(() => $suggestions.removeClass('show'), 200);
         });
 
-        // Tag search input
         $(document).on('input', '.tag-search-input', (e) => this.handleTagSearch(e));
 
-        // Tag selection
         $(document).on('click', '.tag-suggestions .dropdown-item', (e) => this.handleTagSelection(e));
 
-        // Tag removal
         $(document).on('click', '.tag-chip-remove', (e) => this.handleTagRemoval(e));
     }
 
-    // Handle tag search
     async handleTagSearch(event) {
         const $input = $(event.target);
         const term = $input.val().trim();
@@ -355,7 +342,6 @@ class JournalEntryManager {
         }
     }
 
-    // Handle tag selection
     handleTagSelection(event) {
         event.preventDefault();
 
@@ -366,7 +352,6 @@ class JournalEntryManager {
         const $tagBox = $item.closest('td').find('.tag-multibox');
         const $input = $tagBox.find('.tag-search-input');
 
-        // Create tag chip
         const $chip = $(`
             <div class="tag-chip me-1 mb-1" data-tag-id="${tagId}">
                 <span>${tagName}</span>
@@ -383,7 +368,6 @@ class JournalEntryManager {
         $item.closest('.tag-suggestions').removeClass('show');
     }
 
-    // Handle tag removal
     handleTagRemoval(event) {
         event.preventDefault();
 
@@ -394,7 +378,6 @@ class JournalEntryManager {
         this.updateTagInputs($row);
     }
 
-    // Update hidden tag inputs for form submission
     updateTagInputs($row) {
         const rowIndex = $row.attr('id').split('-')[1];
         const $container = $row.find('.tag-hidden-inputs');
@@ -413,16 +396,13 @@ class JournalEntryManager {
         });
     }
 
-    // Setup calculation-related event handlers
     setupCalculationHandlers() {
-        // Quantity and rate changes
         $(document).on('input blur', '.qty-input, .rate-input', (e) => {
             const row = $(e.target).closest('tr')[0];
             this.updateRowCalculations(row);
             this.validateQuantityForProduct(e.target);
         });
 
-        // PKG changes
         $(document).on('input blur', '.pkg-input', (e) => {
             const row = $(e.target).closest('tr')[0];
             const pkgValue = this.parseIntOrZero($(e.target).val());
@@ -430,15 +410,12 @@ class JournalEntryManager {
             this.updateRowCalculations(row);
         });
 
-        // Percentage changes
         $(document).on('input', '.percent-input', (e) => {
             this.updateRowCalculations($(e.target).closest('tr')[0]);
         });
 
-        // Discount changes
         $(document).on('input blur', '.disc-input', () => this.updateTotals());
 
-        // Debit/Credit focus handlers
         $(document).on('focus', '.debit-input', (e) => {
             if (!$(e.target).val()) {
                 this.updateRowCalculations($(e.target).closest('tr')[0], 'debit');
@@ -451,11 +428,9 @@ class JournalEntryManager {
             }
         });
 
-        // Debit/Credit input changes
         $(document).on('input', '.debit-input, .credit-input', () => this.updateTotals());
     }
 
-    // Update row calculations
     updateRowCalculations(row, focusField = null) {
         this.calculateAmountWithPkg(row);
         this.updateDiscount(row);
@@ -463,7 +438,6 @@ class JournalEntryManager {
         this.updateTotals();
     }
 
-    // Calculate amount considering PKG
     calculateAmountWithPkg(row) {
         const $row = $(row);
         const rbpValue = $row.find('.rbp-select').val();
@@ -488,7 +462,6 @@ class JournalEntryManager {
         row.setAttribute('data-total-amount', totalAmount.toString());
     }
 
-    // Update discount based on percentage
     updateDiscount(row) {
         const $row = $(row);
         const percent = this.parseFloatOrZero($row.find('.percent-input').val());
@@ -498,7 +471,6 @@ class JournalEntryManager {
         $row.find('.disc-input').val(Math.round(discount));
     }
 
-    // Calculate debit/credit amounts
     calculateDebitCredit(row, focusField) {
         const $row = $(row);
         const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
@@ -517,7 +489,6 @@ class JournalEntryManager {
         }
     }
 
-    // Update total amounts
     updateTotals() {    
         let totalDebit = 0;
         let totalCredit = 0;
@@ -532,7 +503,6 @@ class JournalEntryManager {
         $('#totalCredit').text(totalCredit);
     }
 
-    // Add new entry row
     addNewRow() {
         this.rowCounter++;
         const newIndex = this.rowCounter;
@@ -543,31 +513,26 @@ class JournalEntryManager {
         this.resetRowElements($newRow, newIndex);
         $('#entryRows').append($newRow);
 
-        // Load categories if project is selected
         const projectId = $('#ProjectId').val();
         if (projectId) {
             const $categorySelect = $newRow.find('.category-select');
             this.loadCategories($categorySelect, projectId);
             
-            // Set focus to the category select in the new row - fixed deprecated focus() method
+            // Focus on the category search input instead of the select
             setTimeout(() => {
-                $categorySelect[0].focus();
+                const $searchInput = $newRow.find('.select-search').first();
+                $searchInput.focus();
             }, 50);
         }
 
-        // Update base voucher checkbox state after adding new row
         this.updateBaseVoucherCheckbox();
-
         this.updateTotals();
     }
 
-    // Reset row elements for new row
     resetRowElements($row, index) {
-        // Reset inputs
         $row.find('input').each(function () {
             const $input = $(this);
 
-            // Update IDs and names
             if ($input.attr('id')) {
                 $input.attr('id', $input.attr('id').replace(/_\d+_/, `_${index}_`));
             }
@@ -575,16 +540,13 @@ class JournalEntryManager {
                 $input.attr('name', $input.attr('name').replace(/\[\d+\]/, `[${index}]`));
             }
 
-            // Clear values and validation
             $input.val('').removeClass('is-invalid required-field').removeAttr('required');
             $input.next('.invalid-feedback').remove();
         });
 
-        // Reset selects
         $row.find('select').each(function () {
             const $select = $(this);
 
-            // Update IDs and names
             if ($select.attr('id')) {
                 $select.attr('id', $select.attr('id').replace(/_\d+_/, `_${index}_`));
             }
@@ -595,19 +557,16 @@ class JournalEntryManager {
             $select.prop('selectedIndex', 0);
         });
 
-        // Reset tag elements
         const $tagSearch = $row.find('.tag-search-input');
         $tagSearch.attr('data-index', index).val('');
         $row.find('.tag-chip').remove();
         $row.find('.tag-hidden-inputs').empty();
 
-        // Clear row data attributes
         const rowElement = $row[0];
         ['data-pkg', 'data-total-amount', 'data-account-type', 'data-account-group']
             .forEach(attr => rowElement.removeAttribute(attr));
     }
 
-    // Remove entry row
     removeRow(event) {
         const $rows = $('#entryRows tr');
 
@@ -615,7 +574,6 @@ class JournalEntryManager {
             $(event.target).closest('tr').remove();
             this.updateTotals();
             this.updateProductRequiredIndicator();
-            // Update base voucher checkbox state after removing row
             this.updateBaseVoucherCheckbox();
         }
     }
@@ -630,7 +588,6 @@ class JournalEntryManager {
         this.showSubmitSpinner();
 
         try {
-            // Small delay to show spinner
             await new Promise(resolve => setTimeout(resolve, 100));
 
             const validationErrors = this.validateJournalEntry();
@@ -654,17 +611,14 @@ class JournalEntryManager {
         }
     }
 
-    // Validate journal entry form
     validateJournalEntry() {
         const errors = [];
 
-        // Validate project selection
         const projectId = this.parseIntOrZero($('#ProjectId').val());
         if (projectId <= 0) {
             errors.push('Project is required.');
         }
 
-        // Validate entries
         const $rows = $('#entryRows tr');
         if ($rows.length === 0) {
             errors.push('At least one entry is required.');
@@ -687,14 +641,11 @@ class JournalEntryManager {
             const rbp = $row.find('.rbp-select').val();
             const accountGroup = $row.attr('data-account-group') || '';
 
-            // Required field validation
             if (categoryId <= 0) errors.push(`${entryPrefix}Category is required.`);
             if (accountId <= 0) errors.push(`${entryPrefix}Account is required.`);
 
-            // Skip further validation if basic fields are missing
             if (categoryId <= 0 || accountId <= 0) return;
 
-            // Debit/Credit validation
             if (debit <= 0 && credit <= 0) {
                 errors.push(`${entryPrefix}Either Debit or Credit must be filled.`);
             } else if (debit > 0 && credit > 0) {
@@ -704,7 +655,6 @@ class JournalEntryManager {
             totalDebit += debit;
             totalCredit += credit;
 
-            // Product-specific validation
             if (accountGroup === 'product') {
                 if (rate <= 0) {
                     errors.push(`${entryPrefix}Rate must be greater than zero for product accounts.`);
@@ -718,7 +668,6 @@ class JournalEntryManager {
             }
         });
 
-        // Balance validation
         if (Math.abs(totalDebit - totalCredit) > 0.01) {
             const difference = Math.abs(totalDebit - totalCredit).toFixed(2);
             errors.push(
@@ -730,7 +679,6 @@ class JournalEntryManager {
         return errors;
     }
 
-    // Validate quantity for product accounts
     validateQuantityForProduct(qtyInput) {
         const $input = $(qtyInput);
         const $row = $input.closest('tr');
@@ -750,21 +698,18 @@ class JournalEntryManager {
         }
     }
 
-    // Setup product account requirements
     setupProductRequirements($row) {
         $row.find('.qty-input, .rate-input').addClass('required-field');
         $row.find('.qty-input').attr('required', 'required');
         this.validateQuantityForProduct($row.find('.qty-input')[0]);
     }
 
-    // Update product required indicator visibility
     updateProductRequiredIndicator() {
         const hasProductAccount = $('#entryRows tr').toArray()
             .some(row => $(row).attr('data-account-group') === 'product');
         $('.product-required-indicator').toggleClass('d-none', !hasProductAccount);
     }
 
-    // Setup validation clearance handlers
     setupValidationClearance() {
         const fieldsToWatch = [
             '#ProjectId', '.category-select', '.account-select',
@@ -777,7 +722,6 @@ class JournalEntryManager {
         });
     }
 
-    // Clear all dropdowns when no project selected
     clearAllDropdowns() {
         $('#entryRows tr').each(function () {
             const $row = $(this);
@@ -922,9 +866,105 @@ class JournalEntryManager {
         const year = date.getFullYear();
         return `${day}/${month}/${year}`;
     }
+
+    setupSelectSearch() {
+        $(document).on('input', '.select-search', (e) => {
+            const $input = $(e.target);
+            const $container = $input.closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            const searchTerm = $input.val().toLowerCase();
+
+            let visibleCount = 0;
+            $dropdown.find('.select-option').each(function() {
+                const text = $(this).text().toLowerCase();
+                const shouldShow = text.includes(searchTerm) && visibleCount < 5;
+                $(this).toggleClass('filtered-out', !shouldShow);
+                if (shouldShow) visibleCount++;
+            });
+
+            $dropdown.addClass('show');
+        });
+
+        $(document).on('keydown', '.select-search', (e) => {
+            const $input = $(e.target);
+            const $container = $input.closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            const $options = $dropdown.find('.select-option:not(.filtered-out)');
+            const $selected = $dropdown.find('.select-option.selected');
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if (!$selected.length) {
+                        $options.first().addClass('selected');
+                    } else {
+                        const $next = $selected.nextAll('.select-option:not(.filtered-out)').first();
+                        if ($next.length) {
+                            $selected.removeClass('selected');
+                            $next.addClass('selected');
+                        }
+                    }
+                    break;
+
+                case 'ArrowUp':
+                    e.preventDefault();
+                    if (!$selected.length) {
+                        $options.last().addClass('selected');
+                    } else {
+                        const $prev = $selected.prevAll('.select-option:not(.filtered-out)').first();
+                        if ($prev.length) {
+                            $selected.removeClass('selected');
+                            $prev.addClass('selected');
+                        }
+                    }
+                    break;
+
+                case 'Enter':
+                case 'Tab':
+                    if ($dropdown.hasClass('show')) {
+                        e.preventDefault();
+                        const $toSelect = $selected.length ? $selected : $options.first();
+                        if ($toSelect.length) {
+                            this.selectOption($toSelect, $container);
+                        }
+                    }
+                    break;
+            }
+        });
+
+        $(document).on('click', '.select-option:not(.filtered-out)', (e) => {
+            const $option = $(e.target);
+            const $container = $option.closest('.select-container');
+            this.selectOption($option, $container);
+        });
+
+        $(document).on('click', (e) => {
+            if (!$(e.target).closest('.select-container').length) {
+                $('.select-dropdown').removeClass('show');
+                $('.select-option').removeClass('selected');
+            }
+        });
+
+        $(document).on('focus', '.select-search', (e) => {
+            const $input = $(e.target);
+            const $container = $input.closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            $dropdown.addClass('show');
+        });
+    }
+
+    selectOption($option, $container) {
+        const $select = $container.find('select');
+        const $input = $container.find('.select-search');
+        const $dropdown = $container.find('.select-dropdown');
+
+        $select.val($option.data('value')).trigger('change');
+        $input.val($option.text());
+        $dropdown.removeClass('show');
+        $('.select-option').removeClass('selected');
+    }
 }
 
-// Initialize when document is ready - updated to non-deprecated syntax
 $(function() {
     window.journalEntryManager = new JournalEntryManager();
 });
