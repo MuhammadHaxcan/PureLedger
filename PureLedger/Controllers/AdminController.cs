@@ -273,19 +273,6 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ProjectCartageSettings(ProjectCartageSettings model)
         {
-            if (!ModelState.IsValid)
-            {
-                var projects = await _authService.GetAllProjectsAsync();
-                var accounts = await _authService.GetAllAccountsAsync();
-                var categories = await _authService.GetAllCategoriesAsync();
-
-                ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", model.ProjectId);
-                ViewBag.Accounts = new SelectList(accounts, "AccountId", "AccountName", model.ForExpenseAccountId);
-                ViewBag.Categories = new SelectList(categories, "CategoryId", "CategoryName", model.CartageTransporterCategoryId);
-
-                return View(model);
-            }
-
             await _authService.SaveProjectCartageSettingsAsync(model);
             TempData["SuccessMessage"] = "Project cartage settings updated successfully.";
             return RedirectToAction(nameof(ProjectCartageSettings), new { projectId = model.ProjectId });

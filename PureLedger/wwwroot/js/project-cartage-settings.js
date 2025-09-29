@@ -1,55 +1,127 @@
 ﻿$(document).ready(function () {
-    function loadCategories(projectId) {
+    // Initialize loading state
+    let isLoading = false;
+
+    function setLoadingState(loading) {
+        isLoading = loading;
+        const $form = $('#cartage-settings-form');
+        const $submitBtn = $form.find('button[type="submit"]');
+
+        if (loading) {
+            $submitBtn.prop('disabled', true)
+                .html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+        } else {
+            $submitBtn.prop('disabled', false)
+                .html('<i class="fas fa-save me-1"></i> Save Settings');
+        }
+    }
+
+    function showError(message) {
+        const errorHtml = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>`;
+        $('#alertArea').html(errorHtml);
+    }
+
+    async function loadCategories(projectId) {
         if (!projectId) {
-            $('#ForExpenseCategoryId').empty();
-            $('#CartageTransporterCategoryId').empty();
-            $('#ForExpenseAccountId').empty();
+            resetDropdowns();
             return;
         }
-        $.getJSON('/Admin/GetCategoriesByProject', { projectId: projectId }, function (categories) {
-            var forCat = $('#ForExpenseCategoryId');
-            var cartageCat = $('#CartageTransporterCategoryId');
-            forCat.empty();
-            cartageCat.empty();
-            forCat.append($('<option>').val('').text('-- Select Category --'));
-            cartageCat.append($('<option>').val('').text('-- Select Category --'));
-            $.each(categories, function (i, cat) {
-                forCat.append($('<option>').val(cat.categoryId).text(cat.categoryName));
-                cartageCat.append($('<option>').val(cat.categoryId).text(cat.categoryName));
-            });
-            $('#ForExpenseAccountId').empty();
-            $('#ForExpenseAccountId').append($('<option>').val('').text('-- Select Account --'));
-        });
+
+        setLoadingState(true);
+        try {
+            const categories = await $.getJSON('/Admin/GetCategoriesByProject', { projectId: projectId });
+            updateCategoryDropdowns(categories);
+        } catch (error) {
+            console.error('Error loading categories:', error);
+            showError('Failed to load categories. Please try again.');
+        } finally {
+            setLoadingState(false);
+        }
     }
 
-    function loadAccounts(categoryId) {
+    function updateCategoryDropdowns(categories) {
+        const forCat = $('#ForExpenseCategoryId');
+        const cartageCat = $('#CartageTransporterCategoryId');
+
+        forCat.empty().append('<option value="">-- Select Category --</option>');
+        cartageCat.empty().append('<option value="">-- Select Category --</option>');
+
+        if (categories && categories.length > 0) {
+            categories.forEach(cat => {
+                forCat.append(new Option(cat.categoryName, cat.categoryId));
+                cartageCat.append(new Option(cat.categoryName, cat.categoryId));
+            });
+        }
+
+        resetAccountDropdown();
+    }
+
+    async function loadAccounts(categoryId) {
         if (!categoryId) {
-            $('#ForExpenseAccountId').empty();
-            $('#ForExpenseAccountId').append($('<option>').val('').text('-- Select Account --'));
+            resetAccountDropdown();
             return;
         }
-        $.getJSON('/Admin/GetAccountsByCategory', { categoryId: categoryId }, function (accounts) {
-            var accSel = $('#ForExpenseAccountId');
-            accSel.empty();
-            accSel.append($('<option>').val('').text('-- Select Account --'));
-            $.each(accounts, function (i, acc) {
-                accSel.append($('<option>').val(acc.accountId).text(acc.accountName));
-            });
-        });
+
+        setLoadingState(true);
+        try {
+            const accounts = await $.getJSON('/Admin/GetAccountsByCategory', { categoryId: categoryId });
+            updateAccountDropdown(accounts);
+        } catch (error) {
+            console.error('Error loading accounts:', error);
+            showError('Failed to load accounts. Please try again.');
+        } finally {
+            setLoadingState(false);
+        }
     }
 
+    function updateAccountDropdown(accounts) {
+        const accSel = $('#ForExpenseAccountId');
+        accSel.empty().append('<option value="">-- Select Account --</option>');
+
+        if (accounts && accounts.length > 0) {
+            accounts.forEach(acc => {
+                accSel.append(new Option(acc.accountName, acc.accountId));
+            });
+        }
+    }
+
+    function resetDropdowns() {
+        $('#ForExpenseCategoryId, #CartageTransporterCategoryId')
+            .empty()
+            .append('<option value="">-- Select Category --</option>');
+        resetAccountDropdown();
+    }
+
+    function resetAccountDropdown() {
+        $('#ForExpenseAccountId')
+            .empty()
+            .append('<option value="">-- Select Account --</option>');
+    }
+
+    // Event Handlers
     $('#ProjectId').change(function () {
-        var projectId = $(this).val();
-        loadCategories(projectId);
+        loadCategories($(this).val());
     });
 
     $('#ForExpenseCategoryId').change(function () {
-        var categoryId = $(this).val();
-        loadAccounts(categoryId);
+        loadAccounts($(this).val());
     });
 
-    // On page load, if a project is already selected, load categories
-    var initialProjectId = $('#ProjectId').val();
+    // Form submission handler
+    $('#cartage-settings-form').on('submit', function (e) {
+        if (isLoading) {
+            e.preventDefault();
+            return;
+        }
+        setLoadingState(true);
+    });
+
+    // Initialize if project is selected
+    const initialProjectId = $('#ProjectId').val();
     if (initialProjectId) {
         loadCategories(initialProjectId);
     }
