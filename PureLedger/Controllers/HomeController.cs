@@ -382,6 +382,43 @@ namespace PureLedger.Controllers
             }
         }
 
+        [HttpPost]
+        public async Task<IActionResult> MarkVoucherAsMissed(int voucherId)
+        {
+            try
+            {
+                await _journalService.MarkEntriesAsMissed(voucherId);
+                return JsonSuccess();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking voucher {VoucherId} as missed", voucherId);
+                return JsonError("Error marking entries as missed");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> MissedEntries()
+        {
+            await LoadProjectsData(); // This loads projects into ViewBag
+            return View(new MissedEntriesListViewModel());
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntries(DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            try
+            {
+                var entries = await _journalService.GetFilteredMissedEntriesAsync(startDate, endDate, projectId);
+                return Json(entries);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting missed entries");
+                return Json(new { error = "Failed to load entries" });
+            }
+        }
+
         #region Helper Methods
         private async Task LoadProjectsData(int? selectedProjectId = null)
         {

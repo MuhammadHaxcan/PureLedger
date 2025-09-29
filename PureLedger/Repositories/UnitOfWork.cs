@@ -30,6 +30,7 @@ namespace PureLedger.Repositories
         private IUserControllerAccessRepository? _userControllerAccess;
         private IUserProjectRepository? _userProjects;
         private IProjectCartageSettingsRepository? _projectCartageSettings;
+        private IMissedEntryRepository? _missedEntries; // Add new repository field
 
         public UnitOfWork(LedgerDbContext dbContext)
         {
@@ -57,13 +58,13 @@ namespace PureLedger.Repositories
         public IUserControllerAccessRepository UserControllerAccess => _userControllerAccess ??= new UserControllerAccessRepository(_dbContext);
         public IUserProjectRepository UserProjects => _userProjects ??= new UserProjectRepository(_dbContext);
         public IProjectCartageSettingsRepository ProjectCartageSettings => _projectCartageSettings ??= new ProjectCartageSettingsRepository(_dbContext);
+        public IMissedEntryRepository MissedEntries => _missedEntries ??= new MissedEntryRepository(_dbContext); // Add new property
 
         public async Task<int> SaveChangesAsync()
         {
             return await _dbContext.SaveChangesAsync();
         }
 
-        // Implement the missing transaction method
         public async Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
         {
             return await _dbContext.Database.BeginTransactionAsync(isolationLevel);

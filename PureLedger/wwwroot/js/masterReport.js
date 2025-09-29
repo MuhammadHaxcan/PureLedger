@@ -291,7 +291,17 @@ function displayReport(data) {
     data.entries.forEach(entry => {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${entry.formattedId || entry.id}</td>
+            <td>
+                <div class="id-container">
+                    <a href="/Reporting/PrintVoucher?journalVoucherId=${entry.journalVoucherId}&type=JV" 
+                       class="voucher-link" 
+                       target="_blank" 
+                       title="Open voucher in new window">
+                        JV-${entry.journalVoucherId}
+                    </a>
+                    <span class="entry-id">Entry: ${entry.id}</span>
+                </div>
+            </td>
             <td class="date-column">${formatDate(entry.transactionDate)}</td>
             <td class="description-column">${entry.description || ''}</td>
             <td class="account-column">${entry.accountName}</td>
@@ -322,14 +332,17 @@ function generateAccountGroups(entries) {
 
     // Group by account
     entries.forEach(entry => {
-        if (!entry.accountId) return; // Skip entries without accountId
+        if (!entry.accountId) return;
 
         const accountKey = entry.accountId.toString();
         if (!groupedByAccount[accountKey]) {
+            // Create the formatted ID as projectId-categoryId-accountId
+            const formattedId = `${entry.projectId}-${entry.categoryId}-${entry.accountId}`;
+            
             groupedByAccount[accountKey] = {
                 debit: 0,
                 credit: 0,
-                id: entry.formattedId ? entry.formattedId.split('-')[2] : entry.accountId, // Extract account part from formatted ID
+                id: formattedId, // Use the full formatted ID
                 name: entry.accountName
             };
         }
@@ -366,14 +379,17 @@ function generateCategoryGroups(entries) {
 
     // Group by category
     entries.forEach(entry => {
-        if (!entry.categoryId) return; // Skip entries without categoryId
+        if (!entry.categoryId) return;
 
         const categoryKey = entry.categoryId.toString();
         if (!groupedByCategory[categoryKey]) {
+            // Create the formatted ID as projectId-categoryId
+            const formattedId = `${entry.projectId}-${entry.categoryId}`;
+            
             groupedByCategory[categoryKey] = {
                 debit: 0,
                 credit: 0,
-                id: entry.formattedId ? entry.formattedId.split('-')[1] : entry.categoryId, // Extract category part from formatted ID
+                id: formattedId, // Use the formatted ID
                 name: entry.categoryName
             };
         }

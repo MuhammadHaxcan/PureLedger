@@ -22,5 +22,5 @@ public class VoucherEntryDetailViewModel
     public int Debit { get; set; }
     public int Credit { get; set; }
     public bool IsModified { get; set; }
-    public DateTime? ModifyTime { get; set; }
+    public DateOnly? ModifyTime { get; set; }
 }

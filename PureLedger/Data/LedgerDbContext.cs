@@ -29,6 +29,7 @@ namespace PureLedger.Data
         public DbSet<UserProject> UserProjects { get; set; }
         public DbSet<UserControllerAccess> UserControllerAccess { get; set; }
         public DbSet<ProjectCartageSettings> ProjectCartageSettings { get; set; }
+        public DbSet<MissedEntry> MissedEntries { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -202,6 +203,24 @@ namespace PureLedger.Data
                 .WithMany()
                 .HasForeignKey(pcs => pcs.CartageTransporterCategoryId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<MissedEntry>()
+                .HasOne(m => m.Project)
+                .WithMany()
+                .HasForeignKey(m => m.ProjectId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<MissedEntry>()
+                .HasOne(m => m.CustomerAccount)
+                .WithMany()
+                .HasForeignKey(m => m.CustomerAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MissedEntry>()
+                .HasOne(m => m.ProductAccount)
+                .WithMany()
+                .HasForeignKey(m => m.ProductAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

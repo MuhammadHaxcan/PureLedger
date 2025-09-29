@@ -51,11 +51,11 @@
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Project</label>
+                        <label class="form-label">Project <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                            <select class="form-select" id="projectId">
-                                <option value="">All Projects</option>
+                            <select class="form-select" id="projectId" required>
+                                <option value="">Select Project</option>
                                 @foreach (var project in Model.Projects)
                                 {
                                     <option value="@project.Id">@project.Name</option>
@@ -307,5 +307,36 @@
     /* Negative values in red */
     .negative-balance {
         color: #dc3545;
+    }
+
+    /* Add this to your existing styles */
+    .id-container {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .voucher-link {
+        color: #375a7f;
+        text-decoration: none;
+        font-weight: 500;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .voucher-link:hover {
+        color: #2a4766;
+        text-decoration: underline;
+    }
+
+    .entry-id {
+        font-size: 0.85em;
+        color: #6c757d;
+        display: block;
+    }
+
+    /* Update table styles to handle multi-line content better */
+    #masterReportTable td {
+        vertical-align: middle;
+        padding: 0.5rem;
     }
 </style>

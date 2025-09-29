@@ -486,11 +486,12 @@ namespace PureLedger.Services
 
                     string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
+                    // In the GetMasterReportAsync method, update the mapping:
                     result.Entries.Add(new MasterReportEntryViewModel
                     {
                         Id = entry.JournalEntryId,
+                        JournalVoucherId = entry.JournalVoucherId, // Add this line
                         FormattedId = formattedId,
-                        JournalVoucherId = entry.JournalVoucherId,
                         TransactionDate = GetEffectiveDate(entry.JournalVoucher),
                         Description = entry.Description,
                         AccountName = entry.Account?.AccountName ?? string.Empty,

@@ -28,9 +28,9 @@ namespace PureLedger.ViewModels
 
     public class MasterReportEntryViewModel
     {
-        public int Id { get; set; }
-        public string FormattedId { get; set; } = string.Empty;
+        public int Id { get; set; }  // This is the JournalEntryId
         public int JournalVoucherId { get; set; }
+        public string FormattedId { get; set; } = string.Empty; // For x-y-z format
         public DateOnly TransactionDate { get; set; }
         public string? Description { get; set; }
         public string AccountName { get; set; } = string.Empty;

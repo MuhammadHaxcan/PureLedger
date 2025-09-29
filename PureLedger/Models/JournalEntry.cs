@@ -49,7 +49,7 @@ namespace PureLedger.Models
         [RegularExpression("Y|N", ErrorMessage = "RBP must be 'Y' or 'N'")]
         public string Rbp { get; set; } = "N";
 
-        public DateTime? ModifiedDateTime { get; set; } // <-- Add this line
+        public DateOnly? ModifiedDateTime { get; set; } // <-- Add this line
 
         // Navigation properties
         public virtual Account Account { get; set; }

@@ -5,388 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="PureLedger - Financial Management System" />
     <title>@ViewData["Title"] - PureLedger</title>
+
+    <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- External CSS -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
-    <style>
-        :root {
-            /* Light Theme - Better visibility */
-            --primary-bg: #ffffff;
-            --secondary-bg: #f8f9fa;
-            --accent-color: #0d6efd;
-            --accent-hover: #0b5ed7;
-            --text-primary: #212529;
-            --text-secondary: #495057;
-            --navbar-bg: #0d6efd;
-            --navbar-text: #ffffff;
-            --dropdown-bg: #ffffff;
-            --card-bg: #ffffff;
-            --border-color: #dee2e6;
-            --table-header-bg: #e9ecef;
-            --card-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-        }
 
-        html {
-            font-size: 14px; /* Slightly smaller base font size for more compact UI */
-        }
-
-
-        body {
-            background-color: var(--secondary-bg);
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
-            line-height: 1.5;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding-bottom: 60px; /* Space for footer */
-            position: relative;
-            zoom: 0.9; /* Slightly zoomed out view */
-        }
-
-        .navbar {
-            background-color: var(--navbar-bg) !important;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 0.5rem 1rem;
-        }
-
-        .navbar-brand {
-            color: var(--navbar-text) !important;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-
-        .navbar-nav .nav-link {
-            color: var(--navbar-text) !important;
-            font-weight: 500;
-            padding: 0.5rem 0.75rem;
-            transition: all 0.2s ease;
-        }
-
-            .navbar-nav .nav-link:hover {
-                color: rgba(255, 255, 255, 0.85) !important;
-                transform: translateY(-2px);
-            }
-
-        .dropdown-menu {
-            background-color: var(--dropdown-bg);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-            border-radius: 0.5rem;
-            padding: 0.5rem;
-        }
-
-        .dropdown-item {
-            color: var(--text-primary);
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
-            transition: all 0.2s ease;
-            font-size: 0.9rem;
-        }
-
-            .dropdown-item:hover {
-                background-color: rgba(13, 110, 253, 0.1);
-                color: var(--accent-color);
-                transform: translateX(5px);
-            }
-
-            .dropdown-item i {
-                margin-right: 8px;
-                width: 20px;
-                text-align: center;
-            }
-
-        main {
-            flex: 1;
-        }
-
-        .container {
-            max-width: 1320px; /* Wider container */
-        }
-
-        .container-fluid {
-            background-color: var(--primary-bg);
-            border-radius: 0.5rem;
-            box-shadow: var(--card-shadow);
-            padding: 1.25rem;
-            margin-bottom: 1.25rem;
-        }
-
-        /* Card styles */
-        .card {
-            border: none;
-            border-radius: 0.5rem;
-            box-shadow: var(--card-shadow);
-            transition: transform 0.2s ease;
-            margin-bottom: 1rem;
-        }
-
-            .card:hover {
-                transform: none !important;
-            }
-
-        .card-header {
-            background-color: var(--primary-bg);
-            border-bottom: 1px solid var(--border-color);
-            padding: 0.75rem 1rem;
-        }
-
-            .card-header h6 {
-                margin: 0;
-                color: var(--accent-color);
-                font-weight: 600;
-            }
-
-        .card-body {
-            padding: 1rem;
-        }
-
-        /* Table styles */
-        .table {
-            color: var(--text-primary);
-            border-color: var(--border-color);
-            font-size: 0.9rem;
-        }
-
-            .table thead th {
-                background-color: var(--table-header-bg);
-                color: var(--text-primary);
-                font-weight: 600;
-                padding: 0.6rem;
-                white-space: nowrap;
-            }
-
-            .table tbody tr {
-                transition: background-color 0.2s ease;
-            }
-
-                .table tbody tr:hover {
-                    background-color: rgba(13, 110, 253, 0.05);
-                    transform: none !important;
-                }
-
-        /* Button styles */
-        .btn {
-            border-radius: 0.375rem;
-            padding: 0.35rem 0.85rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            font-size: 0.9rem;
-        }
-
-        .btn-primary {
-            background-color: var(--accent-color);
-            border-color: var(--accent-color);
-        }
-
-            .btn-primary:hover {
-                background-color: var(--accent-hover);
-                border-color: var(--accent-hover);
-                transform: none !important;
-                box-shadow: none !important;
-            }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            border-color: #6c757d;
-        }
-
-            .btn-secondary:hover {
-                background-color: #5a6268;
-                border-color: #545b62;
-                transform: none !important;
-                box-shadow: none !important;
-            }
-
-        .btn-info, .btn-warning, .btn-danger, .btn-success {
-            color: white;
-        }
-
-        .btn-sm {
-            padding: 0.2rem 0.4rem;
-            font-size: 0.8rem;
-        }
-
-        /* Form controls */
-        .form-control, .form-select {
-            background-color: #ffffff;
-            border-color: #ced4da;
-            color: #212529;
-            border-radius: 0.375rem;
-            padding: 0.4rem 0.7rem;
-            font-size: 0.9rem;
-            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-        }
-
-            .form-control:focus, .form-select:focus {
-                background-color: #ffffff;
-                color: #212529;
-                border-color: #86b7fe;
-                box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-            }
-
-        /* Label styling */
-        .form-label {
-            font-weight: 500;
-            font-size: 0.9rem;
-            margin-bottom: 0.3rem;
-        }
-
-        /* Footer styles */
-        footer {
-            background-color: var(--navbar-bg);
-            color: var(--navbar-text);
-            text-align: center;
-            padding: 0.75rem 0;
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            font-size: 0.85rem;
-        }
-
-        /* Alert styles */
-        .alert {
-            border-radius: 0.5rem;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1.25rem;
-            border: none;
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-            font-size: 0.9rem;
-        }
-
-        .alert-success {
-            background-color: #d1e7dd;
-            color: #0f5132;
-        }
-
-        .alert-danger {
-            background-color: #f8d7da;
-            color: #842029;
-        }
-
-        /* DataTables customization */
-        .dataTables_wrapper .dataTables_length,
-        .dataTables_wrapper .dataTables_filter {
-            margin-bottom: 0.75rem;
-            font-size: 0.9rem;
-        }
-
-            .dataTables_wrapper .dataTables_length select {
-                min-width: 60px;
-                margin: 0 5px;
-            }
-
-        .dataTables_wrapper .dataTables_paginate .paginate_button {
-            border-radius: 0.25rem;
-            margin: 0 0.1rem;
-            font-size: 0.85rem;
-        }
-
-            .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-                background: var(--accent-color);
-                border-color: var(--accent-color);
-                color: white !important;
-            }
-
-        /* Compact DataTables */
-        table.dataTable.table-sm thead th {
-            padding: 0.5rem 0.5rem;
-        }
-
-        table.dataTable.table-sm tbody td {
-            padding: 0.4rem 0.5rem;
-        }
-
-        /* Headings */
-        h1, h2, h3, h4, h5, h6 {
-            margin-bottom: 1rem;
-        }
-
-        h2 {
-            font-size: 1.6rem;
-        }
-
-        h3 {
-            font-size: 1.4rem;
-        }
-
-        /* Hide dropdown arrows for select elements */
-        select {
-            appearance: none !important;
-            -webkit-appearance: none !important;
-            -moz-appearance: none !important;
-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 0.5rem center;
-            background-size: 14px 10px;
-            padding-right: 2rem;
-        }
-
-        /* Hide dropdown arrow completely */
-        .no-arrow {
-            background-image: none !important;
-            padding-right: 0.5rem !important;
-        }
-
-        /* Hide dropdown arrows for DataTables */
-        .dataTables_length select {
-            appearance: none !important;
-            -webkit-appearance: none !important;
-            -moz-appearance: none !important;
-            background-image: none !important;
-            padding-right: 0.75rem !important;
-            min-width: 4rem;
-            text-align: center;
-            border-radius: 0.25rem;
-        }
-
-        .card-body {
-            padding: 1.25rem;
-        }
-
-        /* For Firefox and IE */
-        select::-ms-expand {
-            display: none;
-        }
-
-        /* Remove spinner/arrows from number inputs */
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
-
-        /* Remove hover transform effects from cards and other elements */
-        .card:hover {
-            transform: none !important;
-        }
-
-        .btn-primary:hover,
-        .btn-secondary:hover,
-        .btn:hover {
-            transform: none !important;
-            box-shadow: none !important;
-        }
-
-        .navbar-nav .nav-link:hover {
-            transform: none !important;
-        }
-
-        .dropdown-item:hover {
-            transform: none !important;
-        }
-
-        /* Override table row hover effect */
-        .table tbody tr:hover {
-            background-color: rgba(13, 110, 253, 0.05);
-            transform: none !important;
-        }
-    </style>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="~/css/pureledger-theme.css" asp-append-version="true" />
 </head>
 <body>
     <header>
@@ -402,7 +31,7 @@
                 <div class="navbar-collapse collapse d-lg-inline-flex justify-content-between">
                     @* Replace the static navigation with our dynamic component *@
                     @await Component.InvokeAsync("NavigationMenu")
-                    
+
                     <ul class="navbar-nav">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
@@ -435,18 +64,31 @@
         </main>
     </div>
 
+    <!-- Scripts -->
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script src="~/js/site-utilities.js"></script>
+
+    <!-- Initialize theme -->
     <script>
-        // Add a class to allow zoom detection in responsive designs
         document.addEventListener('DOMContentLoaded', function() {
+            // Add zoom-adjusted class for responsive design
             document.body.classList.add('zoom-adjusted');
+
+            // Ensure Bootstrap components are properly initialized
+            if (typeof bootstrap !== 'undefined') {
+                // Initialize all tooltips
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
         });
     </script>
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

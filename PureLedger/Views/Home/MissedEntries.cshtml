@@ -1,0 +1,79 @@
+﻿@using PureLedger.ViewModels
+@model MissedEntriesListViewModel
+@{
+    ViewData["Title"] = "Missed Entries";
+    var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
+    var today = DateTime.Now;
+    var defaultStartDate = today.AddMonths(-1).ToString("yyyy-MM-dd");
+    var defaultEndDate = today.ToString("yyyy-MM-dd");
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="fas fa-exclamation-circle me-2"></i>Missed Entries</h2>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filter Missed Entries</h6>
+        </div>
+        <div class="card-body">
+            <form id="filterForm" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="startDate" value="@defaultStartDate">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="endDate" value="@defaultEndDate">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Project</label>
+                    <select class="form-select" id="projectId" required>
+                        <option value="">Select Project</option>
+                        @if (projects != null)
+                        {
+                            foreach (var project in projects)
+                            {
+                                <option value="@project.ProjectId">@project.ProjectName</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search me-1"></i> Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="missedEntriesTable">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Date</th>
+                            <th>Project</th>
+                            <th>Customer</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Rate</th>
+                            <th>Discount Percent</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entriesTableBody">
+                        <!-- Data will be loaded via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/missed-entries.js" asp-append-version="true"></script>
+}

@@ -12,6 +12,20 @@
     --table-border: #dee2e6;
     --navbar-bg: #343a40;
     --navbar-color: #ffffff;
+
+    --primary-bg: #ffffff;
+    --secondary-bg: #f8f9fa;
+    --accent-color: #0d6efd;
+    --accent-hover: #0b5ed7;
+    --text-primary: #212529;
+    --text-secondary: #495057;
+    --navbar-bg: #0d6efd;
+    --navbar-text: #ffffff;
+    --dropdown-bg: #ffffff;
+    --card-bg: #ffffff;
+    --border-color: #dee2e6;
+    --table-header-bg: #e9ecef;
+    --card-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
 }
 
 html {
@@ -64,6 +78,12 @@ body {
 
     .dropdown-item:hover {
         background-color: rgba(13, 110, 253, 0.1);
+        color: var(--primary-color);
+    }
+
+    .dropdown-item.active, .dropdown-item:active {
+        /* Ensures compatibility with Bootstrap dropdown active states */
+        background-color: rgba(13, 110, 253, 0.3);
         color: var(--primary-color);
     }
 
@@ -215,6 +235,11 @@ body.bg-dark {
         color: #ffffff;
     }
 
+    /* Ensuring links are visible in dark mode */
+    body.bg-dark a {
+        color: #0d6efd;
+    }
+
 /* Typography improvements */
 h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
@@ -231,13 +256,229 @@ a {
         text-decoration: underline;
     }
 
-/* Fix for Firefox dropdown arrow which can persist */
-select::-ms-expand {
-    display: none;
+.navbar {
+    /* Semi-transparent white background with increased blur */
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-/* Custom styling for form-select (Bootstrap 5) */
-.form-select {
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(0, 0, 0, 0.85) !important; /* Darker links for contrast */
+}
+
+    .navbar-dark .navbar-nav .nav-link:hover {
+        color: rgba(0, 0, 0, 1) !important; /* Fully opaque on hover */
+    }
+
+/* Makes dropdowns more legible against the navbar */
+.dropdown-menu {
+    /* Enhanced background for better contrast */
+    background-color: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+.dropdown-item {
+    color: var(--text-color);
+}
+
+    /* Custom scrollbar for dropdowns */
+    .dropdown-menu {
+        scrollbar-width: 12px;
+        scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+    }
+
+    .dropdown-menu::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    .dropdown-menu::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 0, 0, 0.2);
+        border-radius: 10px;
+    }
+
+    .dropdown-menu::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+/* Enhanced card styles */
+.card {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.15);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+.slide-in {
+    animation: slideIn 0.5s ease-out;
+}
+
+/* Misc */
+hr {
+    border-color: var(--border-color);
+    margin: 1.5rem 0;
+}
+
+/* Custom scrollbar for WebKit browsers */
+.container-fluid::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.container-fluid::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.25);
+    border-radius: 10px;
+}
+
+.container-fluid::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Ensure modals are accessible and have good contrast */
+.modal-content {
+    background-color: var(--card-background);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color);
+}
+
+/* Specific styles for the DataTables plugin */
+.dataTables_wrapper {
+    /* Custom background and border */
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+/* Override Bootstrap's default table styles for DataTables */
+table.dataTable {
+    width: 100% !important;
+    margin: 0.5rem 0;
+    border-collapse: collapse;
+}
+
+table.dataTable thead {
+    background-color: var(--table-header-bg);
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+table.dataTable th,
+table.dataTable td {
+    padding: 0.75rem;
+    vertical-align: middle;
+    border: 1px solid var(--border-color);
+}
+
+/* Zebra striping for table rows */
+table.dataTable tbody tr:nth-child(odd) {
+    background-color: var(--secondary-bg);
+}
+
+/* Enhance focus states for accessibility */
+.btn:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.nav-link:focus, .nav-link:active:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.3);
+}
+
+/* Accessibility improvements */
+:not(input):not(textarea) {
+    user-select: none;
+}
+
+/* Style the active link in the navbar */
+.navbar-nav .nav-link.active {
+    font-weight: 500;
+    color: var(--accent-hover) !important;
+    background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+/* Specific styles for the DataTables pagination */
+.dataTables_wrapper .dataTables_paginate {
+    /* Centering pagination controls */
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    padding: 0.5rem 1rem;
+    margin: 0 0.1rem;
+    border-radius: 0.25rem;
+    border: 1px solid transparent;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background-color: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background-color: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+/* Specific styles for the DataTables length changing select box */
+.dataTables_length select {
+    /* Custom styling for better usability */
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--input-background);
+    color: var(--text-color);
+    height: auto;
+    min-width: 4rem;
+    text-align: center;
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -245,10 +486,9 @@ select::-ms-expand {
     background-repeat: no-repeat;
     background-position: right 0.75rem center;
     background-size: 16px 12px;
-    padding-right: 2.5rem;
 }
 
-.form-select.no-arrow {
+.dataTables_length select.no-arrow {
     background-image: none !important;
     padding-right: 0.75rem;
 }

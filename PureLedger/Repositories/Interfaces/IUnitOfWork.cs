@@ -24,6 +24,7 @@ namespace PureLedger.Repositories.Interfaces
         IUserControllerAccessRepository UserControllerAccess { get; }
         IUserProjectRepository UserProjects { get; }
         IProjectCartageSettingsRepository ProjectCartageSettings { get; }
+        IMissedEntryRepository MissedEntries { get; }
 
         Task<int> SaveChangesAsync();
         

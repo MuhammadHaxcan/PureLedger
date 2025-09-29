@@ -276,7 +276,8 @@ namespace PureLedger.Services
             }
 
             entry.IsEdited = true;
-            entry.ModifiedDateTime = DateTime.Now;
+            entry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now);
+            ;
 
         }
 
@@ -481,6 +482,41 @@ namespace PureLedger.Services
             return await _unitOfWork.JournalVouchers.GetBaseVoucherWithUnprocessedEntriesAsync(id);
         }
 
+        private async Task<bool> ShouldProcessAsFullVoucher(
+            int baseVoucherId, 
+            List<BaseVoucherEntryViewModel> entriesToProcess)
+        {
+            var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
+            if (baseVoucher == null || !baseVoucher.IsBaseVoucher) return false;
+
+            // Check if the voucher already has derived vouchers
+            var existingReferences = await _unitOfWork.JournalVoucherReferences
+                .GetByMainVoucherIdAsync(baseVoucherId);
+            if (existingReferences.Any()) return false;
+
+            // Get all non-account entries
+            var regularEntries = baseVoucher.JournalEntries
+                .Where(e => !e.IsProcessed)
+                .ToList();
+
+            if (!regularEntries.Any()) return false;
+
+            // Check if all entries are being processed with full quantity
+            foreach (var entry in regularEntries)
+            {
+                var processEntry = entriesToProcess
+                    .FirstOrDefault(e => e.EntryId == entry.JournalEntryId);
+                
+                if (processEntry == null || processEntry.ProcessQuantity != entry.Quantity)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Modify the CreateDerivedVoucherAsync method
         public async Task<int> CreateDerivedVoucherAsync(
             int baseVoucherId,
             List<BaseVoucherEntryViewModel> entriesToProcess,
@@ -491,6 +527,24 @@ namespace PureLedger.Services
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
+                // Check if we should process this as a full voucher
+                if (await ShouldProcessAsFullVoucher(baseVoucherId, entriesToProcess))
+                {
+                    var baseVoucherToOff = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
+                    if (baseVoucherToOff != null)
+                    {
+                        baseVoucherToOff.IsBaseVoucher = false;
+                        // Explicitly update the voucher through the repository
+                        await _unitOfWork.JournalVouchers.UpdateAsync(baseVoucherToOff);
+                        await _unitOfWork.SaveChangesAsync();
+                        await transaction.CommitAsync();
+
+                        _logger.LogInformation("Base voucher {VoucherId} processed completely and turned off", baseVoucherId);
+                        return baseVoucherToOff.JournalVoucherId;
+
+                    }                    
+                }
+
                 var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
                 if (baseVoucher == null || !baseVoucher.IsBaseVoucher)
                     throw new InvalidOperationException("Base voucher not found");
@@ -603,6 +657,90 @@ namespace PureLedger.Services
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        public async Task MarkEntriesAsMissed(int voucherId)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+                if (voucher == null || !voucher.IsBaseVoucher)
+                    throw new InvalidOperationException("Invalid voucher");
+
+                var customerAccount = await GetCustomerAccountFromEntries(voucher.JournalEntries);
+                if (customerAccount == null)
+                    throw new InvalidOperationException("No customer account found in voucher");
+
+                var unprocessedEntries = voucher.JournalEntries
+                    .Where(e => !e.IsProcessed && 
+                           e.Quantity > 0 && 
+                           e.Account.AccountGroupId == 2)
+                    .ToList();
+
+                foreach (var entry in unprocessedEntries)
+                {
+                    var missedEntry = new MissedEntry
+                    {
+                        CustomerAccountId = customerAccount.AccountId,
+                        ProductAccountId = entry.AccountId,
+                        ProjectId = voucher.ProjectId, // Add ProjectId
+                        MissedDate = DateOnly.FromDateTime(DateTime.Now),
+                        Quantity = entry.Quantity,
+                        Rate = entry.Rate,
+                        Discount = entry.DiscountPercent ?? 0,
+                        Description = entry.Description
+                    };
+
+                    await _unitOfWork.MissedEntries.AddAsync(missedEntry);
+            
+                    entry.Quantity = 0;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Voucher {VoucherId} marked as missed with {Count} entries against customer {CustomerName}", 
+                    voucherId, unprocessedEntries.Count, customerAccount.AccountName);
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<List<MissedEntryViewModel>> GetFilteredMissedEntriesAsync(
+    DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+
+            return entries.Select(e => new MissedEntryViewModel
+            {
+                MissedEntryId = e.MissedEntryId,
+                CustomerName = e.CustomerAccount?.AccountName ?? "Unknown Customer",
+                ProductName = e.ProductAccount?.AccountName ?? "Unknown Product",
+                ProjectName = e.Project?.ProjectName ?? "Unknown Project",
+                MissedDate = e.MissedDate,
+                Quantity = e.Quantity,
+                Rate = e.Rate,
+                Discount = e.Discount,
+                Description = e.Description
+            }).ToList();
+        }
+
+        private async Task<Account?> GetCustomerAccountFromEntries(IEnumerable<JournalEntry> entries)
+        {
+            foreach (var entry in entries)
+            {
+                var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId);
+                if (account?.AccountGroupId == 1)
+                {
+                    return account;
+                }
+            }
+            return null;
         }
     }
 }
