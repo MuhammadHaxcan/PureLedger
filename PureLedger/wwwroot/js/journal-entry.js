@@ -98,6 +98,8 @@ class JournalEntryManager {
         }
         this.updateDueDate();
         this.updateProductRequiredIndicator();
+        // Add initial base voucher checkbox state check
+        this.updateBaseVoucherCheckbox();
     }
 
     // Update due date based on entry date and credit days
@@ -223,6 +225,9 @@ class JournalEntryManager {
             
             // After loading product details, manage input fields based on account group
             this.manageInputsBasedOnAccountGroup($row);
+            
+            // Update base voucher checkbox state
+            this.updateBaseVoucherCheckbox();
         } catch (error) {
             console.error('Error loading product details:', error);
             this.showError('Failed to load product details.');
@@ -550,6 +555,9 @@ class JournalEntryManager {
             }, 50);
         }
 
+        // Update base voucher checkbox state after adding new row
+        this.updateBaseVoucherCheckbox();
+
         this.updateTotals();
     }
 
@@ -607,6 +615,8 @@ class JournalEntryManager {
             $(event.target).closest('tr').remove();
             this.updateTotals();
             this.updateProductRequiredIndicator();
+            // Update base voucher checkbox state after removing row
+            this.updateBaseVoucherCheckbox();
         }
     }
 
@@ -861,6 +871,38 @@ class JournalEntryManager {
     showError(message) {
         console.error(message);
         // Could also show a toast or alert here
+    }
+
+    // Update base voucher checkbox state based on account entries
+    updateBaseVoucherCheckbox() {
+        const $baseVoucherCheckbox = $('#IsBaseVoucher');
+        
+        // Count account entries (account group type 1)
+        let accountEntriesCount = 0;
+        $('#entryRows tr').each(function() {
+            const accountGroup = $(this).attr('data-account-group');
+            if (accountGroup === 'account') {
+                accountEntriesCount++;
+            }
+        });
+
+        // If we don't have exactly one account entry
+        if (accountEntriesCount !== 1) {
+            // Uncheck and disable the checkbox
+            $baseVoucherCheckbox.prop('checked', false)
+                              .prop('disabled', true);
+                              
+            // Add tooltip explaining why it's disabled
+            const tooltipText = accountEntriesCount === 0 
+                ? 'Base voucher requires exactly one account entry'
+                : 'Base voucher cannot have multiple account entries';
+                
+            $baseVoucherCheckbox.attr('title', tooltipText);
+        } else {
+            // Enable the checkbox when we have exactly one account entry
+            $baseVoucherCheckbox.prop('disabled', false)
+                              .attr('title', 'Mark this as a base voucher');
+        }
     }
 
     // Utility Methods
