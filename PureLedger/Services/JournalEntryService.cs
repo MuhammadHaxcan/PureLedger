@@ -67,23 +67,20 @@ namespace PureLedger.Services
         {
             try
             {
-
                 var journalVoucher = new JournalVoucher
                 {
                     ProjectId = model.ProjectId,
-                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
+                    EntryDate = model.EntryDate, // Use the entry date from the model
                     IsCompleted = false,
                     IsBaseVoucher = model.IsBaseVoucher,
-                    CreditableDate = DateOnly.FromDateTime(DateTime.Now.AddDays(model.CreditDays))
+                    CreditableDate = model.EntryDate.AddDays(model.CreditDays) // Calculate due date from entry date
                 };
 
                 journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
-
                 await CreateJournalEntriesAsync(journalVoucher.JournalVoucherId, model.Entries);
-
                 await UpdateVoucherStatusBasedOnAccountsAsync(journalVoucher.JournalVoucherId);
-
                 await _unitOfWork.SaveChangesAsync();
+                
                 return journalVoucher;
             }
             catch (Exception ex)

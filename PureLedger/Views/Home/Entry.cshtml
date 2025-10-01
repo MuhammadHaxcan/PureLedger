@@ -1,7 +1,9 @@
 ﻿@model PureLedger.ViewModels.JournalEntryViewModel
 @{
     ViewData["Title"] = "Journal Entry";
-    var today = DateTime.Now.ToString("dd/MM/yyyy");
+    var today = DateTime.Now;
+    var minDate = today.AddMonths(-1).ToString("dd/MM/yyyy");
+    var todayStr = today.ToString("dd/MM/yyyy");
     var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
 }
 
@@ -49,6 +51,7 @@
                 <div class="row mb-2">
                     <div class="col-md-6 mb-2 mb-md-0">
                         <label class="form-label">Entry Date:</label>
+                        <!-- Entry Date input -->
                         <div class="input-group">
                             <span class="input-group-text calendar-icon" style="cursor:pointer;">
                                 <i class="fas fa-calendar-alt"></i>
@@ -57,7 +60,7 @@
                                    name="EntryDate"
                                    type="text"
                                    id="EntryDate"
-                                   value="@today" />
+                                   value="@(Model?.EntryDate.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy"))" />
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -278,16 +281,19 @@
                     </div>
                     <div class="col-md-4 mb-2">
                         <label class="form-label" for="DueDate">Due Date</label>
+                        <!-- Due Date input - Make it properly read-only -->
                         <div class="input-group">
-                            <span class="input-group-text calendar-icon" style="cursor:pointer;">
+                            <span class="input-group-text">
                                 <i class="fas fa-calendar-check"></i>
                             </span>
-                            <input class="form-control datepicker" 
-                                   id="DueDate" 
-                                   name="DueDate" 
-                                   type="text" 
-                                   value="@today" 
-                                   readonly />
+                            <input class="form-control" 
+                                   id="DueDate"
+                                   name="DueDate"
+                                   type="text"
+                                   value="@(Model?.DueDate.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy"))"
+                                   readonly
+                                   tabindex="-1"
+                                   style="background-color: #e9ecef;" />
                         </div>
                     </div>
                     <div class="col-md-4 mb-2">

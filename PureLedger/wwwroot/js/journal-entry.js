@@ -32,14 +32,57 @@
     }
 
     initializeDatePickers() {
-        $('.datepicker').datepicker({
-            dateFormat: 'dd/mm/yy',
-            changeMonth: true,
-            changeYear: true,
-            showButtonPanel: true,
-            maxDate: new Date(),
-            onError: (error) => console.error('Datepicker error:', error)
-        });
+        try {
+            const today = new Date();
+            const minDate = new Date(today);
+            minDate.setMonth(minDate.getMonth() - 1);
+
+            // Only initialize datepicker for EntryDate
+            $('#EntryDate').datepicker({
+                dateFormat: 'dd/mm/yy',
+                changeMonth: true,
+                changeYear: true,
+                showButtonPanel: true,
+                maxDate: today,
+                minDate: minDate,
+                onSelect: (dateText) => {
+                    this.updateDueDate();
+                }
+            });
+
+            // If entry date is empty, set today's date
+            if (!$('#EntryDate').val()) {
+                const defaultDate = this.formatDateDDMMYYYY(today);
+                $('#EntryDate').val(defaultDate);
+                $('#DueDate').val(defaultDate);
+            }
+
+            // Properly disable the due date input
+            $('#DueDate')
+                .prop('disabled', true)
+                .css({
+                    'background-color': '#e9ecef',
+                    'cursor': 'not-allowed'
+                });
+
+            // Remove click handler from due date calendar icon
+            $('.calendar-icon').each((_, icon) => {
+                const $icon = $(icon);
+                const isForDueDate = $icon.siblings('#DueDate').length > 0;
+                if (isForDueDate) {
+                    $icon.css('cursor', 'not-allowed');
+                    $icon.off('click');
+                } else {
+                    $icon.css('cursor', 'pointer');
+                    $icon.on('click', (e) => {
+                        $(e.currentTarget).siblings('input.datepicker').focus();
+                    });
+                }
+            });
+
+        } catch (error) {
+            console.error('Error initializing date pickers:', error);
+        }
     }
 
     setupEventHandlers() {
@@ -79,6 +122,19 @@
         $('#addRowBtn').html('<i class="fas fa-plus"></i> Add Row <span class="text-muted">[Alt+N]</span>');
 
         this.setupValidationClearance();
+
+        // Add new handler for input focus
+        $(document).on('click focus', 'input', (e) => {
+            // Close all dropdowns except the one in the current container
+            const $currentContainer = $(e.target).closest('.select-container');
+            $('.select-dropdown').each(function() {
+                const $dropdown = $(this);
+                if (!$currentContainer || !$dropdown.closest('.select-container').is($currentContainer)) {
+                    $dropdown.removeClass('show');
+                    $dropdown.find('.select-option').removeClass('selected');
+                }
+            });
+        });
     }
 
     loadInitialData() {
@@ -96,20 +152,24 @@
             const creditDays = this.parseIntOrZero($('#CreditDays').val());
             const entryDateStr = $('#EntryDate').val();
 
-            if (!entryDateStr) return;
+            if (!entryDateStr) {
+                const today = this.formatDateDDMMYYYY(new Date());
+                $('#EntryDate').val(today);
+                $('#DueDate').val(today);
+                return;
+            }
 
-            const dateParts = entryDateStr.split('/');
-            if (dateParts.length !== 3) return;
+            const [day, month, year] = entryDateStr.split('/').map(Number);
+            const entryDate = new Date(year, month - 1, day); // month is 0-based
 
-            const day = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10) - 1;
-            const year = parseInt(dateParts[2], 10);
+            if (isNaN(entryDate.getTime())) {
+                console.error('Invalid entry date');
+                return;
+            }
 
-            const entryDate = new Date(year, month, day);
-            if (isNaN(entryDate.getTime())) return;
-
-            entryDate.setDate(entryDate.getDate() + creditDays);
-            $('#DueDate').val(this.formatDateDDMMYYYY(entryDate));
+            const dueDate = new Date(entryDate);
+            dueDate.setDate(dueDate.getDate() + creditDays);
+            $('#DueDate').val(this.formatDateDDMMYYYY(dueDate));
         } catch (error) {
             console.error('Error updating due date:', error);
         }
@@ -284,6 +344,7 @@
             $discInput.prop('disabled', true).val('0');
             $percentInput.prop('disabled', true).val('0');
         } else {
+            $rbpSelect.prop('disabled', false);
             $qtyInput.prop('disabled', false);
             $rateInput.prop('disabled', false);
             $discInput.prop('disabled', false);
@@ -513,16 +574,24 @@
         this.resetRowElements($newRow, newIndex);
         $('#entryRows').append($newRow);
 
+        // Get the first select-search input in the new row
+        const $firstSearchInput = $newRow.find('.select-search').first();
+
         const projectId = $('#ProjectId').val();
         if (projectId) {
             const $categorySelect = $newRow.find('.category-select');
-            this.loadCategories($categorySelect, projectId);
-            
-            // Focus on the category search input instead of the select
-            setTimeout(() => {
-                const $searchInput = $newRow.find('.select-search').first();
-                $searchInput.focus();
-            }, 50);
+            this.loadCategories($categorySelect, projectId).then(() => {
+                // Focus on the category search input after categories are loaded
+                $firstSearchInput.focus();
+                
+                // Ensure the dropdown is shown
+                $firstSearchInput.closest('.select-container')
+                    .find('.select-dropdown')
+                    .addClass('show');
+            });
+        } else {
+            // If no project selected, still focus on the first input
+            $firstSearchInput.focus();
         }
 
         this.updateBaseVoucherCheckbox();
@@ -861,10 +930,15 @@
     }
 
     formatDateDDMMYYYY(date) {
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
+        try {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}/${month}/${year}`;
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '';
+        }
     }
 
     setupSelectSearch() {

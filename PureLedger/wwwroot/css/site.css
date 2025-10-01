@@ -28,15 +28,157 @@
     --card-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
 }
 
+/* Base font size for smallest screens */
 html {
-    font-size: 14px;
+    font-size: 12px; /* Base size for mobile */
     position: relative;
     min-height: 100%;
+    -webkit-text-size-adjust: 100%; /* Prevent automatic font scaling on iOS */
+}
+
+/* Small tablets and large phones (landscape phones, 576px and up) */
+@media (min-width: 576px) {
+    html {
+        font-size: 13px;
+        zoom: 0.9;
+        -ms-zoom: 0.9;
+        -webkit-zoom: 0.9;
+    }
+}
+
+/* Medium devices (tablets, 768px and up) */
+@media (min-width: 768px) {
+    html {
+        font-size: 14px;
+        zoom: 0.95;
+        -ms-zoom: 0.95;
+        -webkit-zoom: 0.95;
+    }
+}
+
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+    html {
+        font-size: 15px;
+        zoom: 1;
+        -ms-zoom: 1;
+        -webkit-zoom: 1;
+    }
+}
+
+/* Extra large devices (large desktops, 1200px and up) */
+@media (min-width: 1200px) {
+    html {
+        font-size: 16px;
+        zoom: 1;
+        -ms-zoom: 1;
+        -webkit-zoom: 1;
+    }
+}
+
+/* 4K and ultra-wide screens (2560px and up) */
+@media (min-width: 2560px) {
+    html {
+        font-size: 18px;
+        zoom: 1.1;
+        -ms-zoom: 1.1;
+        -webkit-zoom: 1.1;
+    }
+}
+
+/* Add a fallback for browsers that don't support zoom */
+@supports not (zoom: 1) {
+    @media (min-width: 576px) {
+        html {
+            transform: scale(0.9);
+            transform-origin: 0 0;
+        }
+    }
+    
+    @media (min-width: 768px) {
+        html {
+            transform: scale(0.95);
+            transform-origin: 0 0;
+        }
+    }
+    
+    @media (min-width: 992px) {
+        html {
+            transform: scale(1);
+            transform-origin: 0 0;
+        }
+    }
+    
+    @media (min-width: 1200px) {
+        html {
+            transform: scale(1);
+            transform-origin: 0 0;
+        }
+    }
+    
+    @media (min-width: 2560px) {
+        html {
+            transform: scale(1.1);
+            transform-origin: 0 0;
+        }
+    }
+}
+
+/* Update container max-widths for better readability at different zoom levels */
+@media (min-width: 576px) {
+    .container {
+        max-width: 540px;
+    }
 }
 
 @media (min-width: 768px) {
+    .container {
+        max-width: 720px;
+    }
+}
+
+@media (min-width: 992px) {
+    .container {
+        max-width: 960px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .container {
+        max-width: 1140px;
+    }
+}
+
+@media (min-width: 2560px) {
+    .container {
+        max-width: 1440px;
+    }
+}
+
+/* Add smooth transitions for zoom changes */
+html {
+    transition: font-size 0.3s ease-in-out;
+}
+
+@supports (zoom: 1) {
     html {
-        font-size: 16px;
+        transition: zoom 0.3s ease-in-out;
+    }
+}
+
+/* Ensure proper scaling for fixed elements */
+.fixed-top,
+.fixed-bottom,
+.sticky-top {
+    transform-origin: 0 0;
+}
+
+/* Prevent zoom issues with input fields on iOS */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+    select,
+    textarea,
+    input {
+        font-size: 16px !important;
     }
 }
 

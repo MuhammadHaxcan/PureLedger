@@ -488,7 +488,7 @@ namespace PureLedger.Services
 
                     // In the GetMasterReportAsync method, update the mapping:
                     result.Entries.Add(new MasterReportEntryViewModel
-                    {
+                    {    
                         Id = entry.JournalEntryId,
                         JournalVoucherId = entry.JournalVoucherId, // Add this line
                         FormattedId = formattedId,

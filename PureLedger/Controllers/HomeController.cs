@@ -44,16 +44,19 @@ namespace PureLedger.Controllers
         [HttpPost]
         public async Task<IActionResult> Entry(JournalEntryViewModel model, string action)
         {
-            //var errors = await _validator.ValidateAsync(model);
-            //if (errors.Any())
-            //{
-            //    await LoadProjectsData(model.ProjectId);
-            //    ViewBag.Error = string.Join("<br/>", errors);
-            //    return View(model);
-            //}
-
             try
             {
+                // Validate entry date
+                var today = DateOnly.FromDateTime(DateTime.Now);
+                var minDate = today.AddMonths(-1);
+                
+                if (model.EntryDate > today || model.EntryDate < minDate)
+                {
+                    ModelState.AddModelError("EntryDate", "Entry date must be between last month and today");
+                    await LoadProjectsData(model.ProjectId);
+                    return View(model);
+                }
+
                 var journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
 
                 if (action == "submit_print")
@@ -66,11 +69,9 @@ namespace PureLedger.Controllers
                             type = "JV" 
                         });
                 }
-                else
-                {
-                    TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
-                    return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
-                }
+                
+                TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
+                return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
             }
             catch (Exception ex)
             {
