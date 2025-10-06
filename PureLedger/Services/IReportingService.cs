@@ -14,6 +14,7 @@ namespace PureLedger.Services
         Task<List<Project>> GetAllProjectsForUserAsync(int userId);
         Task<List<Category>> GetAllCategoriesAsync();
         Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId);
+        Task<decimal> GetAccountBalanceBeforeVoucherAsync(int journalVoucherId);
         Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request);
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);

@@ -1,5 +1,4 @@
-﻿
-$(function () {
+﻿$(function () {
     initializeVoucherPage();
 });
 
@@ -104,6 +103,13 @@ function hideAccountNamesBasedOnFilter(filterType) {
 }
 
 function formatInvoiceAmounts() {
+    // Format the previous balance
+    const previousBalanceElement = document.querySelector('#previousBalance');
+    if (previousBalanceElement) {
+        const previousBalanceValue = parseFormattedNumber(previousBalanceElement.textContent);
+        previousBalanceElement.textContent = formatNumber(previousBalanceValue);
+    }
+    
     // Format the customer running balance
     const balanceElement = document.querySelector('#customerRunningBalance');
     if (balanceElement) {

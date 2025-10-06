@@ -144,7 +144,7 @@ namespace PureLedger.Services
                 Quantity = entry.Quantity,
                 Rate = entry.Rate,
                 PKG = entry.Account?.ProductData?.Pkg ?? 1,
-                Discount = entry.Discount,
+                Discount = (int)entry.DiscountPercent,
                 Debit = entry.Debit,
                 Credit = entry.Credit,
                 Rbp = entry.Rbp ?? "Y"
@@ -571,5 +571,27 @@ namespace PureLedger.Services
         }
 
         #endregion
+
+        public async Task<decimal> GetAccountBalanceBeforeVoucherAsync(int journalVoucherId)
+        {
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null)
+                return 0m;
+
+            // Find the customer entry in the current voucher
+            var customerEntry = voucher.JournalEntries
+                .FirstOrDefault(e => e.Account != null && e.Account.AccountGroupId == 1);
+
+            if (customerEntry?.Account == null)
+                return 0m;
+
+            int customerAccountId = customerEntry.AccountId;
+
+            // Get base balance up to but not including this voucher
+            var previousBalance = await _unitOfWork.JournalEntries
+                .GetAccountBalanceUpToVoucherAsync(customerAccountId, journalVoucherId - 1);
+            
+            return previousBalance;
+        }
     }
 }

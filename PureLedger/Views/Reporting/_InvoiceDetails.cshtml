@@ -111,6 +111,13 @@
 <!-- Customer Running Balance Display -->
 <div class="row mb-2">
     <div class="col-md-6 offset-md-6">
+        <div class="alert alert-light text-end mb-1">
+            <strong>Previous Balance:</strong>
+            @{
+                var previousBalance = ViewBag.PreviousBalance is decimal prevBal ? prevBal : 0m;
+                <span id="previousBalance">@previousBalance.ToString("N2")</span>
+            }
+        </div>
         <div class="alert alert-secondary text-end">
             <strong>Customer Running Balance:</strong>
             @{

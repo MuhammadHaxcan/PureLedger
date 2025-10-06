@@ -225,15 +225,21 @@ namespace PureLedger.Controllers
         {
             try
             {
+                // Get current running balance
                 var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(journalVoucherId);
                 ViewBag.CustomerRunningBalance = balance;
+                
+                // Get previous balance (before this voucher)
+                var previousBalance = await _reportingService.GetAccountBalanceBeforeVoucherAsync(journalVoucherId);
+                ViewBag.PreviousBalance = previousBalance;
 
-                Console.WriteLine($"Customer balance for voucher {journalVoucherId}: {balance}");
+                Console.WriteLine($"Customer balance for voucher {journalVoucherId}: {balance}, Previous: {previousBalance}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error calculating balance for voucher {journalVoucherId}: {ex.Message}");
                 ViewBag.CustomerRunningBalance = 0m;
+                ViewBag.PreviousBalance = 0m;
             }
         }
 
