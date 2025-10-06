@@ -1,38 +1,53 @@
 ﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
 
 <!-- Voucher Information -->
-<div class="voucher-info mb-4">
-    <div class="row">
-        <div class="col-md-6">
-            <table class="info-table">
-                <tr>
-                    <td><strong>Project:</strong></td>
-                    <td>@Model.ProjectName</td>
-                </tr>
-            </table>
-        </div>
-        <div class="col-md-6">
-            <table class="info-table">
-                <tr>
-                    <td><strong>Booker:</strong></td>
-                    <td>@Model.BookerName</td>
-                </tr>
-            </table>
-        </div>
-    </div>
+<div class="invoice-header mb-3">
+    <table class="header-table" width="100%">
+        <tr>
+            <!-- Project Information -->
+            <td width="50%" style="vertical-align: top; padding-right: 15px;">
+                <div class="voucher-info" style="border: 1px solid #ddd; padding: 8px; border-radius: 4px;">
+                    <h6 class="info-heading" style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px;">
+                        Project Information
+                    </h6>
+                    <table class="info-table" width="100%" style="font-size: 12px;">
+                        <tr>
+                            <td width="35%" style="padding: 2px 0;"><strong>Project:</strong></td>
+                            <td style="padding: 2px 0;">@Model.ProjectName</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+
+            <!-- Booker Information -->
+            <td width="50%" style="vertical-align: top;">
+                <div class="voucher-info" style="border: 1px solid #ddd; padding: 8px; border-radius: 4px;">
+                    <h6 class="info-heading" style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px;">
+                        Booker Information
+                    </h6>
+                    <table class="info-table" width="100%" style="font-size: 12px;">
+                        <tr>
+                            <td width="35%" style="padding: 2px 0;"><strong>Booker:</strong></td>
+                            <td style="padding: 2px 0;">@Model.BookerName</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
 </div>
 
 <!-- Journal Voucher Entries Table -->
-<div class="table-responsive mb-4">
-    <table class="table table-bordered table-striped">
+<div class="table-responsive mb-3">
+    <table class="table table-bordered table-striped" style="font-size: 12px;">
         <thead>
             <tr>
-                <th>Account</th>
-                <th>Description</th>
-                <th class="text-end">Qty</th>
-                <th class="text-end">Rate</th>
-                <th class="text-end">Debit</th>
-                <th class="text-end">Credit</th>
+                <th style="width: 30%;">Account</th>
+                <th style="width: 30%;">Description</th>
+                <th style="width: 8%; text-align: right;">Qty</th>
+                <th style="width: 10%; text-align: right;">Rate</th>
+                <th style="width: 11%; text-align: right;">Debit</th>
+                <th style="width: 11%; text-align: right;">Credit</th>
             </tr>
         </thead>
         <tbody>
@@ -41,20 +56,20 @@
                 <tr>
                     <td>@entry.AccountName</td>
                     <td>@entry.Description</td>
-                    <td class="text-end">@entry.Quantity</td>
-                    <td class="text-end">@entry.Rate.ToString("N2")</td>
-                    <td class="text-end">@entry.Debit.ToString("N2")</td>
-                    <td class="text-end">@entry.Credit.ToString("N2")</td>
+                    <td style="text-align: right;">@entry.Quantity</td>
+                    <td style="text-align: right;">@((int)entry.Rate)</td>
+                    <td style="text-align: right;">@((int)entry.Debit)</td>
+                    <td style="text-align: right;">@((int)entry.Credit)</td>
                 </tr>
             }
         </tbody>
         <tfoot>
             <tr class="table-active">
-                <th colspan="2" class="text-end">Totals</th>
-                <th class="text-end">@Model.TotalQuantity</th>
-                <th class="text-end"></th>
-                <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
-                <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+                <th colspan="2" style="text-align: right;">Totals</th>
+                <th style="text-align: right;">@Model.TotalQuantity</th>
+                <th style="text-align: right;"></th>
+                <th style="text-align: right;">@((int)Model.TotalAmount)</th>
+                <th style="text-align: right;">@((int)Model.TotalAmount)</th>
             </tr>
         </tfoot>
     </table>

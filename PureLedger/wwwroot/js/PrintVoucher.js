@@ -1,17 +1,17 @@
-﻿$(function () {
+﻿/**
+ * PrintVoucher.js - Handles voucher document rendering and printing
+ */
+$(function () {
     initializeVoucherPage();
 });
 
 function initializeVoucherPage() {
-    // Get voucher metadata
+    // Get voucher metadata from data attributes on the body
     const voucherType = document.body.getAttribute('data-voucher-type');
     const voucherId = document.body.getAttribute('data-voucher-id');
 
-    // Set document title
-    setDocumentTitle(voucherType, voucherId);
-
-    // Add button event handlers
-    setupButtonHandlers();
+    // Set up event handlers
+    setupEventHandlers();
 
     // Apply appropriate processing based on voucher type
     if (voucherType === VoucherType.JV) {
@@ -19,35 +19,18 @@ function initializeVoucherPage() {
     } else if (voucherType === VoucherType.INV) {
         formatInvoiceAmounts();
     }
+
+    console.log(`Document initialized: ${voucherType}-${voucherId}`);
 }
 
-function setDocumentTitle(voucherType, voucherId) {
-    let title = 'Document #' + voucherId;
-
-    switch (voucherType) {
-        case VoucherType.JV:
-            title = 'Journal Voucher #' + voucherId;
-            break;
-        case VoucherType.DC:
-            title = 'Delivery Challan #' + voucherId;
-            break;
-        case VoucherType.INV:
-            title = 'Invoice #' + voucherId;
-            break;
-    }
-
-    document.title = title;
-}
-
-
-function setupButtonHandlers() {
+function setupEventHandlers() {
     // Print button
-    $('.btn-success').on('click', function () {
+    $('#btnPrint').on('click', function () {
         window.print();
     });
 
-    // Close button
-    $('.btn-secondary').on('click', function () {
+    // Close button - this works better for a standalone window
+    $('#btnClose').on('click', function () {
         window.close();
     });
 
@@ -56,7 +39,6 @@ function setupButtonHandlers() {
         console.log('Printing completed');
     });
 }
-
 
 function applyJournalVoucherFiltering() {
     // Get filter from URL parameters or use default
@@ -79,10 +61,10 @@ function hideAccountNamesBasedOnFilter(filterType) {
 
     rows.forEach((row) => {
         const cells = row.querySelectorAll('td');
-        if (cells.length < 6) return; // Updated to match actual column count
+        if (cells.length < 6) return;
 
-        const debitValue = parseFormattedNumber(cells[4].textContent);  // Changed from 5 to 4
-        const creditValue = parseFormattedNumber(cells[5].textContent); // Changed from 6 to 5
+        const debitValue = parseFormattedNumber(cells[4].textContent);
+        const creditValue = parseFormattedNumber(cells[5].textContent);
 
         // Store original account name
         const accountCell = cells[0];
@@ -103,20 +85,28 @@ function hideAccountNamesBasedOnFilter(filterType) {
 }
 
 function formatInvoiceAmounts() {
+    formatBalanceElements();
+    formatBuiltyElement();
+    formatTableAmounts();
+}
+
+function formatBalanceElements() {
     // Format the previous balance
     const previousBalanceElement = document.querySelector('#previousBalance');
     if (previousBalanceElement) {
         const previousBalanceValue = parseFormattedNumber(previousBalanceElement.textContent);
         previousBalanceElement.textContent = formatNumber(previousBalanceValue);
     }
-    
+
     // Format the customer running balance
     const balanceElement = document.querySelector('#customerRunningBalance');
     if (balanceElement) {
         const balanceValue = parseFormattedNumber(balanceElement.textContent);
         balanceElement.textContent = formatNumber(balanceValue);
     }
-    
+}
+
+function formatBuiltyElement() {
     const builtyElement = document.querySelector('.invoice-info .info-table tr:nth-child(3) td:nth-child(2)');
     if (builtyElement && builtyElement.textContent.includes('(')) {
         const builtyText = builtyElement.textContent;
@@ -124,10 +114,12 @@ function formatInvoiceAmounts() {
         if (match) {
             const builtyNumber = match[1];
             const cartageAmount = parseFormattedNumber(match[2]);
-            builtyElement.textContent = `${formatNumber(cartageAmount)}`;
+            builtyElement.textContent = formatNumber(cartageAmount);
         }
     }
-    
+}
+
+function formatTableAmounts() {
     // Format all amount cells in the table
     const amountCells = document.querySelectorAll('.table-striped tbody tr td:last-child, .table-striped tfoot tr td:last-child, .table-striped tfoot tr th:last-child');
     amountCells.forEach(cell => {
@@ -153,11 +145,13 @@ function parseFormattedNumber(str) {
 
 function formatNumber(num) {
     if (isNaN(num) || num === null || num === undefined) {
-        return '0.00';
+        return '0';
     }
 
+    // Format as integer (no decimal places)
     return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(num);
+        style: 'decimal',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(Math.round(num));
 }

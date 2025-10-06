@@ -13,17 +13,26 @@ const PureLedger = {
         // Create the full URL (now without base path)
         const fullUrl = url.startsWith('/') ? url : '/' + url;
 
+        console.log(`PureLedger.ajax - URL: ${fullUrl}, Method: ${options.method || 'GET'}`);
+
         // Return the jQuery ajax promise
         return $.ajax($.extend({
-            url: fullUrl
+            url: fullUrl,
+            dataType: 'json', // Ensure JSON response parsing
+            cache: false // Prevent caching issues
         }, options));
     },
 
     // Shorthand methods for common AJAX operations
     get: function (url, data) {
+        console.log(`PureLedger.get - URL: ${url}, Data:`, data);
+        
         return this.ajax(url, {
             method: 'GET',
-            data: data
+            data: data,
+            dataType: 'json', // Explicitly set dataType for GET requests
+            cache: false, // Prevent caching issues with pagination
+            traditional: true // Use traditional parameter serialization
         });
     },
 
@@ -37,7 +46,8 @@ const PureLedger = {
             method: 'POST',
             data: JSON.stringify(data), // Serialize to JSON
             contentType: 'application/json',
-            dataType: 'json'
+            dataType: 'json',
+            cache: false
         });
     }
 };

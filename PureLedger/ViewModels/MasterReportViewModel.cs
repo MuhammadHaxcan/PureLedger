@@ -16,6 +16,8 @@ namespace PureLedger.ViewModels
         public string? ProjectId { get; set; }
         public string? CategoryId { get; set; }
         public string? AccountId { get; set; }
+        public int Page { get; set; } = 0;
+        public int PageSize { get; set; } = 100;
     }
 
     public class MasterReportViewModel
@@ -24,6 +26,12 @@ namespace PureLedger.ViewModels
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public decimal NetBalance { get; set; }
+        
+        // Pagination metadata
+        public int TotalRecords { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public bool HasMoreData { get; set; }
     }
 
     public class MasterReportEntryViewModel

@@ -455,7 +455,6 @@ namespace PureLedger.Services
 
         public async Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request)
         {
-
             var result = new MasterReportViewModel();
 
             DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today);
@@ -464,28 +463,36 @@ namespace PureLedger.Services
             int? projectId = ParseNullableInt(request.ProjectId);
             int? categoryId = ParseNullableInt(request.CategoryId);
             int? accountId = ParseNullableInt(request.AccountId);
+            
+            int page = Math.Max(0, request.Page); // Ensure page is not negative
+            int pageSize = Math.Clamp(request.PageSize, 1, 500); // Allow any size from 1 to 500
 
             return await ExecuteInTransactionAsync(async () =>
             {
-
-                var entries = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
-                    startDate, endDate, projectId, categoryId, accountId);
+                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
+                    startDate, endDate, projectId, categoryId, accountId, page, pageSize);
 
                 result.Entries = new List<MasterReportEntryViewModel>();
                 decimal runningBalance = 0;
 
+                // If this is not the first page, we need to calculate the running balance up to this point
+                if (page > 0)
+                {
+                    runningBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceAsync(
+                        startDate, endDate, projectId, categoryId, accountId, page, pageSize);
+                    Console.WriteLine($"Previous entries balance: {runningBalance}");
+                }
+
                 foreach (var entry in entries)
                 {
-
                     runningBalance += entry.Debit - entry.Credit;
 
                     string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
-                    // In the GetMasterReportAsync method, update the mapping:
                     result.Entries.Add(new MasterReportEntryViewModel
                     {    
                         Id = entry.JournalEntryId,
-                        JournalVoucherId = entry.JournalVoucherId, // Add this line
+                        JournalVoucherId = entry.JournalVoucherId,
                         FormattedId = formattedId,
                         TransactionDate = GetEffectiveDate(entry.JournalVoucher),
                         Description = entry.Description,
@@ -501,9 +508,16 @@ namespace PureLedger.Services
                     });
                 }
 
+                // Calculate totals for the current chunk only
                 result.TotalDebit = result.Entries.Sum(e => e.Debit);
                 result.TotalCredit = result.Entries.Sum(e => e.Credit);
                 result.NetBalance = result.TotalDebit - result.TotalCredit;
+                
+                // Include pagination metadata
+                result.TotalRecords = totalCount;
+                result.Page = page;
+                result.PageSize = pageSize;
+                result.HasMoreData = (page + 1) * pageSize < totalCount;
 
                 return result;
             });

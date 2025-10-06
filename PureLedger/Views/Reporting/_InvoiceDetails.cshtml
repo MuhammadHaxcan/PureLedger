@@ -1,64 +1,80 @@
 ﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
 
-<!-- Customer & Invoice Information -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="customer-info">
-            <h5 class="info-heading">Customer Information</h5>
-            <table class="info-table">
-                <tr>
-                    <td><strong>Customer:</strong></td>
-                    <td>@Model.CustomerAccountName</td>
-                </tr>
-                <tr>
-                    <td><strong>Address:</strong></td>
-                    <td>@Model.CustomerAddress</td>
-                </tr>
-                <tr>
-                    <td><strong>City:</strong></td>
-                    <td>@Model.CustomerCity</td>
-                </tr>
-                <tr>
-                    <td><strong>Phone:</strong></td>
-                    <td>@Model.CustomerPhone</td>
-                </tr>
-            </table>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="invoice-info">
-            <h5 class="info-heading">Invoice Details</h5>
-            <table class="info-table">
-                <tr>
-                    <td><strong>Due Date:</strong></td>
-                    <td>@Model.CreatedDate</td>
-                </tr>
-                <tr>
-                    <td><strong>Adda:</strong></td>
-                    <td>@Model.Adda</td>
-                </tr>
-                <tr>
-                    <td><strong>Builty:</strong></td>
-                    <td>@(Model.Builty)@(Model.CartageAmount > 0 ? $" ({Model.CartageAmount:N2})" : "")</td>
-                </tr>
-            </table>
-        </div>
-    </div>
+<!-- Print-optimized layout for header information -->
+<div class="invoice-header mb-3">
+    <table class="header-table" width="100%">
+        <tr>
+            <!-- Customer Information Column -->
+            <td width="40%" style="vertical-align: top; padding-right: 15px;">
+                <div class="customer-info" style="border: 1px solid #ddd; padding: 8px; border-radius: 4px;">
+                    <h6 class="info-heading" style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px;">
+                        Customer Information
+                    </h6>
+                    <table class="info-table" width="100%" style="font-size: 12px;">
+                        <tr>
+                            <td width="35%" style="padding: 2px 0;"><strong>Customer:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CustomerAccountName</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Address:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CustomerAddress</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>City:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CustomerCity</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Phone:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CustomerPhone</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+
+            <!-- Invoice Details Column -->
+            <td width="40%" style="vertical-align: top; padding-right: 15px;">
+                <div class="invoice-info" style="border: 1px solid #ddd; padding: 8px; border-radius: 4px;">
+                    <h6 class="info-heading" style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px;">
+                        Invoice Details
+                    </h6>
+                    <table class="info-table" width="100%" style="font-size: 12px;">
+                        <tr>
+                            <td width="35%" style="padding: 2px 0;"><strong>Due Date:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CreatedDate</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Adda:</strong></td>
+                            <td style="padding: 2px 0;">@Model.Adda</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Builty:</strong></td>
+                            <td style="padding: 2px 0;">@(Model.Builty)@(Model.CartageAmount > 0 ? $" ({(int)Model.CartageAmount})" : "")</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+
+            <!-- Placeholder for balance -->
+            <td width="20%" style="vertical-align: top;">
+                <!-- Intentionally left empty -->
+            </td>
+        </tr>
+    </table>
 </div>
 
-<!-- Invoice Items Table -->
-<div class="table-responsive mb-4">
-    <table class="table table-bordered table-striped">
+<!-- Invoice Items Table: Expanded size -->
+<div class="table-responsive mb-3">
+    <table class="table table-bordered table-striped" style="font-size: 12px;">
         <thead>
             <tr>
-                <th>SR#</th>
-                <th>Product Name</th>
-                <th class="text-end">Quantity</th>
-                <th class="text-end">PKG</th>
-                <th class="text-end">Rate</th>
-                <th class="text-end">DISC %</th>
-                <th class="text-end">NET Rate</th>
-                <th class="text-end">AMOUNT</th>
+                <th style="width: 5%;">SR#</th>
+                <th style="width: 35%;">Product Name</th>
+                <th style="width: 8%; text-align: right;">Quantity</th>
+                <th style="width: 8%; text-align: right;">PKG</th>
+                <th style="width: 10%; text-align: right;">Rate</th>
+                <th style="width: 10%; text-align: right;">DISC %</th>
+                <th style="width: 10%; text-align: right;">NET Rate</th>
+                <th style="width: 14%; text-align: right;">AMOUNT</th>
             </tr>
         </thead>
         <tbody>
@@ -69,39 +85,35 @@
                     <tr>
                         <td>@(sr++)</td>
                         <td>@entry.AccountName</td>
-                        <td class="text-end">@entry.Quantity</td>
-                        <td class="text-end">@entry.PKG</td>
-                        <td class="text-end">@entry.Rate.ToString("N2")</td>
-                        <td class="text-end">@entry.Discount.ToString("N2")%</td>
-                        <td class="text-end">@entry.NetRate.ToString("N2")</td>
-                        <td class="text-end">@entry.LineTotal.ToString("N2")</td>
+                        <td style="text-align: right;">@entry.Quantity</td>
+                        <td style="text-align: right;">@entry.PKG</td>
+                        <td style="text-align: right;">@((int)entry.Rate)</td>
+                        <td style="text-align: right;">@((int)entry.Discount)</td>
+                        <td style="text-align: right;">@((int)entry.NetRate)</td>
+                        <td style="text-align: right;">@((int)entry.LineTotal)</td>
                     </tr>
                 }
             }
         </tbody>
         <tfoot>
             <tr class="table-active">
-                <th colspan="2" class="text-end">Total</th>
-                <th class="text-end">@Model.TotalQuantity</th>
-                <th class="text-end"></th>
-                <th class="text-end"></th>
-                <th class="text-end"></th>
-                <th class="text-end">Net Amount</th>
-                <th class="text-end">@Model.TotalAmount.ToString("N2")</th>
+                <th colspan="2" style="text-align: right;">Total</th>
+                <th style="text-align: right;">@Model.TotalQuantity</th>
+                <th style="text-align: right;"></th>
+                <th style="text-align: right;"></th>
+                <th style="text-align: right;"></th>
+                <th style="text-align: right;">Net Amount</th>
+                <th style="text-align: right;">@((int)Model.TotalAmount)</th>
             </tr>
             @if (Model.ForChargesAmount > 0)
             {
                 <tr class="table-warning">
-                    <td colspan="7" class="text-end"><strong>Less: FOR Charges</strong></td>
-                    <td class="text-end">@Model.ForChargesAmount.ToString("N2")</td>
+                    <td colspan="7" style="text-align: right;"><strong>Less: FOR Charges</strong></td>
+                    <td style="text-align: right;">@((int)Model.ForChargesAmount)</td>
                 </tr>
-            }
-            @* Removed the Cartage row as it's now displayed in the Builty field *@
-            @if (Model.ForChargesAmount > 0)
-            {
                 <tr class="table-info">
-                    <td colspan="7" class="text-end"><strong>Final Amount</strong></td>
-                    <td class="text-end"><strong>@(Model.TotalAmount - Model.ForChargesAmount).ToString("N2")</strong></td>
+                    <td colspan="7" style="text-align: right;"><strong>Final Amount</strong></td>
+                    <td style="text-align: right;"><strong>@((int)(Model.TotalAmount - Model.ForChargesAmount))</strong></td>
                 </tr>
             }
         </tfoot>
@@ -109,21 +121,24 @@
 </div>
 
 <!-- Customer Running Balance Display -->
-<div class="row mb-2">
-    <div class="col-md-6 offset-md-6">
-        <div class="alert alert-light text-end mb-1">
-            <strong>Previous Balance:</strong>
-            @{
-                var previousBalance = ViewBag.PreviousBalance is decimal prevBal ? prevBal : 0m;
-                <span id="previousBalance">@previousBalance.ToString("N2")</span>
-            }
-        </div>
-        <div class="alert alert-secondary text-end">
-            <strong>Customer Running Balance:</strong>
-            @{
-                var balance = ViewBag.CustomerRunningBalance is decimal bal ? bal : 0m;
-                <span id="customerRunningBalance">@balance.ToString("N2")</span>
-            }
-        </div>
-    </div>
-</div>
+<table width="100%" style="font-size: 12px;">
+    <tr>
+        <td width="65%"></td>
+        <td width="35%" style="padding-top: 5px;">
+            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 5px; text-align: right; margin-bottom: 5px;">
+                <strong>Previous Balance:</strong>
+                @{
+                    var previousBalance = ViewBag.PreviousBalance is decimal prevBal ? prevBal : 0m;
+                    <span id="previousBalance">@((int)previousBalance)</span>
+                }
+            </div>
+            <div style="background-color: #e9ecef; border: 1px solid #dee2e6; padding: 5px; text-align: right;">
+                <strong>Customer Running Balance:</strong>
+                @{
+                    var balance = ViewBag.CustomerRunningBalance is decimal bal ? bal : 0m;
+                    <span id="customerRunningBalance">@((int)balance)</span>
+                }
+            </div>
+        </td>
+    </tr>
+</table>

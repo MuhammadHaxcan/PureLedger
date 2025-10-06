@@ -1,7 +1,9 @@
 ﻿@using PureLedger.Models
 @model PureLedger.ViewModels.JournalVoucherReportViewModel
 @{
+    // Using null layout to avoid including navigation elements for print view
     Layout = null;
+
     bool isDC = Model.VoucherType == VoucherType.DC;
     bool isInv = Model.VoucherType == VoucherType.INV;
     bool isJV = Model.VoucherType == VoucherType.JV;
@@ -15,10 +17,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@documentTitle #@Model.JvId</title>
+
+    <!-- Stylesheets -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="~/css/PrintVoucher.css" rel="stylesheet" asp-append-version="true" />
+
+    <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <!-- Configuration -->
     <script>
         // Define VoucherType enum to match C# enum
         window.VoucherType = {
@@ -26,18 +34,25 @@
             DC: '@VoucherType.DC',
             INV: '@VoucherType.INV'
         };
+
         // Pass filter value from server to client
         var currentFilter = '@(ViewBag.Filter ?? "all")';
+
+        // Define routes for any API calls
+        var routes = {
+            printVoucher: '@Url.Action("PrintVoucher", "Reporting")',
+            customerBalances: '@Url.Action("GetCustomerBalances", "Reporting")'
+        };
     </script>
 </head>
 <body data-voucher-type="@Model.VoucherType.ToString()" data-voucher-id="@Model.JvId">
     <div class="container-fluid print-container">
         <!-- Print Controls -->
         <div class="d-print-none text-end mb-3 print-controls">
-            <button class="btn btn-secondary me-2" onclick="window.close()">
+            <button class="btn btn-secondary me-2" id="btnClose">
                 <i class="fas fa-times me-1"></i> Close
             </button>
-            <button class="btn btn-success" onclick="window.print()">
+            <button class="btn btn-success" id="btnPrint">
                 <i class="fas fa-print me-1"></i> Print
             </button>
         </div>
@@ -82,30 +97,42 @@
                     <partial name="_JournalVoucherDetails" model="Model" />
                 }
 
-                <!-- Signature Section -->
-                <div class="signatures-section mt-5">
-                    <div class="row">
-                        <div class="col-md-4 signature-block">
-                            <div class="signature-line"></div>
-                            <div class="signature-title">Accountant</div>
-                        </div>
-                        <div class="col-md-4 signature-block">
-                            <div class="signature-line">@Model.AuthorizedBy</div>
-                            <div class="signature-title">Authorized By</div>
-                        </div>
-                        <div class="col-md-4 signature-block">
-                            <div class="signature-line">@Model.ReceivedBy</div>
-                            <div class="signature-title">Received/Paid By</div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Improved Signature Section -->
+                <table width="100%" style="margin-top: 50px;">
+                    <tr>
+                        <td width="33%" style="text-align: center; padding: 10px;">
+                            <div style="border-bottom: 1px solid #333; height: 30px; margin-bottom: 5px;">
+                                &nbsp;
+                            </div>
+                            <div style="font-weight: bold; font-size: 14px;">
+                                Accountant
+                            </div>
+                        </td>
+                        <td width="33%" style="text-align: center; padding: 10px;">
+                            <div style="border-bottom: 1px solid #333; height: 30px; margin-bottom: 5px;">
+                                @Model.AuthorizedBy
+                            </div>
+                            <div style="font-weight: bold; font-size: 14px;">
+                                Authorized By
+                            </div>
+                        </td>
+                        <td width="33%" style="text-align: center; padding: 10px;">
+                            <div style="border-bottom: 1px solid #333; height: 30px; margin-bottom: 5px;">
+                                @Model.ReceivedBy
+                            </div>
+                            <div style="font-weight: bold; font-size: 14px;">
+                                Received/Paid By
+                            </div>
+                        </td>
+                    </tr>
+                </table>
 
-                <!-- Document Footer -->
+                @* <!-- Document Footer -->
                 <div class="document-footer mt-4 text-center">
                     <small class="text-muted">
                         Document ID: @Model.JvId | Generated on: @DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
                     </small>
-                </div>
+                </div> *@
             </div>
         </div>
     </div>

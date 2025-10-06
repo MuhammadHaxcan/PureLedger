@@ -172,12 +172,76 @@ namespace PureLedger.Repositories
             return await query.ToListAsync();
         }
 
+
         public async Task<List<JournalEntry>> GetEntriesForMasterReportAsync(
+    DateOnly startDate,
+    DateOnly endDate,
+    int? projectId,
+    int? categoryId,
+    int? accountId,
+    int page,
+    int pageSize,
+    bool getLastEntryOnly)
+        {
+            var query = _context.JournalEntries
+                .Include(je => je.JournalVoucher)
+                    .ThenInclude(jv => jv.Project)
+                .Include(je => je.Account)
+                .Include(je => je.Category)
+                .Where(je =>
+                    je.JournalVoucher.IsCompleted &&
+                    je.JournalVoucher.EntryDate >= startDate &&
+                    je.JournalVoucher.EntryDate <= endDate);
+
+            if (projectId.HasValue)
+            {
+                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+            }
+
+            if (categoryId.HasValue)
+            {
+                query = query.Where(je => je.CategoryId == categoryId.Value);
+            }
+
+            if (accountId.HasValue)
+            {
+                query = query.Where(je => je.AccountId == accountId.Value);
+            }
+
+            // Order consistently
+            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
+                .ThenBy(je => je.JournalVoucherId)
+                .ThenBy(je => je.JournalEntryId);
+
+            if (getLastEntryOnly)
+            {
+                // Calculate the position of the last entry of the requested page
+                int lastEntryPosition = (page * pageSize) - 1;
+
+                // Get only that single entry
+                return await query
+                    .Skip(Math.Max(0, lastEntryPosition))
+                    .Take(1)
+                    .ToListAsync();
+            }
+            else
+            {
+                // Regular paged query
+                return await query
+                    .Skip(page * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+            }
+        }
+
+        public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
             DateOnly startDate,
             DateOnly endDate,
             int? projectId,
             int? categoryId,
-            int? accountId)
+            int? accountId,
+            int page,
+            int pageSize)
         {
             var query = _context.JournalEntries
                 .Include(je => je.JournalVoucher)
@@ -205,13 +269,19 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Order by EntryDate for consistent reports
-            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
-                .ThenBy(je => je.JournalVoucherId)
-                .ThenBy(je => je.JournalEntryId);
+            // Get total count for pagination info
+            int totalCount = await query.CountAsync();
 
-            // Execute the optimized query
-            return await query.ToListAsync();
+            // Order by EntryDate for consistent reports and apply pagination
+            var pagedResults = await query
+                .OrderBy(je => je.JournalVoucher.EntryDate)
+                .ThenBy(je => je.JournalVoucherId)
+                .ThenBy(je => je.JournalEntryId)
+                .Skip(page * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (pagedResults, totalCount);
         }
 
         public async Task<List<JournalEntry>> GetCartageEntriesByJournalVoucherIdAsync(int journalVoucherId)
@@ -237,6 +307,52 @@ namespace PureLedger.Repositories
             }
 
             return cartageEntries;
+        }
+
+        public async Task<decimal> GetPreviousEntriesBalanceAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId,
+            int page,
+            int pageSize)
+        {
+            // Build the same query as the main report
+            var query = _context.JournalEntries
+                .Where(je =>
+                    je.JournalVoucher.IsCompleted &&
+                    je.JournalVoucher.EntryDate >= startDate &&
+                    je.JournalVoucher.EntryDate <= endDate);
+
+            if (projectId.HasValue)
+            {
+                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+            }
+
+            if (categoryId.HasValue)
+            {
+                query = query.Where(je => je.CategoryId == categoryId.Value);
+            }
+
+            if (accountId.HasValue)
+            {
+                query = query.Where(je => je.AccountId == accountId.Value);
+            }
+
+            // Order the same as the main report
+            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
+                .ThenBy(je => je.JournalVoucherId)
+                .ThenBy(je => je.JournalEntryId);
+
+            // Take all entries before the current page
+            var previousEntries = await query
+                .Take(page * pageSize)
+                .Select(je => new { je.Debit, je.Credit })
+                .ToListAsync();
+
+            decimal balance = previousEntries.Sum(e => e.Debit - e.Credit);
+            return balance;
         }
     }
 }

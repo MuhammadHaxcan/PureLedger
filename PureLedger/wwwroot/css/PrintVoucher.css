@@ -45,6 +45,35 @@
     font-weight: 500;
 }
 
+/* Optimized layout for invoice details */
+.customer-info,
+.invoice-info {
+    border: 1px solid #eee;
+    border-radius: 5px;
+    padding: 10px;
+    height: 100%;
+}
+
+.info-heading {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.info-table {
+    width: 100%;
+}
+
+.info-table td:first-child {
+    width: 35%;
+    vertical-align: top;
+}
+
+.info-table td {
+    padding: 3px 0;
+}
+
 /* Table styles */
 .table {
     font-size: 0.9rem;
@@ -54,8 +83,15 @@
     background-color: #f8f9fa;
 }
 
-.text-end {
-    text-align: right !important;
+/* Make invoice table more compact but readable */
+.table-striped > tbody > tr > td {
+    padding: 0.3rem 0.5rem;
+    vertical-align: middle;
+}
+
+/* Ensure product name column takes appropriate width */
+.table-striped th:nth-child(2) {
+    width: 30%;
 }
 
 /* Signature section */
@@ -114,5 +150,11 @@
         background-color: #e9ecef !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+    }
+    
+    .customer-info,
+    .invoice-info {
+        border: none;
+        padding: 5px;
     }
 }

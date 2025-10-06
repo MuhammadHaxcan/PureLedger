@@ -11,19 +11,18 @@
         }
     });
 
-    // Handle Enter key press in inputs - Using .on('keypress') instead of .keypress()
+    // Handle Enter key press in inputs
     $('#voucherId').on('keypress', function (e) {
         if (e.which === 13) {
-            // Trigger the click event on the button
             $('#btnGo').trigger('click');
         }
     });
 
-    // Handle Go button click - Using .on('click') instead of .click()
+    // Handle Go button click
     $('#btnGo').on('click', function () {
         const id = $('#voucherId').val().trim();
         const type = $('#voucherType').val();
-        const filter = type === VoucherType.JV ? $('#jvFilter').val() : 'all'; // Get the filter value only for JV type
+        const filter = type === VoucherType.JV ? $('#jvFilter').val() : 'all';
 
         if (!id || !Number.isInteger(Number(id)) || Number(id) < 1) {
             showAlert('warning', 'Please enter a valid Voucher ID.');
@@ -40,19 +39,16 @@
         $btn.html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Validating...');
         $btn.prop('disabled', true);
 
-        // Use PureLedger utility for AJAX
-        PureLedger.get('/Reporting/ValidateVoucher', {
+        // Use routes object instead of hardcoded URL
+        PureLedger.get(routes.validateVoucher, {
             journalVoucherId: id,
             type: type
         })
             .done(function (result) {
                 if (result.exists) {
-                    // If valid, open print page in new tab
-                    // Use the base path from PureLedger utility to construct the URL
-                    const basePath = PureLedger.getCurrentBasePath();
-
-                    // Include the filter parameter for journal vouchers
-                    let printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
+                    // If valid, open print page in new tab using routes object
+                    // Construct the full URL with query parameters
+                    let printUrl = `${routes.printVoucher}?journalVoucherId=${id}&type=${type}`;
 
                     // Add filter parameter only for Journal Voucher type
                     if (type === VoucherType.JV) {

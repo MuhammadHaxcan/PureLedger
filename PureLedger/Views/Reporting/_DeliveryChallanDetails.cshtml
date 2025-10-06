@@ -1,52 +1,63 @@
 ﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
 
-<!-- Customer & Challan Information -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="customer-info">
-            <h5 class="info-heading">Customer Information</h5>
-            <table class="info-table">
-                <tr>
-                    <td><strong>Customer:</strong></td>
-                    <td>@Model.CustomerAccountName</td>
-                </tr>
-            </table>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="challan-info">
-            <h5 class="info-heading">Challan Details</h5>
-            <table class="info-table">
-                <tr>
-                    <td><strong>Due Date:</strong></td>
-                    <td>@Model.CreatedDate</td>
-                </tr>
-                <tr>
-                    <td><strong>Adda:</strong></td>
-                    <td>@Model.Adda</td>
-                </tr>
-                <tr>
-                    <td><strong>Builty:</strong></td>
-                    <td>@Model.Builty</td>
-                </tr>
-                <tr>
-                    <td><strong>Remarks:</strong></td>
-                    <td>@Model.Remarks</td>
-                </tr>
-            </table>
-        </div>
-    </div>
+<!-- Print-optimized layout for header information -->
+<div class="invoice-header mb-3">
+    <table class="header-table" width="100%">
+        <tr>
+            <!-- Customer Information Column -->
+            <td width="50%" style="vertical-align: top; padding-right: 15px;">
+                <div class="customer-info" style="border: 1px solid #ddd; padding: 8px; border-radius: 4px;">
+                    <h6 class="info-heading" style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px;">
+                        Customer Information
+                    </h6>
+                    <table class="info-table" width="100%" style="font-size: 12px;">
+                        <tr>
+                            <td width="35%" style="padding: 2px 0;"><strong>Customer:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CustomerAccountName</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+
+            <!-- Challan Details Column -->
+            <td width="50%" style="vertical-align: top;">
+                <div class="challan-info" style="border: 1px solid #ddd; padding: 8px; border-radius: 4px;">
+                    <h6 class="info-heading" style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-size: 14px;">
+                        Challan Details
+                    </h6>
+                    <table class="info-table" width="100%" style="font-size: 12px;">
+                        <tr>
+                            <td width="35%" style="padding: 2px 0;"><strong>Due Date:</strong></td>
+                            <td style="padding: 2px 0;">@Model.CreatedDate</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Adda:</strong></td>
+                            <td style="padding: 2px 0;">@Model.Adda</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Builty:</strong></td>
+                            <td style="padding: 2px 0;">@Model.Builty</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 2px 0;"><strong>Remarks:</strong></td>
+                            <td style="padding: 2px 0;">@Model.Remarks</td>
+                        </tr>
+                    </table>
+                </div>
+            </td>
+        </tr>
+    </table>
 </div>
 
 <!-- Delivery Challan Items Table -->
-<div class="table-responsive mb-4">
-    <table class="table table-bordered table-striped">
+<div class="table-responsive mb-3">
+    <table class="table table-bordered table-striped" style="font-size: 12px;">
         <thead>
             <tr>
-                <th>SR#</th>
-                <th>Product Name</th>
-                <th class="text-end">Quantity</th>
-                <th class="text-end">PKG</th>
+                <th style="width: 10%;">SR#</th>
+                <th style="width: 60%;">Product Name</th>
+                <th style="width: 15%; text-align: right;">Quantity</th>
+                <th style="width: 15%; text-align: right;">PKG</th>
             </tr>
         </thead>
         <tbody>
@@ -57,17 +68,17 @@
                     <tr>
                         <td>@(sr++)</td>
                         <td>@entry.AccountName</td>
-                        <td class="text-end">@entry.Quantity</td>
-                        <td class="text-end">@entry.PKG</td>
+                        <td style="text-align: right;">@entry.Quantity</td>
+                        <td style="text-align: right;">@entry.PKG</td>
                     </tr>
                 }
             }
         </tbody>
         <tfoot>
             <tr class="table-active">
-                <th colspan="2" class="text-end">Total</th>
-                <th class="text-end">@Model.TotalQuantity</th>
-                <th class="text-end"></th>
+                <th colspan="2" style="text-align: right;">Total</th>
+                <th style="text-align: right;">@Model.TotalQuantity</th>
+                <th style="text-align: right;"></th>
             </tr>
         </tfoot>
     </table>

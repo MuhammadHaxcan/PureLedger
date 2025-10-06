@@ -247,7 +247,15 @@
 </div>
 
 @section Scripts {
-    <script src="~/js/masterReport.js" asp-append-version="true"></script>
+    <script>
+        // Define API routes for master report
+        var routes = {
+            getCategoriesByProject: '@Url.Action("GetCategoriesByProject", "Reporting")',
+            getAccountsByCategory: '@Url.Action("GetAccountsByCategory", "Reporting")',
+            getMasterReportData: '@Url.Action("GetMasterReportData", "Reporting")'
+        };
+    </script>
+    <script src="~/js/master-report.js" asp-append-version="true"></script>
 }
 
 <style>
@@ -259,51 +267,51 @@
         background-image: none !important;
         padding-right: 0.75rem !important;
     }
-    
-    /* For Firefox */
-    select.form-select::-ms-expand {
-        display: none;
-    }
-    
+
+        /* For Firefox */
+        select.form-select::-ms-expand {
+            display: none;
+        }
+
     /* Table number columns alignment */
     .text-end {
         text-align: right !important;
     }
-    
+
     /* Card header padding */
     .card-header.py-3 {
         padding-top: 1rem !important;
         padding-bottom: 1rem !important;
     }
-    
+
     /* Column toggle buttons */
     .column-toggles .btn {
         border-radius: 0;
     }
-    
-    .column-toggles .btn:first-child {
-        border-top-left-radius: 0.25rem;
-        border-bottom-left-radius: 0.25rem;
-    }
-    
-    .column-toggles .btn:last-child {
-        border-top-right-radius: 0.25rem;
-        border-bottom-right-radius: 0.25rem;
-    }
-    
+
+        .column-toggles .btn:first-child {
+            border-top-left-radius: 0.25rem;
+            border-bottom-left-radius: 0.25rem;
+        }
+
+        .column-toggles .btn:last-child {
+            border-top-right-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+        }
+
     /* Table styles */
     #masterReportTable td,
     #accountSummaryTable td,
     #categorySummaryTable td {
         vertical-align: middle;
     }
-    
+
     /* Monospace for numbers */
     .text-end {
         font-family: monospace;
         font-size: 0.9rem;
     }
-    
+
     /* Negative values in red */
     .negative-balance {
         color: #dc3545;
@@ -323,10 +331,10 @@
         margin-bottom: 2px;
     }
 
-    .voucher-link:hover {
-        color: #2a4766;
-        text-decoration: underline;
-    }
+        .voucher-link:hover {
+            color: #2a4766;
+            text-decoration: underline;
+        }
 
     .entry-id {
         font-size: 0.85em;
@@ -338,5 +346,10 @@
     #masterReportTable td {
         vertical-align: middle;
         padding: 0.5rem;
+    }
+
+    /* Automatic loading indicator */
+    #loadingStatus {
+        font-size: 0.9rem;
     }
 </style>
