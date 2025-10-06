@@ -4,7 +4,7 @@
         const selectedType = $(this).val();
 
         // Show JV filter only when Journal Voucher type is selected
-        if (selectedType === 'JV') {
+        if (selectedType === VoucherType.JV) {
             $('#jvFilterContainer').fadeIn(300);
         } else {
             $('#jvFilterContainer').fadeOut(300);
@@ -23,15 +23,15 @@
     $('#btnGo').on('click', function () {
         const id = $('#voucherId').val().trim();
         const type = $('#voucherType').val();
-        const filter = type === 'JV' ? $('#jvFilter').val() : 'all'; // Get the filter value only for JV type
+        const filter = type === VoucherType.JV ? $('#jvFilter').val() : 'all'; // Get the filter value only for JV type
 
         if (!id || !Number.isInteger(Number(id)) || Number(id) < 1) {
             showAlert('warning', 'Please enter a valid Voucher ID.');
             return;
         }
 
-        if (!type) {
-            showAlert('warning', 'Please select a Voucher Type.');
+        if (!type || !Object.values(VoucherType).includes(type)) {
+            showAlert('warning', 'Please select a valid Voucher Type.');
             return;
         }
 
@@ -55,7 +55,7 @@
                     let printUrl = `${basePath}/Reporting/PrintVoucher?journalVoucherId=${id}&type=${type}`;
 
                     // Add filter parameter only for Journal Voucher type
-                    if (type === 'JV') {
+                    if (type === VoucherType.JV) {
                         printUrl += `&filter=${filter}`;
                     }
 
@@ -68,9 +68,9 @@
                     showAlert('success', 'Document found and opened for printing.');
                 } else {
                     // Show error message on the same page
-                    const errorMessage = type === "DC"
+                    const errorMessage = type === VoucherType.DC
                         ? "No Delivery Challan exists for this Voucher ID."
-                        : (type === "INV"
+                        : (type === VoucherType.INV
                             ? "No Invoice exists for this Voucher ID."
                             : "No Journal Voucher found for this ID.");
 

@@ -12,8 +12,8 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20250816020846_updatednew")]
-    partial class updatednew
+    [Migration("20250924112116_updatedrelations")]
+    partial class updatedrelations
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -333,19 +333,23 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>
                 {
-                    b.Property<int>("JournalEntryId")
-                        .HasColumnType("int");
-
                     b.Property<int>("JournalEntryTagId")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalEntryTagId"));
+
+                    b.Property<int>("JournalEntryId")
                         .HasColumnType("int");
 
                     b.Property<int>("TagId")
                         .HasColumnType("int");
 
-                    b.HasKey("JournalEntryId", "JournalEntryTagId");
+                    b.HasKey("JournalEntryTagId");
 
-                    b.HasIndex("JournalEntryTagId");
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("TagId");
 
                     b.ToTable("JournalEntryTags");
                 });
@@ -363,6 +367,9 @@ namespace PureLedger.Migrations
 
                     b.Property<DateOnly>("EntryDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("IsBaseVoucher")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
@@ -581,6 +588,10 @@ namespace PureLedger.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserControllerAccessId"));
 
+                    b.Property<string>("Action")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Controller")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -682,7 +693,7 @@ namespace PureLedger.Migrations
                     b.HasOne("PureLedger.Models.JournalEntry", "JournalEntry")
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
-                        .OnDelete(DeleteBehavior.NoAction)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("PureLedger.Models.Location", "Location")
@@ -746,7 +757,7 @@ namespace PureLedger.Migrations
 
                     b.HasOne("PureLedger.Models.Tag", "Tag")
                         .WithMany("JournalEntryTags")
-                        .HasForeignKey("JournalEntryTagId")
+                        .HasForeignKey("TagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

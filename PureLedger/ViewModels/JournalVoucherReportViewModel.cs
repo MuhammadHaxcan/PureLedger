@@ -5,13 +5,10 @@ namespace PureLedger.ViewModels
     public class JournalVoucherReportViewModel
     {
         public int JvId { get; set; }
-        public string? VoucherType { get; set; } // DC or JV or INV
+        public VoucherType VoucherType { get; set; }
         public string? ProjectName { get; set; }
         public string? BookerName { get; set; }
         public DateOnly CreatedDate { get; set; }
-
-        // Additional Fields for Delivery Challan
-        public bool IsPartial { get; set; } // Check if Partial DC
 
         // Particular Customer Data
         public string? CustomerAccountName { get; set; } // Customer account name (from JournalEntries with Quantity == 0)

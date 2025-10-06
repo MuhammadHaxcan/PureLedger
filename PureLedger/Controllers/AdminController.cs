@@ -291,5 +291,43 @@ namespace PureLedger.Controllers
             var accounts = await _authService.GetAccountsByCategoryAsync(categoryId);
             return Json(accounts.Select(a => new { a.AccountId, a.AccountName }));
         }
+
+        [HttpGet]
+        public async Task<JsonResult> GetCategoryForAccount(int accountId)
+        {
+            try {
+                var account = await _authService.GetAccountByIdAsync(accountId);
+                return Json(new { categoryId = account?.CategoryId ?? 0 });
+            }
+            catch (Exception ex) {
+                _logger.LogError(ex, "Error getting category for account {AccountId}", accountId);
+                return Json(new { categoryId = 0 });
+            }
+        }
+
+        [HttpGet]
+        public async Task<JsonResult> GetProjectCartageSettingsByProject(int projectId)
+        {
+            try {
+                var settings = await _authService.GetProjectCartageSettingsAsync(projectId);
+                if (settings == null) {
+                    return Json(null);
+                }
+                
+                // Create a simplified anonymous object without navigation properties to avoid circular references
+                var result = new {
+                    id = settings.Id,
+                    projectId = settings.ProjectId,
+                    forExpenseAccountId = settings.ForExpenseAccountId,
+                    cartageTransporterCategoryId = settings.CartageTransporterCategoryId
+                };
+                
+                return Json(result);
+            }
+            catch (Exception ex) {
+                _logger.LogError(ex, "Error getting cartage settings for project {ProjectId}: {Message}", projectId, ex.Message);
+                return Json(null);
+            }
+        }
     }
 }

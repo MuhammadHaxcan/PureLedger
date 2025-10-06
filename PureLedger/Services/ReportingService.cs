@@ -19,17 +19,17 @@ namespace PureLedger.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType)
+        public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, VoucherType voucherType)
         {
             return voucherType switch
             {
-                "DC" => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
-                "INV" => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
+                VoucherType.DC => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
+                VoucherType.INV => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
                 _ => await GetJournalVoucherReportAsync(journalVoucherId, voucherType)
             };
         }
 
-        private async Task<JournalVoucherReportViewModel?> GetDeliveryChallanReportAsync(int journalVoucherId, string voucherType)
+        private async Task<JournalVoucherReportViewModel?> GetDeliveryChallanReportAsync(int journalVoucherId, VoucherType voucherType)
         {
             var dcVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
             if (dcVoucher?.JournalVoucher == null) return null;
@@ -74,19 +74,15 @@ namespace PureLedger.Services
             return viewModel;
         }
 
-        private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, string voucherType)
+        private async Task<JournalVoucherReportViewModel?> GetJournalVoucherReportAsync(int journalVoucherId, VoucherType voucherType)
         {
-
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null) return null;
 
             var project = await _unitOfWork.Projects.GetByIdAsync(voucher.ProjectId);
             if (project == null) return null;
 
-            var isPartial = voucherType == "DC" && !voucher.IsCompleted;
-            var typeLabel = isPartial ? "DC - Partial" : voucherType;
-
-            var entries = GetJournalVoucherEntries(voucher.JournalEntries, isPartial);
+            var entries = GetJournalVoucherEntries(voucher.JournalEntries);
             var customerInfo = GetCustomerAccountName(voucher);
 
             var cartageEntries = await _unitOfWork.JournalEntries
@@ -97,7 +93,7 @@ namespace PureLedger.Services
             var viewModel = new JournalVoucherReportViewModel
             {
                 JvId = journalVoucherId,
-                VoucherType = typeLabel,
+                VoucherType = voucherType,
                 ProjectName = project.ProjectName,
                 CreatedDate = voucher.EntryDate,
                 Entries = entries,
@@ -131,10 +127,9 @@ namespace PureLedger.Services
                 .ToList();
         }
 
-        private List<JournalVoucherEntryReportModel> GetJournalVoucherEntries(IEnumerable<JournalEntry> entries, bool isPartial)
+        private List<JournalVoucherEntryReportModel> GetJournalVoucherEntries(IEnumerable<JournalEntry> entries)
         {
             return entries
-                .Where(e => !isPartial || e.IsProcessed)
                 .Select(MapToEntryReportModel)
                 .ToList();
         }
@@ -546,16 +541,15 @@ namespace PureLedger.Services
             return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
         }
 
-        public async Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, string type)
+        public async Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type)
         {
-
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null)
             {
                 return (false, false);
             }
 
-            if (type != "JV")
+            if (type != VoucherType.JV)
             {
 
                 var report = await GetSingleDocReportAsync(journalVoucherId, type);

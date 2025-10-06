@@ -1,10 +1,10 @@
-﻿@model PureLedger.ViewModels.JournalVoucherReportViewModel
+﻿@using PureLedger.Models
+@model PureLedger.ViewModels.JournalVoucherReportViewModel
 @{
     Layout = null;
-    bool isDC = Model.VoucherType == "DC";
-    bool isInv = Model.VoucherType == "INV";
-    bool isJV = !isDC && !isInv;
-    string challanType = Model.IsPartial ? "Partial Delivery Challan" : "Full Delivery Challan";
+    bool isDC = Model.VoucherType == VoucherType.DC;
+    bool isInv = Model.VoucherType == VoucherType.INV;
+    bool isJV = Model.VoucherType == VoucherType.JV;
     string documentTitle = isInv ? "Invoice" : isDC ? "Delivery Challan" : "Journal Voucher";
     string documentDateFormat = isInv ? "dd-MMM-yyyy" : "dd-MM-yyyy";
 }
@@ -20,11 +20,17 @@
     <link href="~/css/PrintVoucher.css" rel="stylesheet" asp-append-version="true" />
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        // Define VoucherType enum to match C# enum
+        window.VoucherType = {
+            JV: '@VoucherType.JV',
+            DC: '@VoucherType.DC',
+            INV: '@VoucherType.INV'
+        };
         // Pass filter value from server to client
         var currentFilter = '@(ViewBag.Filter ?? "all")';
     </script>
 </head>
-<body data-voucher-type="@Model.VoucherType" data-voucher-id="@Model.JvId">
+<body data-voucher-type="@Model.VoucherType.ToString()" data-voucher-id="@Model.JvId">
     <div class="container-fluid print-container">
         <!-- Print Controls -->
         <div class="d-print-none text-end mb-3 print-controls">
@@ -49,7 +55,7 @@
                             }
                             else if (isDC)
                             {
-                                <span>@challanType - @Model.CreatedDate.ToShortDateString()</span>
+                                <span>Delivery Challan - @Model.CreatedDate.ToShortDateString()</span>
                             }
                             else
                             {

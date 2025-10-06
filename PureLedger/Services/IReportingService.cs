@@ -7,7 +7,7 @@ namespace PureLedger.Services
 {
     public interface IReportingService
     {
-        Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, string voucherType);
+        Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, VoucherType voucherType);
         Task<List<AgingReportViewModel>> GetAgingReportAsync(AgingReportRequest request);
         Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request);
         Task<List<Project>> GetAllProjectsAsync();
@@ -17,6 +17,6 @@ namespace PureLedger.Services
         Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request);
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
-        Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, string type);
+        Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type);
     }
 }

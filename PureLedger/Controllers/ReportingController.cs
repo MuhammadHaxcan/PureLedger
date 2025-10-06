@@ -27,7 +27,7 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> PrintVoucher(int journalVoucherId, string type, string filter = "all")
+        public async Task<IActionResult> PrintVoucher(int journalVoucherId, VoucherType type, string filter = "all")
         {
             if (!IsValidInput(journalVoucherId, type, out IActionResult errorResult))
                 return errorResult;
@@ -36,25 +36,29 @@ namespace PureLedger.Controllers
             if (report == null)
                 return HandleVoucherNotFound(journalVoucherId, type);
 
-            if (type == "INV" && !string.IsNullOrEmpty(report.CustomerAccountName))
+            if (type == VoucherType.INV && !string.IsNullOrEmpty(report.CustomerAccountName))
             {
                 await AddCustomerBalanceToViewBag(journalVoucherId);
             }
 
-            if (type == "JV")
+            if (type == VoucherType.JV)
             {
                 ViewBag.Filter = filter;
             }
 
-            ViewBag.Type = type;
+            ViewBag.Type = type.ToString();
             return View("PrintVoucher", report);
         }
 
         [HttpGet]
         public async Task<IActionResult> ValidateVoucher(int journalVoucherId, string type)
         {
-            var result = await _reportingService.ValidateVoucherAsync(journalVoucherId, type);
-            return Json(new { exists = result.Exists, isBaseVoucher = result.IsBaseVoucher });
+            if (Enum.TryParse<VoucherType>(type, out var voucherType))
+            {
+                var result = await _reportingService.ValidateVoucherAsync(journalVoucherId, voucherType);
+                return Json(new { exists = result.Exists, isBaseVoucher = result.IsBaseVoucher });
+            }
+            return BadRequest(new { error = "Invalid voucher type" });
         }
 
         #endregion
@@ -155,10 +159,10 @@ namespace PureLedger.Controllers
 
         #region Helper Methods
 
-        private bool IsValidInput(int journalVoucherId, string type, out IActionResult errorResult)
+        private bool IsValidInput(int journalVoucherId, VoucherType type, out IActionResult errorResult)
         {
             errorResult = null;
-            if (string.IsNullOrWhiteSpace(type) || journalVoucherId <= 0)
+            if (journalVoucherId <= 0)
             {
                 TempData["Error"] = "Invalid input.";
                 errorResult = RedirectToAction("SingleDoc");
@@ -167,12 +171,12 @@ namespace PureLedger.Controllers
             return true;
         }
 
-        private IActionResult HandleVoucherNotFound(int journalVoucherId, string type)
+        private IActionResult HandleVoucherNotFound(int journalVoucherId, VoucherType type)
         {
             string message = type switch
             {
-                "DC" => $"No Delivery Challan exists for Voucher ID {journalVoucherId}.",
-                "INV" => $"No Invoice exists for Voucher ID {journalVoucherId}.",
+                VoucherType.DC => $"No Delivery Challan exists for Voucher ID {journalVoucherId}.",
+                VoucherType.INV => $"No Invoice exists for Voucher ID {journalVoucherId}.",
                 _ => $"No Journal Voucher exists for Voucher ID {journalVoucherId}."
             };
 

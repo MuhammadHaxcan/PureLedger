@@ -666,6 +666,9 @@
                 return;
             }
 
+            // Format dates correctly before submission
+            this.formatDatesForSubmission();
+
             console.log('Validation passed, submitting form...');
             this.isSubmitting = true;
             event.target.submit();
@@ -676,6 +679,55 @@
         } finally {
             if (!this.isSubmitting) {
                 this.resetSubmitButtons();
+            }
+        }
+    }
+
+    // Add this new method to format dates in ISO format for submission
+    formatDatesForSubmission() {
+        // Get the entry date value
+        const entryDateStr = $('#EntryDate').val();
+        const dueDateStr = $('#DueDate').val();
+        
+        if (entryDateStr) {
+            try {
+                // Parse the dd/MM/yyyy format
+                const [day, month, year] = entryDateStr.split('/').map(Number);
+                
+                // Create a valid ISO date string (yyyy-MM-dd)
+                const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                
+                // Create a hidden field with the ISO formatted date
+                const $entryDateHidden = $('<input>')
+                    .attr('type', 'hidden')
+                    .attr('name', 'EntryDate')
+                    .val(formattedDate);
+                    
+                // Replace the original input with this hidden field
+                $('#EntryDate').prop('disabled', true).after($entryDateHidden);
+            } catch (err) {
+                console.error('Error formatting entry date:', err);
+            }
+        }
+        
+        if (dueDateStr) {
+            try {
+                // Parse the dd/MM/yyyy format
+                const [day, month, year] = dueDateStr.split('/').map(Number);
+                
+                // Create a valid ISO date string (yyyy-MM-dd)
+                const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                
+                // Create a hidden field with the ISO formatted date
+                const $dueDateHidden = $('<input>')
+                    .attr('type', 'hidden')
+                    .attr('name', 'DueDate')
+                    .val(formattedDate);
+                    
+                // Replace the original input with this hidden field
+                $('#DueDate').prop('disabled', true).after($dueDateHidden);
+            } catch (err) {
+                console.error('Error formatting due date:', err);
             }
         }
     }

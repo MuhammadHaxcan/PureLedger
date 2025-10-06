@@ -1,13 +1,8 @@
-﻿/**
- * PrintVoucher.js - Handles client-side functionality for voucher printing
- */
+﻿
 $(function () {
     initializeVoucherPage();
 });
 
-/**
- * Initialize the voucher page with all required functionality
- */
 function initializeVoucherPage() {
     // Get voucher metadata
     const voucherType = document.body.getAttribute('data-voucher-type');
@@ -20,27 +15,24 @@ function initializeVoucherPage() {
     setupButtonHandlers();
 
     // Apply appropriate processing based on voucher type
-    if (voucherType === 'JV') {
+    if (voucherType === VoucherType.JV) {
         applyJournalVoucherFiltering();
-    } else if (voucherType === 'INV') {
+    } else if (voucherType === VoucherType.INV) {
         formatInvoiceAmounts();
     }
 }
 
-/**
- * Set the document title based on voucher type and ID
- */
 function setDocumentTitle(voucherType, voucherId) {
     let title = 'Document #' + voucherId;
 
     switch (voucherType) {
-        case 'JV':
+        case VoucherType.JV:
             title = 'Journal Voucher #' + voucherId;
             break;
-        case 'DC':
+        case VoucherType.DC:
             title = 'Delivery Challan #' + voucherId;
             break;
-        case 'INV':
+        case VoucherType.INV:
             title = 'Invoice #' + voucherId;
             break;
     }
@@ -48,9 +40,7 @@ function setDocumentTitle(voucherType, voucherId) {
     document.title = title;
 }
 
-/**
- * Setup event handlers for print and close buttons
- */
+
 function setupButtonHandlers() {
     // Print button
     $('.btn-success').on('click', function () {
@@ -68,9 +58,7 @@ function setupButtonHandlers() {
     });
 }
 
-/**
- * Apply filtering to journal voucher entries based on selected filter
- */
+
 function applyJournalVoucherFiltering() {
     // Get filter from URL parameters or use default
     const urlParams = new URLSearchParams(window.location.search);
@@ -86,25 +74,16 @@ function applyJournalVoucherFiltering() {
     }
 }
 
-/**
- * Hide account names in journal voucher entries based on selected filter
- * Shows all rows but only displays account names for entries matching the filter
- */
 function hideAccountNamesBasedOnFilter(filterType) {
-    if (filterType === 'all') {
-        return; // No filtering needed
-    }
-
     const rows = document.querySelectorAll('.table-striped tbody tr');
     console.log(`Filtering journal voucher account names by: ${filterType}`);
 
     rows.forEach((row) => {
         const cells = row.querySelectorAll('td');
-        if (cells.length < 7) return; // Skip rows with insufficient columns
+        if (cells.length < 6) return; // Updated to match actual column count
 
-        // Get debit and credit values
-        const debitValue = parseFormattedNumber(cells[5].textContent); // Debit column
-        const creditValue = parseFormattedNumber(cells[6].textContent); // Credit column
+        const debitValue = parseFormattedNumber(cells[4].textContent);  // Changed from 5 to 4
+        const creditValue = parseFormattedNumber(cells[5].textContent); // Changed from 6 to 5
 
         // Store original account name
         const accountCell = cells[0];
@@ -112,17 +91,18 @@ function hideAccountNamesBasedOnFilter(filterType) {
             accountCell.setAttribute('data-original-name', accountCell.textContent);
         }
 
-        // Determine if this account name should be visible based on filter
-        const shouldShowName = filterType === 'debit' ? debitValue > 0 : creditValue > 0;
-
-        // Show or hide the account name without changing row opacity
-        accountCell.textContent = shouldShowName ? accountCell.getAttribute('data-original-name') : '';
+        if (filterType === 'all') {
+            // Show all account names
+            accountCell.textContent = accountCell.getAttribute('data-original-name');
+        } else {
+            const shouldShowName = filterType === 'debit' ? debitValue > 0 : creditValue > 0;
+            accountCell.textContent = shouldShowName ? accountCell.getAttribute('data-original-name') : '';
+        }
     });
+
+    console.log('Filter applied:', filterType);
 }
 
-/**
- * Format invoice amounts for better display
- */
 function formatInvoiceAmounts() {
     // Format the customer running balance
     const balanceElement = document.querySelector('#customerRunningBalance');
@@ -131,7 +111,6 @@ function formatInvoiceAmounts() {
         balanceElement.textContent = formatNumber(balanceValue);
     }
     
-    // Format the builty value if it contains cartage amount
     const builtyElement = document.querySelector('.invoice-info .info-table tr:nth-child(3) td:nth-child(2)');
     if (builtyElement && builtyElement.textContent.includes('(')) {
         const builtyText = builtyElement.textContent;
@@ -151,9 +130,6 @@ function formatInvoiceAmounts() {
     });
 }
 
-/**
- * Parse a number from a formatted string (removes commas, % signs, handles parentheses)
- */
 function parseFormattedNumber(str) {
     if (!str || typeof str !== 'string') return 0;
 
@@ -169,9 +145,6 @@ function parseFormattedNumber(str) {
     return isNaN(result) ? 0 : result;
 }
 
-/**
- * Format a number with commas and decimal places
- */
 function formatNumber(num) {
     if (isNaN(num) || num === null || num === undefined) {
         return '0.00';

@@ -9,7 +9,7 @@ using System.Diagnostics;
 
 namespace PureLedger.Controllers
 {
-    [ControllerAccess]
+    [ControllerAccess] 
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;

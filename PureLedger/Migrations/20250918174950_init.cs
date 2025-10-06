@@ -137,7 +137,8 @@ namespace PureLedger.Migrations
                     ProjectId = table.Column<int>(type: "int", nullable: false),
                     EntryDate = table.Column<DateOnly>(type: "date", nullable: false),
                     CreditableDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    IsCompleted = table.Column<bool>(type: "bit", nullable: false)
+                    IsCompleted = table.Column<bool>(type: "bit", nullable: false),
+                    IsBaseVoucher = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -158,6 +159,7 @@ namespace PureLedger.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
                     Controller = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Action = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     HasAccess = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
@@ -397,13 +399,14 @@ namespace PureLedger.Migrations
                 name: "JournalEntryTags",
                 columns: table => new
                 {
-                    JournalEntryTagId = table.Column<int>(type: "int", nullable: false),
+                    JournalEntryTagId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
                     JournalEntryId = table.Column<int>(type: "int", nullable: false),
                     TagId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_JournalEntryTags", x => new { x.JournalEntryId, x.JournalEntryTagId });
+                    table.PrimaryKey("PK_JournalEntryTags", x => x.JournalEntryTagId);
                     table.ForeignKey(
                         name: "FK_JournalEntryTags_JournalEntries_JournalEntryId",
                         column: x => x.JournalEntryId,
@@ -411,8 +414,8 @@ namespace PureLedger.Migrations
                         principalColumn: "JournalEntryId",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_JournalEntryTags_Tags_JournalEntryTagId",
-                        column: x => x.JournalEntryTagId,
+                        name: "FK_JournalEntryTags_Tags_TagId",
+                        column: x => x.TagId,
                         principalTable: "Tags",
                         principalColumn: "TagId",
                         onDelete: ReferentialAction.Cascade);
@@ -442,7 +445,7 @@ namespace PureLedger.Migrations
             migrationBuilder.InsertData(
                 table: "Users",
                 columns: new[] { "UserId", "CreatedDate", "Email", "FullName", "IsActive", "IsAdmin", "LastLoginDate", "PasswordHash", "Subroute", "Username" },
-                values: new object[] { 1, new DateTime(2025, 8, 16, 2, 1, 49, 16, DateTimeKind.Utc).AddTicks(4127), "admin@example.com", "System Administrator", true, true, null, "$2a$11$f.Fn/tltNBg/nciexH/FDuBSYYCrqR8i/Fb2AwJYvD1PZUxpLIzZC", "Default", "admin" });
+                values: new object[] { 1, new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@example.com", "System Administrator", true, true, null, "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa", "Default", "admin" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_AccountDatas_AccountId",
@@ -518,9 +521,14 @@ namespace PureLedger.Migrations
                 column: "JournalVoucherId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_JournalEntryTags_JournalEntryTagId",
+                name: "IX_JournalEntryTags_JournalEntryId",
                 table: "JournalEntryTags",
-                column: "JournalEntryTagId");
+                column: "JournalEntryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_JournalEntryTags_TagId",
+                table: "JournalEntryTags",
+                column: "TagId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_JournalVoucherReferences_MainVoucherId",

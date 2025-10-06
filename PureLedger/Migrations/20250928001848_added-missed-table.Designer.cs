@@ -12,8 +12,8 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20250816020149_init")]
-    partial class init
+    [Migration("20250928001848_added-missed-table")]
+    partial class addedmissedtable
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,45 @@ namespace PureLedger.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("MissedEntry", b =>
+                {
+                    b.Property<int>("MissedEntryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("MissedEntryId"));
+
+                    b.Property<int>("CustomerAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Discount")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("MissedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ProductAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rate")
+                        .HasColumnType("int");
+
+                    b.HasKey("MissedEntryId");
+
+                    b.HasIndex("CustomerAccountId");
+
+                    b.HasIndex("ProductAccountId");
+
+                    b.ToTable("MissedEntries");
+                });
 
             modelBuilder.Entity("PureLedger.Models.Account", b =>
                 {
@@ -333,19 +372,23 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>
                 {
-                    b.Property<int>("JournalEntryId")
-                        .HasColumnType("int");
-
                     b.Property<int>("JournalEntryTagId")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalEntryTagId"));
+
+                    b.Property<int>("JournalEntryId")
                         .HasColumnType("int");
 
                     b.Property<int>("TagId")
                         .HasColumnType("int");
 
-                    b.HasKey("JournalEntryId", "JournalEntryTagId");
+                    b.HasKey("JournalEntryTagId");
 
-                    b.HasIndex("JournalEntryTagId");
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("TagId");
 
                     b.ToTable("JournalEntryTags");
                 });
@@ -363,6 +406,9 @@ namespace PureLedger.Migrations
 
                     b.Property<DateOnly>("EntryDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("IsBaseVoucher")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
@@ -487,6 +533,34 @@ namespace PureLedger.Migrations
                     b.ToTable("Projects");
                 });
 
+            modelBuilder.Entity("PureLedger.Models.ProjectCartageSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CartageTransporterCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ForExpenseAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CartageTransporterCategoryId");
+
+                    b.HasIndex("ForExpenseAccountId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ProjectCartageSettings");
+                });
+
             modelBuilder.Entity("PureLedger.Models.Tag", b =>
                 {
                     b.Property<int>("TagId")
@@ -562,12 +636,12 @@ namespace PureLedger.Migrations
                         new
                         {
                             UserId = 1,
-                            CreatedDate = new DateTime(2025, 8, 16, 2, 1, 49, 16, DateTimeKind.Utc).AddTicks(4127),
+                            CreatedDate = new DateTime(2023, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Email = "admin@example.com",
                             FullName = "System Administrator",
                             IsActive = true,
                             IsAdmin = true,
-                            PasswordHash = "$2a$11$f.Fn/tltNBg/nciexH/FDuBSYYCrqR8i/Fb2AwJYvD1PZUxpLIzZC",
+                            PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa",
                             Subroute = "Default",
                             Username = "admin"
                         });
@@ -580,6 +654,10 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserControllerAccessId"));
+
+                    b.Property<string>("Action")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Controller")
                         .IsRequired()
@@ -620,6 +698,25 @@ namespace PureLedger.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("UserProjects");
+                });
+
+            modelBuilder.Entity("MissedEntry", b =>
+                {
+                    b.HasOne("PureLedger.Models.Account", "CustomerAccount")
+                        .WithMany()
+                        .HasForeignKey("CustomerAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.Account", "ProductAccount")
+                        .WithMany()
+                        .HasForeignKey("ProductAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("CustomerAccount");
+
+                    b.Navigation("ProductAccount");
                 });
 
             modelBuilder.Entity("PureLedger.Models.Account", b =>
@@ -682,7 +779,7 @@ namespace PureLedger.Migrations
                     b.HasOne("PureLedger.Models.JournalEntry", "JournalEntry")
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
-                        .OnDelete(DeleteBehavior.NoAction)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("PureLedger.Models.Location", "Location")
@@ -746,7 +843,7 @@ namespace PureLedger.Migrations
 
                     b.HasOne("PureLedger.Models.Tag", "Tag")
                         .WithMany("JournalEntryTags")
-                        .HasForeignKey("JournalEntryTagId")
+                        .HasForeignKey("TagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -794,6 +891,33 @@ namespace PureLedger.Migrations
                         .IsRequired();
 
                     b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.ProjectCartageSettings", b =>
+                {
+                    b.HasOne("PureLedger.Models.Category", "CartageTransporterCategory")
+                        .WithMany()
+                        .HasForeignKey("CartageTransporterCategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.Account", "ForExpenseAccount")
+                        .WithMany()
+                        .HasForeignKey("ForExpenseAccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CartageTransporterCategory");
+
+                    b.Navigation("ForExpenseAccount");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("PureLedger.Models.UserControllerAccess", b =>

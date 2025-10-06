@@ -30,6 +30,9 @@ namespace PureLedger.Services
         Task<bool> SaveProjectCartageSettingsAsync(ProjectCartageSettings settings);
         Task<List<Category>> GetCategoriesByProjectAsync(int projectId);
         Task<List<Account>> GetAccountsByCategoryAsync(int categoryId);
+        
+        // New method to get account by ID
+        Task<Account?> GetAccountByIdAsync(int accountId);
     }
 
     public class AuthService : IAuthService
@@ -325,6 +328,12 @@ namespace PureLedger.Services
         public async Task<List<Account>> GetAccountsByCategoryAsync(int categoryId)
         {
             return await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+        }
+
+        // Implementation of the new method
+        public async Task<Account?> GetAccountByIdAsync(int accountId)
+        {
+            return await _unitOfWork.Accounts.GetByIdAsync(accountId);
         }
 
         private bool IsCurrentUserAdmin()

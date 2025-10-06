@@ -91,7 +91,9 @@
         // Add this before loading project-cartage-settings.js
         var routes = {
             getCategoriesByProject: '@Url.Action("GetCategoriesByProject", "Admin")',
-            getAccountsByCategory: '@Url.Action("GetAccountsByCategory", "Admin")'
+            getAccountsByCategory: '@Url.Action("GetAccountsByCategory", "Admin")',
+            getProjectCartageSettingsByProject: '@Url.Action("GetProjectCartageSettingsByProject", "Admin")',
+            getCategoryForAccount: '@Url.Action("GetCategoryForAccount", "Admin")'
         };
     </script>
     <script src="~/js/project-cartage-settings.js" asp-append-version="true"></script>

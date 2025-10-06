@@ -1,7 +1,18 @@
-﻿@{
+﻿@using PureLedger.Models
+@{
     ViewBag.Title = "Print Documents";
     Layout = "~/Views/Shared/_Layout.cshtml";
 }
+
+<!-- Add this script section at the top of the file -->
+<script>
+    // Define VoucherType enum to match C# enum
+    window.VoucherType = {
+        JV: '@VoucherType.JV',
+        DC: '@VoucherType.DC',
+        INV: '@VoucherType.INV'
+    };
+</script>
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -46,11 +57,12 @@
                     <label class="form-label">Voucher Type</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-file-invoice"></i></span>
+                        <!-- Add VoucherType options using enum -->
                         <select class="form-select" id="voucherType" required>
                             <option value="">-- Select Type --</option>
-                            <option value="JV">Journal Voucher (JV)</option>
-                            <option value="DC">Delivery Challan (DC)</option>
-                            <option value="INV">Invoice</option>
+                            <option value="@VoucherType.JV">Journal Voucher (JV)</option>
+                            <option value="@VoucherType.DC">Delivery Challan (DC)</option>
+                            <option value="@VoucherType.INV">Invoice</option>
                         </select>
                     </div>
                 </div>

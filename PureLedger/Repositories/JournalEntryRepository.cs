@@ -173,47 +173,40 @@ namespace PureLedger.Repositories
         }
 
         public async Task<List<JournalEntry>> GetEntriesForMasterReportAsync(
-            DateOnly startDate, DateOnly endDate, int? projectId, int? categoryId, int? accountId)
+            DateOnly startDate,
+            DateOnly endDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId)
         {
-            // Build a query with filters applied at the database level
             var query = _context.JournalEntries
                 .Include(je => je.JournalVoucher)
                     .ThenInclude(jv => jv.Project)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
-                .Where(je => 
+                .Where(je =>
                     je.JournalVoucher.IsCompleted &&
-                    // Use effective date for filtering
-                    ((je.JournalVoucher.CreditableDate != null
-                        ? je.JournalVoucher.CreditableDate 
-                        : je.JournalVoucher.EntryDate) >= startDate) &&
-                    ((je.JournalVoucher.CreditableDate != null
-                        ? je.JournalVoucher.CreditableDate 
-                        : je.JournalVoucher.EntryDate) <= endDate));
+                    // Use only EntryDate for filtering, not CreditableDate
+                    je.JournalVoucher.EntryDate >= startDate &&
+                    je.JournalVoucher.EntryDate <= endDate);
 
-            // Apply project filter if specified
             if (projectId.HasValue)
             {
                 query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
             }
 
-            // Apply category filter if specified
             if (categoryId.HasValue)
             {
                 query = query.Where(je => je.CategoryId == categoryId.Value);
             }
 
-            // Apply account filter if specified
             if (accountId.HasValue)
             {
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Order by date for consistent reports
-            query = query.OrderBy(je => 
-                je.JournalVoucher.CreditableDate != null 
-                    ? je.JournalVoucher.CreditableDate 
-                    : je.JournalVoucher.EntryDate)
+            // Order by EntryDate for consistent reports
+            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
                 .ThenBy(je => je.JournalVoucherId)
                 .ThenBy(je => je.JournalEntryId);
 

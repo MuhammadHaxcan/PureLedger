@@ -12,8 +12,8 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20250816020554_updated")]
-    partial class updated
+    [Migration("20250918174950_init")]
+    partial class init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -333,19 +333,23 @@ namespace PureLedger.Migrations
 
             modelBuilder.Entity("PureLedger.Models.JournalEntryTag", b =>
                 {
-                    b.Property<int>("JournalEntryId")
-                        .HasColumnType("int");
-
                     b.Property<int>("JournalEntryTagId")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JournalEntryTagId"));
+
+                    b.Property<int>("JournalEntryId")
                         .HasColumnType("int");
 
                     b.Property<int>("TagId")
                         .HasColumnType("int");
 
-                    b.HasKey("JournalEntryId", "JournalEntryTagId");
+                    b.HasKey("JournalEntryTagId");
 
-                    b.HasIndex("JournalEntryTagId");
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("TagId");
 
                     b.ToTable("JournalEntryTags");
                 });
@@ -363,6 +367,9 @@ namespace PureLedger.Migrations
 
                     b.Property<DateOnly>("EntryDate")
                         .HasColumnType("date");
+
+                    b.Property<bool>("IsBaseVoucher")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("bit");
@@ -567,7 +574,7 @@ namespace PureLedger.Migrations
                             FullName = "System Administrator",
                             IsActive = true,
                             IsAdmin = true,
-                            PasswordHash = "$2a$11$C2k4DHRpLpAB/vpdrTV.DuMIeTbqj0hiQi8zDVH4WoQ76jrgp1Q32",
+                            PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa",
                             Subroute = "Default",
                             Username = "admin"
                         });
@@ -580,6 +587,10 @@ namespace PureLedger.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserControllerAccessId"));
+
+                    b.Property<string>("Action")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Controller")
                         .IsRequired()
@@ -746,7 +757,7 @@ namespace PureLedger.Migrations
 
                     b.HasOne("PureLedger.Models.Tag", "Tag")
                         .WithMany("JournalEntryTags")
-                        .HasForeignKey("JournalEntryTagId")
+                        .HasForeignKey("TagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

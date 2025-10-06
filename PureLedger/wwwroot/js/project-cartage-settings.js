@@ -25,7 +25,7 @@
         $('#alertArea').html(errorHtml);
     }
 
-    async function loadCategories(projectId) {
+    async function loadProjectData(projectId) {
         if (!projectId) {
             resetDropdowns();
             return;
@@ -33,13 +33,74 @@
 
         setLoadingState(true);
         try {
-            const categories = await $.getJSON('/Admin/GetCategoriesByProject', { projectId: projectId });
+            console.log('Loading data for project:', projectId);
+            console.log('Using route:', routes.getProjectCartageSettingsByProject);
+            
+            // Load categories first
+            const categories = await $.getJSON(routes.getCategoriesByProject, { projectId });
+            console.log('Categories loaded:', categories);
             updateCategoryDropdowns(categories);
+            
+            // Then try to load settings separately (with error handling)
+            try {
+                const settings = await $.getJSON(routes.getProjectCartageSettingsByProject, { projectId });
+                console.log('Settings loaded:', settings);
+                
+                if (settings) {
+                    await loadProjectSettings(settings);
+                }
+            } catch (settingsError) {
+                console.error('Error loading settings:', settingsError);
+                showError('Settings could not be loaded, but you can create new ones.');
+            }
         } catch (error) {
-            console.error('Error loading categories:', error);
-            showError('Failed to load categories. Please try again.');
+            console.error('Error loading project data:', error);
+            showError('Failed to load project data. Please try again.');
         } finally {
             setLoadingState(false);
+        }
+    }
+
+    async function loadProjectSettings(settings) {
+        console.log('Loading settings:', settings);
+
+        try {
+            // Load FOR expense category and select it
+            if (settings.forExpenseAccountId) {
+                console.log('Loading data for account ID:', settings.forExpenseAccountId);
+
+                // Get the category for this account
+                const forCategory = await getCategoryForAccount(settings.forExpenseAccountId);
+                console.log('Retrieved category ID:', forCategory);
+
+                if (forCategory) {
+                    // Select the FOR expense category
+                    $('#ForExpenseCategoryId').val(forCategory).trigger('change');
+
+                    // Wait for accounts to load, then select the FOR expense account
+                    await loadAccounts(forCategory);
+                    $('#ForExpenseAccountId').val(settings.forExpenseAccountId);
+                }
+            }
+
+            // Set the cartage transporter category
+            if (settings.cartageTransporterCategoryId) {
+                console.log('Setting cartage category:', settings.cartageTransporterCategoryId);
+                $('#CartageTransporterCategoryId').val(settings.cartageTransporterCategoryId);
+            }
+        } catch (error) {
+            console.error('Error loading project settings:', error);
+            showError('Error loading project settings. Please try again.');
+        }
+    }
+
+    async function getCategoryForAccount(accountId) {
+        try {
+            const response = await $.getJSON(routes.getCategoryForAccount, { accountId });
+            return response.categoryId;
+        } catch (error) {
+            console.error('Error getting category for account:', error);
+            return null;
         }
     }
 
@@ -63,19 +124,21 @@
     async function loadAccounts(categoryId) {
         if (!categoryId) {
             resetAccountDropdown();
-            return;
+            return Promise.resolve();
         }
 
-        setLoadingState(true);
-        try {
-            const accounts = await $.getJSON('/Admin/GetAccountsByCategory', { categoryId: categoryId });
-            updateAccountDropdown(accounts);
-        } catch (error) {
-            console.error('Error loading accounts:', error);
-            showError('Failed to load accounts. Please try again.');
-        } finally {
-            setLoadingState(false);
-        }
+        return new Promise((resolve, reject) => {
+            $.getJSON(routes.getAccountsByCategory, { categoryId })
+                .done(accounts => {
+                    updateAccountDropdown(accounts);
+                    resolve(accounts);
+                })
+                .fail(error => {
+                    console.error('Error loading accounts:', error);
+                    showError('Failed to load accounts. Please try again.');
+                    reject(error);
+                });
+        });
     }
 
     function updateAccountDropdown(accounts) {
@@ -104,7 +167,7 @@
 
     // Event Handlers
     $('#ProjectId').change(function () {
-        loadCategories($(this).val());
+        loadProjectData($(this).val());
     });
 
     $('#ForExpenseCategoryId').change(function () {
@@ -123,6 +186,6 @@
     // Initialize if project is selected
     const initialProjectId = $('#ProjectId').val();
     if (initialProjectId) {
-        loadCategories(initialProjectId);
+        loadProjectData(initialProjectId);
     }
 });
