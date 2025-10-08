@@ -4,6 +4,7 @@
     color: #333;
     background-color: #f8f9fa;
     margin: 30px;
+    font-size: 14px; /* Base font size increased */
 }
 
 .print-container {
@@ -15,15 +16,15 @@
 .logo-container {
     text-align: right;
 }
-
+    
 .logo {
-    max-height: 80px;
+    max-height: 80px;   
     max-width: 180px;
 }
 
 /* Information tables */
 .info-heading {
-    font-size: 1rem;
+    font-size: 1.1rem; /* Increased from 1rem */
     font-weight: 600;
     margin-bottom: 0.5rem;
     padding-bottom: 0.25rem;
@@ -38,6 +39,7 @@
 .info-table td {
     padding: 0.25rem 0;
     vertical-align: top;
+    font-size: 14px; /* Explicitly setting font size */
 }
 
 .info-table td:first-child {
@@ -55,7 +57,7 @@
 }
 
 .info-heading {
-    font-size: 0.9rem;
+    font-size: 1rem; /* Increased from 0.9rem */
     margin-bottom: 8px;
     padding-bottom: 5px;
     border-bottom: 1px solid #eee;
@@ -76,16 +78,17 @@
 
 /* Table styles */
 .table {
-    font-size: 0.9rem;
+    font-size: 1rem; /* Increased from 0.9rem */
 }
 
 .table th {
     background-color: #f8f9fa;
+    font-size: 1.05rem; /* Slightly larger headers */
 }
 
 /* Make invoice table more compact but readable */
 .table-striped > tbody > tr > td {
-    padding: 0.3rem 0.5rem;
+    padding: 0.35rem 0.5rem; /* Slightly more vertical padding */
     vertical-align: middle;
 }
 
@@ -112,12 +115,14 @@
 
 .signature-title {
     font-weight: 500;
+    font-size: 1.05rem; /* Increased */
 }
 
 /* Print styles */
 @media print {
     body {
         background-color: #fff;
+        font-size: 14px; /* Ensure font size in print */
     }
     
     .print-controls {
@@ -136,12 +141,14 @@
     .table {
         width: 100% !important;
         border-collapse: collapse !important;
+        font-size: 1rem !important; /* Ensure table text is larger in print */
     }
     
     .table th {
         background-color: #f8f9fa !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        font-size: 1.05rem !important; /* Ensure headers are larger in print */
     }
     
     .table-active,
@@ -157,4 +164,69 @@
         border: none;
         padding: 5px;
     }
+}
+
+/* Add at the end of your PrintVoucher.css file */
+@page {
+    margin: 15mm 10mm 15mm 10mm; /* top right bottom left */
+    size: auto;
+}
+
+@media print {
+    /* Hide URL from print */
+    body {
+        margin-bottom: 0;
+    }
+    
+    /* Hide elements that might cause delays when printing */
+    .print-controls {
+        display: none !important;
+    }
+    
+    /* Prevent page breaks inside critical content */
+    .table-responsive {
+        page-break-inside: auto;
+    }
+    
+    tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+    }
+    
+    thead {
+        display: table-header-group;
+    }
+    
+    tfoot {
+        display: table-footer-group;
+    }
+}
+
+/* Improve loading experience */
+.logo {
+    max-height: 80px;
+    max-width: 180px;
+    height: auto;
+    width: auto;
+}
+
+/* Document header */
+.header-section h2 {
+    font-size: 1.6rem; /* Larger document title */
+    font-weight: 600;
+}
+
+.header-section .text-muted {
+    font-size: 1.1rem; /* Larger date/document info */
+}
+
+/* Table totals/summary rows */
+.table tfoot {
+    font-weight: 600;
+    font-size: 1.05rem; /* Make totals stand out more */
+}
+
+/* Improve signature section text size */
+table[style*="margin-top: 50px"] div[style*="font-weight: bold; font-size: 14px"] {
+    font-size: 15px !important; /* Larger signature titles */
 }

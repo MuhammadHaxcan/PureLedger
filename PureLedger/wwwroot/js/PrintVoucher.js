@@ -1,7 +1,7 @@
 ﻿/**
  * PrintVoucher.js - Handles voucher document rendering and printing
  */
-$(function () {
+document.addEventListener('DOMContentLoaded', function() {
     initializeVoucherPage();
 });
 
@@ -19,23 +19,21 @@ function initializeVoucherPage() {
     } else if (voucherType === VoucherType.INV) {
         formatInvoiceAmounts();
     }
-
-    console.log(`Document initialized: ${voucherType}-${voucherId}`);
 }
 
 function setupEventHandlers() {
     // Print button
-    $('#btnPrint').on('click', function () {
+    document.getElementById('btnPrint').addEventListener('click', function() {
         window.print();
     });
 
     // Close button - this works better for a standalone window
-    $('#btnClose').on('click', function () {
+    document.getElementById('btnClose').addEventListener('click', function() {
         window.close();
     });
 
     // After print handler
-    window.addEventListener('afterprint', function () {
+    window.addEventListener('afterprint', function() {
         console.log('Printing completed');
     });
 }
@@ -57,7 +55,6 @@ function applyJournalVoucherFiltering() {
 
 function hideAccountNamesBasedOnFilter(filterType) {
     const rows = document.querySelectorAll('.table-striped tbody tr');
-    console.log(`Filtering journal voucher account names by: ${filterType}`);
 
     rows.forEach((row) => {
         const cells = row.querySelectorAll('td');
@@ -80,8 +77,6 @@ function hideAccountNamesBasedOnFilter(filterType) {
             accountCell.textContent = shouldShowName ? accountCell.getAttribute('data-original-name') : '';
         }
     });
-
-    console.log('Filter applied:', filterType);
 }
 
 function formatInvoiceAmounts() {
@@ -120,7 +115,7 @@ function formatBuiltyElement() {
 }
 
 function formatTableAmounts() {
-    // Format all amount cells in the table
+    // Format all amount cells in the table - using more specific selectors for better performance
     const amountCells = document.querySelectorAll('.table-striped tbody tr td:last-child, .table-striped tfoot tr td:last-child, .table-striped tfoot tr th:last-child');
     amountCells.forEach(cell => {
         const value = parseFormattedNumber(cell.textContent);
