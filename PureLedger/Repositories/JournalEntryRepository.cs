@@ -144,6 +144,25 @@ namespace PureLedger.Repositories
             return totalDebit - totalCredit;
         }
 
+        public async Task<decimal> GetAccountBalanceUpToVoucherAsyncMinus1(int accountId, int maxVoucherId)
+        {
+            // Calculate the base balance directly in the database
+            var balance = await _context.JournalEntries
+                .Where(je =>
+                    je.AccountId == accountId &&
+                    je.JournalVoucher.IsCompleted &&
+                    je.JournalVoucherId <= maxVoucherId
+                )
+                .Select(je => new { je.Debit, je.Credit })
+                .ToListAsync();
+
+            // Sum up the results
+            decimal totalDebit = balance.Sum(e => e.Debit);
+            decimal totalCredit = balance.Sum(e => e.Credit);
+
+            return totalDebit - totalCredit;
+        }
+
         public async Task<List<JournalEntry>> GetJournalEntriesByFiltersAsync(
             List<int> accountIds, int? categoryId, int? projectId)
         {

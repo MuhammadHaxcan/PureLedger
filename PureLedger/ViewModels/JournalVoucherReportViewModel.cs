@@ -30,7 +30,7 @@ namespace PureLedger.ViewModels
         public List<JournalVoucherEntryReportModel> CartageEntries { get; set; } = new List<JournalVoucherEntryReportModel>();
         public decimal ForChargesAmount { get; set; }
         public decimal CartageAmount { get; set; }
-
+        
         // Totals as calculated properties
         public int TotalQuantity => Entries.Sum(e => e.Quantity);
         public decimal TotalAmount => Entries.Sum(e => e.LineTotal);

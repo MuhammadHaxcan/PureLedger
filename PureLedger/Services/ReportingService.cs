@@ -603,7 +603,7 @@ namespace PureLedger.Services
 
             // Get base balance up to but not including this voucher
             var previousBalance = await _unitOfWork.JournalEntries
-                .GetAccountBalanceUpToVoucherAsync(customerAccountId, journalVoucherId - 1);
+                .GetAccountBalanceUpToVoucherAsyncMinus1(customerAccountId, journalVoucherId - 1);
             
             return previousBalance;
         }

@@ -18,8 +18,9 @@ namespace PureLedger.ViewModels
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
 
-        // Calculate line total (quantity * net rate)
-        public decimal LineTotal => Credit;
+        // Calculate line total considering both credit and debit entries
+        // Credit is positive, debit is negative
+        public decimal LineTotal => Credit > 0 ? Credit : -Debit;
 
         // RBP flag (Y or N)
         public string Rbp { get; set; } = "Y";
@@ -27,6 +28,6 @@ namespace PureLedger.ViewModels
         // Actual amount calculation based on RBP, quantity and rate
         public decimal ActualAmount => Rbp == "Y"
             ? PKG * Quantity * NetRate
-            : Credit > 0 ? Credit : Debit;
+            : Credit > 0 ? Credit : -Debit;
     }
 }
