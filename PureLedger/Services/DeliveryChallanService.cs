@@ -581,7 +581,7 @@ namespace PureLedger.Services
                 if (projectSettings == null)
                     throw new InvalidOperationException("Project cartage settings not found for this project");
 
-                int CategoryId = projectSettings.CartageTransporterCategoryId;
+                int CategoryId = projectSettings.CartageTransporterCategoryId ?? 0;
                 if (CategoryId == 0)
                     throw new InvalidOperationException("FOR Account ID is not set for this project");
 
@@ -781,7 +781,7 @@ namespace PureLedger.Services
                 if (projectSettings == null)
                     throw new InvalidOperationException("Project cartage settings not found for this project");
 
-                int forAccountId = projectSettings.ForExpenseAccountId;
+                int forAccountId = projectSettings.ForExpenseAccountId ?? 0;
                 if (forAccountId == 0)
                     throw new InvalidOperationException("FOR Account ID is not set for this project");
 

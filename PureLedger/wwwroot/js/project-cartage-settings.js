@@ -180,6 +180,17 @@
             e.preventDefault();
             return;
         }
+        
+        // Custom validation: At least one of FOR account or Cartage category must be selected
+        const forExpenseAccount = $('#ForExpenseAccountId').val();
+        const cartageCategory = $('#CartageTransporterCategoryId').val();
+        
+        if (!forExpenseAccount && !cartageCategory) {
+            e.preventDefault();
+            showError("At least one of FOR Expense Account or Cartage Transporter Category must be selected.");
+            return;
+        }
+        
         setLoadingState(true);
     });
 
