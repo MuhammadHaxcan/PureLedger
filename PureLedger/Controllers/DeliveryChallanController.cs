@@ -218,6 +218,38 @@ namespace PureLedger.Controllers
                 return JsonError("An error occurred while retrieving transporter category ID", ex);
             }
         }
+        
+        [HttpGet]
+        public async Task<IActionResult> CheckForChargesAvailable(int? projectId)
+        {
+            try
+            {
+                bool forChargesAvailable = false;
+
+                if (projectId.HasValue)
+                {
+                    var settings = await _deliveryChallanService.GetProjectCartageSettingsAsync(projectId.Value);
+                    if (settings != null && settings.ForExpenseAccountId > 0)
+                    {
+                        forChargesAvailable = true;
+                    }
+                    
+                    _logger.LogInformation("FOR charges availability check for project {ProjectId}: {IsAvailable}", 
+                        projectId.Value, forChargesAvailable);
+                }
+                else
+                {
+                    _logger.LogWarning("CheckForChargesAvailable called without a project ID");
+                }
+
+                return Json(new { available = forChargesAvailable });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking FOR charges availability for project {ProjectId}", projectId);
+                return JsonError("An error occurred while checking FOR charges availability", ex, new { available = false });
+            }
+        }
 
         #endregion
 

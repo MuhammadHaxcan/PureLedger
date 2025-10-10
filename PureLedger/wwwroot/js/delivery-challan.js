@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', function () {
         entryId: null
     };
 
+    // Track FOR charges availability
+    let forChargesAvailable = false;
+
     // Set default dates if not already set
     if (!sinceDate.value) {
         const thirtyDaysAgo = new Date();
@@ -36,6 +39,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (this.value) {
             fetchCategories(this.value);
+            checkForChargesAvailability(this.value);
+        } else {
+            // Reset FOR charges availability if no project selected
+            updateForChargesState(false);
         }
     });
 
@@ -69,6 +76,62 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('dcJournalEntryId').value = '';
             document.getElementById('dcChallanId').value = '';
             currentModalData = { voucherId: null, entryId: null };
+        });
+    }
+
+    // Check if FOR charges are available for the currently selected project
+    function checkForChargesAvailability(projectId) {
+        PureLedger.get('/DeliveryChallan/CheckForChargesAvailable', { projectId: projectId })
+            .done(function (data) {
+                updateForChargesState(data.available);
+            })
+            .fail(function (xhr, status, error) {
+                console.error('Error checking FOR charges availability:', error);
+                updateForChargesState(false); // Disable by default on error
+            });
+    }
+
+    // Update the state of FOR charges UI elements
+    function updateForChargesState(isAvailable) {
+        forChargesAvailable = isAvailable;
+        
+        // Update all FOR charges checkboxes in the page
+        const forChargesCheckboxes = document.querySelectorAll('#includeForCharges');
+        forChargesCheckboxes.forEach(checkbox => {
+            checkbox.disabled = !isAvailable;
+            
+            if (!isAvailable) {
+                checkbox.checked = false;
+                // Hide FOR charges amount input if it's visible
+                const forChargesContainer = document.getElementById('forChargesContainer');
+                if (forChargesContainer) {
+                    forChargesContainer.classList.add('d-none');
+                }
+                // Reset amount value
+                const forChargesAmount = document.getElementById('forChargesAmount');
+                if (forChargesAmount) {
+                    forChargesAmount.value = "0";
+                }
+            }
+
+            // Add a tooltip explaining why it's disabled
+            if (!isAvailable) {
+                checkbox.setAttribute('title', 'FOR charges are not available for this project. Check project settings.');
+                
+                // If using Bootstrap tooltips, initialize them
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                    new bootstrap.Tooltip(checkbox);
+                }
+            } else {
+                checkbox.setAttribute('title', '');
+                // Remove tooltip if it exists
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                    const tooltipInstance = bootstrap.Tooltip.getInstance(checkbox);
+                    if (tooltipInstance) {
+                        tooltipInstance.dispose();
+                    }
+                }
+            }
         });
     }
 
@@ -308,6 +371,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
         loadLocations();
 
+        // Set FOR charges checkbox based on availability
+        // If we're opening a modal, ensure the FOR charges checkbox is properly disabled/enabled
+        const includeForChargesCheckbox = document.getElementById('includeForCharges');
+        if (includeForChargesCheckbox) {
+            includeForChargesCheckbox.disabled = !forChargesAvailable;
+            
+            if (!forChargesAvailable) {
+                includeForChargesCheckbox.checked = false;
+                const forChargesContainer = document.getElementById('forChargesContainer');
+                if (forChargesContainer) {
+                    forChargesContainer.classList.add('d-none');
+                }
+                document.getElementById('forChargesAmount').value = "0";
+            }
+        }
+
         // Check for existing challan
         PureLedger.get('/DeliveryChallan/CheckExistingChallan', { voucherId: voucherId })
             .done(function (data) {
@@ -514,7 +593,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // Get FOR charges data
-            const includeForCharges = document.getElementById('includeForCharges').checked;
+            const includeForCharges = document.getElementById('includeForCharges').checked && forChargesAvailable;
             const forChargesAmount = includeForCharges ?
                 parseInt(document.getElementById('forChargesAmount').value || "0") : 0;
 
@@ -580,7 +659,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const otherRef = document.getElementById('dcOtherRef').value;
 
             // Get FOR charges data
-            const includeForCharges = document.getElementById('includeForCharges').checked;
+            const includeForCharges = document.getElementById('includeForCharges').checked && forChargesAvailable;
             const forChargesAmount = includeForCharges ?
                 parseInt(document.getElementById('forChargesAmount').value || "0") : 0;
 
@@ -641,7 +720,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const dcLocation = document.getElementById('dcLocation').value;
 
             // Get FOR charges data
-            const includeForCharges = document.getElementById('includeForCharges').checked;
+            const includeForCharges = document.getElementById('includeForCharges').checked && forChargesAvailable;
             const forChargesAmount = includeForCharges ?
                 parseInt(document.getElementById('forChargesAmount').value || "0") : 0;
 
@@ -715,6 +794,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Initialize the page
     console.log('Initializing Delivery Challan page');
+    
+    // If project is already selected on page load, check FOR charges availability
+    if (projectSelect && projectSelect.value) {
+        checkForChargesAvailability(projectSelect.value);
+    } else {
+        // Disable FOR charges by default if no project is selected
+        updateForChargesState(false);
+    }
 
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));

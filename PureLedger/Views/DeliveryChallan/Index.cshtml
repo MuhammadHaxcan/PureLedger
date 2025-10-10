@@ -204,10 +204,12 @@
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" id="includeForCharges">
+                                <input class="form-check-input" type="checkbox" id="includeForCharges" disabled>
                                 <label class="form-check-label" for="includeForCharges">
                                     <strong>Include FOR Charges</strong>
                                     <small class="text-muted ms-2">(Freight on Road)</small>
+                                    <i class="fas fa-info-circle text-info ms-1" data-bs-toggle="tooltip" 
+                                       title="FOR charges must be configured in project settings to be enabled"></i>
                                 </label>
                             </div>
                             <div id="forChargesContainer" class="d-none">
@@ -333,5 +335,11 @@
     /* Style for checkbox labels */
     .form-check-label {
         cursor: pointer;
+    }
+    
+    /* Style for disabled checkbox */
+    .form-check-input:disabled + label {
+        cursor: not-allowed;
+        opacity: 0.6;
     }
 </style>
