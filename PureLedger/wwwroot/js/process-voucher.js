@@ -9,6 +9,7 @@
 
     // Track the account entry rows
     const accountEntryRows = $('.entry-row[data-is-account="true"]');
+    const accountEntryCheckboxes = accountEntryRows.find('.entry-select');
     let updatingAccounts = false;
 
     // Calculate and update entry amounts (debit and credit)
@@ -60,6 +61,7 @@
         // Calculate totals from non-account entries first
         let totalDebits = 0;
         let totalCredits = 0;
+        let hasSelectedProducts = false;
 
         $('.entry-row').each(function () {
             const $row = $(this);
@@ -67,6 +69,7 @@
 
             // Skip account entries for this calculation
             if (!isAccount && $row.find('.entry-select').is(':checked')) {
+                hasSelectedProducts = true;
                 const debit = parseInt($row.find('.entry-debit').text().replace(/,/g, '')) || 0;
                 const credit = parseInt($row.find('.entry-credit').text().replace(/,/g, '')) || 0;
                 totalDebits += debit;
@@ -86,48 +89,48 @@
             const $hiddenAmountField = $row.find('.account-entry-amount');
             const $hiddenIsDebitField = $row.find('.account-entry-is-debit');
 
-            // NEVER disable account entries - they should always be available
-            $checkbox.prop('disabled', false);
-
-            // Always check the account entry checkbox if any regular entry is selected
-            if (totalDebits > 0 || totalCredits > 0) {
-                $checkbox.prop('checked', true);
+            // Set account entry checked state based on whether any product entries are selected
+            $checkbox.prop('checked', hasSelectedProducts);
+            
+            if (hasSelectedProducts) {
                 $row.addClass('table-active');
+            } else {
+                $row.removeClass('table-active');
             }
 
             // Update the debit/credit display based on the imbalance
             if (difference > 0) {
                 // More debits than credits, so account entry needs to be credit
                 $debitDisplay.text('0');
-                $creditDisplay.text(difference.toLocaleString());
+                $creditDisplay.text(hasSelectedProducts ? difference.toLocaleString() : '0');
 
                 // Also update the hidden fields
                 if ($hiddenAmountField.length) {
-                    $hiddenAmountField.val(difference);
+                    $hiddenAmountField.val(hasSelectedProducts ? difference : 0);
                 }
                 if ($hiddenIsDebitField.length) {
                     $hiddenIsDebitField.val(false);
                 }
 
                 // Set the AccountEntryAmount and AccountEntryIsDebit fields in the form
-                $('#AccountEntryAmount').val(difference);
+                $('#AccountEntryAmount').val(hasSelectedProducts ? difference : 0);
                 $('#AccountEntryIsDebit').val(false);
 
             } else if (difference < 0) {
                 // More credits than debits, so account entry needs to be debit
-                $debitDisplay.text(Math.abs(difference).toLocaleString());
+                $debitDisplay.text(hasSelectedProducts ? Math.abs(difference).toLocaleString() : '0');
                 $creditDisplay.text('0');
 
                 // Also update the hidden fields
                 if ($hiddenAmountField.length) {
-                    $hiddenAmountField.val(Math.abs(difference));
+                    $hiddenAmountField.val(hasSelectedProducts ? Math.abs(difference) : 0);
                 }
                 if ($hiddenIsDebitField.length) {
                     $hiddenIsDebitField.val(true);
                 }
 
                 // Set the AccountEntryAmount and AccountEntryIsDebit fields in the form
-                $('#AccountEntryAmount').val(Math.abs(difference));
+                $('#AccountEntryAmount').val(hasSelectedProducts ? Math.abs(difference) : 0);
                 $('#AccountEntryIsDebit').val(true);
 
             } else {
@@ -142,6 +145,9 @@
                 // Set the AccountEntryAmount field in the form
                 $('#AccountEntryAmount').val(0);
             }
+            
+            // Set the AccountEntryIncluded field in the form based on whether any products are selected
+            $('#AccountEntryIncluded').val(hasSelectedProducts);
         });
 
         updatingAccounts = false;
@@ -175,6 +181,7 @@
 
     // Update selected count and all calculated values
     function updateSelectedCount() {
+        // Count only checked entries
         const count = entryCheckboxes.filter(':checked').length;
         $('#selectedCount').text(count);
 
@@ -194,11 +201,23 @@
     }
 
     // Handle checkbox selection
-    entryCheckboxes.on('change', function () {
+    entryCheckboxes.on('change', function (e) {
         const $checkbox = $(this);
         const $row = $checkbox.closest('tr');
-        const $quantityInput = $row.find('.process-qty');
         const isAccount = $row.data('isAccount') === true;
+
+        // If this is an account entry checkbox being changed directly, prevent it and revert
+        if (isAccount) {
+            // Prevent the user from manually changing account checkboxes
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Don't run the rest of the handler for account checkboxes
+            updateSelectedCount(); // Just update everything
+            return false;
+        }
+        
+        const $quantityInput = $row.find('.process-qty');
 
         if ($checkbox.is(':checked')) {
             $row.addClass('table-active');
@@ -213,6 +232,13 @@
         }
 
         updateSelectedCount();
+    });
+
+    // Prevent direct clicks on account checkboxes
+    accountEntryCheckboxes.on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
     });
 
     // Handle quantity changes
@@ -231,11 +257,8 @@
             $input.val(max);
         }
 
-        // For account entries, allow 0 quantity but still keep checked
-        if (isAccount) {
-            $checkbox.prop('checked', true);
-            $row.addClass('table-active');
-        } else {
+        // Skip logic for account entries
+        if (!isAccount) {
             // For regular entries, check/uncheck based on quantity
             if (value > 0) {
                 $checkbox.prop('checked', true);
@@ -249,27 +272,30 @@
         updateSelectedCount();
     });
 
-    // Select All button
+    // Select All button - only select non-account entries
     selectAllBtn.on('click', function () {
-        entryCheckboxes.not(':disabled').prop('checked', true).trigger('change');
+        // Only select non-account entries
+        entryCheckboxes.filter(function() {
+            return !$(this).closest('tr').data('isAccount') && !$(this).prop('disabled');
+        }).prop('checked', true).trigger('change');
     });
 
-    // Deselect All button - keep account entries selected if any other entries are selected
+    // Deselect All button - deselect all non-account entries
     deselectAllBtn.on('click', function () {
-        entryCheckboxes.filter(function () {
+        // Only deselect non-account entries
+        entryCheckboxes.filter(function() {
             return !$(this).closest('tr').data('isAccount');
         }).prop('checked', false).trigger('change');
     });
 
     // Max Quantities button
     maxQuantityBtn.on('click', function () {
+        // Only set max quantities for non-account entries that are checked
         entryCheckboxes.filter(':checked').each(function () {
             const $checkbox = $(this);
             const $row = $checkbox.closest('tr');
-            const isAccount = $row.data('isAccount') === true;
-
-            // Skip account entries when setting max quantities
-            if (!isAccount) {
+            
+            if (!$row.data('isAccount')) {
                 const $quantityInput = $row.find('.process-qty');
                 $quantityInput.val($quantityInput.attr('max')).trigger('change');
             }
@@ -281,10 +307,15 @@
         // Force update account entries one last time
         updateAccountEntries();
 
+        // Count selected non-account entries
+        const selectedProductEntries = entryCheckboxes.filter(function() {
+            return $(this).is(':checked') && !$(this).closest('tr').data('isAccount');
+        }).length;
+
         // Validate that at least one entry is selected
-        if (entryCheckboxes.filter(':checked').length === 0) {
+        if (selectedProductEntries === 0) {
             e.preventDefault();
-            alert('Please select at least one entry to process.');
+            alert('Please select at least one product entry to process.');
             return false;
         }
 
@@ -292,10 +323,8 @@
         let valid = true;
         entryCheckboxes.filter(':checked').each(function () {
             const $row = $(this).closest('tr');
-            const isAccount = $row.data('isAccount') === true;
-
-            // Skip validation for account entries - allow them to have 0 quantity
-            if (!isAccount) {
+            
+            if (!$row.data('isAccount')) {
                 const $quantityInput = $row.find('.process-qty');
                 if (parseInt($quantityInput.val()) <= 0) {
                     valid = false;
@@ -308,7 +337,7 @@
 
         if (!valid) {
             e.preventDefault();
-            alert('All selected regular entries must have a process quantity greater than zero.');
+            alert('All selected product entries must have a process quantity greater than zero.');
             return false;
         }
 
@@ -327,4 +356,10 @@
 
     // Initial update
     updateSelectedCount();
+
+    // Style account entry checkboxes to indicate they're automatic
+    accountEntryCheckboxes.css({
+        'opacity': '0.7',
+        'cursor': 'not-allowed'
+    }).attr('title', 'This account entry is automatically selected when any product is selected');
 });

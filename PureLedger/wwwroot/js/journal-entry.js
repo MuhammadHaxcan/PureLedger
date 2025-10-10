@@ -2,8 +2,19 @@
     constructor() {
         this.rowCounter = 0;
         this.isSubmitting = false;
+        this.rowTemplate = null; // Store row template
+        this.captureRowTemplate(); // Capture the template on initialization
         this.init();
-        this.setupSelectSearch(); // Add this line
+        this.setupSelectSearch();
+    }
+
+    // Capture the initial row as a template
+    captureRowTemplate() {
+        const initialRow = document.getElementById('entryRow-0');
+        if (initialRow) {
+            // Deep clone the row to use as a template
+            this.rowTemplate = initialRow.cloneNode(true);
+        }
     }
 
     init() {
@@ -568,9 +579,22 @@
         this.rowCounter++;
         const newIndex = this.rowCounter;
 
-        const $newRow = $('#entryRow-0').clone();
+        // Use the stored template if the first row is not available
+        let $newRow;
+        const firstRow = document.getElementById('entryRow-0');
+        
+        if (firstRow) {
+            // If the original row exists, clone it (original behavior)
+            $newRow = $(firstRow).clone();
+        } else if (this.rowTemplate) {
+            // If the original row doesn't exist but we have a template, use that
+            $newRow = $(this.rowTemplate).clone();
+        } else {
+            console.error("No row template available");
+            return; // Exit if we can't create a new row
+        }
+        
         $newRow.attr('id', `entryRow-${newIndex}`);
-
         this.resetRowElements($newRow, newIndex);
         $('#entryRows').append($newRow);
 
@@ -640,11 +664,50 @@
         const $rows = $('#entryRows tr');
 
         if ($rows.length > 1) {
+            // Only remove the row if there's more than one
             $(event.target).closest('tr').remove();
+            
+            // After removing a row, we need to renumber all remaining rows
+            this.renumberRows();
+            
             this.updateTotals();
             this.updateProductRequiredIndicator();
             this.updateBaseVoucherCheckbox();
+        } else {
+            // If there's only one row, show a message instead of removing it
+            this.showError("Cannot delete the last row. At least one entry is required.");
         }
+    }
+    
+    // New method to renumber rows after deletion
+    renumberRows() {
+        $('#entryRows tr').each((index, row) => {
+            const $row = $(row);
+            
+            // Update the row ID
+            $row.attr('id', `entryRow-${index}`);
+            
+            // Update all input and select elements
+            $row.find('input, select').each(function() {
+                const $element = $(this);
+                
+                // Update id attribute if it exists
+                if ($element.attr('id')) {
+                    $element.attr('id', $element.attr('id').replace(/_\d+_/, `_${index}_`));
+                }
+                
+                // Update name attribute if it exists and follows the Entries[n] pattern
+                if ($element.attr('name') && $element.attr('name').match(/Entries\[\d+\]/)) {
+                    $element.attr('name', $element.attr('name').replace(/Entries\[\d+\]/, `Entries[${index}]`));
+                }
+            });
+            
+            // Update tag search input data-index attribute
+            $row.find('.tag-search-input').attr('data-index', index);
+            
+            // Update hidden tag inputs if they exist
+            this.updateTagInputs($row);
+        });
     }
 
     // Handle form submission
@@ -657,8 +720,9 @@
         this.showSubmitSpinner();
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 100));
-
+            // Always renumber rows before submission to ensure proper indexing
+            this.renumberRows();
+            
             const validationErrors = this.validateJournalEntry();
 
             if (validationErrors.length > 0) {
@@ -935,7 +999,20 @@
 
     showError(message) {
         console.error(message);
-        // Could also show a toast or alert here
+        
+        // Display error in the validation alert area
+        $('#validationMessage').html(message);
+        $('#validationAlert').removeClass('d-none');
+        
+        // Scroll to the alert
+        $('html, body').animate({
+            scrollTop: $('#validationAlert').offset().top - 100
+        }, 300);
+        
+        // Hide after 5 seconds
+        setTimeout(() => {
+            $('#validationAlert').addClass('d-none');
+        }, 5000);
     }
 
     // Update base voucher checkbox state based on account entries
