@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Middleware;
 using PureLedger.Repositories;
@@ -46,8 +47,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 // Register LedgerDbContext directly with connection string from configuration
-builder.Services.AddDbContext<LedgerDbContext>(options => 
-    options.UseSqlServer(builder.Configuration.GetConnectionString("LedgerDb")));
+builder.Services.AddDbContext<LedgerDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("LedgerDb")));
 
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
