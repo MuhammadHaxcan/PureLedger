@@ -8,6 +8,28 @@ namespace PureLedger.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<AuthorizationMiddleware> _logger;
+        
+        // Define utility endpoints that should be accessible when user has any access to the controller
+        private static readonly Dictionary<string, HashSet<string>> ApiUtilityEndpoints = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Home"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "GetCategoriesByProject",
+                "GetAccountsByCategory",
+                "GetProductDetails"
+            },
+            ["DeliveryChallan"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "GetCategoriesByProject",
+                "GetAccountsByCategory",
+                "GetLocations"
+            },
+            ["Reporting"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "GetCategoriesByProject",
+                "GetAccountsByCategory"
+            }
+        };
 
         public AuthorizationMiddleware(RequestDelegate next, ILogger<AuthorizationMiddleware> logger)
         {
@@ -17,7 +39,6 @@ namespace PureLedger.Middleware
 
         public async Task InvokeAsync(HttpContext context, IAuthService authService)
         {
-            // Skip authentication checks for Account controller and static files
             var controller = context.Request.RouteValues["controller"]?.ToString();
             var action = context.Request.RouteValues["action"]?.ToString();
             var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
@@ -33,29 +54,26 @@ namespace PureLedger.Middleware
                 return;
             }
 
-            // Check if user is authenticated
             if (context.User.Identity?.IsAuthenticated == true)
             {
-                // Get user ID and controller name
                 var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 
                 if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out int userId) && !string.IsNullOrEmpty(controller))
                 {
-                    // Check if user is admin (admins have access to all controllers)
+                    // Check if user is admin
                     if (context.User.IsInRole("Admin"))
                     {
                         await _next(context);
                         return;
                     }
 
-                    // Check project ID if present in route or query string
+                    // Check project access if projectId is present
                     if (context.Request.RouteValues.TryGetValue("projectId", out var projectIdObj) || 
                         context.Request.Query.TryGetValue("projectId", out var projectIdQuery))
                     {
                         string projectIdStr = (projectIdObj ?? projectIdQuery.FirstOrDefault()) as string;
                         if (int.TryParse(projectIdStr, out int projectId))
                         {
-                            // Check if user has access to this project
                             bool hasProjectAccess = await authService.HasProjectAccessAsync(userId, projectId);
                             if (!hasProjectAccess)
                             {
@@ -66,44 +84,64 @@ namespace PureLedger.Middleware
                         }
                     }
                     
-                    // Check access permissions - simplified approach
-                    bool hasAccess = false;
-                    
-                    if (!string.IsNullOrEmpty(action))
+                    // Check if this is a utility endpoint
+                    bool isUtilityEndpoint = !string.IsNullOrEmpty(action) && 
+                                           ApiUtilityEndpoints.TryGetValue(controller, out var utilityActions) &&
+                                           utilityActions.Contains(action);
+
+                    if (isUtilityEndpoint)
                     {
-                        // Check for specific action access first
-                        hasAccess = await authService.HasActionAccessAsync(userId, controller, action);
-                        
-                        // If no specific action access, check controller-level access
-                        if (!hasAccess)
+                        // For utility endpoints, check if user has access to ANY action in this controller
+                        var userActionAccess = await authService.GetUserActionAccessAsync(userId);
+                        bool hasAnyActionAccess = userActionAccess != null && 
+                                                userActionAccess.TryGetValue(controller, out var actions) &&
+                                                actions != null &&
+                                                actions.Count > 0;
+
+                        if (hasAnyActionAccess)
                         {
-                            hasAccess = await authService.HasControllerAccessAsync(userId, controller);
+                            await _next(context);
+                            return;
                         }
                     }
                     else
                     {
-                        // No action specified, check controller-level access
-                        hasAccess = await authService.HasControllerAccessAsync(userId, controller);
-                    }
-
-                    if (!hasAccess)
-                    {
-                        _logger.LogWarning("Access denied: User {UserId} attempted to access {Controller}/{Action} without permission", 
-                            userId, controller, action ?? "default");
+                        // Regular access check logic
+                        bool hasAccess = false;
                         
-                        await HandleAccessDenied(context);
-                        return;
+                        if (!string.IsNullOrEmpty(action))
+                        {
+                            // Check for specific action access first
+                            hasAccess = await authService.HasActionAccessAsync(userId, controller, action);
+                            
+                            // If no specific action access, check controller-level access
+                            if (!hasAccess)
+                            {
+                                hasAccess = await authService.HasControllerAccessAsync(userId, controller);
+                            }
+                        }
+                        else
+                        {
+                            // No action specified, check controller-level access
+                            hasAccess = await authService.HasControllerAccessAsync(userId, controller);
+                        }
+
+                        if (hasAccess)
+                        {
+                            await _next(context);
+                            return;
+                        }
                     }
 
-                    // Log successful access for debugging
-                    _logger.LogDebug("Access granted: User {UserId} accessing {Controller}/{Action}", 
+                    _logger.LogWarning("Access denied: User {UserId} attempted to access {Controller}/{Action} without permission", 
                         userId, controller, action ?? "default");
+                    
+                    await HandleAccessDenied(context);
+                    return;
                 }
             }
             else if (!string.IsNullOrEmpty(controller) && !string.IsNullOrEmpty(action))
             {
-                // User is not authenticated, redirect to login
-                // But store the return URL so they can be redirected back after login
                 var returnUrl = $"/{controller}/{action}";
                 if (context.Request.QueryString.HasValue)
                 {
@@ -120,7 +158,6 @@ namespace PureLedger.Middleware
 
         private async Task HandleAccessDenied(HttpContext context)
         {
-            // Check if this is an AJAX request
             if (context.Request.Headers["X-Requested-With"] == "XMLHttpRequest")
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;

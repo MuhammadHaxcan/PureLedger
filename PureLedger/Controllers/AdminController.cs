@@ -139,6 +139,23 @@ namespace PureLedger.Controllers
             ViewBag.Projects = await _authService.GetUserProjectsAsync(currentUserId);
             ViewBag.ControllerActions = _controllerActions;
             
+            // Clear password validation errors if password is empty
+            if (string.IsNullOrWhiteSpace(model.Password))
+            {
+                // Clear validation errors for Password and ConfirmPassword
+                ModelState.Remove("Password");
+                ModelState.Remove("ConfirmPassword");
+                
+                // Make sure these are empty strings to avoid any issues
+                model.Password = string.Empty;
+                model.ConfirmPassword = string.Empty;
+            }
+            // If password is provided but doesn't match confirmation
+            else if (!string.IsNullOrWhiteSpace(model.Password) && model.Password != model.ConfirmPassword)
+            {
+                ModelState.AddModelError("ConfirmPassword", "Passwords do not match");
+            }
+            
             if (!ModelState.IsValid)
             {
                 return View(model);

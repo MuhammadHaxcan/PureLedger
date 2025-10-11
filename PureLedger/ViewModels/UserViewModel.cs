@@ -10,8 +10,11 @@ namespace PureLedger.ViewModels
         [StringLength(50, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 50 characters")]
         public string Username { get; set; } = string.Empty;
 
-        [StringLength(100, MinimumLength = 6, ErrorMessage = "Password must be at least 6 characters")]
+        // Remove MinimumLength and make it completely optional with no validation when empty
+        [StringLength(100, ErrorMessage = "Password must not exceed 100 characters")]
         [DataType(DataType.Password)]
+        // This marks the field as not required
+        [RequiredIf("IsNew", true, ErrorMessage = "Password is required for new users")]
         public string Password { get; set; } = string.Empty;
 
         [Compare("Password", ErrorMessage = "Passwords do not match")]
@@ -29,6 +32,10 @@ namespace PureLedger.ViewModels
         public bool IsAdmin { get; set; }
 
         public bool IsActive { get; set; } = true;
+
+        // Property to indicate if this is a new user creation (not an edit)
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool IsNew => UserId == 0;
 
         public List<int> ProjectIds { get; set; } = new List<int>();
         
@@ -76,6 +83,41 @@ namespace PureLedger.ViewModels
                 .Where(p => p.StartsWith($"{controller}|"))
                 .Select(p => p.Split('|')[1])
                 .ToList();
+        }
+    }
+
+    // Custom validation attribute to conditionally make a field required
+    public class RequiredIfAttribute : ValidationAttribute
+    {
+        private readonly string _propertyName;
+        private readonly object _compareValue;
+
+        public RequiredIfAttribute(string propertyName, object compareValue, string errorMessage = "")
+        {
+            _propertyName = propertyName;
+            _compareValue = compareValue;
+            ErrorMessage = errorMessage;
+        }
+
+        protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
+        {
+            // Get the property to compare with
+            var property = validationContext.ObjectType.GetProperty(_propertyName);
+            if (property == null)
+                return ValidationResult.Success;
+
+            // Get the property value to compare
+            var propertyValue = property.GetValue(validationContext.ObjectInstance, null);
+            
+            // If the comparison property matches the expected value
+            if (Equals(propertyValue, _compareValue))
+            {
+                // Validate that the current value is not empty
+                if (value == null || (value is string stringValue && string.IsNullOrWhiteSpace(stringValue)))
+                    return new ValidationResult(ErrorMessage);
+            }
+
+            return ValidationResult.Success;
         }
     }
 }
