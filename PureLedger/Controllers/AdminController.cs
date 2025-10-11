@@ -20,7 +20,7 @@ namespace PureLedger.Controllers
         {
             ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries" , "MissedEntries", "BaseVouchers" },
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Tags", "Locations" },
-            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport" },
+            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport" },
             ["DeliveryChallan"] = new() { "Index" }
         };
 

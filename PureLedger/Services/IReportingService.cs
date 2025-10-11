@@ -19,5 +19,7 @@ namespace PureLedger.Services
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
         Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type);
+        Task<ProductReportViewModel> GetProductReportAsync(ProductReportRequest request);
+        Task<List<Location>> GetAllLocationsAsync();
     }
 }

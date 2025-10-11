@@ -1,0 +1,307 @@
+@model PureLedger.ViewModels.ProductReportPageViewModel
+@{
+    ViewData["Title"] = "Product Report";
+    var today = DateTime.Now.ToString("yyyy-MM-dd");
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-box me-2"></i>Product Report</h2>
+    </div>
+
+    <div id="alertArea">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> @TempData["SuccessMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> @TempData["ErrorMessage"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter me-2"></i>Report Parameters
+            </h6>
+        </div>
+        <div class="card-body">
+            <form id="productReportForm">
+                <div class="row mb-3">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Since</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                            <input type="date" class="form-control" id="startDate" value="@today" required>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">To</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                            <input type="date" class="form-control" id="endDate" value="@today" required>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Project <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                            <select class="form-select" id="projectId" required>
+                                <option value="">Select Project</option>
+                                @foreach (var project in Model.Projects)
+                                {
+                                    <option value="@project.Id">@project.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Category</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-sitemap"></i></span>
+                            <select class="form-select" id="categoryId">
+                                <option value="">All Categories</option>
+                                @foreach (var category in Model.Categories)
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Account (Product)</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-box"></i></span>
+                            <select class="form-select" id="accountId">
+                                <option value="">All Products</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Location</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
+                            <select class="form-select" id="locationId">
+                                <option value="">All Locations</option>
+                                @foreach (var location in Model.Locations)
+                                {
+                                    <option value="@location.Id">@location.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label d-block">Column Visibility</label>
+                        <div class="btn-group column-toggles" role="group">
+                            <input type="checkbox" class="btn-check" id="showDate" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showDate">
+                                <i class="fas fa-calendar-day"></i> Date
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showDescription" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showDescription">
+                                <i class="fas fa-align-left"></i> Description
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showAccount" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showAccount">
+                                <i class="fas fa-box"></i> Product
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showQuantity" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showQuantity">
+                                <i class="fas fa-sort-numeric-up"></i> Quantity
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showRate" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showRate">
+                                <i class="fas fa-dollar-sign"></i> Rate
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showCOGS" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showCOGS">
+                                <i class="fas fa-money-bill"></i> COGS/Margin
+                            </label>
+                            
+                            <input type="checkbox" class="btn-check" id="showLocation" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showLocation">
+                                <i class="fas fa-map-marker-alt"></i> Location
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Search</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" id="globalReportSearch" placeholder="Search products, descriptions...">
+                            <button type="button" class="btn btn-outline-secondary" id="clearSearch">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Search across all report data</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-chart-bar me-1"></i> Generate Report
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="reportResults" style="display:none;">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-table me-2"></i>Product Report Results
+                </h6>
+                <div class="input-group input-group-sm" style="width: 250px;">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" id="reportSearch" class="form-control" placeholder="Search records...">
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="productReportTable" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th class="date-column">Date</th>
+                                <th class="description-column">Description</th>
+                                <th class="account-column">Product</th>
+                                <th class="qty-column text-end">Qty</th>
+                                <th class="qty-balance-column text-end">Qty Balance</th>
+                                <th class="rate-column text-end">Rate</th>
+                                <th class="debit-qty-column text-end">Debit Qty</th>
+                                <th class="credit-qty-column text-end">Credit Qty</th>
+                                <th class="qty-balance-column text-end">Balance</th>
+                                <th class="avg-rate-column text-end">Avg Rate</th>
+                                <th class="debit-column text-end">Debit</th>
+                                <th class="credit-column text-end">Credit</th>
+                                <th class="balance-column text-end">Balance</th>
+                                <th class="cogs-column text-end">COGS</th>
+                                <th class="margin-column text-end">Margin</th>
+                                <th class="location-column">Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportData">
+                        </tbody>
+                        <tfoot class="table-secondary">
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold">TOTAL</td>
+                                <td class="text-end fw-bold" id="totalQty">0</td>
+                                <td class="text-end fw-bold" id="totalQtyBalance">0</td>
+                                <td class="text-end fw-bold">-</td>
+                                <td class="text-end fw-bold" id="totalDebitQty">0</td>
+                                <td class="text-end fw-bold" id="totalCreditQty">0</td>
+                                <td class="text-end fw-bold" id="netQty">0</td>
+                                <td class="text-end fw-bold">-</td>
+                                <td class="text-end fw-bold" id="totalDebit">0.00</td>
+                                <td class="text-end fw-bold" id="totalCredit">0.00</td>
+                                <td class="text-end fw-bold" id="netBalance">0.00</td>
+                                <td class="text-end fw-bold" id="totalCOGS">0.00</td>
+                                <td class="text-end fw-bold" id="totalMargin">0.00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Summary -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-box me-2"></i>Product Summary
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" id="productSummaryTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-end">Total Qty</th>
+                                <th class="text-end">Debit Qty</th>
+                                <th class="text-end">Credit Qty</th>
+                                <th class="text-end">Balance Qty</th>
+                                <th class="text-end">Debit</th>
+                                <th class="text-end">Credit</th>
+                                <th class="text-end">Balance</th>
+                                <th class="text-end">COGS</th>
+                                <th class="text-end">Margin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productGroupData">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Define API routes for product report
+        var routes = {
+            getCategoriesByProject: '@Url.Action("GetCategoriesByProject", "Reporting")',
+            getAccountsByCategory: '@Url.Action("GetAccountsByCategory", "Reporting")',
+            getProductReportData: '@Url.Action("GetProductReportData", "Reporting")'
+        };
+    </script>
+    <script src="~/js/product-report.js" asp-append-version="true"></script>
+}
+
+<style>
+    /* Remove dropdown arrows from all select elements */
+    select.form-select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        background-image: none !important;
+        padding-right: 0.75rem !important;
+    }
+
+    /* For Firefox */
+    select.form-select::-ms-expand {
+        display: none;
+    }
+
+    /* Table number columns alignment */
+    .text-end {
+        text-align: right !important;
+    }
+
+    /* Monospace for numbers */
+    .text-end {
+        font-family: monospace;
+        font-size: 0.9rem;
+    }
+
+    /* Negative values in red */
+    .negative-balance {
+        color: #dc3545;
+    }
+</style>

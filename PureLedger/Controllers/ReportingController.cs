@@ -117,6 +117,33 @@ namespace PureLedger.Controllers
 
         #endregion
 
+        #region Product Report
+
+        [HttpGet]
+        public async Task<IActionResult> ProductReport()
+        {
+            var viewModel = await CreateReportBaseViewModel<ProductReportPageViewModel>();
+            
+            // Get locations for the dropdown
+            var locations = await _reportingService.GetAllLocationsAsync();
+            viewModel.Locations = locations.Select(l => new LocationViewModel
+            {
+                Id = l.LocationId.ToString(),
+                Name = l.LocationName
+            }).ToList();
+            
+            return View(viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetProductReportData([FromQuery] ProductReportRequest request)
+        {
+            var report = await _reportingService.GetProductReportAsync(request);
+            return Json(report);
+        }
+
+        #endregion
+
         #region Lookup APIs
 
         [HttpGet]
