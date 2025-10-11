@@ -59,7 +59,7 @@ body {
     flex-direction: column;
     padding-bottom: 60px;
     position: relative;
-    zoom: 0.9;
+    zoom:1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
