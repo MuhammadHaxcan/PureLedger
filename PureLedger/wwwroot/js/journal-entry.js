@@ -47,25 +47,20 @@
             const today = new Date();
             const minDate = new Date(today);
             minDate.setMonth(minDate.getMonth() - 1);
-
-            // Only initialize datepicker for EntryDate
-            $('#EntryDate').datepicker({
-                dateFormat: 'dd/mm/yy',
-                changeMonth: true,
-                changeYear: true,
-                showButtonPanel: true,
-                maxDate: today,
-                minDate: minDate,
-                onSelect: (dateText) => {
-                    this.updateDueDate();
+            
+            // Set min/max date attributes on the date input
+            const entryDateInput = document.getElementById('EntryDate');
+            if (entryDateInput) {
+                entryDateInput.min = minDate.toISOString().split('T')[0]; // Format: yyyy-MM-dd
+                entryDateInput.max = today.toISOString().split('T')[0];
+                
+                // If entry date is empty, set today's date
+                if (!entryDateInput.value) {
+                    entryDateInput.value = today.toISOString().split('T')[0];
                 }
-            });
-
-            // If entry date is empty, set today's date
-            if (!$('#EntryDate').val()) {
-                const defaultDate = this.formatDateDDMMYYYY(today);
-                $('#EntryDate').val(defaultDate);
-                $('#DueDate').val(defaultDate);
+                
+                // Add change event to update due date
+                entryDateInput.addEventListener('change', () => this.updateDueDate());
             }
 
             // Properly disable the due date input
@@ -76,18 +71,14 @@
                     'cursor': 'not-allowed'
                 });
 
-            // Remove click handler from due date calendar icon
+            // Remove click handler from calendar icons
             $('.calendar-icon').each((_, icon) => {
                 const $icon = $(icon);
                 const isForDueDate = $icon.siblings('#DueDate').length > 0;
                 if (isForDueDate) {
                     $icon.css('cursor', 'not-allowed');
-                    $icon.off('click');
                 } else {
                     $icon.css('cursor', 'pointer');
-                    $icon.on('click', (e) => {
-                        $(e.currentTarget).siblings('input.datepicker').focus();
-                    });
                 }
             });
 
@@ -161,17 +152,17 @@
     updateDueDate() {
         try {
             const creditDays = this.parseIntOrZero($('#CreditDays').val());
-            const entryDateStr = $('#EntryDate').val();
+            const entryDateStr = $('#EntryDate').val(); // Now in yyyy-MM-dd format
 
             if (!entryDateStr) {
-                const today = this.formatDateDDMMYYYY(new Date());
+                const today = new Date().toISOString().split('T')[0]; // Format: yyyy-MM-dd
                 $('#EntryDate').val(today);
                 $('#DueDate').val(today);
                 return;
             }
 
-            const [day, month, year] = entryDateStr.split('/').map(Number);
-            const entryDate = new Date(year, month - 1, day); // month is 0-based
+            // Parse the date from the HTML5 date input (yyyy-MM-dd)
+            const entryDate = new Date(entryDateStr);
 
             if (isNaN(entryDate.getTime())) {
                 console.error('Invalid entry date');
@@ -180,7 +171,9 @@
 
             const dueDate = new Date(entryDate);
             dueDate.setDate(dueDate.getDate() + creditDays);
-            $('#DueDate').val(this.formatDateDDMMYYYY(dueDate));
+            
+            // Format for HTML5 date input
+            $('#DueDate').val(dueDate.toISOString().split('T')[0]);
         } catch (error) {
             console.error('Error updating due date:', error);
         }
@@ -749,50 +742,32 @@
 
     // Add this new method to format dates in ISO format for submission
     formatDatesForSubmission() {
-        // Get the entry date value
+        // HTML5 date inputs already use yyyy-MM-dd format which is compatible with ISO format
+        // We still need to create hidden fields for server-side processing
+        
         const entryDateStr = $('#EntryDate').val();
         const dueDateStr = $('#DueDate').val();
         
         if (entryDateStr) {
-            try {
-                // Parse the dd/MM/yyyy format
-                const [day, month, year] = entryDateStr.split('/').map(Number);
+            // Create a hidden field with the ISO formatted date
+            const $entryDateHidden = $('<input>')
+                .attr('type', 'hidden')
+                .attr('name', 'EntryDate')
+                .val(entryDateStr);
                 
-                // Create a valid ISO date string (yyyy-MM-dd)
-                const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                
-                // Create a hidden field with the ISO formatted date
-                const $entryDateHidden = $('<input>')
-                    .attr('type', 'hidden')
-                    .attr('name', 'EntryDate')
-                    .val(formattedDate);
-                    
-                // Replace the original input with this hidden field
-                $('#EntryDate').prop('disabled', true).after($entryDateHidden);
-            } catch (err) {
-                console.error('Error formatting entry date:', err);
-            }
+            // Replace the original input with this hidden field
+            $('#EntryDate').prop('disabled', true).after($entryDateHidden);
         }
         
         if (dueDateStr) {
-            try {
-                // Parse the dd/MM/yyyy format
-                const [day, month, year] = dueDateStr.split('/').map(Number);
+            // Create a hidden field with the ISO formatted date
+            const $dueDateHidden = $('<input>')
+                .attr('type', 'hidden')
+                .attr('name', 'DueDate')
+                .val(dueDateStr);
                 
-                // Create a valid ISO date string (yyyy-MM-dd)
-                const formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                
-                // Create a hidden field with the ISO formatted date
-                const $dueDateHidden = $('<input>')
-                    .attr('type', 'hidden')
-                    .attr('name', 'DueDate')
-                    .val(formattedDate);
-                    
-                // Replace the original input with this hidden field
-                $('#DueDate').prop('disabled', true).after($dueDateHidden);
-            } catch (err) {
-                console.error('Error formatting due date:', err);
-            }
+            // Replace the original input with this hidden field
+            $('#DueDate').prop('disabled', true).after($dueDateHidden);
         }
     }
 

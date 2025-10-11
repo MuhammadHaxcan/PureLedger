@@ -51,16 +51,15 @@
                 <div class="row mb-2">
                     <div class="col-md-6 mb-2 mb-md-0">
                         <label class="form-label">Entry Date:</label>
-                        <!-- Entry Date input -->
                         <div class="input-group">
-                            <span class="input-group-text calendar-icon" style="cursor:pointer;">
+                            <span class="input-group-text calendar-icon">
                                 <i class="fas fa-calendar-alt"></i>
                             </span>
-                            <input class="form-control datepicker no-arrow"
+                            <input class="form-control"
                                    name="EntryDate"
-                                   type="text"
+                                   type="date"
                                    id="EntryDate"
-                                   value="@(Model?.EntryDate.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy"))" />
+                                   value="@(Model?.EntryDate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))" />
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -281,7 +280,6 @@
                     </div>
                     <div class="col-md-4 mb-2">
                         <label class="form-label" for="DueDate">Due Date</label>
-                        <!-- Due Date input - Make it properly read-only -->
                         <div class="input-group">
                             <span class="input-group-text">
                                 <i class="fas fa-calendar-check"></i>
@@ -289,8 +287,8 @@
                             <input class="form-control" 
                                    id="DueDate"
                                    name="DueDate"
-                                   type="text"
-                                   value="@(Model?.DueDate.ToString("dd/MM/yyyy") ?? DateTime.Now.ToString("dd/MM/yyyy"))"
+                                   type="date"
+                                   value="@(Model?.DueDate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))"
                                    readonly
                                    tabindex="-1"
                                    style="background-color: #e9ecef;" />
@@ -349,7 +347,6 @@
 </div>
 
 @section Scripts {
-    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="~/js/journal-entry.js" asp-append-version="true"></script>
 }
 
@@ -517,5 +514,33 @@
 
     .select-option.filtered-out {
         display: none;
+    }
+
+    /* Date input styling */
+    input[type="date"] {
+        position: relative;
+        padding-right: 0.75rem !important;
+        cursor: pointer;
+    }
+
+    /* Hide the default calendar icon in date inputs across browsers */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        cursor: pointer;
+    }
+    
+    /* Additional styling to match the Delivery Challan styling */
+    .input-group .input-group-text {
+        background-color: #f8f9fa;
+        border-right: 0;
+    }
+    
+    .input-group .form-control {
+        border-left: 0;
     }
 </style>
