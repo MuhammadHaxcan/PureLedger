@@ -498,7 +498,7 @@
             </div>
 
             <!-- Base Voucher Checkbox -->
-            <div class="row mt-2">
+            <div class="row mt-2" id="baseVoucherCheckboxRow" style="display:none;">
                 <div class="col-12">
                     <div class="form-check">
                         <input class="form-check-input"
@@ -516,6 +516,43 @@
                             </small>
                         </label>
                     </div>
+                </div>
+            </div>
+
+            <!-- Save Recipe Checkbox and Input -->
+            <div class="row mt-2" id="saveRecipeCheckboxRow" style="display:none;">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="SaveAsRecipe"
+                               name="SaveAsRecipe"
+                               value="true" />
+                        <label class="form-check-label" for="SaveAsRecipe">
+                            <span class="fw-bold text-success">
+                                <i class="fas fa-bookmark me-1"></i>Save this recipe
+                            </span>
+                            <small class="text-muted ms-2">
+                                (Available only for product entries with at least 2 items)
+                            </small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recipe Name Input - Hidden by default -->
+            <div id="recipeNameContainer" class="row mt-3 d-none">
+                <div class="col-md-6">
+                    <label class="form-label" for="RecipeName">Recipe Name <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-tag"></i></span>
+                        <input type="text" 
+                               class="form-control" 
+                               id="RecipeName" 
+                               name="RecipeName" 
+                               placeholder="Enter a name for this recipe" />
+                    </div>
+                    <div class="invalid-feedback">Please provide a name for your recipe</div>
                 </div>
             </div>
         </div>

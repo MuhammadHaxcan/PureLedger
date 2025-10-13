@@ -13,7 +13,6 @@
     captureRowTemplate() {
         const initialRow = document.getElementById('entryRow-0');
         if (initialRow) {
-            // Deep clone the row to use as a template              
             this.rowTemplate = initialRow.cloneNode(true);
         }
     }
@@ -185,14 +184,11 @@
             }
         });
 
-        // Update the Add Row button text to include shortcut
         $('#addRowBtn').html('<i class="fas fa-plus"></i> Add Row <span class="text-muted">[Alt+N]</span>');
 
         this.setupValidationClearance();
 
-        // Add new handler for input focus
         $(document).on('click focus', 'input', (e) => {
-            // Close all dropdowns except the one in the current container
             const $currentContainer = $(e.target).closest('.select-container');
             $('.select-dropdown').each(function () {
                 const $dropdown = $(this);
@@ -201,6 +197,10 @@
                     $dropdown.find('.select-option').removeClass('selected');
                 }
             });
+        });
+
+        $('#SaveAsRecipe').on('change', (e) => {
+            this.toggleRecipeNameInput(e.target.checked);
         });
     }
 
@@ -213,6 +213,7 @@
         this.updateDueDate();
         this.updateProductRequiredIndicator();
         this.updateBaseVoucherCheckbox();
+        this.updateSaveRecipeCheckbox(); // Add this line
         this.updateTotals();
     }
 
@@ -296,7 +297,6 @@
 
             $dropdown.empty();
 
-            // Store the currently selected option's value to restore it after updating options
             const selectedValue = $categorySelect.val();
 
             $categorySelect.empty().append('<option value="">Select Category</option>');
@@ -309,7 +309,6 @@
                     );
                 });
 
-                // Restore selected value if it exists in the new options
                 if (selectedValue && $categorySelect.find(`option[value="${selectedValue}"]`).length) {
                     $categorySelect.val(selectedValue);
                 }
@@ -332,7 +331,6 @@
         await this.loadAccounts($row, categoryId);
         this.clearAccountRelatedData($row);
 
-        // Update the data attribute
         $row.data('category-id', categoryId);
     }
 
@@ -357,7 +355,6 @@
 
             $dropdown.empty();
 
-            // Store the currently selected option's value to restore it after updating options
             const selectedValue = $accountSelect.val();
 
             $accountSelect.empty().append('<option value="">Select Account</option>');
@@ -373,7 +370,6 @@
                     );
                 });
 
-                // Restore selected value if it exists in the new options
                 if (selectedValue && $accountSelect.find(`option[value="${selectedValue}"]`).length) {
                     $accountSelect.val(selectedValue);
                 }
@@ -408,6 +404,7 @@
             await this.loadProductDetails($row, accountId);
             this.manageInputsBasedOnAccountGroup($row);
             this.updateBaseVoucherCheckbox();
+            this.updateSaveRecipeCheckbox(); // Add this line
         } catch (error) {
             console.error('Error loading product details:', error);
             this.showError('Failed to load product details.');
@@ -587,15 +584,12 @@
         this.rowCounter++;
         const newIndex = this.rowCounter;
 
-        // Use the stored template if the first row is not available
         let $newRow;
         const firstRow = document.getElementById('entryRow-0');
 
         if (firstRow) {
-            // If the original row exists, clone it (original behavior)
             $newRow = $(firstRow).clone();
         } else if (this.rowTemplate) {
-            // If the original row doesn't exist but we have a template, use that
             $newRow = $(this.rowTemplate).clone();
         } else {
             console.error("No row template available");
@@ -627,6 +621,7 @@
         }
 
         this.updateBaseVoucherCheckbox();
+        this.updateSaveRecipeCheckbox(); // Add this line
         this.updateTotals();
     }
 
@@ -690,7 +685,50 @@
         }
     }
 
-    // Add this method to the JournalEntryManager class
+    updateSaveRecipeCheckbox() {
+        const $saveRecipeCheckboxRow = $('#saveRecipeCheckboxRow');
+        const $saveRecipeCheckbox = $('#SaveAsRecipe');
+        const entriesCount = $('#entryRows tr').length;
+
+        let productEntriesCount = 0;
+        let nonProductEntries = 0;
+
+        $('#entryRows tr').each(function () {
+            const accountGroup = $(this).attr('data-account-group');
+            if (accountGroup === 'product') {
+                productEntriesCount++;
+            } else if (accountGroup) {
+                nonProductEntries++;
+            }
+        });
+        const hasEnoughEntries = entriesCount >= 2;
+        const allAssignedEntriesAreProducts = nonProductEntries === 0;
+        const hasAtLeastOneProduct = productEntriesCount > 0;
+
+        const shouldShow = hasEnoughEntries && allAssignedEntriesAreProducts && hasAtLeastOneProduct;
+
+        if (shouldShow) {
+            $saveRecipeCheckboxRow.show();
+        } else {
+            $saveRecipeCheckbox.prop('checked', false);
+            $saveRecipeCheckboxRow.hide();
+            this.toggleRecipeNameInput(false);
+        }
+    }
+
+    toggleRecipeNameInput(show) {
+        const $recipeNameContainer = $('#recipeNameContainer');
+        const $recipeNameInput = $('#RecipeName');
+
+        if (show) {
+            $recipeNameContainer.removeClass('d-none');
+            $recipeNameInput.prop('required', true);
+        } else {
+            $recipeNameContainer.addClass('d-none');
+            $recipeNameInput.prop('required', false).val('');
+        }
+    }
+
     setupSelectSearch() {
         const self = this;
         
@@ -765,12 +803,10 @@
             }
         });
         
-        // Select option on click
         $(document).on('click', '.select-option:not(.filtered-out)', function() {
             self.selectOption($(this), $(this).closest('.select-container'));
         });
         
-        // Close dropdowns when clicking outside
         $(document).on('click', function(e) {
             if (!$(e.target).closest('.select-container').length) {
                 $('.select-dropdown').removeClass('show');
@@ -791,7 +827,6 @@
         $('.select-option').removeClass('selected');
     }
 
-    // Handle form submission
     async handleFormSubmit(event) {
         event.preventDefault();
 
@@ -809,7 +844,6 @@
                 return;
             }
 
-            // Format dates correctly before submission
             this.formatDatesForSubmission();
 
             console.log('Validation passed, submitting form...');
@@ -827,29 +861,24 @@
     }
 
     formatDatesForSubmission() {
-        // HTML5 date inputs already use yyyy-MM-dd format which is compatible with ISO format
         const entryDateStr = $('#EntryDate').val();
         const dueDateStr = $('#DueDate').val();
 
         if (entryDateStr) {
-            // Create a hidden field with the ISO formatted date
             const $entryDateHidden = $('<input>')
                 .attr('type', 'hidden')
                 .attr('name', 'EntryDate')
                 .val(entryDateStr);
 
-            // Replace the original input with this hidden field
             $('#EntryDate').prop('disabled', true).after($entryDateHidden);
         }
 
         if (dueDateStr) {
-            // Create a hidden field with the ISO formatted date
             const $dueDateHidden = $('<input>')
                 .attr('type', 'hidden')
                 .attr('name', 'DueDate')
                 .val(dueDateStr);
 
-            // Replace the original input with this hidden field
             $('#DueDate').prop('disabled', true).after($dueDateHidden);
         }
     }
@@ -910,6 +939,18 @@
                 }
             }
         });
+
+
+        if ($('#SaveAsRecipe').is(':checked')) {
+            const recipeName = $('#RecipeName').val().trim();
+            if (!recipeName) {
+                errors.push('Recipe name is required when saving as a recipe.');
+                $('#RecipeName').addClass('is-invalid');
+            } else {
+                $('#RecipeName').removeClass('is-invalid');
+            }
+        }
+
 
         if (Math.abs(totalDebit - totalCredit) > 0.01) {
             const difference = Math.abs(totalDebit - totalCredit).toFixed(2);
@@ -1074,39 +1115,32 @@
         }, 5000);
     }
 
-    // Update base voucher checkbox state based on account entries
     updateBaseVoucherCheckbox() {
+        const $baseVoucherCheckboxRow = $('#baseVoucherCheckboxRow');
         const $baseVoucherCheckbox = $('#IsBaseVoucher');
-
-        // Count account entries (account group type 1)
         let accountEntriesCount = 0;
+        let productEntriesCount = 0;
+
         $('#entryRows tr').each(function () {
             const accountGroup = $(this).attr('data-account-group');
             if (accountGroup === 'account') {
                 accountEntriesCount++;
+            } else if (accountGroup === 'product') {
+                productEntriesCount++;
             }
         });
 
-        // If we don't have exactly one account entry
-        if (accountEntriesCount !== 1) {
-            // Uncheck and disable the checkbox
-            $baseVoucherCheckbox.prop('checked', false)
-                .prop('disabled', true);
+        const shouldShow = accountEntriesCount === 1 && productEntriesCount >= 1;
 
-            // Add tooltip explaining why it's disabled
-            const tooltipText = accountEntriesCount === 0
-                ? 'Base voucher requires exactly one account entry'
-                : 'Base voucher cannot have multiple account entries';
-
-            $baseVoucherCheckbox.attr('title', tooltipText);
+        if (shouldShow) {
+            $baseVoucherCheckboxRow.show();
         } else {
-            // Enable the checkbox when we have exactly one account entry
-            $baseVoucherCheckbox.prop('disabled', false)
-                .attr('title', 'Mark this as a base voucher');
+            // Always uncheck and hide if not valid
+            $baseVoucherCheckbox.prop('checked', false);
+            $baseVoucherCheckboxRow.hide();
         }
     }
 
-    // Utility Methods
     parseFloatOrZero(value) {
         const parsed = parseFloat(value);
         return isNaN(parsed) ? 0 : parsed;
@@ -1131,7 +1165,6 @@
 
     removeRow(e) {
         try {
-            // Ensure we're working with the correct target - either the button or its closest parent button
             const $button = $(e.target).closest('.remove-row-btn');
             const $row = $button.closest('tr');
             const $rows = $('#entryRows tr');
@@ -1140,7 +1173,6 @@
                 // Remove the row from the DOM
                 $row.remove();
                 
-                // Update row counter to prevent issues with row numbering
                 this.rowCounter = $rows.length - 2; // -1 for the removed row, -1 for zero-based indexing
                 
                 // Update the remaining rows' indices
@@ -1150,32 +1182,28 @@
                     // Update row ID
                     $r.attr('id', `entryRow-${idx}`);
                     
-                    // Update form field names and IDs
                     $r.find('input, select').each(function() {
                         const $el = $(this);
                         const name = $el.attr('name');
                         const id = $el.attr('id');
                         
-                        // Update name attribute for form submission
                         if (name && name.includes('Entries[')) {
                             $el.attr('name', name.replace(/Entries\[\d+\]/, `Entries[${idx}]`));
                         }
                         
-                        // Update ID attribute for labels and scripts
                         if (id) {
                             $el.attr('id', id.replace(/(\d+)/, idx));
                         }
                     });
                 });
 
-                // Update UI elements and calculations
                 this.updateTotals();
                 this.updateProductRequiredIndicator();
                 this.updateBaseVoucherCheckbox();
+                this.updateSaveRecipeCheckbox(); // Add this line
                 
                 console.log(`Row removed successfully, ${$('#entryRows tr').length} rows remaining`);
             } else {
-                // Can't remove the last row
                 this.showError("Cannot delete the last row. At least one entry is required.");
             }
         } catch (error) {

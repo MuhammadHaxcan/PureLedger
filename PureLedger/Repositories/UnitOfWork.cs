@@ -29,7 +29,9 @@ namespace PureLedger.Repositories
         private IUserControllerAccessRepository? _userControllerAccess;
         private IUserProjectRepository? _userProjects;
         private IProjectCartageSettingsRepository? _projectCartageSettings;
-        private IMissedEntryRepository? _missedEntries; // Add new repository field
+        private IMissedEntryRepository? _missedEntries;
+        private IRecipeRepository? _recipes; // Changed to same pattern
+        private IRecipeItemRepository? _recipeItems; // Changed to same pattern
 
         public UnitOfWork(LedgerDbContext dbContext)
         {
@@ -56,7 +58,9 @@ namespace PureLedger.Repositories
         public IUserControllerAccessRepository UserControllerAccess => _userControllerAccess ??= new UserControllerAccessRepository(_dbContext);
         public IUserProjectRepository UserProjects => _userProjects ??= new UserProjectRepository(_dbContext);
         public IProjectCartageSettingsRepository ProjectCartageSettings => _projectCartageSettings ??= new ProjectCartageSettingsRepository(_dbContext);
-        public IMissedEntryRepository MissedEntries => _missedEntries ??= new MissedEntryRepository(_dbContext); // Add new property
+        public IMissedEntryRepository MissedEntries => _missedEntries ??= new MissedEntryRepository(_dbContext);
+        public IRecipeRepository Recipes => _recipes ??= new RecipeRepository(_dbContext);
+        public IRecipeItemRepository RecipeItems => _recipeItems ??= new RecipeItemRepository(_dbContext);
 
         public async Task<int> SaveChangesAsync()
         {

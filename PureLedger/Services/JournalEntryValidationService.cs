@@ -118,10 +118,6 @@ namespace PureLedger.Services
                     errors.Add($"{entryPrefix}Error validating account details.");
                 }
 
-                // The following fields are always optional
-                // - Type (read-only field populated from account)
-                // - Tags
-                // - Des (Description)
             }
 
             // Check if debits and credits are balanced

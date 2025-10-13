@@ -826,5 +826,61 @@ namespace PureLedger.Services
                 throw;
             }
         }
+
+        // Add this method to JournalEntryService
+        public async Task<int> CreateRecipeFromVoucherAsync(JournalEntryViewModel model, int journalVoucherId)
+        {
+            try
+            {
+                if (!model.SaveAsRecipe || string.IsNullOrWhiteSpace(model.RecipeName))
+                {
+                    return 0; // Recipe creation not requested or name not provided
+                }
+                
+                _logger.LogInformation("Creating recipe '{RecipeName}' from voucher {VoucherId}", 
+                    model.RecipeName, journalVoucherId);
+
+                // Create the recipe with only the specified fields
+                var recipe = new Recipe
+                {
+                    RecipeName = model.RecipeName,
+                    ProjectId = model.ProjectId
+                };
+
+                recipe = await _unitOfWork.Recipes.AddAsync(recipe);
+                
+                // Get product entries (we'll only save CategoryId and AccountId)
+                var productEntries = model.Entries
+                    .Where(e => e.AccountId.HasValue && e.CategoryId.HasValue)
+                    .ToList();
+
+                // Create recipe items with only CategoryId and AccountId
+                foreach (var entry in productEntries)
+                {
+                    if (!entry.AccountId.HasValue || !entry.CategoryId.HasValue)
+                        continue;
+                        
+                    var recipeItem = new RecipeItem
+                    {
+                        RecipeId = recipe.RecipeId,
+                        CategoryId = entry.CategoryId.Value,
+                        AccountId = entry.AccountId.Value
+                    };
+                    
+                    await _unitOfWork.RecipeItems.AddAsync(recipeItem);
+                }
+                
+                await _unitOfWork.SaveChangesAsync();
+                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items", 
+                    recipe.RecipeId, productEntries.Count);
+                    
+                return recipe.RecipeId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating recipe from voucher {VoucherId}", journalVoucherId);
+                throw;
+            }
+        }
     }
 }

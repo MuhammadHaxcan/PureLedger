@@ -70,6 +70,24 @@ namespace PureLedger.Controllers
                     // Create new voucher (existing functionality)
                     journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
                     TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
+
+                    // If the save recipe checkbox is checked and a name is provided, create a recipe
+                    if (model.SaveAsRecipe && !string.IsNullOrWhiteSpace(model.RecipeName))
+                    {
+                        try
+                        {
+                            int recipeId = await _journalService.CreateRecipeFromVoucherAsync(model, journalVoucher.JournalVoucherId);
+                            if (recipeId > 0)
+                            {
+                                TempData["Success"] = $"{TempData["Success"]} Recipe '{model.RecipeName}' was saved.";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error saving recipe from voucher {VoucherId}", journalVoucher.JournalVoucherId);
+                            // Don't interrupt the main workflow if recipe creation fails
+                        }
+                    }
                 }
 
                 if (action == "submit_print")

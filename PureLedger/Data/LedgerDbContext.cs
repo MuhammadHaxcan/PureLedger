@@ -29,6 +29,10 @@ namespace PureLedger.Data
         public DbSet<ProjectCartageSettings> ProjectCartageSettings { get; set; }
         public DbSet<MissedEntry> MissedEntries { get; set; }
 
+        // Recipe related tables
+        public DbSet<Recipe> Recipes { get; set; }
+        public DbSet<RecipeItem> RecipeItems { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -205,6 +209,34 @@ namespace PureLedger.Data
                 .WithMany()
                 .HasForeignKey(m => m.ProductAccountId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Recipe to Project relationship
+            modelBuilder.Entity<Recipe>()
+                .HasOne(r => r.Project)
+                .WithMany()
+                .HasForeignKey(r => r.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            // RecipeItem to Recipe relationship
+            modelBuilder.Entity<RecipeItem>()
+                .HasOne(ri => ri.Recipe)
+                .WithMany(r => r.RecipeItems)
+                .HasForeignKey(ri => ri.RecipeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // RecipeItem to Category relationship
+            modelBuilder.Entity<RecipeItem>()
+                .HasOne(ri => ri.Category)
+                .WithMany()
+                .HasForeignKey(ri => ri.CategoryId)
+                .OnDelete(DeleteBehavior.NoAction);
+                
+            // RecipeItem to Account relationship
+            modelBuilder.Entity<RecipeItem>()
+                .HasOne(ri => ri.Account)
+                .WithMany()
+                .HasForeignKey(ri => ri.AccountId)
+                .OnDelete(DeleteBehavior.NoAction);
         }
     }
 }
