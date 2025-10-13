@@ -23,14 +23,20 @@ namespace PureLedger.Repositories
         
         public async Task<Recipe?> GetByIdWithItemsAsync(int id)
         {
+            // Add the missing Include statements for the related entities
             return await _context.Recipes
+                .Include(r => r.Project)
                 .Include(r => r.RecipeItems)
+                    .ThenInclude(ri => ri.Category)
+                .Include(r => r.RecipeItems)
+                    .ThenInclude(ri => ri.Account)
                 .FirstOrDefaultAsync(r => r.RecipeId == id);
         }
         
         public async Task<List<Recipe>> GetAllByProjectIdAsync(int projectId)
         {
             return await _context.Recipes
+                .Include(r => r.Project)
                 .Where(r => r.ProjectId == projectId)
                 .ToListAsync();
         }

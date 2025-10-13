@@ -478,6 +478,76 @@ namespace PureLedger.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> Recipes(int? projectId = null)
+        {
+            // Load projects for dropdown
+            await LoadProjectsData(projectId);
+            
+            // Initialize view model
+            var viewModel = new RecipesViewModel
+            {
+                ProjectId = projectId ?? 0
+            };
+            
+            // If project is selected, load recipes
+            if (projectId.HasValue)
+            {
+                try
+                {
+                    var recipes = await _journalService.GetRecipesByProjectAsync(projectId.Value);
+                    viewModel.Recipes = recipes.Select(r => new RecipeListItemViewModel
+                    {
+                        RecipeId = r.RecipeId,
+                        RecipeName = r.RecipeName,
+                        ProjectName = r.Project?.ProjectName ?? "Unknown Project"
+                    }).ToList();
+                    
+                    _logger.LogInformation("Loaded {Count} recipes for project {ProjectId}", 
+                        viewModel.Recipes.Count, projectId.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error loading recipes for project {ProjectId}", projectId);
+                    ViewBag.Error = "Failed to load recipes. Please try again.";
+                }
+            }
+            
+            return View(viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetRecipeItems(int recipeId)
+        {
+            try
+            {
+                var recipe = await _journalService.GetRecipeWithItemsAsync(recipeId);
+                if (recipe == null)
+                    return NotFound();
+                    
+                var recipeItems = recipe.RecipeItems.Select(item => new RecipeItemViewModel
+                {
+                    RecipeItemId = item.RecipeItemId,
+                    CategoryName = item.Category?.CategoryName ?? "Unknown Category",
+                    AccountName = item.Account?.AccountName ?? "Unknown Account"
+                }).ToList();
+                
+                var result = new
+                {
+                    recipeName = recipe.RecipeName,
+                    projectName = recipe.Project?.ProjectName ?? "Unknown Project",
+                    items = recipeItems
+                };
+                
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving recipe items for recipe {RecipeId}", recipeId);
+                return Json(new { error = "Failed to load recipe items" });
+            }
+        }
+        
         #region Helper Methods
         private async Task LoadProjectsData(int? selectedProjectId = null)
         {

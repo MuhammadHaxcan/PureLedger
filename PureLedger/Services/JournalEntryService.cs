@@ -882,5 +882,49 @@ namespace PureLedger.Services
                 throw;
             }
         }
+
+        // Add these methods to JournalEntryService
+
+        // Get all recipes for a specific project
+        public async Task<List<Recipe>> GetRecipesByProjectAsync(int projectId)
+        {
+            try
+            {
+                _logger.LogInformation("Retrieving recipes for project {ProjectId}", projectId);
+                var recipes = await _unitOfWork.Recipes.GetAllByProjectIdAsync(projectId);
+                _logger.LogInformation("Found {Count} recipes for project {ProjectId}", recipes.Count, projectId);
+                return recipes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting recipes for project {ProjectId}", projectId);
+                throw;
+            }
+        }
+
+        // Get a specific recipe with its items
+        public async Task<Recipe?> GetRecipeWithItemsAsync(int recipeId)
+        {
+            try
+            {
+                _logger.LogInformation("Retrieving recipe with items for recipe ID {RecipeId}", recipeId);
+                var recipe = await _unitOfWork.Recipes.GetByIdWithItemsAsync(recipeId);
+                
+                if (recipe == null)
+                {
+                    _logger.LogWarning("Recipe with ID {RecipeId} not found", recipeId);
+                    return null;
+                }
+                
+                _logger.LogInformation("Found recipe '{RecipeName}' with {ItemCount} items", 
+                    recipe.RecipeName, recipe.RecipeItems?.Count ?? 0);
+                return recipe;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting recipe with ID {RecipeId}", recipeId);
+                throw;
+            }
+        }
     }
 }

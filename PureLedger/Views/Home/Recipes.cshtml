@@ -1,0 +1,131 @@
+@model PureLedger.ViewModels.RecipesViewModel
+@{
+    ViewData["Title"] = "Recipes";
+}
+
+<div class="container mt-4">
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-book-open me-2"></i>Recipes
+            </h6>
+        </div>
+        <div class="card-body">
+            <!-- Project selection -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label for="projectSelect" class="form-label">Select Project:</label>
+                    <select id="projectSelect" class="form-select">
+                        <option value="">-- Select Project --</option>
+                        @if (ViewBag.Projects != null)
+                        {
+                            foreach (var project in ViewBag.Projects)
+                            {
+                                <option value="@project.ProjectId" selected="@(Model.ProjectId == project.ProjectId)">
+                                    @project.ProjectName
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <!-- Alert Area -->
+            @if (ViewBag.Error != null)
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-circle me-2"></i>@ViewBag.Error
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+
+            <!-- Recipes table -->
+            <div class="table-responsive">
+                <table id="recipesTable" class="table table-bordered table-striped">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>ID</th>
+                            <th>Recipe Name</th>
+                            <th>Project</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Recipes != null && Model.Recipes.Any())
+                        {
+                            foreach (var recipe in Model.Recipes)
+                            {
+                                <tr>
+                                    <td>@recipe.RecipeId</td>
+                                    <td>@recipe.RecipeName</td>
+                                    <td>@recipe.ProjectName</td>
+                                    <td>
+                                        <button type="button" class="btn btn-info btn-sm view-recipe-btn" 
+                                                data-recipe-id="@recipe.RecipeId" 
+                                                data-recipe-name="@recipe.RecipeName">
+                                            <i class="fas fa-eye"></i> View Items
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else if (Model.ProjectId > 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center">No recipes found for this project.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center">Please select a project to view recipes.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recipe Items Modal -->
+<div class="modal fade" id="recipeItemsModal" tabindex="-1" aria-labelledby="recipeItemsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="recipeItemsModalLabel">Recipe Items</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="recipe-details mb-3">
+                    <h5 id="recipeNameDisplay"></h5>
+                    <p id="projectNameDisplay" class="text-muted"></p>
+                </div>
+                
+                <div class="table-responsive">
+                    <table id="recipeItemsTable" class="table table-bordered table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Category</th>
+                                <th>Account</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recipeItemsTableBody">
+                            <tr>
+                                <td colspan="3" class="text-center">Loading items...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/recipes.js" asp-append-version="true"></script>
+}

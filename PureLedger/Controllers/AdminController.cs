@@ -18,7 +18,7 @@ namespace PureLedger.Controllers
         // Map of controllers and their actions for access control
         private readonly Dictionary<string, List<string>> _controllerActions = new()
         {
-            ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries" , "MissedEntries", "BaseVouchers" },
+            ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "MissedEntries", "BaseVouchers", "Recipes" }, // Added "Recipes"
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations" },
             ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport" },
             ["DeliveryChallan"] = new() { "Index" }
