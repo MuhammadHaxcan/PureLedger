@@ -83,6 +83,11 @@
 
             // Apply account type specific settings
             this.manageInputsBasedOnAccountGroup($row);
+            
+            // Explicitly trigger row calculations for product accounts
+            if ($row.attr('data-account-group') === 'product') {
+                this.updateRowCalculations($row[0], 'debit');
+            }
         } catch (error) {
             console.error('Error loading data for row:', error);
         }
@@ -206,14 +211,21 @@
 
     loadInitialData() {
         const projectId = $('#ProjectId').val();
+        
+        // For normal new entries (not edit mode and not recipe-based)
         if (projectId && !this.isEditMode()) {
             this.handleProjectChange(projectId);
         }
-
+        
+        // For recipe-based entries
+        if (!this.isEditMode()) {
+            this.processRecipeEntries();
+        }
+        
         this.updateDueDate();
         this.updateProductRequiredIndicator();
         this.updateBaseVoucherCheckbox();
-        this.updateSaveRecipeCheckbox(); // Add this line
+        this.updateSaveRecipeCheckbox();
         this.updateTotals();
     }
 
@@ -431,6 +443,12 @@
 
                     if (accountGroup === 'product') {
                         this.setupProductRequirements($row);
+                        
+                        // For product accounts, if quantity > 0, trigger calculations
+                        const qty = this.parseFloatOrZero($row.find('.qty-input').val());
+                        if (qty > 0) {
+                            this.updateRowCalculations($row[0], 'debit');
+                        }
                     }
                 }
 
@@ -552,11 +570,22 @@
         const $row = $(row);
         const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
         const discount = this.parseFloatOrZero($row.find('.disc-input').val());
+        
+        // Skip for account group 'account' if both debit and credit are already set
+        const accountGroup = $row.attr('data-account-group') || '';
+        const debitValue = this.parseFloatOrZero($row.find('.debit-input').val());
+        const creditValue = this.parseFloatOrZero($row.find('.credit-input').val());
+        
+        // If it's an account entry and already has values, don't override
+        if (accountGroup === 'account' && (debitValue > 0 || creditValue > 0)) {
+            return;
+        }
 
         const amount = Math.round(totalAmount - discount);
 
+        // Only update if the amount is valid
         if (amount > 0) {
-            if (focusField === 'debit') {
+            if (focusField === 'debit' || (!focusField && !debitValue && !creditValue)) {
                 $row.find('.debit-input').val(amount);
                 $row.find('.credit-input').val('');
             } else if (focusField === 'credit') {
@@ -736,6 +765,7 @@
             const $input = $(this);
             const $container = $input.closest('.select-container');
             const $dropdown = $container.find('.select-dropdown');
+            const $select = $container.find('select');
             const searchTerm = $input.val().toLowerCase();
             
             // Filter options based on search term
@@ -751,17 +781,40 @@
             $dropdown.addClass('show');
         });
         
-        // Show dropdown on focus
+        // Show dropdown on focus and highlight the currently selected option
         $(document).on('focus', '.select-search', function() {
             $('.select-dropdown').removeClass('show');
-            $(this).closest('.select-container').find('.select-dropdown').addClass('show');
+            
+            const $container = $(this).closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            const $select = $container.find('select');
+            const currentValue = $select.val();
+            
+            // Clear previous selection highlighting
+            $dropdown.find('.select-option').removeClass('selected');
+            
+            // If there's a currently selected value, highlight it in the dropdown
+            if (currentValue) {
+                const $selectedOption = $dropdown.find(`.select-option[data-value="${currentValue}"]`);
+                if ($selectedOption.length) {
+                    $selectedOption.addClass('selected');
+                }
+            }
+            
+            $dropdown.addClass('show');
         });
         
         // Navigation with keyboard
         $(document).on('keydown', '.select-search', function(e) {
             const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
             const $options = $dropdown.find('.select-option:not(.filtered-out)');
-            const $selected = $dropdown.find('.select-option.selected');
+            let $selected = $dropdown.find('.select-option.selected');
+            
+            // If Tab key and dropdown is showing, just close the dropdown without changing selection
+            if (e.key === 'Tab' && $dropdown.hasClass('show')) {
+                $dropdown.removeClass('show');
+                return; // Allow normal tab behavior
+            }
             
             switch (e.key) {
                 case 'ArrowDown':
@@ -791,14 +844,24 @@
                     break;
                 
                 case 'Enter':
-                case 'Tab':
                     if ($dropdown.hasClass('show')) {
                         e.preventDefault();
-                        const $toSelect = $selected.length ? $selected : $options.first();
-                        if ($toSelect.length) {
-                            self.selectOption($toSelect, $(this).closest('.select-container'));
+                        $selected = $dropdown.find('.select-option.selected');
+                        if ($selected.length) {
+                            self.selectOption($selected, $(this).closest('.select-container'));
+                        } else {
+                            // If nothing is selected but dropdown is open, select first visible option
+                            const $firstOption = $options.first();
+                            if ($firstOption.length) {
+                                self.selectOption($firstOption, $(this).closest('.select-container'));
+                            }
                         }
                     }
+                    break;
+                
+                case 'Escape':
+                    e.preventDefault();
+                    $dropdown.removeClass('show');
                     break;
             }
         });
@@ -808,6 +871,7 @@
         });
         
         $(document).on('click', function(e) {
+            // Only close dropdowns when clicking outside of any select container
             if (!$(e.target).closest('.select-container').length) {
                 $('.select-dropdown').removeClass('show');
             }
@@ -822,9 +886,10 @@
         $container.find('select').val(value).trigger('change');
         $container.find('.select-search').val(text);
         
-        // Hide dropdown
+        // Hide dropdown and update the selected class
         $container.find('.select-dropdown').removeClass('show');
-        $('.select-option').removeClass('selected');
+        $container.find('.select-option').removeClass('selected');
+        $option.addClass('selected'); // Keep the option marked as selected
     }
 
     async handleFormSubmit(event) {
@@ -1209,6 +1274,71 @@
         } catch (error) {
             console.error("Error removing row:", error);
             this.showError("An error occurred while removing the row. Please try again.");
+        }
+    }
+
+    /**
+     * Process a recipe-based journal entry
+     * This is called when the page is loaded with recipe data
+     */
+    processRecipeEntries() {
+        // Check if there are any rows with preloaded data from a recipe
+        let hasPreloadedData = false;
+        const projectId = $('#ProjectId').val();
+        
+        $('#entryRows tr').each((index, row) => {
+            const $row = $(row);
+            const categoryId = $row.data('category-id');
+            const accountId = $row.data('account-id');
+            
+            if (categoryId && accountId) {
+                hasPreloadedData = true;
+                // Process this recipe item row
+                this.processRecipeRow($row, projectId, categoryId, accountId);
+            }
+        });
+        
+        if (hasPreloadedData) {
+            console.log("Processing recipe-based journal entry");
+        }
+    }
+
+    /**
+     * Process a single row from a recipe
+     */
+    async processRecipeRow($row, projectId, categoryId, accountId) {
+        try {
+            // Load categories for this row
+            await this.loadCategories($row.find('.category-select'), projectId);
+            
+            // Set category value and display text
+            $row.find('.category-select').val(categoryId);
+            const categoryText = $row.find('.category-select option:selected').text();
+            $row.find('.category-search').val(categoryText);
+            
+            // Load accounts based on category
+            await this.loadAccounts($row, categoryId);
+            
+            // Set account value and display text
+            $row.find('.account-select').val(accountId);
+            const accountText = $row.find('.account-select option:selected').text();
+            $row.find('.account-search').val(accountText);
+            
+            // Load product details to set account group attributes
+            await this.loadProductDetails($row, accountId);
+            
+            // Apply account type specific settings
+            this.manageInputsBasedOnAccountGroup($row);
+            
+            // Focus on quantity field for product accounts to prompt user to enter value
+            if ($row.attr('data-account-group') === 'product') {
+                $row.find('.qty-input').focus();
+                
+                // Explicitly trigger row calculations
+                this.updateRowCalculations($row[0], 'debit');
+            }
+        } catch (error) {
+            console.error('Error processing recipe row:', error);
         }
     }
 }

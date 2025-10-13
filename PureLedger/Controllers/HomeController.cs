@@ -547,6 +547,42 @@ namespace PureLedger.Controllers
                 return Json(new { error = "Failed to load recipe items" });
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> CreateFromRecipe(int recipeId, int projectId)
+        {
+            try
+            {
+                _logger.LogInformation("Creating new journal entry from recipe {RecipeId} for project {ProjectId}", 
+                    recipeId, projectId);
+            
+                // Load projects into ViewBag
+                await LoadProjectsData(projectId);
+        
+                // Create view model from recipe
+                var model = await _journalService.CreateViewModelFromRecipeAsync(recipeId, projectId);
+        
+                // Set ViewBag title
+                ViewBag.Title = "New Journal Entry from Recipe";
+        
+                // Pass selected project ID
+                ViewBag.SelectedProjectId = projectId;
+        
+                return View("Entry", model);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid recipe or project: {Message}", ex.Message);
+                TempData["Error"] = ex.Message;
+                return RedirectToAction(nameof(Recipes), new { projectId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating entry from recipe {RecipeId}", recipeId);
+                TempData["Error"] = "An error occurred while preparing the entry form. Please try again.";
+                return RedirectToAction(nameof(Recipes), new { projectId });
+            }
+        }
         
         #region Helper Methods
         private async Task LoadProjectsData(int? selectedProjectId = null)

@@ -926,5 +926,81 @@ namespace PureLedger.Services
                 throw;
             }
         }
+
+        /// <summary>
+        /// Creates a new JournalEntryViewModel pre-filled with items from a recipe
+        /// </summary>
+        public async Task<JournalEntryViewModel> CreateViewModelFromRecipeAsync(int recipeId, int projectId)
+        {
+            try
+            {
+                _logger.LogInformation("Creating journal entry view model from recipe {RecipeId}", recipeId);
+                
+                var recipe = await _unitOfWork.Recipes.GetByIdWithItemsAsync(recipeId);
+                if (recipe == null)
+                {
+                    _logger.LogWarning("Recipe with ID {RecipeId} not found", recipeId);
+                    throw new ArgumentException($"Recipe with ID {recipeId} not found");
+                }
+                
+                // If the project ID from the recipe is different from the requested project ID,
+                // we should verify that the recipe belongs to the requested project
+                if (recipe.ProjectId != projectId)
+                {
+                    _logger.LogWarning(
+                        "Recipe project ID mismatch. Recipe {RecipeId} belongs to project {RecipeProjectId}, " +
+                        "but was requested for project {RequestedProjectId}", 
+                        recipeId, recipe.ProjectId, projectId);
+                        
+                    throw new ArgumentException("Recipe does not belong to the selected project");
+                }
+                
+                // Create a new view model with defaults
+                var viewModel = new JournalEntryViewModel
+                {
+                    ProjectId = projectId,
+                    EntryDate = DateOnly.FromDateTime(DateTime.Now),
+                    DueDate = DateOnly.FromDateTime(DateTime.Now),
+                    CreditDays = 0,
+                    IsBaseVoucher = false,
+                    Booker = "",
+                    Entries = new List<JournalEntryRowModel>()
+                };
+                
+                // Add entries from recipe items
+                foreach (var item in recipe.RecipeItems)
+                {
+                    // Get account details to populate any needed fields
+                    var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(item.AccountId);
+                    
+                    var entry = new JournalEntryRowModel
+                    {
+                        CategoryId = item.CategoryId,
+                        AccountId = item.AccountId,
+                        Pkg = account?.ProductData?.Pkg,
+                        Des = "", // Empty description by default
+                        Qty = 0, // Default quantity to 0
+                        Rate = 0, // Default rate to 0
+                        Percent = 0, // Default discount percent to 0
+                        Disc = 0, // Default discount to 0
+                        Debit = 0, // Default debit to 0
+                        Credit = 0, // Default credit to 0
+                        Rbp = "Y" // Default RBP to "Y"
+                    };
+                    
+                    viewModel.Entries.Add(entry);
+                }
+                
+                _logger.LogInformation("Created journal entry view model from recipe {RecipeId} with {EntryCount} entries", 
+                    recipeId, viewModel.Entries.Count);
+                
+                return viewModel;
+            }
+            catch (Exception ex) when (ex is not ArgumentException)
+            {
+                _logger.LogError(ex, "Error creating view model from recipe {RecipeId}", recipeId);
+                throw;
+            }
+        }
     }
 }
