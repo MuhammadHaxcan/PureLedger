@@ -11,7 +11,6 @@ namespace PureLedger.Repositories.Interfaces
         IJournalEntryRepository JournalEntries { get; }
         ICategoryRepository Categories { get; }
         IAccountRepository Accounts { get; }
-        ITagRepository Tags { get; }
         IAccountGroupRepository AccountGroups { get; }
         IAccountDataRepository AccountDatas { get; }
         IProductDataRepository ProductDatas { get; }

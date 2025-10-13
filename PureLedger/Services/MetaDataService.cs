@@ -433,63 +433,6 @@ namespace PureLedger.Services
         }
         #endregion
 
-        #region Tag Operations
-        public async Task<List<Tag>> GetAllTagsAsync()
-        {
-            return await _unitOfWork.Tags.GetAllAsync();
-        }
-
-        public async Task<List<string>> CreateTagAsync(Tag tag)
-        {
-            var errors = new List<string>();
-
-            var existing = await _unitOfWork.Tags.GetAllAsync();
-            if (existing.Any(t => t.TagName.ToLower().Trim() == tag.TagName.ToLower().Trim()))
-            {
-                errors.Add("A tag with this name already exists.");
-                return errors;
-            }
-
-            try
-            {
-                await _unitOfWork.Tags.AddAsync(tag);
-                await _unitOfWork.SaveChangesAsync();
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "Database error while creating tag.");
-                errors.Add("An unexpected error occurred while creating the tag.");
-            }
-
-            return errors;
-        }
-
-
-        public async Task<bool> DeleteTagAsync(int tagId)
-        {
-            var tag = await _unitOfWork.Tags.GetByIdAsync(tagId);
-            if (tag == null)
-                return false;
-
-            await _unitOfWork.Tags.DeleteAsync(tag);
-            await _unitOfWork.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<bool> IsTagInUseAsync(int tagId)
-        {
-            return await _unitOfWork.Tags.IsTagInUseAsync(tagId);
-        }
-
-        public async Task<List<object>> SearchTagsAsync(string term, int take = 20)
-        {
-            var tags = await _unitOfWork.Tags.SearchByNameAsync(term, take);
-            return tags.Select(t => new { id = t.TagId, text = t.TagName })
-                .Cast<object>()
-                .ToList();
-        }
-        #endregion
-
         #region Location Operations
         public async Task<List<Location>> GetAllLocationsAsync()
         {

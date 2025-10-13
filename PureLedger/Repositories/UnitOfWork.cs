@@ -17,7 +17,6 @@ namespace PureLedger.Repositories
         private IJournalEntryRepository? _journalEntries;
         private ICategoryRepository? _categories;
         private IAccountRepository? _accounts;
-        private ITagRepository? _tags;
         private IAccountGroupRepository? _accountGroups;
         private IAccountDataRepository? _accountDatas;
         private IProductDataRepository? _productDatas;
@@ -45,7 +44,6 @@ namespace PureLedger.Repositories
         public IJournalEntryRepository JournalEntries => _journalEntries ??= new JournalEntryRepository(_dbContext);
         public ICategoryRepository Categories => _categories ??= new CategoryRepository(_dbContext);
         public IAccountRepository Accounts => _accounts ??= new AccountRepository(_dbContext);
-        public ITagRepository Tags => _tags ??= new TagRepository(_dbContext);
         public IAccountGroupRepository AccountGroups => _accountGroups ??= new AccountGroupRepository(_dbContext);
         public IAccountDataRepository AccountDatas => _accountDatas ??= new AccountDataRepository(_dbContext);
         public IProductDataRepository ProductDatas => _productDatas ??= new ProductDataRepository(_dbContext);

@@ -339,9 +339,6 @@ namespace PureLedger.Services
                 }
                 else
                 {
-
-                    await DeleteFromJournalEntryTagsAsync(entryId);
-
                     await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
                     await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
@@ -359,29 +356,8 @@ namespace PureLedger.Services
             }
         }
 
-        private async Task DeleteFromJournalEntryTagsAsync(int entryId)
-        {
-            try
-            {
-                var entryWithTags = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
-                var links = entryWithTags?.JournalEntryTags?.ToList();
-                if (links == null || links.Count == 0)
-                    return;
-
-                entryWithTags!.JournalEntryTags.Clear();
-                await _unitOfWork.JournalEntries.UpdateAsync(entryWithTags);
-            }
-            catch (Exception ex)
-            {
-
-                _logger.LogWarning(ex, "Failed to explicitly remove JournalEntryTags for entry {EntryId}. Relying on cascade delete.", entryId);
-            }
-        }
-
         private async Task DeleteVoucherWithLastEntryAsync(int entryId, int voucherId)
         {
-
-            await DeleteFromJournalEntryTagsAsync(entryId);
 
             await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
@@ -580,8 +556,6 @@ namespace PureLedger.Services
                     if (baseEntry == null || baseEntry.IsProcessed)
                         continue;
 
-                    var baseTagIds = baseEntry.JournalEntryTags?.Select(t => t.TagId).ToList() ?? new List<int>();
-
                     var account = await _unitOfWork.Accounts.GetByIdAsync(baseEntry.AccountId);
                     bool isAccountEntry = account != null && account.AccountGroupId == 1;
 
@@ -611,11 +585,6 @@ namespace PureLedger.Services
 
                         var savedEntry = await _unitOfWork.JournalEntries.AddAsync(newEntry);
 
-                        if (baseTagIds.Any())
-                        {
-                            await _unitOfWork.JournalEntries.AddTagsAsync(savedEntry.JournalEntryId, baseTagIds);
-                        }
-
                         continue;
                     }
 
@@ -637,10 +606,6 @@ namespace PureLedger.Services
 
                     var savedRegularEntry = await _unitOfWork.JournalEntries.AddAsync(newRegularEntry);
 
-                    if (baseTagIds.Any())
-                    {
-                        await _unitOfWork.JournalEntries.AddTagsAsync(savedRegularEntry.JournalEntryId, baseTagIds);
-                    }
 
                     baseEntry.Quantity -= entryToProcess.ProcessQuantity;
                     if (baseEntry.Quantity <= 0)
@@ -754,34 +719,110 @@ namespace PureLedger.Services
                 if (existingVoucher == null)
                     throw new InvalidOperationException($"Voucher with ID {voucherId} not found");
 
-                // Update basic voucher information
-                existingVoucher.ProjectId = model.ProjectId;
-                existingVoucher.EntryDate = model.EntryDate;
-                existingVoucher.CreditableDate = model.DueDate;
-                existingVoucher.IsBaseVoucher = model.IsBaseVoucher;
-
-                // First, remove all existing entries
-                foreach (var entry in existingVoucher.JournalEntries.ToList())
+                using var transaction = await _unitOfWork.BeginTransactionAsync();
+                try
                 {
-                    await _unitOfWork.JournalEntries.DeleteAsync(entry.JournalEntryId);
+                    // 1. Update basic voucher information
+                    existingVoucher.ProjectId = model.ProjectId;
+                    existingVoucher.EntryDate = model.EntryDate;
+                    existingVoucher.CreditableDate = model.DueDate;
+                    
+                    // Keep base voucher status if the voucher already had any derived vouchers
+                    var hasReferences = await _unitOfWork.JournalVoucherReferences
+                        .GetByMainVoucherIdAsync(voucherId);
+                        
+                    if (!hasReferences.Any())
+                    {
+                        // Only allow changing IsBaseVoucher if no derived vouchers exist
+                        existingVoucher.IsBaseVoucher = model.IsBaseVoucher;
+                    }
+                    
+                    // 2. Create lookup of existing entries by their unique properties for efficient matching
+                    var existingEntries = existingVoucher.JournalEntries.ToList();
+                    var entriesToDelete = new List<JournalEntry>();
+
+                    // 3. Process each entry in the model
+                    foreach (var entryModel in model.Entries)
+                    {
+                        // If we can identify an existing entry that matches this model entry
+                        var existingEntry = existingEntries.FirstOrDefault(e => 
+                            e.AccountId == entryModel.AccountId && 
+                            e.CategoryId == entryModel.CategoryId &&
+                            string.Equals(e.Description, entryModel.Des, StringComparison.OrdinalIgnoreCase));
+
+                        if (existingEntry != null)
+                        {
+                            // Update existing entry with new values
+                            existingEntry.Description = entryModel.Des;
+                            existingEntry.Quantity = entryModel.Qty ?? 0;
+                            existingEntry.Rate = (int)(entryModel.Rate ?? 0);
+                            existingEntry.DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null;
+                            existingEntry.Discount = (int)(entryModel.Disc ?? 0);
+                            existingEntry.Debit = (int)(entryModel.Debit ?? 0);
+                            existingEntry.Credit = (int)(entryModel.Credit ?? 0);
+                            existingEntry.Rbp = entryModel.Rbp ?? "Y";
+                            
+                            await _unitOfWork.JournalEntries.UpdateAsync(existingEntry);
+                            
+                            // Remove this entry from our tracking list so we know it's been handled
+                            existingEntries.Remove(existingEntry);
+                        }
+                        else
+                        {
+                            // This is a new entry, add it
+                            var newEntry = new JournalEntry
+                            {
+                                JournalVoucherId = voucherId,
+                                AccountId = entryModel.AccountId ?? 0,
+                                CategoryId = entryModel.CategoryId ?? 0,
+                                Description = entryModel.Des,
+                                Quantity = entryModel.Qty ?? 0,
+                                Rate = (int)(entryModel.Rate ?? 0),
+                                DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null,
+                                Discount = (int)(entryModel.Disc ?? 0),
+                                Debit = (int)(entryModel.Debit ?? 0),
+                                Credit = (int)(entryModel.Credit ?? 0),
+                                Rbp = entryModel.Rbp ?? "Y",
+                                IsProcessed = false
+                            };
+                            
+                            await _unitOfWork.JournalEntries.AddAsync(newEntry);
+                        }
+                    }
+
+                    // 4. Delete entries that aren't in the model anymore
+                    foreach (var entryToDelete in existingEntries)
+                    {                        
+                        // Delete the entry
+                        await _unitOfWork.JournalEntries.DeleteAsync(entryToDelete.JournalEntryId);
+                        
+                        // Delete any related delivery challan entries
+                        await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryToDelete.JournalEntryId);
+                    }
+                    
+                    // 5. Update voucher
+                    await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
+                    
+                    // 6. Update voucher status
+                    await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
+                    
+                    await _unitOfWork.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    
+                    _logger.LogInformation("Successfully updated voucher {VoucherId} with {EntryCount} entries", 
+                        voucherId, model.Entries.Count);
+                    
+                    return existingVoucher;
                 }
-
-                // Update voucher
-                await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
-                await _unitOfWork.SaveChangesAsync();
-
-                // Add new entries
-                await CreateJournalEntriesAsync(voucherId, model.Entries);
-                
-                // Update voucher status
-                await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
-                await _unitOfWork.SaveChangesAsync();
-                
-                return existingVoucher;
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating journal voucher");
+                _logger.LogError(ex, "Error updating journal voucher {VoucherId}", voucherId);
                 throw;
             }
         }

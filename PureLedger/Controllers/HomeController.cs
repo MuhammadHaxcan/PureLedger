@@ -358,8 +358,6 @@ namespace PureLedger.Controllers
                             Disc = e.Discount, // Include discount amount
                             Rbp = e.Rbp, // Include Rbp
                             AccountGroupId = e.Account?.AccountGroupId ?? 0,
-                            // Include tags if present
-                            Tags = e.JournalEntryTags?.Select(t => t.TagId).ToList()
                         })
                         .ToList()
                 };

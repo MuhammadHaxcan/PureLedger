@@ -15,10 +15,8 @@ namespace PureLedger.Data
         public DbSet<AccountGroup> AccountGroups { get; set; }
         public DbSet<AccountData> AccountDatas { get; set; }
         public DbSet<ProductData> ProductDatas { get; set; }
-        public DbSet<Tag> Tags { get; set; }
         public DbSet<JournalVoucher> JournalVouchers { get; set; }
         public DbSet<JournalEntry> JournalEntries { get; set; }
-        public DbSet<JournalEntryTag> JournalEntryTags { get; set; }
         public DbSet<Location> Locations { get; set; }
         public DbSet<DeliveryChallanVoucher> DeliveryChallanVouchers { get; set; }
         public DbSet<DeliveryChallanEntry> DeliveryChallanEntries { get; set; }
@@ -34,20 +32,6 @@ namespace PureLedger.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-
-            // Remove the incorrect composite key and foreign key configuration for JournalEntryTag
-            modelBuilder.Entity<JournalEntryTag>()
-                .HasKey(jet => jet.JournalEntryTagId);
-
-            modelBuilder.Entity<JournalEntryTag>()
-                .HasOne(jet => jet.JournalEntry)
-                .WithMany(je => je.JournalEntryTags)
-                .HasForeignKey(jet => jet.JournalEntryId);
-
-            modelBuilder.Entity<JournalEntryTag>()
-                .HasOne(jet => jet.Tag)
-                .WithMany(t => t.JournalEntryTags)
-                .HasForeignKey(jet => jet.TagId);
 
             // JournalEntries to Category relationship - use NO ACTION to break cascade path
             modelBuilder.Entity<JournalEntry>()

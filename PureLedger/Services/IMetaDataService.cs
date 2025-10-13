@@ -33,13 +33,6 @@ namespace PureLedger.Services
         Task<(bool Success, List<int> AssociatedVoucherIds)> DeleteAccountAsync(int id);
         Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId);
 
-        // Tag operations
-        Task<List<Tag>> GetAllTagsAsync();
-        Task<List<string>> CreateTagAsync(Tag tag);
-        Task<bool> DeleteTagAsync(int tagId);
-        Task<bool> IsTagInUseAsync(int tagId);
-        Task<List<object>> SearchTagsAsync(string term, int take = 20);
-
         // Location operations
         Task<List<Location>> GetAllLocationsAsync();
         Task<Location?> GetLocationByIdAsync(int id);

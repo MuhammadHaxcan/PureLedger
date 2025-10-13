@@ -104,21 +104,6 @@ namespace PureLedger.Services
             return errors;
         }
 
-        public async Task<List<string>> ValidateTagAsync(Tag tag)
-        {
-            var errors = new List<string>();
-
-            if (string.IsNullOrWhiteSpace(tag.TagName))
-                errors.Add("Tag name is required.");
-
-            // Check if tag with same name already exists (case insensitive)
-            var existingTag = await _unitOfWork.Tags.GetByNameAsync(tag.TagName);
-            if (existingTag != null && existingTag.TagId != tag.TagId)
-                errors.Add("A tag with this name already exists.");
-
-            return errors;
-        }
-
         public async Task<List<string>> ValidateLocationAsync(Location location)
         {
             var errors = new List<string>();

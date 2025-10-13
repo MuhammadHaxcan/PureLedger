@@ -9,6 +9,62 @@
     var isEditMode = editingVoucherId != null;
 }
 
+<style>
+    /* Basic dropdown positioning */
+    .select-container {
+        position: relative;
+        width: 100%;
+    }
+    
+    .select-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+        background: white;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        z-index: 9999;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        display: none;
+    }
+    
+    .select-dropdown.show {
+        display: block;
+    }
+    
+    .select-option {
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+    
+    .select-option:hover, .select-option.selected {
+        background-color: #f8f9fa;
+    }
+    
+    .select-option.filtered-out {
+        display: none;
+    }
+    
+    /* Hide original select */
+    .select-container select {
+        display: none;
+    }
+    
+    /* Make discount input look disabled */
+    .disc-input {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+    
+    /* Fix table overflow */
+    .table-responsive {
+        overflow: visible;
+    }
+</style>
+
 <form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
     @if (isEditMode)
     {
@@ -228,7 +284,9 @@
                                                type="number"
                                                min="0"
                                                step="1"
-                                               value="@(entry.Disc)" />
+                                               value="@(entry.Disc)"
+                                               readonly
+                                               tabindex="-1" />
                                     </td>
                                     <td>
                                         <input class="form-control form-control-sm debit-input"
@@ -348,7 +406,9 @@
                                            type="number"
                                            min="0"
                                            step="1"
-                                           placeholder="0" />
+                                           placeholder="0"
+                                           readonly
+                                           tabindex="-1" />
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm debit-input"

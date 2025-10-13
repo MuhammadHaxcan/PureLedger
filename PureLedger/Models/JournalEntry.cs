@@ -55,6 +55,5 @@ namespace PureLedger.Models
         public virtual Account Account { get; set; }
         public virtual Category Category { get; set; }
         public virtual JournalVoucher JournalVoucher { get; set; }
-        public virtual ICollection<JournalEntryTag> JournalEntryTags { get; set; } = new List<JournalEntryTag>();
     }
 }

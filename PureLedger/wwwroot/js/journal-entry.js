@@ -6,25 +6,30 @@
         this.captureRowTemplate(); // Capture the template on initialization
         this.init();
         this.setupSelectSearch();
+        console.log("JournalEntryManager initialized");
     }
 
     // Capture the initial row as a template
     captureRowTemplate() {
         const initialRow = document.getElementById('entryRow-0');
         if (initialRow) {
-            // Deep clone the row to use as a template
+            // Deep clone the row to use as a template              
             this.rowTemplate = initialRow.cloneNode(true);
         }
     }
-
+                    
     init() {
         console.log("Initializing Journal Entry Manager");
-        this.rowCounter = $('#entryRows tr').length - 1; // Set counter based on existing rows
+        this.rowCounter = $('#entryRows tr').length - 1;
         this.setupFormAction();
         this.initializeDatePickers();
+        
+        // Make all discount inputs readonly
+        $('.disc-input').prop('readonly', true).attr('tabindex', '-1');
+        
         this.setupEventHandlers();
 
-        // First, set up any existing data from the model
+        // Handle edit mode and load initial data
         if (this.isEditMode()) {
             console.log("Edit mode detected - processing existing data");
             this.processExistingData();
@@ -450,19 +455,19 @@
         const $rateInput = $row.find('.rate-input');
         const $discInput = $row.find('.disc-input');
         const $percentInput = $row.find('.percent-input');
+        $discInput.prop('readonly', true).attr('tabindex', '-1');
         $pkgInput.prop('disabled', true);
 
         if (accountGroup === 'account') {
             $rbpSelect.prop('disabled', true).val('Y');
             $qtyInput.prop('disabled', true).val('0');
             $rateInput.prop('disabled', true).val('0');
-            $discInput.prop('disabled', true).val('0');
+            $discInput.val('0');
             $percentInput.prop('disabled', true).val('0');
         } else {
             $rbpSelect.prop('disabled', false);
             $qtyInput.prop('disabled', false);
             $rateInput.prop('disabled', false);
-            $discInput.prop('disabled', false);
             $percentInput.prop('disabled', false);
         }
     }
@@ -481,11 +486,9 @@
             this.updateRowCalculations(row);
         });
 
-        $(document).on('input', '.percent-input', (e) => {
+        $(document).on('input blur', '.percent-input', (e) => {
             this.updateRowCalculations($(e.target).closest('tr')[0]);
         });
-
-        $(document).on('input blur', '.disc-input', () => this.updateTotals());
 
         $(document).on('focus', '.debit-input', (e) => {
             if (!$(e.target).val()) {
@@ -538,8 +541,14 @@
         const percent = this.parseFloatOrZero($row.find('.percent-input').val());
         const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
 
+        // Calculate discount based on percentage
         const discount = (totalAmount * percent) / 100;
-        $row.find('.disc-input').val(Math.round(discount));
+        
+        // Set the discount value and ensure it's readonly
+        $row.find('.disc-input')
+            .val(Math.round(discount))
+            .prop('readonly', true)
+            .attr('tabindex', '-1');
     }
 
     calculateDebitCredit(row, focusField) {
@@ -621,34 +630,26 @@
         this.updateTotals();
     }
 
+    // Update IDs and names with a more efficient regex
     resetRowElements($row, index) {
-        $row.find('input').each(function () {
-            const $input = $(this);
-
-            if ($input.attr('id')) {
-                $input.attr('id', $input.attr('id').replace(/_\d+_/, `_${index}_`));
-            }
-            if ($input.attr('name')) {
-                $input.attr('name', $input.attr('name').replace(/\[\d+\]/, `[${index}]`));
-            }
-
-            $input.val('').removeClass('is-invalid required-field').removeAttr('required');
-            $input.next('.invalid-feedback').remove();
+        $row.find('[id]').each(function() {
+            const $el = $(this);
+            $el.attr('id', $el.attr('id').replace(/(_\d+_|_\d+$)/, `_${index}_`));
+        });
+        
+        $row.find('[name]').each(function() {
+            const $el = $(this);
+            $el.attr('name', $el.attr('name').replace(/\[\d+\]/, `[${index}]`));
         });
 
-        $row.find('select').each(function () {
-            const $select = $(this);
+        // Clear all input values and validation states
+        $row.find('input').val('').removeClass('is-invalid required-field').removeAttr('required')
+            .next('.invalid-feedback').remove();
+        
+        // Reset selects to first option
+        $row.find('select').prop('selectedIndex', 0);
 
-            if ($select.attr('id')) {
-                $select.attr('id', $select.attr('id').replace(/_\d+_/, `_${index}_`));
-            }
-            if ($select.attr('name')) {
-                $select.attr('name', $select.attr('name').replace(/\[\d+\]/, `[${index}]`));
-            }
-
-            $select.prop('selectedIndex', 0);
-        });
-
+        // Clear data attributes
         const rowElement = $row[0];
         ['data-pkg', 'data-total-amount', 'data-account-type', 'data-account-group',
             'data-category-id', 'data-account-id']
@@ -656,50 +657,138 @@
                 rowElement.removeAttribute(attr);
                 $(rowElement).data(attr.replace('data-', ''), null);
             });
+
+        // Make sure discount input is readonly in new rows
+        $row.find('.disc-input').prop('readonly', true).attr('tabindex', '-1');
     }
 
-    removeRow(event) {
-        const $rows = $('#entryRows tr');
+    // Update this method to ensure discount inputs are always readonly
+    manageInputsBasedOnAccountGroup($row) {
+        const accountGroup = $row.attr('data-account-group') || '';
+        const $pkgInput = $row.find('.pkg-input');
+        const $rbpSelect = $row.find('.rbp-select');
+        const $qtyInput = $row.find('.qty-input');
+        const $rateInput = $row.find('.rate-input');
+        const $discInput = $row.find('.disc-input');
+        const $percentInput = $row.find('.percent-input');
+        
+        // Always make discount input readonly
+        $discInput.prop('readonly', true).attr('tabindex', '-1');
+        $pkgInput.prop('disabled', true);
 
-        if ($rows.length > 1) {
-            // Only remove the row if there's more than one
-            $(event.target).closest('tr').remove();
-
-            // After removing a row, we need to renumber all remaining rows
-            this.renumberRows();
-
-            this.updateTotals();
-            this.updateProductRequiredIndicator();
-            this.updateBaseVoucherCheckbox();
+        if (accountGroup === 'account') {
+            $rbpSelect.prop('disabled', true).val('Y');
+            $qtyInput.prop('disabled', true).val('0');
+            $rateInput.prop('disabled', true).val('0');
+            $discInput.val('0');
+            $percentInput.prop('disabled', true).val('0');
         } else {
-            // If there's only one row, show a message instead of removing it
-            this.showError("Cannot delete the last row. At least one entry is required.");
+            $rbpSelect.prop('disabled', false);
+            $qtyInput.prop('disabled', false);
+            $rateInput.prop('disabled', false);
+            $percentInput.prop('disabled', false);
         }
     }
 
-    // New method to renumber rows after deletion
-    renumberRows() {
-        $('#entryRows tr').each((index, row) => {
-            const $row = $(row);
-
-            // Update the row ID
-            $row.attr('id', `entryRow-${index}`);
-
-            // Update all input and select elements
-            $row.find('input, select').each(function () {
-                const $element = $(this);
-
-                // Update id attribute if it exists
-                if ($element.attr('id')) {
-                    $element.attr('id', $element.attr('id').replace(/_\d+_/, `_${index}_`));
-                }
-
-                // Update name attribute if it exists and follows the Entries[n] pattern
-                if ($element.attr('name') && $element.attr('name').match(/Entries\[\d+\]/)) {
-                    $element.attr('name', $element.attr('name').replace(/Entries\[\d+\]/, `Entries[${index}]`));
-                }
+    // Add this method to the JournalEntryManager class
+    setupSelectSearch() {
+        const self = this;
+        
+        $(document).on('input', '.select-search', function() {
+            const $input = $(this);
+            const $container = $input.closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            const searchTerm = $input.val().toLowerCase();
+            
+            // Filter options based on search term
+            let visibleCount = 0;
+            $dropdown.find('.select-option').each(function() {
+                const text = $(this).text().toLowerCase();
+                const shouldShow = text.includes(searchTerm) && visibleCount < 5;
+                $(this).toggleClass('filtered-out', !shouldShow);
+                if (shouldShow) visibleCount++;
             });
+            
+            // Show dropdown
+            $dropdown.addClass('show');
         });
+        
+        // Show dropdown on focus
+        $(document).on('focus', '.select-search', function() {
+            $('.select-dropdown').removeClass('show');
+            $(this).closest('.select-container').find('.select-dropdown').addClass('show');
+        });
+        
+        // Navigation with keyboard
+        $(document).on('keydown', '.select-search', function(e) {
+            const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
+            const $options = $dropdown.find('.select-option:not(.filtered-out)');
+            const $selected = $dropdown.find('.select-option.selected');
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if (!$selected.length) {
+                        $options.first().addClass('selected');
+                    } else {
+                        const $next = $selected.nextAll('.select-option:not(.filtered-out)').first();
+                        if ($next.length) {
+                            $selected.removeClass('selected');
+                            $next.addClass('selected');
+                        }
+                    }
+                    break;
+                
+                case 'ArrowUp':
+                    e.preventDefault();
+                    if (!$selected.length) {
+                        $options.last().addClass('selected');
+                    } else {
+                        const $prev = $selected.prevAll('.select-option:not(.filtered-out)').first();
+                        if ($prev.length) {
+                            $selected.removeClass('selected');
+                            $prev.addClass('selected');
+                        }
+                    }
+                    break;
+                
+                case 'Enter':
+                case 'Tab':
+                    if ($dropdown.hasClass('show')) {
+                        e.preventDefault();
+                        const $toSelect = $selected.length ? $selected : $options.first();
+                        if ($toSelect.length) {
+                            self.selectOption($toSelect, $(this).closest('.select-container'));
+                        }
+                    }
+                    break;
+            }
+        });
+        
+        // Select option on click
+        $(document).on('click', '.select-option:not(.filtered-out)', function() {
+            self.selectOption($(this), $(this).closest('.select-container'));
+        });
+        
+        // Close dropdowns when clicking outside
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.select-container').length) {
+                $('.select-dropdown').removeClass('show');
+            }
+        });
+    }
+
+    selectOption($option, $container) {
+        const value = $option.data('value');
+        const text = $option.text();
+        
+        // Update select and input values
+        $container.find('select').val(value).trigger('change');
+        $container.find('.select-search').val(text);
+        
+        // Hide dropdown
+        $container.find('.select-dropdown').removeClass('show');
+        $('.select-option').removeClass('selected');
     }
 
     // Handle form submission
@@ -712,9 +801,7 @@
         this.showSubmitSpinner();
 
         try {
-            // Always renumber rows before submission to ensure proper indexing
-            this.renumberRows();
-
+            
             const validationErrors = this.validateJournalEntry();
 
             if (validationErrors.length > 0) {
@@ -1042,101 +1129,59 @@
         }
     }
 
-    setupSelectSearch() {
-        $(document).on('input', '.select-search', (e) => {
-            const $input = $(e.target);
-            const $container = $input.closest('.select-container');
-            const $dropdown = $container.find('.select-dropdown');
-            const searchTerm = $input.val().toLowerCase();
+    removeRow(e) {
+        try {
+            // Ensure we're working with the correct target - either the button or its closest parent button
+            const $button = $(e.target).closest('.remove-row-btn');
+            const $row = $button.closest('tr');
+            const $rows = $('#entryRows tr');
 
-            let visibleCount = 0;
-            $dropdown.find('.select-option').each(function () {
-                const text = $(this).text().toLowerCase();
-                const shouldShow = text.includes(searchTerm) && visibleCount < 5;
-                $(this).toggleClass('filtered-out', !shouldShow);
-                if (shouldShow) visibleCount++;
-            });
-
-            $dropdown.addClass('show');
-        });
-
-        $(document).on('keydown', '.select-search', (e) => {
-            const $input = $(e.target);
-            const $container = $input.closest('.select-container');
-            const $dropdown = $container.find('.select-dropdown');
-            const $options = $dropdown.find('.select-option:not(.filtered-out)');
-            const $selected = $dropdown.find('.select-option.selected');
-
-            switch (e.key) {
-                case 'ArrowDown':
-                    e.preventDefault();
-                    if (!$selected.length) {
-                        $options.first().addClass('selected');
-                    } else {
-                        const $next = $selected.nextAll('.select-option:not(.filtered-out)').first();
-                        if ($next.length) {
-                            $selected.removeClass('selected');
-                            $next.addClass('selected');
+            if ($rows.length > 1) {
+                // Remove the row from the DOM
+                $row.remove();
+                
+                // Update row counter to prevent issues with row numbering
+                this.rowCounter = $rows.length - 2; // -1 for the removed row, -1 for zero-based indexing
+                
+                // Update the remaining rows' indices
+                $('#entryRows tr').each((idx, row) => {
+                    const $r = $(row);
+                    
+                    // Update row ID
+                    $r.attr('id', `entryRow-${idx}`);
+                    
+                    // Update form field names and IDs
+                    $r.find('input, select').each(function() {
+                        const $el = $(this);
+                        const name = $el.attr('name');
+                        const id = $el.attr('id');
+                        
+                        // Update name attribute for form submission
+                        if (name && name.includes('Entries[')) {
+                            $el.attr('name', name.replace(/Entries\[\d+\]/, `Entries[${idx}]`));
                         }
-                    }
-                    break;
-
-                case 'ArrowUp':
-                    e.preventDefault();
-                    if (!$selected.length) {
-                        $options.last().addClass('selected');
-                    } else {
-                        const $prev = $selected.prevAll('.select-option:not(.filtered-out)').first();
-                        if ($prev.length) {
-                            $selected.removeClass('selected');
-                            $prev.addClass('selected');
+                        
+                        // Update ID attribute for labels and scripts
+                        if (id) {
+                            $el.attr('id', id.replace(/(\d+)/, idx));
                         }
-                    }
-                    break;
+                    });
+                });
 
-                case 'Enter':
-                case 'Tab':
-                    if ($dropdown.hasClass('show')) {
-                        e.preventDefault();
-                        const $toSelect = $selected.length ? $selected : $options.first();
-                        if ($toSelect.length) {
-                            this.selectOption($toSelect, $container);
-                        }
-                    }
-                    break;
+                // Update UI elements and calculations
+                this.updateTotals();
+                this.updateProductRequiredIndicator();
+                this.updateBaseVoucherCheckbox();
+                
+                console.log(`Row removed successfully, ${$('#entryRows tr').length} rows remaining`);
+            } else {
+                // Can't remove the last row
+                this.showError("Cannot delete the last row. At least one entry is required.");
             }
-        });
-
-        $(document).on('click', '.select-option:not(.filtered-out)', (e) => {
-            const $option = $(e.target);
-            const $container = $option.closest('.select-container');
-            this.selectOption($option, $container);
-        });
-
-        $(document).on('click', (e) => {
-            if (!$(e.target).closest('.select-container').length) {
-                $('.select-dropdown').removeClass('show');
-                $('.select-option').removeClass('selected');
-            }
-        });
-
-        $(document).on('focus', '.select-search', (e) => {
-            const $input = $(e.target);
-            const $container = $input.closest('.select-container');
-            const $dropdown = $container.find('.select-dropdown');
-            $dropdown.addClass('show');
-        });
-    }
-
-    selectOption($option, $container) {
-        const $select = $container.find('select');
-        const $input = $container.find('.select-search');
-        const $dropdown = $container.find('.select-dropdown');
-
-        $select.val($option.data('value')).trigger('change');
-        $input.val($option.text());
-        $dropdown.removeClass('show');
-        $('.select-option').removeClass('selected');
+        } catch (error) {
+            console.error("Error removing row:", error);
+            this.showError("An error occurred while removing the row. Please try again.");
+        }
     }
 }
 
