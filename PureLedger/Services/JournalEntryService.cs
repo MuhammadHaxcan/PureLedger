@@ -41,26 +41,55 @@ namespace PureLedger.Services
 
         public async Task<JournalEntryViewModel> MapVoucherToViewModelAsync(JournalVoucher voucher)
         {
-            return new JournalEntryViewModel
+            try
             {
-                ProjectId = voucher.ProjectId,
-                CreditDays = voucher.EntryDate.Day - voucher.CreditableDate.Day,
-                DueDate = voucher.CreditableDate,
-                Booker = "",
-                Entries = voucher.JournalEntries.Select(e => new JournalEntryRowModel
+                _logger.LogInformation("Mapping voucher ID {VoucherId} to view model", voucher.JournalVoucherId);
+                
+                // Calculate credit days properly (total days difference, not just day component)
+                int creditDays = 0;
+                if (voucher.CreditableDate > voucher.EntryDate)
                 {
-                    CategoryId = e.CategoryId,
-                    AccountId = e.AccountId,
-                    Des = e.Description,
-                    Qty = e.Quantity,
-                    Rate = e.Rate,
-                    Percent = e.DiscountPercent ?? 0,
-                    Disc = e.Discount,
-                    Debit = e.Debit,
-                    Credit = e.Credit,
-                    Rbp = e.Rbp
-                }).ToList()
-            };
+                    creditDays = (voucher.CreditableDate.DayNumber - voucher.EntryDate.DayNumber);
+                }
+
+                // Get all entries with their related data
+                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucher.JournalVoucherId, null, null);
+                _logger.LogInformation("Found {Count} entries for voucher ID {VoucherId}", entries.Count, voucher.JournalVoucherId);
+
+                var viewModel = new JournalEntryViewModel
+                {
+                    ProjectId = voucher.ProjectId,
+                    EntryDate = voucher.EntryDate,
+                    DueDate = voucher.CreditableDate,
+                    CreditDays = creditDays,
+                    IsBaseVoucher = voucher.IsBaseVoucher,
+                    Booker = "",
+                    Entries = entries.Select(e => new JournalEntryRowModel
+                    {
+                        CategoryId = e.CategoryId,
+                        AccountId = e.AccountId,
+                        Pkg = e.Account?.ProductData?.Pkg, // <-- Add this line
+                        Des = e.Description,
+                        Qty = e.Quantity,
+                        Rate = e.Rate,
+                        Percent = e.DiscountPercent ?? 0,
+                        Disc = e.Discount,
+                        Debit = e.Debit,
+                        Credit = e.Credit,
+                        Rbp = e.Rbp ?? "Y"
+                    }).ToList()
+                };
+
+                _logger.LogInformation("Successfully mapped voucher to view model with {EntriesCount} entries", 
+                    viewModel.Entries.Count);
+                
+                return viewModel;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error mapping voucher to view model");
+                throw;
+            }
         }
 
         public async Task<JournalVoucher> CreateJournalVoucherAsync(JournalEntryViewModel model)
@@ -101,15 +130,15 @@ namespace PureLedger.Services
                     var journalEntry = new JournalEntry
                     {
                         JournalVoucherId = journalVoucherId,
-                        AccountId = entryModel.AccountId,
-                        CategoryId = entryModel.CategoryId,
+                        AccountId = entryModel.AccountId ?? 0,
+                        CategoryId = entryModel.CategoryId ?? 0,
                         Description = entryModel.Des,
-                        Quantity = entryModel.Qty,
-                        Rate = entryModel.Rate,
-                        DiscountPercent = entryModel.Percent,
-                        Discount = entryModel.Disc,
-                        Debit = entryModel.Debit,
-                        Credit = entryModel.Credit,
+                        Quantity = entryModel.Qty ?? 0,
+                        Rate = (int)(entryModel.Rate ?? 0),
+                        DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null,
+                        Discount = (int)(entryModel.Disc ?? 0),
+                        Debit = (int)(entryModel.Debit ?? 0),
+                        Credit = (int)(entryModel.Credit ?? 0),
                         Rbp = entryModel.Rbp ?? "Y",
                         IsProcessed = false
                     };
@@ -715,6 +744,46 @@ namespace PureLedger.Services
                 }
             }
             return null;
+        }
+
+        public async Task<JournalVoucher> UpdateJournalVoucherAsync(int voucherId, JournalEntryViewModel model)
+        {
+            try
+            {
+                var existingVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+                if (existingVoucher == null)
+                    throw new InvalidOperationException($"Voucher with ID {voucherId} not found");
+
+                // Update basic voucher information
+                existingVoucher.ProjectId = model.ProjectId;
+                existingVoucher.EntryDate = model.EntryDate;
+                existingVoucher.CreditableDate = model.DueDate;
+                existingVoucher.IsBaseVoucher = model.IsBaseVoucher;
+
+                // First, remove all existing entries
+                foreach (var entry in existingVoucher.JournalEntries.ToList())
+                {
+                    await _unitOfWork.JournalEntries.DeleteAsync(entry.JournalEntryId);
+                }
+
+                // Update voucher
+                await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
+                await _unitOfWork.SaveChangesAsync();
+
+                // Add new entries
+                await CreateJournalEntriesAsync(voucherId, model.Entries);
+                
+                // Update voucher status
+                await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
+                await _unitOfWork.SaveChangesAsync();
+                
+                return existingVoucher;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating journal voucher");
+                throw;
+            }
         }
     }
 }

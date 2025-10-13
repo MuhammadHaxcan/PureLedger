@@ -42,7 +42,7 @@ namespace PureLedger.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Entry(JournalEntryViewModel model, string action)
+        public async Task<IActionResult> Entry(JournalEntryViewModel model, string action, int? editingVoucherId = null)
         {
             try
             {
@@ -57,7 +57,20 @@ namespace PureLedger.Controllers
                     return View(model);
                 }
 
-                var journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
+                JournalVoucher journalVoucher;
+                
+                if (editingVoucherId.HasValue)
+                {
+                    // Update existing voucher
+                    journalVoucher = await _journalService.UpdateJournalVoucherAsync(editingVoucherId.Value, model);
+                    TempData["Success"] = $"Journal voucher updated. Jv-{journalVoucher.JournalVoucherId}";
+                }
+                else
+                {
+                    // Create new voucher (existing functionality)
+                    journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
+                    TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
+                }
 
                 if (action == "submit_print")
                 {
@@ -70,7 +83,6 @@ namespace PureLedger.Controllers
                         });
                 }
                 
-                TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
                 return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
             }
             catch (Exception ex)
@@ -108,16 +120,46 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> EditVoucher(int jvId)
+        [Route("Home/EditVoucher/{id}")] // Add explicit route with 'id' parameter
+        public async Task<IActionResult> EditVoucher(int id) // Change parameter name from jvId to id
         {
-            var voucher = await _journalService.GetVoucherWithEntriesAsync(jvId);
-            if (voucher == null)
-                return NotFound();
+            try
+            {
+                _logger.LogInformation("Attempting to edit voucher with ID {VoucherId}", id);
+                
+                var voucher = await _journalService.GetVoucherWithEntriesAsync(id);
+                if (voucher == null)
+                {
+                    _logger.LogWarning("Voucher with ID {VoucherId} not found", id);
+                    return NotFound("Voucher not found");
+                }
 
-            var model = await _journalService.MapVoucherToViewModelAsync(voucher);
-            await LoadProjectsData(voucher.ProjectId);
+                _logger.LogInformation("Found voucher with {EntriesCount} entries", voucher.JournalEntries.Count);
 
-            return View("Entry", model);
+                // Map the voucher to view model
+                var model = await _journalService.MapVoucherToViewModelAsync(voucher);
+                
+                // Log mapped model entries for debugging
+                _logger.LogInformation("Mapped to view model with {EntriesCount} entries", model.Entries.Count);
+                
+                // Load projects into ViewBag
+                await LoadProjectsData(voucher.ProjectId);
+                
+                // Pass voucher ID and set up the page title
+                ViewBag.EditingVoucherId = id;
+                ViewBag.Title = $"Edit Journal Voucher #{id}";
+                
+                // Make sure the selected project is set correctly
+                ViewBag.SelectedProjectId = voucher.ProjectId;
+
+                return View("Entry", model);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error preparing voucher {VoucherId} for editing", id);
+                TempData["Error"] = "An error occurred while loading the voucher. Please try again.";
+                return RedirectToAction("VoucherEntry");
+            }
         }
 
         [HttpGet]

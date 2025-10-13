@@ -73,8 +73,8 @@ namespace PureLedger.Services
                     errors.Add($"{entryPrefix}Only one of Debit or Credit can be filled, not both.");
 
                 // Track totals for balance validation
-                totalDebit += entry.Debit;
-                totalCredit += entry.Credit;
+                totalDebit += entry.Debit ?? 0;
+                totalCredit += entry.Credit ?? 0;
 
                 try
                 {

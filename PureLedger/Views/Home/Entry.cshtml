@@ -1,16 +1,26 @@
 ﻿@model PureLedger.ViewModels.JournalEntryViewModel
 @{
-    ViewData["Title"] = "Journal Entry";
+    ViewData["Title"] = ViewBag.Title ?? "Journal Entry";
     var today = DateTime.Now;
     var minDate = today.AddMonths(-1).ToString("dd/MM/yyyy");
     var todayStr = today.ToString("dd/MM/yyyy");
     var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
+    var editingVoucherId = ViewBag.EditingVoucherId;
+    var isEditMode = editingVoucherId != null;
 }
 
-<div class="container-fluid">
+<form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
+    @if (isEditMode)
+    {
+        <input type="hidden" id="editingVoucherId" name="editingVoucherId" value="@editingVoucherId" />
+    }
+
     <!-- Page Header -->
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2><i class="fas fa-book-open me-2"></i>Journal Entry</h2>
+        <h2>
+            <i class="fas fa-@(isEditMode ? "edit" : "book-open") me-2"></i>
+            @(isEditMode ? $"Edit Journal Voucher #{editingVoucherId}" : "Journal Entry")
+        </h2>
     </div>
 
     <!-- Alert Area -->
@@ -39,82 +49,216 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
-    <form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
-        <!-- Entry Details Card -->
-        <div class="card shadow mb-3">
-            <div class="card-header py-2">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-info-circle me-2"></i>Entry Details
-                </h6>
-            </div>
-            <div class="card-body py-2">
-                <div class="row mb-2">
-                    <div class="col-md-6 mb-2 mb-md-0">
-                        <label class="form-label">Entry Date:</label>
-                        <div class="input-group">
-                            <span class="input-group-text calendar-icon">
-                                <i class="fas fa-calendar-alt"></i>
-                            </span>
-                            <input class="form-control"
-                                   name="EntryDate"
-                                   type="date"
-                                   id="EntryDate"
-                                   value="@(Model?.EntryDate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))" />
-                        </div>
+    <!-- Entry Details Card -->
+    <div class="card shadow mb-3">
+        <div class="card-header py-2">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-info-circle me-2"></i>Entry Details
+            </h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="row mb-2">
+                <div class="col-md-6 mb-2 mb-md-0">
+                    <label class="form-label">Entry Date:</label>
+                    <div class="input-group">
+                        <span class="input-group-text calendar-icon">
+                            <i class="fas fa-calendar-alt"></i>
+                        </span>
+                        <input class="form-control"
+                               name="EntryDate"
+                               type="date"
+                               id="EntryDate"
+                               value="@(Model?.EntryDate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))" />
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label" for="ProjectId">Project <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                            <select class="form-select" id="ProjectId" name="ProjectId" required>
-                                <option value="">Select Project</option>
-                                @if (projects != null)
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="ProjectId">Project <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                        <select class="form-select" id="ProjectId" name="ProjectId" required>
+                            <option value="">Select Project</option>
+                            @if (projects != null)
+                            {
+                                foreach (var project in projects)
                                 {
-                                    foreach (var project in projects)
+                                    // compute selection inline
+                                    var isSelected = false;
+                                    if (Model != null && Model.ProjectId == project.ProjectId)
                                     {
-                                        var selected = (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == project.ProjectId) ? "selected" : "";
-                                        <option value="@project.ProjectId" selected="@selected">@project.ProjectName</option>
+                                        isSelected = true;
                                     }
+                                    else if (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == project.ProjectId)
+                                    {
+                                        isSelected = true;
+                                    }
+                                    <option value="@project.ProjectId" selected="@(isSelected ? "selected" : null)">@project.ProjectName</option>
                                 }
-                            </select>
-                        </div>
-                        <span asp-validation-for="ProjectId" class="text-danger"></span>
+                            }
+                        </select>
                     </div>
+                    <span asp-validation-for="ProjectId" class="text-danger"></span>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Journal Entries Card -->
-        <div class="card shadow mb-3">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-list-alt me-2"></i>Journal Entries
-                </h6>
-                <button id="addRowBtn" type="button" class="btn btn-primary btn-sm">
-                    <i class="fas fa-plus"></i> Add Row
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-bordered align-middle mb-0">
-                        <thead class="table-primary">
-                            <tr>
-                                <th>Category <span class="text-danger">*</span></th>
-                                <th>Account <span class="text-danger">*</span></th>
-                                <th>PKG</th>
-                                <th>RBP</th>
-                                <th>Description</th>
-                                <th>Qty <span class="text-danger product-required-indicator d-none">*</span></th>
-                                <th>Rate</th>
-                                <th>%</th>
-                                <th>Discount</th>
-                                <th>Debit</th>
-                                <th>Credit</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="entryRows">
-                            <!-- Initial row template -->
+    <!-- Journal Entries Card -->
+    <div class="card shadow mb-3">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-list-alt me-2"></i>Journal Entries
+            </h6>
+            <button id="addRowBtn" type="button" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> Add Row
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0">
+                    <thead class="table-primary">
+                        <tr>
+                            <th>Category <span class="text-danger">*</span></th>
+                            <th>Account <span class="text-danger">*</span></th>
+                            <th>PKG</th>
+                            <th>RBP</th>
+                            <th>Description</th>
+                            <th>Qty <span class="text-danger product-required-indicator d-none">*</span></th>
+                            <th>Rate</th>
+                            <th>%</th>
+                            <th>Discount</th>
+                            <th>Debit</th>
+                            <th>Credit</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="entryRows">
+                        @if (Model?.Entries != null && Model.Entries.Any())
+                        {
+                            for (int i = 0; i < Model.Entries.Count; i++)
+                            {
+                                var entry = Model.Entries[i];
+                                <tr id="entryRow-@i" class="entry-row" data-category-id="@entry.CategoryId" data-account-id="@entry.AccountId">
+                                    <td>
+                                        <div class="select-container">
+                                            <input type="text"
+                                                   class="form-control form-control-sm select-search category-search"
+                                                   placeholder="Search category..."
+                                                   autocomplete="off" />
+                                            <select class="form-select form-select-sm category-select d-none"
+                                                    id="Entries_@(i)_CategoryId"
+                                                    name="Entries[@(i)].CategoryId"
+                                                    required>
+                                                <option value="@entry.CategoryId">Loading category...</option>
+                                            </select>
+                                            <div class="select-dropdown category-dropdown"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="select-container">
+                                            <input type="text"
+                                                   class="form-control form-control-sm select-search account-search"
+                                                   placeholder="Search account..."
+                                                   autocomplete="off" />
+                                            <select class="form-select form-select-sm account-select d-none"
+                                                    id="Entries_@(i)_AccountId"
+                                                    name="Entries[@(i)].AccountId"
+                                                    required>
+                                                <option value="@entry.AccountId">Loading account...</option>
+                                            </select>
+                                            <div class="select-dropdown account-dropdown"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm pkg-input"
+                                               id="Entries_@(i)_Pkg"
+                                               name="Entries[@(i)].Pkg"
+                                               type="number"
+                                               min="0"
+                                               step="1"
+                                               placeholder="PKG"
+                                               value="@(entry.Pkg)" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm rbp-select no-arrow"
+                                                id="Entries_@(i)_Rbp"
+                                                name="Entries[@(i)].Rbp">
+                                            <option value="Y" selected="@(entry.Rbp == "Y" ? "selected" : null)">Y</option>
+                                            <option value="N" selected="@(entry.Rbp == "N" ? "selected" : null)">N</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm des-input"
+                                               id="Entries_@(i)_Des"
+                                               name="Entries[@(i)].Des"
+                                               placeholder="Description"
+                                               value="@entry.Des" />
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm qty-input"
+                                               id="Entries_@(i)_Qty"
+                                               name="Entries[@(i)].Qty"
+                                               type="number"
+                                               min="0"
+                                               step="1"
+                                               value="@(entry.Qty)" />
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm rate-input"
+                                               id="Entries_@(i)_Rate"
+                                               name="Entries[@(i)].Rate"
+                                               type="number"
+                                               min="0"
+                                               step="0.01"
+                                               value="@(entry.Rate)" />
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm percent-input"
+                                               id="Entries_@(i)_Percent"
+                                               name="Entries[@(i)].Percent"
+                                               type="number"
+                                               min="0"
+                                               max="100"
+                                               step="0.01"
+                                               value="@(entry.Percent)" />
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm disc-input"
+                                               id="Entries_@(i)_Disc"
+                                               name="Entries[@(i)].Disc"
+                                               type="number"
+                                               min="0"
+                                               step="1"
+                                               value="@(entry.Disc)" />
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm debit-input"
+                                               id="Entries_@(i)_Debit"
+                                               name="Entries[@(i)].Debit"
+                                               type="number"
+                                               min="0"
+                                               step="1"
+                                               value="@(entry.Debit)" />
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm credit-input"
+                                               id="Entries_@(i)_Credit"
+                                               name="Entries[@(i)].Credit"
+                                               type="number"
+                                               min="0"
+                                               step="1"
+                                               value="@(entry.Credit)" />
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-danger btn-sm remove-row-btn">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <!-- Empty template row when there are no entries -->
                             <tr id="entryRow-0" class="entry-row">
                                 <td>
                                     <div class="select-container">
@@ -123,7 +267,7 @@
                                                placeholder="Search category..."
                                                autocomplete="off" />
                                         <select class="form-select form-select-sm category-select d-none"
-                                                id="Entries_0__CategoryId"
+                                                id="Entries_0_CategoryId"
                                                 name="Entries[0].CategoryId"
                                                 required>
                                             <option value="">Select Category</option>
@@ -138,7 +282,7 @@
                                                placeholder="Search account..."
                                                autocomplete="off" />
                                         <select class="form-select form-select-sm account-select d-none"
-                                                id="Entries_0__AccountId"
+                                                id="Entries_0_AccountId"
                                                 name="Entries[0].AccountId"
                                                 required>
                                             <option value="">Select Account</option>
@@ -148,7 +292,7 @@
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm pkg-input"
-                                           id="Entries_0__Pkg"
+                                           id="Entries_0_Pkg"
                                            name="Entries[0].Pkg"
                                            type="number"
                                            min="0"
@@ -157,71 +301,71 @@
                                 </td>
                                 <td>
                                     <select class="form-select form-select-sm rbp-select no-arrow"
-                                            id="Entries_0__Rbp"
+                                            id="Entries_0_Rbp"
                                             name="Entries[0].Rbp">
                                         <option value="Y" selected>Y</option>
                                         <option value="N">N</option>
                                     </select>
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm des-input" 
-                                           id="Entries_0__Des" 
-                                           name="Entries[0].Des" 
+                                    <input class="form-control form-control-sm des-input"
+                                           id="Entries_0_Des"
+                                           name="Entries[0].Des"
                                            placeholder="Description" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm qty-input" 
-                                           id="Entries_0__Qty" 
-                                           name="Entries[0].Qty" 
-                                           type="number" 
-                                           min="0" 
-                                           step="1" 
+                                    <input class="form-control form-control-sm qty-input"
+                                           id="Entries_0_Qty"
+                                           name="Entries[0].Qty"
+                                           type="number"
+                                           min="0"
+                                           step="1"
                                            placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm rate-input" 
-                                           id="Entries_0__Rate" 
-                                           name="Entries[0].Rate" 
-                                           type="number" 
-                                           min="0" 
-                                           step="0.01" 
+                                    <input class="form-control form-control-sm rate-input"
+                                           id="Entries_0_Rate"
+                                           name="Entries[0].Rate"
+                                           type="number"
+                                           min="0"
+                                           step="0.01"
                                            placeholder="0.00" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm percent-input" 
-                                           id="Entries_0__Percent" 
-                                           name="Entries[0].Percent" 
-                                           type="number" 
-                                           min="0" 
-                                           max="100" 
-                                           step="0.01" 
+                                    <input class="form-control form-control-sm percent-input"
+                                           id="Entries_0_Percent"
+                                           name="Entries[0].Percent"
+                                           type="number"
+                                           min="0"
+                                           max="100"
+                                           step="0.01"
                                            placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm disc-input" 
-                                           id="Entries_0__Disc" 
-                                           name="Entries[0].Disc" 
-                                           type="number" 
-                                           min="0" 
-                                           step="1" 
+                                    <input class="form-control form-control-sm disc-input"
+                                           id="Entries_0_Disc"
+                                           name="Entries[0].Disc"
+                                           type="number"
+                                           min="0"
+                                           step="1"
                                            placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm debit-input" 
-                                           id="Entries_0__Debit" 
-                                           name="Entries[0].Debit" 
-                                           type="number" 
-                                           min="0" 
-                                           step="1" 
+                                    <input class="form-control form-control-sm debit-input"
+                                           id="Entries_0_Debit"
+                                           name="Entries[0].Debit"
+                                           type="number"
+                                           min="0"
+                                           step="1"
                                            placeholder="0" />
                                 </td>
                                 <td>
-                                    <input class="form-control form-control-sm credit-input" 
-                                           id="Entries_0__Credit" 
-                                           name="Entries[0].Credit" 
-                                           type="number" 
-                                           min="0" 
-                                           step="1" 
+                                    <input class="form-control form-control-sm credit-input"
+                                           id="Entries_0_Credit"
+                                           name="Entries[0].Credit"
+                                           type="number"
+                                           min="0"
+                                           step="1"
                                            placeholder="0" />
                                 </td>
                                 <td>
@@ -230,304 +374,110 @@
                                     </button>
                                 </td>
                             </tr>
-                        </tbody>
-                        <tfoot>
-                            <tr class="table-secondary">
-                                <td colspan="9" class="text-end fw-bold">TOTAL</td>
-                                <td class="fw-bold" id="totalDebit">0</td>
-                                <td class="fw-bold" id="totalCredit">0</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-secondary">
+                            <td colspan="9" class="text-end fw-bold">TOTAL</td>
+                            <td class="fw-bold" id="totalDebit">0</td>
+                            <td class="fw-bold" id="totalCredit">0</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
+    </div>
 
-        <!-- Additional Details Card -->
-        <div class="card shadow mb-3">
-            <div class="card-header py-2">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-cog me-2"></i>Additional Details
-                </h6>
-            </div>
-            <div class="card-body py-2">
-                <div class="row">
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label" for="CreditDays">Credit Days</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-calendar-day"></i></span>
-                            <input class="form-control no-arrow" 
-                                   id="CreditDays" 
-                                   name="CreditDays" 
-                                   type="number" 
-                                   min="0" 
-                                   value="0" />
-                        </div>
+    <!-- Additional Details Card -->
+    <div class="card shadow mb-3">
+        <div class="card-header py-2">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-cog me-2"></i>Additional Details
+            </h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label" for="CreditDays">Credit Days</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-calendar-day"></i></span>
+                        <input class="form-control no-arrow"
+                               id="CreditDays"
+                               name="CreditDays"
+                               type="number"
+                               min="0"
+                               value="@(Model?.CreditDays ?? 0)" />
                     </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label" for="DueDate">Due Date</label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="fas fa-calendar-check"></i>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label" for="DueDate">Due Date</label>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-calendar-check"></i>
+                        </span>
+                        <input class="form-control"
+                               id="DueDate"
+                               name="DueDate"
+                               type="date"
+                               value="@(Model?.DueDate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))"
+                               readonly
+                               tabindex="-1"
+                               style="background-color: #e9ecef;" />
+                    </div>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <label class="form-label" for="Booker">Booker</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                        <select class="form-select" id="Booker" name="Booker">
+                            <option value="ghazi">ghazi</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Base Voucher Checkbox -->
+            <div class="row mt-2">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="IsBaseVoucher"
+                               name="IsBaseVoucher"
+                               value="true"
+                               @(Model?.IsBaseVoucher == true ? "checked" : "") />
+                        <label class="form-check-label" for="IsBaseVoucher">
+                            <span class="fw-bold text-primary">
+                                <i class="fas fa-layer-group me-1"></i>Mark as Base Voucher
                             </span>
-                            <input class="form-control" 
-                                   id="DueDate"
-                                   name="DueDate"
-                                   type="date"
-                                   value="@(Model?.DueDate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"))"
-                                   readonly
-                                   tabindex="-1"
-                                   style="background-color: #e9ecef;" />
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <label class="form-label" for="Booker">Booker</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-user"></i></span>
-                            <select class="form-select" id="Booker" name="Booker">
-                                <option value="ghazi">ghazi</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Base Voucher Checkbox -->
-                <div class="row mt-2">
-                    <div class="col-12">
-                        <div class="form-check">
-                            <input class="form-check-input" 
-                                   type="checkbox" 
-                                   id="IsBaseVoucher" 
-                                   name="IsBaseVoucher" 
-                                   value="true" />
-                            <label class="form-check-label" for="IsBaseVoucher">
-                                <span class="fw-bold text-primary">
-                                    <i class="fas fa-layer-group me-1"></i>Mark as Base Voucher
-                                </span>
-                                <small class="text-muted ms-2">
-                                    (Base vouchers can be used to create multiple derived vouchers)
-                                </small>
-                            </label>
-                        </div>
+                            <small class="text-muted ms-2">
+                                (Base vouchers can be used to create multiple derived vouchers)
+                            </small>
+                        </label>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Form Actions -->
-        <div class="d-flex justify-content-between mb-3">
-            <button type="button" class="btn btn-secondary" onclick="history.back()">
-                <i class="fas fa-arrow-left me-1"></i> Back
+    <!-- Form Actions -->
+    <div class="d-flex justify-content-between mb-3">
+        <button type="button" class="btn btn-secondary" onclick="history.back()">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </button>
+        <div>
+            <input type="hidden" id="formAction" name="action" value="submit" />
+            <button type="submit" class="btn btn-primary px-4 me-2" id="submitBtn">
+                <i class="fas fa-save me-1"></i> @(isEditMode ? "Update Journal Voucher" : "Submit Journal Entry")
             </button>
-            <div>
-                <input type="hidden" id="formAction" name="action" value="submit" />
-                <button type="submit" class="btn btn-primary px-4 me-2" id="submitBtn">
-                    <i class="fas fa-save me-1"></i> Submit Journal Entry
-                </button>
-                <button type="submit" class="btn btn-success px-4" id="submitPrintBtn" name="action" value="submit_print">
-                    <i class="fas fa-print me-1"></i> Submit and Print
-                </button>
-            </div>
+            <button type="submit" class="btn btn-success px-4" id="submitPrintBtn" name="action" value="submit_print">
+                <i class="fas fa-print me-1"></i> @(isEditMode ? "Update and Print" : "Submit and Print")
+            </button>
         </div>
-    </form>
-</div>
+    </div>
+</form>
 
 @section Scripts {
     <script src="~/js/journal-entry.js" asp-append-version="true"></script>
 }
-
-<style>
-    /* Form Controls */
-    .table .form-control-sm,
-    .table .form-select-sm {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
-    }
-    
-    /* Remove dropdown arrows */
-    select.form-select {
-        -webkit-appearance: none !important;
-        -moz-appearance: none !important;
-        appearance: none !important;
-        background-image: none !important;
-        padding-right: 0.75rem !important;
-    }
-    
-    select.form-select::-ms-expand {
-        display: none;
-    }
-
-    /* Tag Multibox */
-    .tag-multibox {
-        min-height: 31px;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        background: #fff;
-        padding: 2px 4px;
-        position: relative;
-    }
-
-    .tag-multibox .tag-chip {
-        display: inline-flex;
-        align-items: center;
-        font-size: 0.85em;
-        background: #375a7f;
-        color: #fff;
-        border-radius: 4px;
-        padding: 0 4px;
-        margin-right: 2px;
-        margin-bottom: 2px;
-    }
-
-    .tag-multibox .tag-chip-remove {
-        color: #fff;
-        margin-left: 3px;
-        cursor: pointer;
-    }
-
-    .tag-multibox .tag-search-input {
-        background: transparent;
-        color: #212529;
-        border: none;
-        outline: none;
-        min-width: 80px;
-        flex: 1 1 0;
-        box-shadow: none !important;
-    }
-
-    .tag-suggestions {
-        max-height: 200px;
-        overflow-y: auto;
-        z-index: 9999;
-    }
-
-    /* Validation Styles */
-    .required-field {
-        border-color: #375a7f !important;
-        background-color: rgba(55, 90, 127, 0.05) !important;
-    }
-
-    .is-invalid {
-        border-color: #dc3545 !important;
-    }
-
-    .invalid-feedback {
-        display: block;
-        width: 100%;
-        margin-top: 0.25rem;
-        font-size: 80%;
-        color: #dc3545;
-    }
-
-    /* Datepicker */
-    .ui-datepicker {
-        background-color: #fff;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        padding: 8px;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        z-index: 9999 !important;
-    }
-
-    /* Card Padding */
-    .card-header.py-2 {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
-    }
-
-    .card-body.py-2 {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0.5rem !important;
-    }
-
-    /* Dropdown z-index fix */
-    .dropdown-menu {
-        z-index: 9999 !important;
-    }
-
-    /* Dropdown positioning and visibility fixes */
-    .table-responsive {
-        overflow: visible !important; /* Allow dropdowns to overflow */
-    }
-    
-    .table td {
-        position: relative; /* Enable proper dropdown positioning */
-    }
-
-    /* Enhanced Select Styling */
-    .select-container {
-        position: relative;
-    }
-
-    .select-search {
-        padding-right: 30px;
-        width: 100%;
-    }
-
-    .select-dropdown {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 1000;
-        background: white;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        max-height: 200px;
-        overflow-y: auto;
-        display: none;
-    }
-
-    .select-dropdown.show {
-        display: block;
-    }
-
-    .select-option {
-        padding: 0.5rem;
-        cursor: pointer;
-        transition: background-color 0.2s, color 0.2s;
-    }
-
-    .select-option:hover:not(.selected) {
-        background-color: #f8f9fa;
-    }
-
-    .select-option.selected {
-        background-color: #375a7f;
-        color: white;
-    }
-
-    .select-option.filtered-out {
-        display: none;
-    }
-
-    /* Date input styling */
-    input[type="date"] {
-        position: relative;
-        padding-right: 0.75rem !important;
-        cursor: pointer;
-    }
-
-    /* Hide the default calendar icon in date inputs across browsers */
-    input[type="date"]::-webkit-calendar-picker-indicator {
-        opacity: 0;
-        width: 100%;
-        height: 100%;
-        position: absolute;
-        top: 0;
-        left: 0;
-        cursor: pointer;
-    }
-    
-    /* Additional styling to match the Delivery Challan styling */
-    .input-group .input-group-text {
-        background-color: #f8f9fa;
-        border-right: 0;
-    }
-    
-    .input-group .form-control {
-        border-left: 0;
-    }
-</style>

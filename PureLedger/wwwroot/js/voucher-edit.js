@@ -32,6 +32,17 @@
         fetchVoucherSummary(voucherId);
     });
 
+    // Add handler for Edit Entire Voucher button
+    $(document).on('click', '#editEntireVoucherBtn', function() {
+        if (!currentVoucherId) {
+            showAlert('warning', 'No voucher selected.');
+            return;
+        }
+        
+        // Redirect to the EditVoucher action
+        window.location.href = PureLedger.getCurrentBasePath() + '/Home/EditVoucher/' + currentVoucherId;
+    });
+
     // Function to fetch voucher summary
     function fetchVoucherSummary(voucherId) {
         PureLedger.get('/Home/GetVoucherSummary', { voucherId: voucherId })

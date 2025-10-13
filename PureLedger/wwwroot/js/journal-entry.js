@@ -18,10 +18,70 @@
     }
 
     init() {
+        console.log("Initializing Journal Entry Manager");
+        this.rowCounter = $('#entryRows tr').length - 1; // Set counter based on existing rows
         this.setupFormAction();
         this.initializeDatePickers();
         this.setupEventHandlers();
+
+        // First, set up any existing data from the model
+        if (this.isEditMode()) {
+            console.log("Edit mode detected - processing existing data");
+            this.processExistingData();
+        }
+
         this.loadInitialData();
+    }
+
+    isEditMode() {
+        return $('#editingVoucherId').length > 0;
+    }
+
+    // Process data that was already loaded from the model
+    processExistingData() {
+        const projectId = $('#ProjectId').val();
+        if (!projectId) return;
+
+        $('#entryRows tr').each((index, row) => {
+            const $row = $(row);
+            const categoryId = $row.data('category-id');
+            const accountId = $row.data('account-id');
+
+            if (categoryId && accountId) {
+                console.log(`Processing row ${index} with categoryId=${categoryId}, accountId=${accountId}`);
+
+                // Load categories and accounts in sequence
+                this.loadCategoryAndAccountData($row, projectId, categoryId, accountId);
+            }
+        });
+    }
+
+    async loadCategoryAndAccountData($row, projectId, categoryId, accountId) {
+        try {
+            // Load categories for this row
+            await this.loadCategories($row.find('.category-select'), projectId);
+
+            // Set category value and display text
+            $row.find('.category-select').val(categoryId);
+            const categoryText = $row.find('.category-select option:selected').text();
+            $row.find('.category-search').val(categoryText);
+
+            // Now load accounts based on category
+            await this.loadAccounts($row, categoryId);
+
+            // Set account value and display text
+            $row.find('.account-select').val(accountId);
+            const accountText = $row.find('.account-select option:selected').text();
+            $row.find('.account-search').val(accountText);
+
+            // Load product details to set account group attributes
+            await this.loadProductDetails($row, accountId);
+
+            // Apply account type specific settings
+            this.manageInputsBasedOnAccountGroup($row);
+        } catch (error) {
+            console.error('Error loading data for row:', error);
+        }
     }
 
     setupFormAction() {
@@ -47,18 +107,18 @@
             const today = new Date();
             const minDate = new Date(today);
             minDate.setMonth(minDate.getMonth() - 1);
-            
+
             // Set min/max date attributes on the date input
             const entryDateInput = document.getElementById('EntryDate');
             if (entryDateInput) {
                 entryDateInput.min = minDate.toISOString().split('T')[0]; // Format: yyyy-MM-dd
                 entryDateInput.max = today.toISOString().split('T')[0];
-                
+
                 // If entry date is empty, set today's date
                 if (!entryDateInput.value) {
                     entryDateInput.value = today.toISOString().split('T')[0];
                 }
-                
+
                 // Add change event to update due date
                 entryDateInput.addEventListener('change', () => this.updateDueDate());
             }
@@ -81,7 +141,6 @@
                     $icon.css('cursor', 'pointer');
                 }
             });
-
         } catch (error) {
             console.error('Error initializing date pickers:', error);
         }
@@ -89,7 +148,10 @@
 
     setupEventHandlers() {
         $(document).on('click', '.calendar-icon', (e) => {
-            $(e.currentTarget).siblings('input.datepicker')[0].focus();
+            const $input = $(e.currentTarget).siblings('input[type="date"]');
+            if ($input.length > 0 && !$input.prop('disabled')) {
+                $input[0].showPicker();
+            }
         });
 
         $('#CreditDays, #EntryDate').on('input change', () => this.updateDueDate());
@@ -127,7 +189,7 @@
         $(document).on('click focus', 'input', (e) => {
             // Close all dropdowns except the one in the current container
             const $currentContainer = $(e.target).closest('.select-container');
-            $('.select-dropdown').each(function() {
+            $('.select-dropdown').each(function () {
                 const $dropdown = $(this);
                 if (!$currentContainer || !$dropdown.closest('.select-container').is($currentContainer)) {
                     $dropdown.removeClass('show');
@@ -139,12 +201,14 @@
 
     loadInitialData() {
         const projectId = $('#ProjectId').val();
-        if (projectId) {
+        if (projectId && !this.isEditMode()) {
             this.handleProjectChange(projectId);
         }
+
         this.updateDueDate();
         this.updateProductRequiredIndicator();
         this.updateBaseVoucherCheckbox();
+        this.updateTotals();
     }
 
     updateDueDate() {
@@ -169,7 +233,7 @@
 
             const dueDate = new Date(entryDate);
             dueDate.setDate(dueDate.getDate() + creditDays);
-            
+
             // Format for HTML5 date input
             $('#DueDate').val(dueDate.toISOString().split('T')[0]);
         } catch (error) {
@@ -188,9 +252,29 @@
         for (const row of rows) {
             const $row = $(row);
             const $categorySelect = $row.find('.category-select');
+            const existingCategoryId = $row.data('category-id');
 
             await this.loadCategories($categorySelect, projectId);
-            this.clearAccountsAndSubsequent($row);
+
+            // If we have a data attribute with category ID, set it after loading options
+            if (existingCategoryId) {
+                $categorySelect.val(existingCategoryId);
+                const categoryText = $categorySelect.find('option:selected').text();
+                $row.find('.category-search').val(categoryText);
+
+                // Also load accounts based on this category
+                await this.loadAccounts($row, existingCategoryId);
+
+                // Set account value if we have it
+                const existingAccountId = $row.data('account-id');
+                if (existingAccountId) {
+                    $row.find('.account-select').val(existingAccountId);
+                    const accountText = $row.find('.account-select option:selected').text();
+                    $row.find('.account-search').val(accountText);
+                }
+            } else {
+                this.clearAccountsAndSubsequent($row);
+            }
         }
     }
 
@@ -199,13 +283,17 @@
             const $container = $categorySelect.closest('.select-container');
             const $dropdown = $container.find('.select-dropdown');
             const $searchInput = $container.find('.select-search');
-            
+
             $searchInput.val('').prop('disabled', true);
             $dropdown.empty().append('<div class="select-option">Loading...</div>');
 
             const categories = await this.apiGet('/Home/GetCategoriesByProject', { projectId });
 
             $dropdown.empty();
+
+            // Store the currently selected option's value to restore it after updating options
+            const selectedValue = $categorySelect.val();
+
             $categorySelect.empty().append('<option value="">Select Category</option>');
 
             if (categories?.length > 0) {
@@ -215,13 +303,20 @@
                         `<div class="select-option" data-value="${category.id}">${category.name}</div>`
                     );
                 });
+
+                // Restore selected value if it exists in the new options
+                if (selectedValue && $categorySelect.find(`option[value="${selectedValue}"]`).length) {
+                    $categorySelect.val(selectedValue);
+                }
             }
-            
+
             $searchInput.prop('disabled', false);
+            return categories;
         } catch (error) {
             console.error('Error loading categories:', error);
             $categorySelect.empty().append('<option value="">Error loading categories</option>');
             this.showError('Failed to load categories. Please try again.');
+            return [];
         }
     }
 
@@ -231,6 +326,9 @@
 
         await this.loadAccounts($row, categoryId);
         this.clearAccountRelatedData($row);
+
+        // Update the data attribute
+        $row.data('category-id', categoryId);
     }
 
     async loadAccounts($row, categoryId) {
@@ -244,7 +342,7 @@
                 $accountSelect.empty().append('<option value="">Select Account</option>');
                 $dropdown.empty();
                 $searchInput.val('').prop('disabled', true);
-                return;
+                return [];
             }
 
             $searchInput.val('').prop('disabled', true);
@@ -253,6 +351,10 @@
             const accounts = await this.apiGet('/Home/GetAccountsByCategory', { categoryId });
 
             $dropdown.empty();
+
+            // Store the currently selected option's value to restore it after updating options
+            const selectedValue = $accountSelect.val();
+
             $accountSelect.empty().append('<option value="">Select Account</option>');
 
             if (accounts?.length > 0) {
@@ -260,18 +362,25 @@
                     const $option = $(new Option(account.name, account.id));
                     $option.data('account-type', account.accountTypeName || '');
                     $accountSelect.append($option);
-                    
+
                     $dropdown.append(
                         `<div class="select-option" data-value="${account.id}">${account.name}</div>`
                     );
                 });
+
+                // Restore selected value if it exists in the new options
+                if (selectedValue && $accountSelect.find(`option[value="${selectedValue}"]`).length) {
+                    $accountSelect.val(selectedValue);
+                }
             }
-            
+
             $searchInput.prop('disabled', false);
+            return accounts;
         } catch (error) {
             console.error('Error loading accounts:', error);
             $accountSelect.empty().append('<option value="">Error loading accounts</option>');
             this.showError('Failed to load accounts. Please try again.');
+            return [];
         }
     }
 
@@ -286,6 +395,9 @@
 
         const accountType = $selected.data('account-type') || '';
         $row[0].setAttribute('data-account-type', accountType);
+
+        // Update the data attribute
+        $row.data('account-id', accountId);
 
         try {
             await this.loadProductDetails($row, accountId);
@@ -323,6 +435,7 @@
                 this.updateRowCalculations($row[0]);
                 this.updateProductRequiredIndicator();
             }
+            return product;
         } catch (error) {
             console.error('Error loading product details:', error);
             throw error;
@@ -337,8 +450,8 @@
         const $rateInput = $row.find('.rate-input');
         const $discInput = $row.find('.disc-input');
         const $percentInput = $row.find('.percent-input');
-        $pkgInput.prop('disabled', true); 
-        
+        $pkgInput.prop('disabled', true);
+
         if (accountGroup === 'account') {
             $rbpSelect.prop('disabled', true).val('Y');
             $qtyInput.prop('disabled', true).val('0');
@@ -447,7 +560,7 @@
         }
     }
 
-    updateTotals() {    
+    updateTotals() {
         let totalDebit = 0;
         let totalCredit = 0;
 
@@ -468,7 +581,7 @@
         // Use the stored template if the first row is not available
         let $newRow;
         const firstRow = document.getElementById('entryRow-0');
-        
+
         if (firstRow) {
             // If the original row exists, clone it (original behavior)
             $newRow = $(firstRow).clone();
@@ -479,7 +592,7 @@
             console.error("No row template available");
             return; // Exit if we can't create a new row
         }
-        
+
         $newRow.attr('id', `entryRow-${newIndex}`);
         this.resetRowElements($newRow, newIndex);
         $('#entryRows').append($newRow);
@@ -493,7 +606,7 @@
             this.loadCategories($categorySelect, projectId).then(() => {
                 // Focus on the category search input after categories are loaded
                 $firstSearchInput.focus();
-                
+
                 // Ensure the dropdown is shown
                 $firstSearchInput.closest('.select-container')
                     .find('.select-dropdown')
@@ -537,8 +650,12 @@
         });
 
         const rowElement = $row[0];
-        ['data-pkg', 'data-total-amount', 'data-account-type', 'data-account-group']
-            .forEach(attr => rowElement.removeAttribute(attr));
+        ['data-pkg', 'data-total-amount', 'data-account-type', 'data-account-group',
+            'data-category-id', 'data-account-id']
+            .forEach(attr => {
+                rowElement.removeAttribute(attr);
+                $(rowElement).data(attr.replace('data-', ''), null);
+            });
     }
 
     removeRow(event) {
@@ -547,10 +664,10 @@
         if ($rows.length > 1) {
             // Only remove the row if there's more than one
             $(event.target).closest('tr').remove();
-            
+
             // After removing a row, we need to renumber all remaining rows
             this.renumberRows();
-            
+
             this.updateTotals();
             this.updateProductRequiredIndicator();
             this.updateBaseVoucherCheckbox();
@@ -559,24 +676,24 @@
             this.showError("Cannot delete the last row. At least one entry is required.");
         }
     }
-    
+
     // New method to renumber rows after deletion
     renumberRows() {
         $('#entryRows tr').each((index, row) => {
             const $row = $(row);
-            
+
             // Update the row ID
             $row.attr('id', `entryRow-${index}`);
-            
+
             // Update all input and select elements
-            $row.find('input, select').each(function() {
+            $row.find('input, select').each(function () {
                 const $element = $(this);
-                
+
                 // Update id attribute if it exists
                 if ($element.attr('id')) {
                     $element.attr('id', $element.attr('id').replace(/_\d+_/, `_${index}_`));
                 }
-                
+
                 // Update name attribute if it exists and follows the Entries[n] pattern
                 if ($element.attr('name') && $element.attr('name').match(/Entries\[\d+\]/)) {
                     $element.attr('name', $element.attr('name').replace(/Entries\[\d+\]/, `Entries[${index}]`));
@@ -597,7 +714,7 @@
         try {
             // Always renumber rows before submission to ensure proper indexing
             this.renumberRows();
-            
+
             const validationErrors = this.validateJournalEntry();
 
             if (validationErrors.length > 0) {
@@ -622,32 +739,29 @@
         }
     }
 
-    // Add this new method to format dates in ISO format for submission
     formatDatesForSubmission() {
         // HTML5 date inputs already use yyyy-MM-dd format which is compatible with ISO format
-        // We still need to create hidden fields for server-side processing
-        
         const entryDateStr = $('#EntryDate').val();
         const dueDateStr = $('#DueDate').val();
-        
+
         if (entryDateStr) {
             // Create a hidden field with the ISO formatted date
             const $entryDateHidden = $('<input>')
                 .attr('type', 'hidden')
                 .attr('name', 'EntryDate')
                 .val(entryDateStr);
-                
+
             // Replace the original input with this hidden field
             $('#EntryDate').prop('disabled', true).after($entryDateHidden);
         }
-        
+
         if (dueDateStr) {
             // Create a hidden field with the ISO formatted date
             const $dueDateHidden = $('<input>')
                 .attr('type', 'hidden')
                 .attr('name', 'DueDate')
                 .val(dueDateStr);
-                
+
             // Replace the original input with this hidden field
             $('#DueDate').prop('disabled', true).after($dueDateHidden);
         }
@@ -775,6 +889,7 @@
     // Clear accounts and subsequent data when category changes
     clearAccountsAndSubsequent($row) {
         $row.find('.account-select').empty().append('<option value="">Select Account</option>');
+        $row.find('.account-search').val('');
         this.clearAccountRelatedData($row);
     }
 
@@ -794,7 +909,7 @@
             .removeAttr('required')
             .prop('disabled', false)  // Ensure inputs are enabled by default
             .next('.invalid-feedback').remove();
-            
+
         $row.find('.disc-input, .percent-input')
             .prop('disabled', false);  // Ensure inputs are enabled by default
     }
@@ -856,16 +971,16 @@
 
     showError(message) {
         console.error(message);
-        
+
         // Display error in the validation alert area
         $('#validationMessage').html(message);
         $('#validationAlert').removeClass('d-none');
-        
+
         // Scroll to the alert
         $('html, body').animate({
             scrollTop: $('#validationAlert').offset().top - 100
         }, 300);
-        
+
         // Hide after 5 seconds
         setTimeout(() => {
             $('#validationAlert').addClass('d-none');
@@ -875,10 +990,10 @@
     // Update base voucher checkbox state based on account entries
     updateBaseVoucherCheckbox() {
         const $baseVoucherCheckbox = $('#IsBaseVoucher');
-        
+
         // Count account entries (account group type 1)
         let accountEntriesCount = 0;
-        $('#entryRows tr').each(function() {
+        $('#entryRows tr').each(function () {
             const accountGroup = $(this).attr('data-account-group');
             if (accountGroup === 'account') {
                 accountEntriesCount++;
@@ -889,18 +1004,18 @@
         if (accountEntriesCount !== 1) {
             // Uncheck and disable the checkbox
             $baseVoucherCheckbox.prop('checked', false)
-                              .prop('disabled', true);
-                              
+                .prop('disabled', true);
+
             // Add tooltip explaining why it's disabled
-            const tooltipText = accountEntriesCount === 0 
+            const tooltipText = accountEntriesCount === 0
                 ? 'Base voucher requires exactly one account entry'
                 : 'Base voucher cannot have multiple account entries';
-                
+
             $baseVoucherCheckbox.attr('title', tooltipText);
         } else {
             // Enable the checkbox when we have exactly one account entry
             $baseVoucherCheckbox.prop('disabled', false)
-                              .attr('title', 'Mark this as a base voucher');
+                .attr('title', 'Mark this as a base voucher');
         }
     }
 
@@ -935,7 +1050,7 @@
             const searchTerm = $input.val().toLowerCase();
 
             let visibleCount = 0;
-            $dropdown.find('.select-option').each(function() {
+            $dropdown.find('.select-option').each(function () {
                 const text = $(this).text().toLowerCase();
                 const shouldShow = text.includes(searchTerm) && visibleCount < 5;
                 $(this).toggleClass('filtered-out', !shouldShow);
@@ -951,7 +1066,7 @@
             const $dropdown = $container.find('.select-dropdown');
             const $options = $dropdown.find('.select-option:not(.filtered-out)');
             const $selected = $dropdown.find('.select-option.selected');
-            
+
             switch (e.key) {
                 case 'ArrowDown':
                     e.preventDefault();
@@ -1025,6 +1140,6 @@
     }
 }
 
-$(function() {
+$(function () {
     window.journalEntryManager = new JournalEntryManager();
 });
