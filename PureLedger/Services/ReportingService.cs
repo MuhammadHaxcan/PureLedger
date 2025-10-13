@@ -465,7 +465,7 @@ namespace PureLedger.Services
             int? accountId = ParseNullableInt(request.AccountId);
             
             int page = Math.Max(0, request.Page); // Ensure page is not negative
-            int pageSize = Math.Clamp(request.PageSize, 1, 500); // Allow any size from 1 to 500
+            int pageSize = Math.Clamp(request.PageSize, 1, 1); // Allow any size from 1 to 500
 
             return await ExecuteInTransactionAsync(async () =>
             {
@@ -620,119 +620,122 @@ namespace PureLedger.Services
             int? categoryId = !string.IsNullOrEmpty(request.CategoryId) ? int.Parse(request.CategoryId) : null;
             int? accountId = !string.IsNullOrEmpty(request.AccountId) ? int.Parse(request.AccountId) : null;
             int? locationId = !string.IsNullOrEmpty(request.LocationId) ? int.Parse(request.LocationId) : null;
-            
+
             var startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
             var endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
 
-            // Get all entries with delivery challan info
-            var entriesWithDC = await _unitOfWork.JournalEntries.GetProcessedEntriesForProductReportAsync(
-                startDate, endDate, projectId, categoryId, accountId, locationId);
+            int page = Math.Max(0, request.Page); // Ensure page is not negative
+            int pageSize = Math.Clamp(request.PageSize, 1, 500); // Allow any size from 1 to 500
 
-            // Convert to view model
-            var reportEntries = new List<ProductReportEntryViewModel>();
-    
-            // Group entries by product (AccountId) to calculate weighted average costs
-            var accountGroups = entriesWithDC.GroupBy(x => x.Entry.AccountId);
-            
-            // Process groups to calculate weighted average costs and create report entries
-            int totalDebitQty = 0;
-            int totalCreditQty = 0;
-            decimal totalDebit = 0;
-            decimal totalCredit = 0;
-            decimal totalCOGS = 0;
-            decimal totalMargin = 0;
-            
-            foreach (var accountGroup in accountGroups)
+            return await ExecuteInTransactionAsync(async () =>
             {
-                // Sort entries by date for chronological processing
-                var accountEntries = accountGroup.OrderBy(x => x.Entry.JournalVoucher.EntryDate)
-                                                 .ThenBy(x => x.Entry.JournalVoucherId)
-                                                 .ToList();
-                                                 
-                // Track running totals for weighted average calculation
-                decimal totalCost = 0;
-                int totalPurchaseQty = 0;
-                decimal weightedAvgCost = 0;
-                
-                foreach (var (entry, dcEntry) in accountEntries)
+                // Get paginated entries with total count
+                var (entriesWithDC, totalCount) = await _unitOfWork.JournalEntries.GetProcessedEntriesForProductReportAsync(
+                    startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
+
+                var reportEntries = new List<ProductReportEntryViewModel>();
+
+                // Initialize running totals
+                decimal totalDebit = 0;
+                decimal totalCredit = 0;
+                int totalDebitQty = 0;
+                int totalCreditQty = 0;
+                decimal totalCOGS = 0;
+                decimal totalMargin = 0;
+
+                // Group entries by product (AccountId) to calculate weighted average costs
+                var accountGroups = entriesWithDC.GroupBy(x => x.Entry.AccountId);
+
+                foreach (var accountGroup in accountGroups)
                 {
-                    // Calculate debit and credit quantities
-                    int debitQty = entry.Debit > 0 ? entry.Quantity : 0;
-                    int creditQty = entry.Credit > 0 ? entry.Quantity : 0;
-                    
-                    // Update running totals for purchases (debits represent inventory additions)
-                    if (debitQty > 0)
+                    // Sort entries by date for chronological processing
+                    var accountEntries = accountGroup.OrderBy(x => x.Entry.JournalVoucher.EntryDate)
+                                                   .ThenBy(x => x.Entry.JournalVoucherId)
+                                                   .ToList();
+
+                    // Track running totals for weighted average calculation
+                    decimal totalCost = 0;
+                    int totalPurchaseQty = 0;
+                    decimal weightedAvgCost = 0;
+
+                    foreach (var (entry, dcEntry) in accountEntries)
                     {
-                        // Add to total cost and quantity for average calculation
-                        totalCost += entry.Debit;
-                        totalPurchaseQty += debitQty;
-                        
-                        // Recalculate weighted average cost after each purchase
-                        weightedAvgCost = totalPurchaseQty > 0 ? totalCost / totalPurchaseQty : 0;
+                        // Calculate debit and credit quantities
+                        int debitQty = entry.Debit > 0 ? entry.Quantity : 0;
+                        int creditQty = entry.Credit > 0 ? entry.Quantity : 0;
+
+                        // Update running totals for purchases (debits represent inventory additions)
+                        if (debitQty > 0)
+                        {
+                            totalCost += entry.Debit;
+                            totalPurchaseQty += debitQty;
+                            weightedAvgCost = totalPurchaseQty > 0 ? totalCost / totalPurchaseQty : 0;
+                        }
+
+                        // Calculate COGS and margin
+                        decimal cogs = creditQty * weightedAvgCost;
+                        decimal margin = entry.Credit - cogs;
+
+                        // Add to report totals
+                        totalDebit += entry.Debit;
+                        totalCredit += entry.Credit;
+                        totalDebitQty += debitQty;
+                        totalCreditQty += creditQty;
+                        totalCOGS += cogs;
+                        totalMargin += margin;
+
+                        // Create entry view model
+                        var reportEntry = new ProductReportEntryViewModel
+                        {
+                            Id = entry.JournalVoucherId,
+                            EntryId = entry.JournalEntryId,  // Add the Entry ID
+                            EntryDate = entry.JournalVoucher.EntryDate.ToString("dd-MMM yyyy"),
+                            DueDate = entry.JournalVoucher.CreditableDate.ToString("dd-MMM yyyy"),
+                            Description = entry.Description ?? "",
+                            AccountName = entry.Account?.AccountName ?? "",
+                            Quantity = entry.Quantity,
+                            QtyBalance = totalPurchaseQty - (accountEntries.Take(accountEntries.IndexOf((entry, dcEntry)) + 1)
+                                                     .Sum(x => x.Entry.Credit > 0 ? x.Entry.Quantity : 0)),
+                            Rate = entry.Rate,
+                            DebitQty = debitQty,
+                            CreditQty = creditQty,
+                            QuantityBalance = debitQty - creditQty,
+                            AvgRate = weightedAvgCost,
+                            Debit = entry.Debit,
+                            Credit = entry.Credit,
+                            Balance = entry.Debit - entry.Credit,
+                            COGS = cogs,
+                            Margin = margin,
+                            LocationName = dcEntry?.Location?.LocationName ?? "N/A"
+                        };
+
+                        reportEntries.Add(reportEntry);
                     }
-                    
-                    // Calculate COGS based on weighted average cost
-                    decimal cogs = creditQty * weightedAvgCost; // Using weighted avg cost for sales (credits)
-                    decimal margin = entry.Credit - cogs; // Margin = Sales Revenue - COGS
-                    
-                    // Add to totals
-                    totalCOGS += cogs;
-                    totalMargin += margin;
-                    
-                    // Create entry view model
-                    var reportEntry = new ProductReportEntryViewModel
-                    {
-                        Id = entry.JournalVoucherId,
-                        EntryDate = entry.JournalVoucher.EntryDate.ToString("dd-MMM yyyy"),
-                        DueDate = entry.JournalVoucher.CreditableDate.ToString("dd-MMM yyyy"),
-                        Description = entry.Description ?? "",
-                        AccountName = entry.Account.AccountName,
-                        Quantity = entry.Quantity,
-                        QtyBalance = totalPurchaseQty - (accountEntries.Take(accountEntries.IndexOf((entry, dcEntry)) + 1)
-                                                                       .Sum(x => x.Entry.Credit > 0 ? x.Entry.Quantity : 0)),
-                        Rate = entry.Rate,
-                        DebitQty = debitQty,
-                        CreditQty = creditQty,
-                        QuantityBalance = debitQty - creditQty,
-                        AvgRate = weightedAvgCost, // Use the weighted average as AvgRate
-                        Debit = entry.Debit,
-                        Credit = entry.Credit,
-                        Balance = entry.Debit - entry.Credit,
-                        COGS = cogs,
-                        Margin = margin,
-                        LocationName = dcEntry?.Location?.LocationName ?? "N/A"
-                    };
-
-                    reportEntries.Add(reportEntry);
-                    
-                    // Update report totals
-                    totalDebitQty += debitQty;
-                    totalCreditQty += creditQty;
-                    totalDebit += entry.Debit;
-                    totalCredit += entry.Credit;
                 }
-            }
 
-            // Create view model
-            var viewModel = new ProductReportViewModel
-            {
-                Entries = reportEntries,
-                TotalDebitQty = totalDebitQty,
-                TotalCreditQty = totalCreditQty,
-                NetQuantity = totalDebitQty - totalCreditQty,
-                TotalDebit = totalDebit,
-                TotalCredit = totalCredit,
-                NetBalance = totalDebit - totalCredit,
-                TotalQuantity = reportEntries.Sum(e => e.Quantity),
-                TotalRecords = reportEntries.Count,
-                TotalCOGS = totalCOGS,
-                TotalMargin = totalMargin,
-                Page = request.Page,
-                PageSize = request.PageSize,
-                HasMoreData = false
-            };
+                // Create final view model with pagination
+                var viewModel = new ProductReportViewModel
+                {
+                    Entries = reportEntries,
+                    TotalDebitQty = totalDebitQty,
+                    TotalCreditQty = totalCreditQty,
+                    NetQuantity = totalDebitQty - totalCreditQty,
+                    TotalDebit = totalDebit,
+                    TotalCredit = totalCredit,
+                    NetBalance = totalDebit - totalCredit,
+                    TotalQuantity = reportEntries.Sum(e => e.Quantity),
+                    TotalRecords = totalCount,
+                    TotalCOGS = totalCOGS,
+                    TotalMargin = totalMargin,
 
-            return viewModel;
+                    // Pagination metadata
+                    Page = page,
+                    PageSize = pageSize,
+                    HasMoreData = (page + 1) * pageSize < totalCount
+                };
+
+                return viewModel;
+            });
         }
 
         public async Task<List<Location>> GetAllLocationsAsync()

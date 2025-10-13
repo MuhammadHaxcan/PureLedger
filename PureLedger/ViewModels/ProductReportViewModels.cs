@@ -24,7 +24,7 @@ namespace PureLedger.ViewModels
         public string? CategoryId { get; set; }
         public string? AccountId { get; set; }
         public string? LocationId { get; set; }
-        public int Page { get; set; } = 1;
+        public int Page { get; set; } = 0;
         public int PageSize { get; set; } = 50;
     }
 
@@ -49,7 +49,8 @@ namespace PureLedger.ViewModels
 
     public class ProductReportEntryViewModel
     {
-        public int Id { get; set; }
+        public int Id { get; set; }  // Journal Voucher ID
+        public int EntryId { get; set; }  // Journal Entry ID
         public string EntryDate { get; set; }
         public string DueDate { get; set; }
         public string Description { get; set; }

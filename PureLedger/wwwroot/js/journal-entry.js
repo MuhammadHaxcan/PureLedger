@@ -100,8 +100,6 @@
 
         $(document).on('change', '.account-select', (e) => this.handleAccountChange(e));
 
-        this.setupTagHandlers();
-
         this.setupCalculationHandlers();
 
         $('#addRowBtn').on('click', () => this.addNewRow());
@@ -356,111 +354,6 @@
         }
     }
 
-    setupTagHandlers() {
-        $(document).on('focus', '.tag-search-input', (e) => {
-            const $suggestions = $(e.target).closest('.tag-multibox').siblings('.tag-suggestions');
-            $suggestions.addClass('show');
-        });
-
-        $(document).on('blur', '.tag-search-input', (e) => {
-            const $suggestions = $(e.target).closest('.tag-multibox').siblings('.tag-suggestions');
-            setTimeout(() => $suggestions.removeClass('show'), 200);
-        });
-
-        $(document).on('input', '.tag-search-input', (e) => this.handleTagSearch(e));
-
-        $(document).on('click', '.tag-suggestions .dropdown-item', (e) => this.handleTagSelection(e));
-
-        $(document).on('click', '.tag-chip-remove', (e) => this.handleTagRemoval(e));
-    }
-
-    async handleTagSearch(event) {
-        const $input = $(event.target);
-        const term = $input.val().trim();
-        const $suggestions = $input.closest('.tag-multibox').siblings('.tag-suggestions');
-
-        if (term.length === 0) {
-            $suggestions.removeClass('show');
-            return;
-        }
-
-        try {
-            const tags = await this.apiGet('/MetaData/SearchTags', { term });
-
-            $suggestions.empty();
-
-            if (tags?.length > 0) {
-                tags.forEach(tag => {
-                    $suggestions.append(
-                        `<a class="dropdown-item" href="#" data-id="${tag.id}" data-name="${tag.text}">
-                            ${tag.text}
-                        </a>`
-                    );
-                });
-                $suggestions.addClass('show');
-            } else {
-                $suggestions.removeClass('show');
-            }
-        } catch (error) {
-            console.error('Error searching tags:', error);
-            $suggestions.removeClass('show');
-        }
-    }
-
-    handleTagSelection(event) {
-        event.preventDefault();
-
-        const $item = $(event.target);
-        const tagId = $item.data('id');
-        const tagName = $item.data('name');
-        const $row = $item.closest('tr');
-        const $tagBox = $item.closest('td').find('.tag-multibox');
-        const $input = $tagBox.find('.tag-search-input');
-
-        const $chip = $(`
-            <div class="tag-chip me-1 mb-1" data-tag-id="${tagId}">
-                <span>${tagName}</span>
-                <a href="#" class="tag-chip-remove ms-1">
-                    <i class="fas fa-times"></i>
-                </a>
-            </div>
-        `);
-
-        $chip.insertBefore($input);
-        $input.val('');
-
-        this.updateTagInputs($row);
-        $item.closest('.tag-suggestions').removeClass('show');
-    }
-
-    handleTagRemoval(event) {
-        event.preventDefault();
-
-        const $chip = $(event.target).closest('.tag-chip');
-        const $row = $chip.closest('tr');
-
-        $chip.remove();
-        this.updateTagInputs($row);
-    }
-
-    updateTagInputs($row) {
-        const rowIndex = $row.attr('id').split('-')[1];
-        const $container = $row.find('.tag-hidden-inputs');
-
-        $container.empty();
-
-        $row.find('.tag-chip').each(function (index) {
-            const tagId = $(this).data('tag-id');
-            if (tagId) {
-                const $input = $('<input>')
-                    .attr('type', 'hidden')
-                    .attr('name', `Entries[${rowIndex}].Tags`)
-                    .attr('value', tagId);
-                $container.append($input);
-            }
-        });
-    }
-
     setupCalculationHandlers() {
         $(document).on('input blur', '.qty-input, .rate-input', (e) => {
             const row = $(e.target).closest('tr')[0];
@@ -643,11 +536,6 @@
             $select.prop('selectedIndex', 0);
         });
 
-        const $tagSearch = $row.find('.tag-search-input');
-        $tagSearch.attr('data-index', index).val('');
-        $row.find('.tag-chip').remove();
-        $row.find('.tag-hidden-inputs').empty();
-
         const rowElement = $row[0];
         ['data-pkg', 'data-total-amount', 'data-account-type', 'data-account-group']
             .forEach(attr => rowElement.removeAttribute(attr));
@@ -694,12 +582,6 @@
                     $element.attr('name', $element.attr('name').replace(/Entries\[\d+\]/, `Entries[${index}]`));
                 }
             });
-            
-            // Update tag search input data-index attribute
-            $row.find('.tag-search-input').attr('data-index', index);
-            
-            // Update hidden tag inputs if they exist
-            this.updateTagInputs($row);
         });
     }
 

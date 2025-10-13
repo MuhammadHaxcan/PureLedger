@@ -135,7 +135,7 @@
                             <label class="btn btn-outline-primary btn-sm" for="showCOGS">
                                 <i class="fas fa-money-bill"></i> COGS/Margin
                             </label>
-                            
+
                             <input type="checkbox" class="btn-check" id="showLocation" checked autocomplete="off">
                             <label class="btn btn-outline-primary btn-sm" for="showLocation">
                                 <i class="fas fa-map-marker-alt"></i> Location
@@ -275,6 +275,33 @@
 }
 
 <style>
+    /* Increase ID column width */
+    .id-column {
+        min-width: 120px;  /* Increased from default */
+        width: auto;
+    }
+
+    /* ID container styling */
+    .id-container {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .voucher-link {
+        font-weight: 500;
+        color: #0d6efd;
+        text-decoration: none;
+    }
+
+    .voucher-link:hover {
+        text-decoration: underline;
+    }
+
+    .entry-id {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
     /* Remove dropdown arrows from all select elements */
     select.form-select {
         -webkit-appearance: none !important;
@@ -284,14 +311,20 @@
         padding-right: 0.75rem !important;
     }
 
-    /* For Firefox */
-    select.form-select::-ms-expand {
-        display: none;
-    }
+        /* For Firefox */
+        select.form-select::-ms-expand {
+            display: none;
+        }
 
     /* Table number columns alignment */
     .text-end {
         text-align: right !important;
+    }
+
+    /* Card header padding */
+    .card-header.py-3 {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
     }
 
     /* Monospace for numbers */
@@ -303,5 +336,16 @@
     /* Negative values in red */
     .negative-balance {
         color: #dc3545;
+    }
+
+    /* Loading status indicator */
+    #loadingStatus {
+        font-size: 0.9rem;
+    }
+
+    /* Auto loading indicator */
+    #autoLoadIndicator {
+        margin-top: 0.5rem;
+        margin-bottom: 1rem;
     }
 </style>

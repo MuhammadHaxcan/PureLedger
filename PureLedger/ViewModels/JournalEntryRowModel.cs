@@ -6,7 +6,6 @@
         public int AccountId { get; set; }
         public string? Type { get; set; }
         public string? Rbp { get; set; } = "Y";
-        public List<int>? Tags { get; set; } // Now a list of tag IDs
         public string? Des { get; set; }
         public int Qty { get; set; }
         public int Rate { get; set; }

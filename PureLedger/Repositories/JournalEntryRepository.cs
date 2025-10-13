@@ -374,20 +374,21 @@ namespace PureLedger.Repositories
             return balance;
         }
 
-        // Add this method to the JournalEntryRepository class
-        public async Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetProcessedEntriesForProductReportAsync(
-            DateOnly startDate,
-            DateOnly endDate,
-            int projectId,
-            int? categoryId,
-            int? accountId,
-            int? locationId)
+        public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(
+    DateOnly startDate,
+    DateOnly endDate,
+    int projectId,
+    int? categoryId,
+    int? accountId,
+    int? locationId,
+    int page,
+    int pageSize)
         {
             // Start with a query for all JournalEntries that match our basic criteria
             var query = _context.JournalEntries
                 .Include(je => je.JournalVoucher)
                 .Include(je => je.Account)
-                .Where(je => 
+                .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
                     je.IsProcessed &&
                     je.Quantity > 0 && // Only get entries with quantity for product report
@@ -406,8 +407,18 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
+            // Get total count for pagination
+            int totalCount = await query.CountAsync();
+
+            // Apply ordering before pagination
+            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
+                        .ThenBy(je => je.JournalVoucherId)
+                        .ThenBy(je => je.JournalEntryId);
+
+            // Apply pagination
+            query = query.Skip(page * pageSize).Take(pageSize);
+
             // Get entries with a LEFT JOIN to DeliveryChallanEntry
-            // This will return all journal entries with their delivery challan entry if it exists
             var entriesWithDC = await query
                 .GroupJoin(
                     _context.DeliveryChallanEntries.Include(dce => dce.Location),
@@ -428,7 +439,9 @@ namespace PureLedger.Repositories
             }
 
             // Transform to the return type
-            return entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
+            var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
+
+            return (results, totalCount);
         }
     }
 }

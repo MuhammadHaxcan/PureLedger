@@ -96,9 +96,7 @@ namespace PureLedger.Services
             {
                 try
                 {
-
-                    _logger.LogInformation("Creating journal entry with AccountId={AccountId}, Tags={TagCount}",
-                        entryModel.AccountId, entryModel.Tags?.Count ?? 0);
+                    _logger.LogInformation("Creating journal entry with AccountId={AccountId}", entryModel.AccountId);
 
                     var journalEntry = new JournalEntry
                     {
@@ -118,27 +116,6 @@ namespace PureLedger.Services
 
                     journalEntry = await _unitOfWork.JournalEntries.AddAsync(journalEntry);
                     await _unitOfWork.SaveChangesAsync();
-
-                    if (entryModel.Tags != null && entryModel.Tags.Any())
-                    {
-                        try
-                        {
-                            _logger.LogInformation("Adding {TagCount} tags to entry {EntryId}",
-                                entryModel.Tags.Count, journalEntry.JournalEntryId);
-
-                            var validTags = entryModel.Tags.Where(t => t > 0).ToList();
-                            if (validTags.Any())
-                            {
-                                await _unitOfWork.JournalEntries.AddTagsAsync(journalEntry.JournalEntryId, validTags);
-                                await _unitOfWork.SaveChangesAsync();
-                            }
-                        }
-                        catch (Exception tagEx)
-                        {
-                            _logger.LogError(tagEx, "Error adding tags to entry {EntryId}", journalEntry.JournalEntryId);
-
-                        }
-                    }
                 }
                 catch (Exception ex)
                 {

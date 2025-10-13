@@ -103,7 +103,6 @@
                                 <th>Account <span class="text-danger">*</span></th>
                                 <th>PKG</th>
                                 <th>RBP</th>
-                                <th>Tags</th>
                                 <th>Description</th>
                                 <th>Qty <span class="text-danger product-required-indicator d-none">*</span></th>
                                 <th>Rate</th>
@@ -163,18 +162,6 @@
                                         <option value="Y" selected>Y</option>
                                         <option value="N">N</option>
                                     </select>
-                                </td>
-                                <td class="position-relative">
-                                    <div class="tag-multibox d-flex flex-wrap align-items-center" style="min-height:31px;">
-                                        <input type="text"
-                                               class="form-control form-control-sm tag-search-input border-0 flex-grow-1"
-                                               style="min-width:100px;box-shadow:none;background:transparent;"
-                                               placeholder="Search tags"
-                                               autocomplete="off"
-                                               data-index="0" />
-                                    </div>
-                                    <div class="tag-hidden-inputs"></div>
-                                    <div class="tag-suggestions dropdown-menu" style="width:100%;"></div>
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm des-input" 
@@ -246,7 +233,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="table-secondary">
-                                <td colspan="10" class="text-end fw-bold">TOTAL</td>
+                                <td colspan="9" class="text-end fw-bold">TOTAL</td>
                                 <td class="fw-bold" id="totalDebit">0</td>
                                 <td class="fw-bold" id="totalCredit">0</td>
                                 <td></td>
