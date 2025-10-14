@@ -47,13 +47,18 @@ namespace PureLedger.Repositories.Interfaces
             int pageSize);
         Task<decimal> GetAccountBalanceUpToVoucherAsyncMinus1(int accountId, int maxVoucherId);
         Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int? locationId,
-    int page,
-    int pageSize);
+            DateOnly startDate,
+            DateOnly endDate,
+            int projectId,
+            int? categoryId,
+            int? accountId,
+            int? locationId,
+            int page,
+            int pageSize);
+        Task<(decimal Debit, decimal Credit)> GetOpeningBalanceAsync(
+            DateOnly startDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId);
     }
 }

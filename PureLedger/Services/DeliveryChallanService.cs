@@ -830,7 +830,7 @@ namespace PureLedger.Services
                     CategoryId = forAccount.CategoryId,
                     Description = $"FOR Charges Debit - Ref to JV-{journalVoucherId}" +
                                   (entryId.HasValue ? $" Entry-{entryId}" : ""),
-                    Quantity = 1,
+                    Quantity = 0,
                     Rate = amount,
                     Debit = amount,
                     Credit = 0,

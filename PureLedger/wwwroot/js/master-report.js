@@ -411,13 +411,14 @@ function renderAllEntriesWithBalance() {
     const tbody = document.getElementById('reportData');
     tbody.innerHTML = '';
 
-    // Use DocumentFragment for better performance
     const fragment = document.createDocumentFragment();
 
-    window.reportState.allEntries.forEach(entry => {
+    window.reportState.allEntries.forEach((entry, idx) => {
+        const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>
+                ${isOpening ? '<span class="fw-bold text-primary">OPENING</span>' : `
                 <div class="id-container">
                     <a href="/Reporting/PrintVoucher?journalVoucherId=${entry.journalVoucherId}&type=JV" 
                        class="voucher-link" 
@@ -427,14 +428,18 @@ function renderAllEntriesWithBalance() {
                     </a>
                     <span class="entry-id">Entry: ${entry.id}</span>
                 </div>
+                `}
             </td>
             <td class="date-column">${formatDate(entry.transactionDate)}</td>
             <td class="description-column">${entry.description || ''}</td>
-            <td class="account-column">${entry.accountName}</td>
+            <td class="account-column">${entry.accountName || ''}</td>
             <td class="debit-column text-right">${formatCurrency(entry.debit)}</td>
             <td class="credit-column text-right">${formatCurrency(entry.credit)}</td>
             <td class="balance-column text-right">${formatCurrency(entry.balance)}</td>
         `;
+        if (isOpening) {
+            row.classList.add('table-info');
+        }
         fragment.appendChild(row);
     });
 

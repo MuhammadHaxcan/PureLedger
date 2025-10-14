@@ -417,5 +417,33 @@ namespace PureLedger.Repositories
 
             return (results, totalCount);
         }
+
+        public async Task<(decimal Debit, decimal Credit)> GetOpeningBalanceAsync(
+            DateOnly startDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId)
+        {
+            var query = _context.JournalEntries
+                .Include(je => je.JournalVoucher)
+                .Where(je =>
+                    je.JournalVoucher.IsCompleted &&
+                    je.JournalVoucher.EntryDate < startDate);
+
+            if (projectId.HasValue)
+                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+
+            if (categoryId.HasValue)
+                query = query.Where(je => je.CategoryId == categoryId.Value);
+
+            if (accountId.HasValue)
+                query = query.Where(je => je.AccountId == accountId.Value);
+
+            var entries = await query.ToListAsync();
+            decimal totalDebit = entries.Sum(e => e.Debit);
+            decimal totalCredit = entries.Sum(e => e.Credit);
+
+            return (totalDebit, totalCredit);
+        }
     }
 }

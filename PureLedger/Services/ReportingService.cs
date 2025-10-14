@@ -144,7 +144,7 @@ namespace PureLedger.Services
                 Quantity = entry.Quantity,
                 Rate = entry.Rate,
                 PKG = entry.Account?.ProductData?.Pkg ?? 1,
-                Discount = (int)entry.DiscountPercent,
+                Discount = entry.DiscountPercent ?? 0,
                 Debit = entry.Debit,
                 Credit = entry.Credit,
                 Rbp = entry.Rbp ?? "Y"
@@ -241,11 +241,6 @@ namespace PureLedger.Services
             string city = parts.Length > 2 ? parts[2].Trim() : "";
 
             return (name, phone, address, city);
-        }
-
-        private DateOnly GetEffectiveDate(JournalVoucher voucher)
-        {
-            return voucher?.CreditableDate ?? voucher.EntryDate;
         }
 
         private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation)
@@ -463,26 +458,49 @@ namespace PureLedger.Services
             int? projectId = ParseNullableInt(request.ProjectId);
             int? categoryId = ParseNullableInt(request.CategoryId);
             int? accountId = ParseNullableInt(request.AccountId);
-            
-            int page = Math.Max(0, request.Page); // Ensure page is not negative
-            int pageSize = Math.Clamp(request.PageSize, 1, 1); // Allow any size from 1 to 500
+
+            int page = Math.Max(0, request.Page);
+            int pageSize = Math.Clamp(request.PageSize, 1, 500);
 
             return await ExecuteInTransactionAsync(async () =>
             {
+                // 1. Get opening balance
+                var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceAsync(
+                    startDate, projectId, categoryId, accountId);
+
+                decimal openingBalance = openingDebit - openingCredit;
+
+                // 2. Get paged entries
                 var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
                     startDate, endDate, projectId, categoryId, accountId, page, pageSize);
 
                 result.Entries = new List<MasterReportEntryViewModel>();
-                decimal runningBalance = 0;
+                decimal runningBalance = openingBalance;
 
-                // If this is not the first page, we need to calculate the running balance up to this point
-                if (page > 0)
+                // 3. Insert opening balance row only on the first page
+                bool includeOpening = (page == 0) && (openingDebit != 0 || openingCredit != 0);
+                if (includeOpening)
                 {
-                    runningBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceAsync(
-                        startDate, endDate, projectId, categoryId, accountId, page, pageSize);
-                    Console.WriteLine($"Previous entries balance: {runningBalance}");
+                    result.Entries.Add(new MasterReportEntryViewModel
+                    {
+                        Id = 0,
+                        JournalVoucherId = 0,
+                        FormattedId = "OPENING",
+                        TransactionDate = startDate,
+                        Description = "Opening Balance",
+                        AccountName = "",
+                        AccountId = accountId ?? 0,
+                        Debit = openingDebit,
+                        Credit = openingCredit,
+                        Balance = openingBalance,
+                        ProjectName = "",
+                        ProjectId = projectId ?? 0,
+                        CategoryName = "",
+                        CategoryId = categoryId ?? 0
+                    });
                 }
 
+                // 4. Add actual entries, updating running balance
                 foreach (var entry in entries)
                 {
                     runningBalance += entry.Debit - entry.Credit;
@@ -490,11 +508,11 @@ namespace PureLedger.Services
                     string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
                     result.Entries.Add(new MasterReportEntryViewModel
-                    {    
+                    {
                         Id = entry.JournalEntryId,
                         JournalVoucherId = entry.JournalVoucherId,
                         FormattedId = formattedId,
-                        TransactionDate = GetEffectiveDate(entry.JournalVoucher),
+                        TransactionDate = entry.JournalVoucher.EntryDate,
                         Description = entry.Description,
                         AccountName = entry.Account?.AccountName ?? string.Empty,
                         AccountId = entry.AccountId,
@@ -508,13 +526,13 @@ namespace PureLedger.Services
                     });
                 }
 
-                // Calculate totals for the current chunk only
-                result.TotalDebit = result.Entries.Sum(e => e.Debit);
-                result.TotalCredit = result.Entries.Sum(e => e.Credit);
+                // Totals for current chunk (excluding opening)
+                result.TotalDebit = result.Entries.Skip(includeOpening ? 1 : 0).Sum(e => e.Debit);
+                result.TotalCredit = result.Entries.Skip(includeOpening ? 1 : 0).Sum(e => e.Credit);
                 result.NetBalance = result.TotalDebit - result.TotalCredit;
-                
-                // Include pagination metadata
-                result.TotalRecords = totalCount;
+
+                // Pagination metadata
+                result.TotalRecords = totalCount + (includeOpening ? 1 : 0);
                 result.Page = page;
                 result.PageSize = pageSize;
                 result.HasMoreData = (page + 1) * pageSize < totalCount;
