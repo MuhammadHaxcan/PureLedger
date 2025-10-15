@@ -83,10 +83,10 @@ namespace PureLedger.Repositories
             // Build a query that filters at the database level
             var query = _context.JournalEntries
                 .Include(je => je.JournalVoucher)
-                .Where(je => 
-                    accountIds.Contains(je.AccountId) && 
+                .Where(je =>
+                    accountIds.Contains(je.AccountId) &&
                     je.CategoryId == categoryId &&
-                    je.JournalVoucher.IsCompleted && 
+                    je.JournalVoucher.IsCompleted &&
                     je.JournalVoucher.CreditableDate <= referenceDate);
 
             // Apply project filter if specified
@@ -145,7 +145,7 @@ namespace PureLedger.Repositories
                 .Include(je => je.JournalVoucher)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
-                .Where(je => 
+                .Where(je =>
                     accountIds.Contains(je.AccountId) &&
                     je.JournalVoucher.IsCompleted);
 
@@ -166,67 +166,6 @@ namespace PureLedger.Repositories
         }
 
 
-        public async Task<List<JournalEntry>> GetEntriesForMasterReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int? projectId,
-    int? categoryId,
-    int? accountId,
-    int page,
-    int pageSize,
-    bool getLastEntryOnly)
-        {
-            var query = _context.JournalEntries
-                .Include(je => je.JournalVoucher)
-                    .ThenInclude(jv => jv.Project)
-                .Include(je => je.Account)
-                .Include(je => je.Category)
-                .Where(je =>
-                    je.JournalVoucher.IsCompleted &&
-                    je.JournalVoucher.EntryDate >= startDate &&
-                    je.JournalVoucher.EntryDate <= endDate);
-
-            if (projectId.HasValue)
-            {
-                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
-            }
-
-            if (categoryId.HasValue)
-            {
-                query = query.Where(je => je.CategoryId == categoryId.Value);
-            }
-
-            if (accountId.HasValue)
-            {
-                query = query.Where(je => je.AccountId == accountId.Value);
-            }
-
-            // Order consistently
-            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
-                .ThenBy(je => je.JournalVoucherId)
-                .ThenBy(je => je.JournalEntryId);
-
-            if (getLastEntryOnly)
-            {
-                // Calculate the position of the last entry of the requested page
-                int lastEntryPosition = (page * pageSize) - 1;
-
-                // Get only that single entry
-                return await query
-                    .Skip(Math.Max(0, lastEntryPosition))
-                    .Take(1)
-                    .ToListAsync();
-            }
-            else
-            {
-                // Regular paged query
-                return await query
-                    .Skip(page * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-            }
-        }
-
         public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
             DateOnly startDate,
             DateOnly endDate,
@@ -243,7 +182,6 @@ namespace PureLedger.Repositories
                 .Include(je => je.Category)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
-                    // Use only EntryDate for filtering, not CreditableDate
                     je.JournalVoucher.EntryDate >= startDate &&
                     je.JournalVoucher.EntryDate <= endDate);
 
@@ -283,12 +221,12 @@ namespace PureLedger.Repositories
             var cartageReferences = await _context.JournalVoucherReferences
                 .Where(r => r.MainVoucherId == journalVoucherId && r.ReferenceType == "Cartage")
                 .ToListAsync();
-                
+
             if (cartageReferences == null || !cartageReferences.Any())
                 return new List<JournalEntry>();
 
             List<JournalEntry> cartageEntries = new List<JournalEntry>();
-            
+
             // Process each referenced cartage voucher
             foreach (var reference in cartageReferences)
             {

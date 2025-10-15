@@ -28,10 +28,12 @@ namespace PureLedger.ViewModels
         public decimal NetBalance { get; set; }
         
         // Pagination metadata
+        public decimal PreviousBalance { get; set; }
         public int TotalRecords { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
         public bool HasMoreData { get; set; }
+
     }
 
     public class MasterReportEntryViewModel

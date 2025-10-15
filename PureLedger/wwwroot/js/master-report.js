@@ -9,12 +9,13 @@
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 1,  // Small for testing, adjust as needed
+        pageSize: 5,  // Small for testing, adjust as needed
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
         allEntries: [],
-        reportParams: null
+        reportParams: null,
+        previousBalance: 0
     };
 }
 
@@ -376,12 +377,13 @@ function fetchReportChunk() {
             window.reportState.currentPage++;
             window.reportState.hasMoreData = data.hasMoreData;
             window.reportState.totalRecords = data.totalRecords;
+            window.reportState.previousBalance = data.previousBalance || 0;
 
             // Update UI
             updateLoadingStatus();
         })
         .fail(() => {
-            document.getElementById('reportData').innerHTML =
+            document.getElementById('reportData').innerHTML =   
                 '<tr><td colspan="7" class="text-center text-danger">Error loading report data. Please try again.</td></tr>';
         })
         .always(() => {
@@ -395,7 +397,7 @@ function fetchReportChunk() {
 function processAndDisplayEntries(entries) {
     if (!entries?.length) return;
 
-    // Add entries to allEntries array
+    // Accumulate entries for infinite scroll
     window.reportState.allEntries = [...window.reportState.allEntries, ...entries];
 
     // Re-render tables
@@ -413,8 +415,9 @@ function renderAllEntriesWithBalance() {
 
     const fragment = document.createDocumentFragment();
 
-    window.reportState.allEntries.forEach((entry, idx) => {
+    window.reportState.allEntries.forEach((entry) => {
         const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>

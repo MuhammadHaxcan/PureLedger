@@ -27,16 +27,6 @@ namespace PureLedger.Repositories.Interfaces
             int page,
             int pageSize);
 
-        Task<List<JournalEntry>> GetEntriesForMasterReportAsync(
-            DateOnly startDate,
-            DateOnly endDate,
-            int? projectId,
-            int? categoryId,
-            int? accountId,
-            int page,
-            int pageSize,
-            bool getLastEntryOnly);
-
         Task<decimal> GetPreviousEntriesBalanceAsync(
             DateOnly startDate,
             DateOnly endDate,
