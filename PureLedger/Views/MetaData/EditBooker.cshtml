@@ -1,0 +1,35 @@
+﻿@model PureLedger.Models.Booker
+@{
+    ViewData["Title"] = "Edit Booker";
+}
+
+<div class="container-fluid">
+    <h2 class="mb-4">Edit Booker</h2>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edit Booker</h6>
+        </div>
+        <div class="card-body">
+            <form asp-action="EditBooker" method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input type="hidden" asp-for="BookerID" />
+
+                <div class="mb-3">
+                    <label asp-for="BookerName" class="form-label">Booker Name</label>
+                    <input asp-for="BookerName" class="form-control" />
+                    <span asp-validation-for="BookerName" class="text-danger"></span>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-action="Bookers" class="btn btn-secondary">Back to List</a>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

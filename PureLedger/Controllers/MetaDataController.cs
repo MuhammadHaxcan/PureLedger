@@ -575,5 +575,81 @@ namespace PureLedger.Controllers
         }
 
         #endregion
+
+        #region Booker
+
+        // Add these methods to MetaDataController class
+        #region Booker
+
+        public async Task<IActionResult> Bookers()
+        {
+            var bookers = await _metaDataService.GetAllBookersAsync();
+            return View(bookers);
+        }
+
+        public IActionResult CreateBooker()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateBooker(Booker booker)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(booker);
+            }
+
+            var errors = await _metaDataService.CreateBookerAsync(booker);
+            if (errors.Count > 0)
+            {
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(booker);
+            }
+
+            TempData["SuccessMessage"] = "Booker created successfully.";
+            return RedirectToAction(nameof(Bookers));
+        }
+
+        public async Task<IActionResult> EditBooker(int id)
+        {
+            var booker = await _metaDataService.GetBookerByIdAsync(id);
+            if (booker == null)
+            {
+                return NotFound();
+            }
+            return View(booker);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditBooker(Booker booker)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(booker);
+            }
+
+            var errors = await _metaDataService.UpdateBookerAsync(booker);
+            if (errors.Count > 0)
+            {
+                foreach (var error in errors)
+                {
+                    ModelState.AddModelError("", error);
+                }
+                return View(booker);
+            }
+
+            TempData["SuccessMessage"] = "Booker updated successfully.";
+            return RedirectToAction(nameof(Bookers));
+        }
+
+        #endregion
+
+        #endregion
     }
 }

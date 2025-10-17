@@ -38,6 +38,12 @@ namespace PureLedger.Models
         [NotMapped]
         public bool HasDerivedVouchers => OutgoingReferences?.Any(r => r.ReferenceType == "DerivedVoucher") ?? false;
 
+        [ForeignKey("Booker")]
+        public int? BookerId { get; set; }
+
+        // Add navigation property
+        public virtual Booker? Booker { get; set; }
+
         // Navigation properties
         public virtual Project Project { get; set; }
         public virtual ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();

@@ -45,20 +45,9 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> Entry(JournalEntryViewModel model, string action, int? editingVoucherId = null)
         {
             try
-            {
-                // Validate entry date
-                var today = DateOnly.FromDateTime(DateTime.Now);
-                var minDate = today.AddMonths(-1);
-                
-                if (model.EntryDate > today || model.EntryDate < minDate)
-                {
-                    ModelState.AddModelError("EntryDate", "Entry date must be between last month and today");
-                    await LoadProjectsData(model.ProjectId);
-                    return View(model);
-                }
-
-                JournalVoucher journalVoucher;
-                
+            { 
+                 JournalVoucher journalVoucher;
+                                                                                                 
                 if (editingVoucherId.HasValue)
                 {
                     // Update existing voucher
@@ -591,12 +580,15 @@ namespace PureLedger.Controllers
             if (userId.HasValue)
             {
                 var projects = await _journalService.GetAllProjectsForUserAsync(userId.Value);
+                var bookers = await _journalService.GetAllBookersAsync(); // Add this line
                 ViewBag.Projects = projects;
+                ViewBag.Bookers = bookers; // Add this line
                 ViewBag.SelectedProjectId = selectedProjectId;
             }
             else
             {
                 ViewBag.Projects = new List<Project>();
+                ViewBag.Bookers = new List<Booker>();
                 ViewBag.SelectedProjectId = selectedProjectId;
             }
         }

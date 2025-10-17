@@ -494,11 +494,36 @@
                     </div>
                 </div>
                 <div class="col-md-4 mb-2">
-                    <label class="form-label" for="Booker">Booker</label>
+                    <label class="form-label" for="BookerId">Booker</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-user"></i></span>
-                        <select class="form-select" id="Booker" name="Booker">
-                            <option value="ghazi">ghazi</option>
+                        <select class="form-select" id="BookerId" name="BookerId">
+                            @if (ViewBag.Bookers != null && ((List<PureLedger.Models.Booker>)ViewBag.Bookers).Any())
+                            {
+                                foreach (var booker in ViewBag.Bookers)
+                                {
+                                    bool isSelected = false;
+                                    
+                                    if (Model?.BookerId.HasValue == true)
+                                    {
+                                        // For edit mode - use the model's BookerId
+                                        isSelected = Model.BookerId == booker.BookerID;
+                                    }
+                                    else if (booker == ViewBag.Bookers[0])
+                                    {
+                                        // For create mode - select first booker by default
+                                        isSelected = true;
+                                    }
+                                    
+                                    <option value="@booker.BookerID" selected="@isSelected">
+                                        @booker.BookerName
+                                    </option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="">No bookers available</option>
+                            }
                         </select>
                     </div>
                 </div>

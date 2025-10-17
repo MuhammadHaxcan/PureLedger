@@ -19,7 +19,7 @@ namespace PureLedger.Controllers
         private readonly Dictionary<string, List<string>> _controllerActions = new()
         {
             ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "MissedEntries", "BaseVouchers", "Recipes" }, // Added "Recipes"
-            ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations" },
+            ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations", "Bookers" },
             ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport" },
             ["DeliveryChallan"] = new() { "Index" }
         };

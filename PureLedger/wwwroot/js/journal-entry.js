@@ -119,14 +119,13 @@
     initializeDatePickers() {
         try {
             const today = new Date();
-            const minDate = new Date(today);
-            minDate.setMonth(minDate.getMonth() - 1);
-
-            // Set min/max date attributes on the date input
+            
+            // Set up the entry date input without any date restrictions
             const entryDateInput = document.getElementById('EntryDate');
             if (entryDateInput) {
-                entryDateInput.min = minDate.toISOString().split('T')[0]; // Format: yyyy-MM-dd
-                entryDateInput.max = today.toISOString().split('T')[0];
+                // Remove min/max date restrictions
+                entryDateInput.removeAttribute('min');
+                entryDateInput.removeAttribute('max');
 
                 // If entry date is empty, set today's date
                 if (!entryDateInput.value) {
@@ -145,7 +144,7 @@
                     'cursor': 'not-allowed'
                 });
 
-            // Remove click handler from calendar icons
+            // Set up calendar icons
             $('.calendar-icon').each((_, icon) => {
                 const $icon = $(icon);
                 const isForDueDate = $icon.siblings('#DueDate').length > 0;
@@ -1008,7 +1007,6 @@
                 }
             }
         });
-
 
         if ($('#SaveAsRecipe').is(':checked')) {
             const recipeName = $('#RecipeName').val().trim();

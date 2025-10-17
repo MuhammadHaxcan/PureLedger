@@ -61,7 +61,7 @@ namespace PureLedger.Services
                     DueDate = voucher.CreditableDate,
                     CreditDays = creditDays,
                     IsBaseVoucher = voucher.IsBaseVoucher,
-                    Booker = "",
+                    BookerId = voucher.BookerId,
                     Entries = entries.Select(e => new JournalEntryRowModel
                     {
                         CategoryId = e.CategoryId,
@@ -100,7 +100,8 @@ namespace PureLedger.Services
                     EntryDate = model.EntryDate,
                     IsCompleted = false,
                     IsBaseVoucher = model.IsBaseVoucher,
-                    CreditableDate = model.EntryDate.AddDays(model.CreditDays)
+                    CreditableDate = model.EntryDate.AddDays(model.CreditDays),
+                    BookerId = model.BookerId ?? 0
                 };
 
                 journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
@@ -721,6 +722,7 @@ namespace PureLedger.Services
                     existingVoucher.ProjectId = model.ProjectId;
                     existingVoucher.EntryDate = model.EntryDate;
                     existingVoucher.CreditableDate = model.DueDate;
+                    existingVoucher.BookerId = model.BookerId; 
 
                     var hasReferences = await _unitOfWork.JournalVoucherReferences
                         .GetByMainVoucherIdAsync(voucherId);
@@ -952,7 +954,7 @@ namespace PureLedger.Services
                     DueDate = DateOnly.FromDateTime(DateTime.Now),
                     CreditDays = 0,
                     IsBaseVoucher = false,
-                    Booker = "",
+                    BookerId = 0,
                     Entries = new List<JournalEntryRowModel>()
                 };
 
@@ -1025,6 +1027,19 @@ namespace PureLedger.Services
                 }
                 voucher.IsCompleted = true;
                 await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+            }
+        }
+
+        public async Task<List<Booker>> GetAllBookersAsync()
+        {
+            try
+            {
+                return await _unitOfWork.Bookers.GetAllAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all bookers");
+                return new List<Booker>();
             }
         }
     }

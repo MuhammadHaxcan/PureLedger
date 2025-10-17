@@ -510,5 +510,81 @@ namespace PureLedger.Services
 
 
         #endregion
+
+        #region Booker Operations
+
+        // Add these methods to MetaDataService class
+        public async Task<List<Booker>> GetAllBookersAsync()
+        {
+            return await _unitOfWork.Bookers.GetAllAsync();
+        }
+
+        public async Task<Booker?> GetBookerByIdAsync(int id)
+        {
+            return await _unitOfWork.Bookers.GetByIdAsync(id);
+        }
+
+        public async Task<List<string>> CreateBookerAsync(Booker booker)
+        {
+            var errors = new List<string>();
+
+            // Check for duplicate booker name (case-insensitive)
+            var existing = await _unitOfWork.Bookers.GetAllAsync();
+            if (existing.Any(b => b.BookerName.ToLower().Trim() == booker.BookerName.ToLower().Trim()))
+            {
+                errors.Add("A booker with this name already exists.");
+                return errors;
+            }
+
+            try
+            {
+                await _unitOfWork.Bookers.AddAsync(booker);
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while creating booker.");
+                errors.Add("An error occurred while saving the booker.");
+            }
+
+            return errors;
+        }
+
+        public async Task<List<string>> UpdateBookerAsync(Booker booker)
+        {
+            var errors = new List<string>();
+
+            // Check for duplicate name excluding current
+            var existingBookers = await _unitOfWork.Bookers.GetAllAsync();
+            if (existingBookers.Any(b =>
+                b.BookerID != booker.BookerID &&
+                b.BookerName.ToLower().Trim() == booker.BookerName.ToLower().Trim()))
+            {
+                errors.Add("A booker with this name already exists.");
+                return errors;
+            }
+
+            var existing = await _unitOfWork.Bookers.GetByIdAsync(booker.BookerID);
+            if (existing == null)
+            {
+                errors.Add("Booker not found.");
+                return errors;
+            }
+
+            existing.BookerName = booker.BookerName;
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating booker.");
+                errors.Add("An unexpected error occurred while updating the booker.");
+            }
+
+            return errors;
+        }
+        #endregion
     }
 }

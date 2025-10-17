@@ -32,6 +32,7 @@ namespace PureLedger.Repositories
         private IMissedEntryRepository? _missedEntries;
         private IRecipeRepository? _recipes; // Changed to same pattern
         private IRecipeItemRepository? _recipeItems; // Changed to same pattern
+        private IBookerRepository? _bookers;
 
         public UnitOfWork(LedgerDbContext dbContext)
         {
@@ -61,7 +62,8 @@ namespace PureLedger.Repositories
         public IMissedEntryRepository MissedEntries => _missedEntries ??= new MissedEntryRepository(_dbContext);
         public IRecipeRepository Recipes => _recipes ??= new RecipeRepository(_dbContext);
         public IRecipeItemRepository RecipeItems => _recipeItems ??= new RecipeItemRepository(_dbContext);
-
+        
+        public IBookerRepository Bookers => _bookers ??= new BookerRepository(_dbContext);
         public async Task<int> SaveChangesAsync()
         {
             return await _dbContext.SaveChangesAsync();
