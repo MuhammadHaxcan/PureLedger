@@ -453,8 +453,9 @@ namespace PureLedger.Services
         {
             var result = new MasterReportViewModel();
 
-            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today);
-            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
+            // If no start/end date, use min/max to include all data
+            DateOnly startDate = request.StartDate ?? DateOnly.MinValue;
+            DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
 
             int? projectId = ParseNullableInt(request.ProjectId);
             int? categoryId = ParseNullableInt(request.CategoryId);
@@ -487,7 +488,7 @@ namespace PureLedger.Services
                     startDate, endDate, projectId, categoryId, accountId, page, pageSize);
 
                 result.Entries = new List<MasterReportEntryViewModel>();
-                result.PreviousBalance = previousBalance; // ✅ Add this property
+                result.PreviousBalance = previousBalance;
 
                 decimal runningBalance = previousBalance;
 
@@ -537,7 +538,8 @@ namespace PureLedger.Services
                         ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
                         ProjectId = entry.JournalVoucher.ProjectId,
                         CategoryName = entry.Category?.CategoryName ?? string.Empty,
-                        CategoryId = entry.CategoryId
+                        CategoryId = entry.CategoryId,
+                        Quantity = entry.Quantity
                     });
                 }
 

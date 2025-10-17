@@ -52,5 +52,6 @@ namespace PureLedger.ViewModels
         public int ProjectId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public int CategoryId { get; set; }
+        public int Quantity { get; set; } // <-- Add this line
     }
 }

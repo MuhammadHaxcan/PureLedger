@@ -2,7 +2,56 @@
     initializeReportState();
     setupEventListeners();
     setDefaultDates();
+    initializeDropdownStates();
 });
+
+// ==================== DROPDOWN LOCKING LOGIC ====================
+
+function initializeDropdownStates() {
+    const projectId = document.getElementById('projectId');
+    const categoryId = document.getElementById('categoryId');
+    const accountId = document.getElementById('accountId');
+
+    // Always reset and lock category/account on load
+    resetSelect(categoryId, 'All Categories', true);
+    resetSelect(accountId, 'All Accounts', true);
+
+    // If project is pre-selected, unlock category
+    if (projectId.value) {
+        categoryId.disabled = false;
+    }
+}
+
+function handleProjectChange() {
+    const projectId = document.getElementById('projectId');
+    const categoryId = document.getElementById('categoryId');
+    const accountId = document.getElementById('accountId');
+
+    if (projectId.value) {
+        // Unlock category, lock account, and load categories
+        resetSelect(categoryId, 'All Categories', false);
+        resetSelect(accountId, 'All Accounts', true);
+        loadCategoriesForProject(); // <-- This line loads categories for the selected project
+    } else {
+        // Lock both
+        resetSelect(categoryId, 'All Categories', true);
+        resetSelect(accountId, 'All Accounts', true);
+    }
+}
+
+function handleCategoryChange() {
+    const categoryId = document.getElementById('categoryId');
+    const accountId = document.getElementById('accountId');
+
+    if (categoryId.value) {
+        // Unlock account
+        resetSelect(accountId, 'All Accounts', false);
+        loadAccountsForCategory();
+    } else {
+        // Lock account
+        resetSelect(accountId, 'All Accounts', true);
+    }
+}
 
 // ==================== STATE MANAGEMENT ====================
 
@@ -31,19 +80,19 @@ function setupEventListeners() {
     // UI controls
     initColumnToggles();
     initSearchFunctionality();
-
+    
     // Dropdowns with dependencies
-    document.getElementById('projectId').addEventListener('change', loadCategoriesForProject);
-    document.getElementById('categoryId').addEventListener('change', loadAccountsForCategory);
+    document.getElementById('projectId').addEventListener('change', handleProjectChange);
+    document.getElementById('categoryId').addEventListener('change', handleCategoryChange);
 
     // Infinite scroll
     window.addEventListener('scroll', throttle(checkIfShouldLoadMore, 100));
 }
 
 function setDefaultDates() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('startDate').value = today;
-    document.getElementById('endDate').value = today;
+    // Leave the date fields empty by default
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
 }
 
 // ==================== UI CONTROLS ====================
@@ -56,7 +105,16 @@ function initColumnToggles() {
             document.querySelectorAll('.' + columnClass).forEach(cell => {
                 cell.style.display = isVisible ? 'table-cell' : 'none';
             });
+            // Also toggle the footer cell
+            const footerCell = document.querySelector('tfoot .' + columnClass);
+            if (footerCell) {
+                footerCell.style.display = isVisible ? 'table-cell' : 'none';
+            }
         });
+    });
+    // Ensure all columns are shown/hidden on load
+    document.querySelectorAll('.column-toggles input[type="checkbox"]').forEach(checkbox => {
+        checkbox.dispatchEvent(new Event('change'));
     });
 }
 
@@ -261,9 +319,12 @@ function generateReport() {
     initializeReportState();
 
     // Get form values
+    const startDateValue = document.getElementById('startDate').value;
+    const endDateValue = document.getElementById('endDate').value;
+
     const params = {
-        StartDate: document.getElementById('startDate').value,
-        EndDate: document.getElementById('endDate').value,
+        StartDate: startDateValue ? startDateValue : null,
+        EndDate: endDateValue ? endDateValue : null,
         Page: 0,
         PageSize: window.reportState.pageSize
     };
@@ -436,6 +497,7 @@ function renderAllEntriesWithBalance() {
             <td class="date-column">${formatDate(entry.transactionDate)}</td>
             <td class="description-column">${entry.description || ''}</td>
             <td class="account-column">${entry.accountName || ''}</td>
+            <td class="quantity-column text-right">${entry.quantity ?? ''}</td>
             <td class="debit-column text-right">${formatCurrency(entry.debit)}</td>
             <td class="credit-column text-right">${formatCurrency(entry.credit)}</td>
             <td class="balance-column text-right">${formatCurrency(entry.balance)}</td>
@@ -604,11 +666,13 @@ function updateLoadMoreButton() {
 
 function updateTotals() {
     // Calculate totals from all loaded entries
+    const totalQuantity = window.reportState.allEntries.reduce((sum, entry) => sum + (entry.quantity || 0), 0);
     const totalDebit = window.reportState.allEntries.reduce((sum, entry) => sum + entry.debit, 0);
     const totalCredit = window.reportState.allEntries.reduce((sum, entry) => sum + entry.credit, 0);
     const netBalance = totalDebit - totalCredit;
 
     // Update the display
+    document.getElementById('totalQuantity').textContent = totalQuantity;
     document.getElementById('totalDebit').textContent = formatCurrency(totalDebit);
     document.getElementById('totalCredit').textContent = formatCurrency(totalCredit);
     document.getElementById('netBalance').textContent = formatCurrency(netBalance);

@@ -40,14 +40,14 @@
                         <label class="form-label">Since</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                            <input type="date" class="form-control" id="startDate" value="@today" required>
+                            <input type="date" class="form-control" id="startDate" value="@today">
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label">To</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                            <input type="date" class="form-control" id="endDate" value="@today" required>
+                            <input type="date" class="form-control" id="endDate" value="@today">
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
@@ -122,6 +122,11 @@
                             <label class="btn btn-outline-primary btn-sm" for="showBalance">
                                 <i class="fas fa-balance-scale"></i> Balance
                             </label>
+
+                            <input type="checkbox" class="btn-check" id="showQuantity" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showQuantity">
+                                <i class="fas fa-cubes"></i> Quantity
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -172,19 +177,20 @@
                                 <th class="date-column">Date</th>
                                 <th class="description-column">Description</th>
                                 <th class="account-column">Account</th>
+                                <th class="quantity-column text-end">Quantity</th>
                                 <th class="debit-column text-end">Debit</th>
                                 <th class="credit-column text-end">Credit</th>
                                 <th class="balance-column text-end">Balance</th>
                             </tr>
                         </thead>
-                        <tbody id="reportData">
-                        </tbody>
+                        <tbody id="reportData"></tbody>
                         <tfoot class="table-secondary">
                             <tr>
                                 <td colspan="4" class="text-end fw-bold">TOTAL</td>
-                                <td class="text-end fw-bold" id="totalDebit">0.00</td>
-                                <td class="text-end fw-bold" id="totalCredit">0.00</td>
-                                <td class="text-end fw-bold" id="netBalance">0.00</td>
+                                <td class="quantity-column text-end fw-bold" id="totalQuantity">0</td>
+                                <td class="debit-column text-end fw-bold" id="totalDebit">0.00</td>
+                                <td class="credit-column text-end fw-bold" id="totalCredit">0.00</td>
+                                <td class="balance-column text-end fw-bold" id="netBalance">0.00</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -350,6 +356,12 @@
 
     /* Automatic loading indicator */
     #loadingStatus {
+        font-size: 0.9rem;
+    }
+
+    .quantity-column {
+        text-align: right !important;
+        font-family: monospace;
         font-size: 0.9rem;
     }
 </style>
