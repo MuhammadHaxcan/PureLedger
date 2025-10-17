@@ -44,15 +44,13 @@ namespace PureLedger.Services
             try
             {
                 _logger.LogInformation("Mapping voucher ID {VoucherId} to view model", voucher.JournalVoucherId);
-                
-                // Calculate credit days properly (total days difference, not just day component)
+
                 int creditDays = 0;
                 if (voucher.CreditableDate > voucher.EntryDate)
                 {
                     creditDays = (voucher.CreditableDate.DayNumber - voucher.EntryDate.DayNumber);
                 }
 
-                // Get all entries with their related data
                 var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucher.JournalVoucherId, null, null);
                 _logger.LogInformation("Found {Count} entries for voucher ID {VoucherId}", entries.Count, voucher.JournalVoucherId);
 
@@ -68,7 +66,7 @@ namespace PureLedger.Services
                     {
                         CategoryId = e.CategoryId,
                         AccountId = e.AccountId,
-                        Pkg = e.Account?.ProductData?.Pkg, // <-- Add this line
+                        Pkg = e.Account?.ProductData?.Pkg,
                         Des = e.Description,
                         Qty = e.Quantity,
                         Rate = e.Rate,
@@ -80,9 +78,9 @@ namespace PureLedger.Services
                     }).ToList()
                 };
 
-                _logger.LogInformation("Successfully mapped voucher to view model with {EntriesCount} entries", 
+                _logger.LogInformation("Successfully mapped voucher to view model with {EntriesCount} entries",
                     viewModel.Entries.Count);
-                
+
                 return viewModel;
             }
             catch (Exception ex)
@@ -99,17 +97,17 @@ namespace PureLedger.Services
                 var journalVoucher = new JournalVoucher
                 {
                     ProjectId = model.ProjectId,
-                    EntryDate = model.EntryDate, // Use the entry date from the model
+                    EntryDate = model.EntryDate,
                     IsCompleted = false,
                     IsBaseVoucher = model.IsBaseVoucher,
-                    CreditableDate = model.EntryDate.AddDays(model.CreditDays) // Calculate due date from entry date
+                    CreditableDate = model.EntryDate.AddDays(model.CreditDays)
                 };
 
                 journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
                 await CreateJournalEntriesAsync(journalVoucher.JournalVoucherId, model.Entries);
                 await UpdateVoucherStatusBasedOnAccountsAsync(journalVoucher.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
-                
+
                 return journalVoucher;
             }
             catch (Exception ex)
@@ -343,7 +341,7 @@ namespace PureLedger.Services
 
                     await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
 
-                    await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
+                    await UpdateVoucherOnDelete(voucherId);
                 }
 
                 await _unitOfWork.SaveChangesAsync();
@@ -462,30 +460,27 @@ namespace PureLedger.Services
         }
 
         private async Task<bool> ShouldProcessAsFullVoucher(
-            int baseVoucherId, 
+            int baseVoucherId,
             List<BaseVoucherEntryViewModel> entriesToProcess)
         {
             var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
             if (baseVoucher == null || !baseVoucher.IsBaseVoucher) return false;
 
-            // Check if the voucher already has derived vouchers
             var existingReferences = await _unitOfWork.JournalVoucherReferences
                 .GetByMainVoucherIdAsync(baseVoucherId);
             if (existingReferences.Any()) return false;
 
-            // Get all non-account entries
             var regularEntries = baseVoucher.JournalEntries
                 .Where(e => !e.IsProcessed)
                 .ToList();
 
             if (!regularEntries.Any()) return false;
 
-            // Check if all entries are being processed with full quantity
             foreach (var entry in regularEntries)
             {
                 var processEntry = entriesToProcess
                     .FirstOrDefault(e => e.EntryId == entry.JournalEntryId);
-                
+
                 if (processEntry == null || processEntry.ProcessQuantity != entry.Quantity)
                 {
                     return false;
@@ -495,7 +490,6 @@ namespace PureLedger.Services
             return true;
         }
 
-        // Modify the CreateDerivedVoucherAsync method
         public async Task<int> CreateDerivedVoucherAsync(
             int baseVoucherId,
             List<BaseVoucherEntryViewModel> entriesToProcess,
@@ -506,14 +500,14 @@ namespace PureLedger.Services
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Check if we should process this as a full voucher
+
                 if (await ShouldProcessAsFullVoucher(baseVoucherId, entriesToProcess))
                 {
                     var baseVoucherToOff = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
                     if (baseVoucherToOff != null)
                     {
                         baseVoucherToOff.IsBaseVoucher = false;
-                        // Explicitly update the voucher through the repository
+
                         await _unitOfWork.JournalVouchers.UpdateAsync(baseVoucherToOff);
                         await _unitOfWork.SaveChangesAsync();
                         await transaction.CommitAsync();
@@ -521,7 +515,7 @@ namespace PureLedger.Services
                         _logger.LogInformation("Base voucher {VoucherId} processed completely and turned off", baseVoucherId);
                         return baseVoucherToOff.JournalVoucherId;
 
-                    }                    
+                    }
                 }
 
                 var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
@@ -606,7 +600,6 @@ namespace PureLedger.Services
 
                     var savedRegularEntry = await _unitOfWork.JournalEntries.AddAsync(newRegularEntry);
 
-
                     baseEntry.Quantity -= entryToProcess.ProcessQuantity;
                     if (baseEntry.Quantity <= 0)
                     {
@@ -641,8 +634,8 @@ namespace PureLedger.Services
                     throw new InvalidOperationException("No customer account found in voucher");
 
                 var unprocessedEntries = voucher.JournalEntries
-                    .Where(e => !e.IsProcessed && 
-                           e.Quantity > 0 && 
+                    .Where(e => !e.IsProcessed &&
+                           e.Quantity > 0 &&
                            e.Account.AccountGroupId == 2)
                     .ToList();
 
@@ -652,7 +645,7 @@ namespace PureLedger.Services
                     {
                         CustomerAccountId = customerAccount.AccountId,
                         ProductAccountId = entry.AccountId,
-                        ProjectId = voucher.ProjectId, // Add ProjectId
+                        ProjectId = voucher.ProjectId,
                         MissedDate = DateOnly.FromDateTime(DateTime.Now),
                         Quantity = entry.Quantity,
                         Rate = entry.Rate,
@@ -661,7 +654,7 @@ namespace PureLedger.Services
                     };
 
                     await _unitOfWork.MissedEntries.AddAsync(missedEntry);
-            
+
                     entry.Quantity = 0;
                     await _unitOfWork.JournalEntries.UpdateAsync(entry);
                 }
@@ -669,7 +662,7 @@ namespace PureLedger.Services
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation("Voucher {VoucherId} marked as missed with {Count} entries against customer {CustomerName}", 
+                _logger.LogInformation("Voucher {VoucherId} marked as missed with {Count} entries against customer {CustomerName}",
                     voucherId, unprocessedEntries.Count, customerAccount.AccountName);
             }
             catch (Exception)
@@ -719,40 +712,42 @@ namespace PureLedger.Services
                 if (existingVoucher == null)
                     throw new InvalidOperationException($"Voucher with ID {voucherId} not found");
 
+                bool wasBaseVoucher = existingVoucher.IsBaseVoucher;
+                bool wasCompleted = existingVoucher.IsCompleted;
+
                 using var transaction = await _unitOfWork.BeginTransactionAsync();
                 try
                 {
-                    // 1. Update basic voucher information
                     existingVoucher.ProjectId = model.ProjectId;
                     existingVoucher.EntryDate = model.EntryDate;
                     existingVoucher.CreditableDate = model.DueDate;
-                    
-                    // Keep base voucher status if the voucher already had any derived vouchers
+
                     var hasReferences = await _unitOfWork.JournalVoucherReferences
                         .GetByMainVoucherIdAsync(voucherId);
-                        
+
                     if (!hasReferences.Any())
                     {
-                        // Only allow changing IsBaseVoucher if no derived vouchers exist
                         existingVoucher.IsBaseVoucher = model.IsBaseVoucher;
                     }
-                    
-                    // 2. Create lookup of existing entries by their unique properties for efficient matching
+                    else
+                    {
+                        existingVoucher.IsBaseVoucher = wasBaseVoucher;
+                    }
+
                     var existingEntries = existingVoucher.JournalEntries.ToList();
                     var entriesToDelete = new List<JournalEntry>();
 
-                    // 3. Process each entry in the model
+                    bool newEntryAdded = false;
+
                     foreach (var entryModel in model.Entries)
                     {
-                        // If we can identify an existing entry that matches this model entry
-                        var existingEntry = existingEntries.FirstOrDefault(e => 
-                            e.AccountId == entryModel.AccountId && 
+                        var existingEntry = existingEntries.FirstOrDefault(e =>
+                            e.AccountId == entryModel.AccountId &&
                             e.CategoryId == entryModel.CategoryId &&
                             string.Equals(e.Description, entryModel.Des, StringComparison.OrdinalIgnoreCase));
 
                         if (existingEntry != null)
                         {
-                            // Update existing entry with new values
                             existingEntry.Description = entryModel.Des;
                             existingEntry.Quantity = entryModel.Qty ?? 0;
                             existingEntry.Rate = (int)(entryModel.Rate ?? 0);
@@ -761,15 +756,17 @@ namespace PureLedger.Services
                             existingEntry.Debit = (int)(entryModel.Debit ?? 0);
                             existingEntry.Credit = (int)(entryModel.Credit ?? 0);
                             existingEntry.Rbp = entryModel.Rbp ?? "Y";
-                            
+
+                            // Set IsEdited and ModifiedDateTime when updating
+                            existingEntry.IsEdited = true;
+                            existingEntry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now);
+
                             await _unitOfWork.JournalEntries.UpdateAsync(existingEntry);
-                            
-                            // Remove this entry from our tracking list so we know it's been handled
+
                             existingEntries.Remove(existingEntry);
                         }
                         else
                         {
-                            // This is a new entry, add it
                             var newEntry = new JournalEntry
                             {
                                 JournalVoucherId = voucherId,
@@ -783,35 +780,41 @@ namespace PureLedger.Services
                                 Debit = (int)(entryModel.Debit ?? 0),
                                 Credit = (int)(entryModel.Credit ?? 0),
                                 Rbp = entryModel.Rbp ?? "Y",
-                                IsProcessed = false
+                                IsProcessed = false,
+                                // Set IsEdited and ModifiedDateTime for new entries as well
+                                IsEdited = true,
+                                ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now)
                             };
-                            
+
                             await _unitOfWork.JournalEntries.AddAsync(newEntry);
+                            newEntryAdded = true;
                         }
                     }
 
-                    // 4. Delete entries that aren't in the model anymore
                     foreach (var entryToDelete in existingEntries)
-                    {                        
-                        // Delete the entry
-                        await _unitOfWork.JournalEntries.DeleteAsync(entryToDelete.JournalEntryId);
-                        
-                        // Delete any related delivery challan entries
-                        await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryToDelete.JournalEntryId);
+                    {
+                        await DeleteJournalEntryAsync(entryToDelete.JournalEntryId);
                     }
-                    
-                    // 5. Update voucher
+
+                    if (newEntryAdded)
+                    {
+                        existingVoucher.IsCompleted = false;
+                    }
+                    else
+                    {
+                        existingVoucher.IsCompleted = wasCompleted;
+                    }
+
+                    await UpdateVoucherOnDelete(existingVoucher.JournalVoucherId);
+
                     await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
-                    
-                    // 6. Update voucher status
-                    await UpdateVoucherStatusBasedOnAccountsAsync(voucherId);
-                    
+
                     await _unitOfWork.SaveChangesAsync();
                     await transaction.CommitAsync();
-                    
-                    _logger.LogInformation("Successfully updated voucher {VoucherId} with {EntryCount} entries", 
+
+                    _logger.LogInformation("Successfully updated voucher {VoucherId} with {EntryCount} entries",
                         voucherId, model.Entries.Count);
-                    
+
                     return existingVoucher;
                 }
                 catch (Exception)
@@ -827,20 +830,18 @@ namespace PureLedger.Services
             }
         }
 
-        // Add this method to JournalEntryService
         public async Task<int> CreateRecipeFromVoucherAsync(JournalEntryViewModel model, int journalVoucherId)
         {
             try
             {
                 if (!model.SaveAsRecipe || string.IsNullOrWhiteSpace(model.RecipeName))
                 {
-                    return 0; // Recipe creation not requested or name not provided
+                    return 0;
                 }
-                
-                _logger.LogInformation("Creating recipe '{RecipeName}' from voucher {VoucherId}", 
+
+                _logger.LogInformation("Creating recipe '{RecipeName}' from voucher {VoucherId}",
                     model.RecipeName, journalVoucherId);
 
-                // Create the recipe with only the specified fields
                 var recipe = new Recipe
                 {
                     RecipeName = model.RecipeName,
@@ -848,32 +849,30 @@ namespace PureLedger.Services
                 };
 
                 recipe = await _unitOfWork.Recipes.AddAsync(recipe);
-                
-                // Get product entries (we'll only save CategoryId and AccountId)
+
                 var productEntries = model.Entries
                     .Where(e => e.AccountId.HasValue && e.CategoryId.HasValue)
                     .ToList();
 
-                // Create recipe items with only CategoryId and AccountId
                 foreach (var entry in productEntries)
                 {
                     if (!entry.AccountId.HasValue || !entry.CategoryId.HasValue)
                         continue;
-                        
+
                     var recipeItem = new RecipeItem
                     {
                         RecipeId = recipe.RecipeId,
                         CategoryId = entry.CategoryId.Value,
                         AccountId = entry.AccountId.Value
                     };
-                    
+
                     await _unitOfWork.RecipeItems.AddAsync(recipeItem);
                 }
-                
+
                 await _unitOfWork.SaveChangesAsync();
-                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items", 
+                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items",
                     recipe.RecipeId, productEntries.Count);
-                    
+
                 return recipe.RecipeId;
             }
             catch (Exception ex)
@@ -883,9 +882,6 @@ namespace PureLedger.Services
             }
         }
 
-        // Add these methods to JournalEntryService
-
-        // Get all recipes for a specific project
         public async Task<List<Recipe>> GetRecipesByProjectAsync(int projectId)
         {
             try
@@ -902,21 +898,20 @@ namespace PureLedger.Services
             }
         }
 
-        // Get a specific recipe with its items
         public async Task<Recipe?> GetRecipeWithItemsAsync(int recipeId)
         {
             try
             {
                 _logger.LogInformation("Retrieving recipe with items for recipe ID {RecipeId}", recipeId);
                 var recipe = await _unitOfWork.Recipes.GetByIdWithItemsAsync(recipeId);
-                
+
                 if (recipe == null)
                 {
                     _logger.LogWarning("Recipe with ID {RecipeId} not found", recipeId);
                     return null;
                 }
-                
-                _logger.LogInformation("Found recipe '{RecipeName}' with {ItemCount} items", 
+
+                _logger.LogInformation("Found recipe '{RecipeName}' with {ItemCount} items",
                     recipe.RecipeName, recipe.RecipeItems?.Count ?? 0);
                 return recipe;
             }
@@ -927,35 +922,29 @@ namespace PureLedger.Services
             }
         }
 
-        /// <summary>
-        /// Creates a new JournalEntryViewModel pre-filled with items from a recipe
-        /// </summary>
         public async Task<JournalEntryViewModel> CreateViewModelFromRecipeAsync(int recipeId, int projectId)
         {
             try
             {
                 _logger.LogInformation("Creating journal entry view model from recipe {RecipeId}", recipeId);
-                
+
                 var recipe = await _unitOfWork.Recipes.GetByIdWithItemsAsync(recipeId);
                 if (recipe == null)
                 {
                     _logger.LogWarning("Recipe with ID {RecipeId} not found", recipeId);
                     throw new ArgumentException($"Recipe with ID {recipeId} not found");
                 }
-                
-                // If the project ID from the recipe is different from the requested project ID,
-                // we should verify that the recipe belongs to the requested project
+
                 if (recipe.ProjectId != projectId)
                 {
                     _logger.LogWarning(
                         "Recipe project ID mismatch. Recipe {RecipeId} belongs to project {RecipeProjectId}, " +
-                        "but was requested for project {RequestedProjectId}", 
+                        "but was requested for project {RequestedProjectId}",
                         recipeId, recipe.ProjectId, projectId);
-                        
+
                     throw new ArgumentException("Recipe does not belong to the selected project");
                 }
-                
-                // Create a new view model with defaults
+
                 var viewModel = new JournalEntryViewModel
                 {
                     ProjectId = projectId,
@@ -966,40 +955,76 @@ namespace PureLedger.Services
                     Booker = "",
                     Entries = new List<JournalEntryRowModel>()
                 };
-                
-                // Add entries from recipe items
+
                 foreach (var item in recipe.RecipeItems)
                 {
-                    // Get account details to populate any needed fields
+
                     var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(item.AccountId);
-                    
+
                     var entry = new JournalEntryRowModel
                     {
                         CategoryId = item.CategoryId,
                         AccountId = item.AccountId,
                         Pkg = account?.ProductData?.Pkg,
-                        Des = "", // Empty description by default
-                        Qty = 0, // Default quantity to 0
-                        Rate = 0, // Default rate to 0
-                        Percent = 0, // Default discount percent to 0
-                        Disc = 0, // Default discount to 0
-                        Debit = 0, // Default debit to 0
-                        Credit = 0, // Default credit to 0
-                        Rbp = "Y" // Default RBP to "Y"
+                        Des = "",
+                        Qty = 0,
+                        Rate = 0,
+                        Percent = 0,
+                        Disc = 0,
+                        Debit = 0,
+                        Credit = 0,
+                        Rbp = "Y"
                     };
-                    
+
                     viewModel.Entries.Add(entry);
                 }
-                
-                _logger.LogInformation("Created journal entry view model from recipe {RecipeId} with {EntryCount} entries", 
+
+                _logger.LogInformation("Created journal entry view model from recipe {RecipeId} with {EntryCount} entries",
                     recipeId, viewModel.Entries.Count);
-                
+
                 return viewModel;
             }
             catch (Exception ex) when (ex is not ArgumentException)
             {
                 _logger.LogError(ex, "Error creating view model from recipe {RecipeId}", recipeId);
                 throw;
+            }
+        }
+
+        private async Task UpdateVoucherOnDelete(int voucherId)
+        {
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+            if (voucher == null) return;
+
+            var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
+            if (entries.Count == 0) return;
+
+            var accountIds = entries.Select(e => e.AccountId).Distinct().ToList();
+            var accounts = new Dictionary<int, Account>();
+            foreach (var accountId in accountIds)
+            {
+                var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
+                if (account != null)
+                    accounts[accountId] = account;
+            }
+
+            if (entries.All(e => e.IsProcessed))
+            {
+                voucher.IsCompleted = true;
+                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                return;
+            }
+
+            var unprocessedEntries = entries.Where(e => !e.IsProcessed).ToList();
+            if (unprocessedEntries.Count > 0 && unprocessedEntries.All(e => accounts.ContainsKey(e.AccountId) && accounts[e.AccountId].AccountGroupId == 1))
+            {
+                foreach (var entry in unprocessedEntries)
+                {
+                    entry.IsProcessed = true;
+                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                }
+                voucher.IsCompleted = true;
+                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
             }
         }
     }

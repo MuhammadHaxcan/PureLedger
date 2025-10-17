@@ -20,5 +20,12 @@ namespace PureLedger.Services
         Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type);
         Task<ProductReportViewModel> GetProductReportAsync(ProductReportRequest request);
         Task<List<Location>> GetAllLocationsAsync();
+
+        // Missed entries analytics methods
+        Task<MissedEntriesReportViewModel> GetMissedEntriesReportAsync(MissedEntriesReportRequest request);
+        Task<MissedEntriesSummaryViewModel> GetMissedEntriesSummaryAsync(MissedEntriesSummaryRequest request);
+        Task<List<MissedEntriesByCustomerViewModel>> GetMissedEntriesByCustomerAsync(MissedEntriesReportRequest request);
+        Task<List<MissedEntriesByProductViewModel>> GetMissedEntriesByProductAsync(MissedEntriesReportRequest request);
+        Task<MissedEntriesDetailViewModel> GetMissedEntriesDetailAsync(MissedEntriesReportRequest request);
     }
 }

@@ -12,7 +12,9 @@ namespace PureLedger.Controllers
         private readonly IReportingService _reportingService;
         private readonly ICurrentUserService _currentUserService;
 
-        public ReportingController(IReportingService reportingService, ICurrentUserService currentUserService)
+        public ReportingController(
+            IReportingService reportingService, 
+            ICurrentUserService currentUserService)
         {
             _reportingService = reportingService;
             _currentUserService = currentUserService;
@@ -139,6 +141,45 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> GetProductReportData([FromQuery] ProductReportRequest request)
         {
             var report = await _reportingService.GetProductReportAsync(request);
+            return Json(report);
+        }
+
+        #endregion
+
+        #region Missed Entries Report
+
+        [HttpGet]
+        public async Task<IActionResult> MissedEntriesReport()
+        {
+            var viewModel = await CreateReportBaseViewModel<MissedEntriesReportViewModel>();
+            return View(viewModel);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesData([FromQuery] MissedEntriesReportRequest request)
+        {
+            var report = await _reportingService.GetMissedEntriesDetailAsync(request);
+            return Json(report);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesSummary([FromQuery] MissedEntriesSummaryRequest request)
+        {
+            var summary = await _reportingService.GetMissedEntriesSummaryAsync(request);
+            return Json(summary);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesByCustomer([FromQuery] MissedEntriesReportRequest request)
+        {
+            var report = await _reportingService.GetMissedEntriesByCustomerAsync(request);
+            return Json(report);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesByProduct([FromQuery] MissedEntriesReportRequest request)
+        {
+            var report = await _reportingService.GetMissedEntriesByProductAsync(request);
             return Json(report);
         }
 

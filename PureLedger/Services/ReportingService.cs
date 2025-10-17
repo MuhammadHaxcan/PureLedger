@@ -770,5 +770,219 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.Locations.GetAllAsync();
         }
+
+        public async Task<MissedEntriesReportViewModel> GetMissedEntriesReportAsync(MissedEntriesReportRequest request)
+        {
+            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
+            int? projectId = ParseNullableInt(request.ProjectId);
+            
+            // Create the base view model with Projects and Categories
+            var viewModel = new MissedEntriesReportViewModel
+            {
+                // Projects and Categories will be populated by the controller
+            };
+            
+            return viewModel;
+        }
+
+        public async Task<MissedEntriesSummaryViewModel> GetMissedEntriesSummaryAsync(MissedEntriesSummaryRequest request)
+        {
+            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
+            int? projectId = ParseNullableInt(request.ProjectId);
+            
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+                
+                decimal totalValue = entries.Sum(e => (decimal)((e.Quantity * e.Rate) - e.Discount));
+                
+                var summary = new MissedEntriesSummaryViewModel
+                {
+                    TotalMissedEntries = entries.Count,
+                    TotalMissedQuantity = entries.Sum(e => e.Quantity),
+                    TotalMissedValue = totalValue,
+                    UniqueCustomers = entries.Select(e => e.CustomerAccountId).Distinct().Count(),
+                    UniqueProducts = entries.Select(e => e.ProductAccountId).Distinct().Count(),
+                    AverageQuantityPerEntry = entries.Any() ? (decimal)entries.Average(e => e.Quantity) : 0, // Cast to decimal
+                    AverageValuePerEntry = entries.Any() ? totalValue / entries.Count : 0,
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    ProjectId = projectId
+                };
+                
+                // Get top missed product
+                var topProduct = entries
+                    .GroupBy(e => e.ProductAccountId)
+                    .OrderByDescending(g => g.Sum(e => e.Quantity))
+                    .FirstOrDefault();
+                    
+                if (topProduct != null)
+                {
+                    var productName = topProduct.First().ProductAccount?.AccountName ?? "Unknown";
+                    summary.TopMissedProduct = productName;
+                    summary.TopMissedProductQuantity = topProduct.Sum(e => e.Quantity);
+                }
+                
+                // Get top customer with missed items
+                var topCustomer = entries
+                    .GroupBy(e => e.CustomerAccountId)
+                    .OrderByDescending(g => g.Sum(e => e.Quantity))
+                    .FirstOrDefault();
+                    
+                if (topCustomer != null)
+                {
+                    var customerName = topCustomer.First().CustomerAccount?.AccountName ?? "Unknown";
+                    summary.TopCustomer = customerName;
+                    summary.TopCustomerMissedQuantity = topCustomer.Sum(e => e.Quantity);
+                }
+                
+                return summary;
+            });
+        }
+
+        public async Task<List<MissedEntriesByCustomerViewModel>> GetMissedEntriesByCustomerAsync(MissedEntriesReportRequest request)
+        {
+            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
+            int? projectId = ParseNullableInt(request.ProjectId);
+            
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+                
+                // Calculate the total quantity for percentage calculations
+                int totalQuantity = entries.Sum(e => e.Quantity);
+                
+                var groupedByCustomer = entries
+                    .GroupBy(e => new { e.CustomerAccountId, CustomerName = e.CustomerAccount?.AccountName ?? "Unknown" })
+                    .Select(g => {
+                        // Map all entries for this customer for drill-down functionality
+                        var customerEntries = g.Select(e => new MissedEntryDetailViewModel
+                        {
+                            MissedEntryId = e.MissedEntryId,
+                            CustomerName = g.Key.CustomerName,
+                            ProductName = e.ProductAccount?.AccountName ?? "Unknown Product",
+                            ProjectName = e.Project?.ProjectName ?? "Unknown Project",
+                            MissedDate = e.MissedDate,
+                            Quantity = e.Quantity,
+                            Rate = e.Rate,
+                            Discount = e.Discount,
+                            Description = e.Description,
+                            TotalValue = (decimal)((e.Quantity * e.Rate) - e.Discount),
+                            CustomerAccountId = e.CustomerAccountId,
+                            ProductAccountId = e.ProductAccountId,
+                            ProjectId = e.ProjectId
+                        }).ToList();
+                        
+                        return new MissedEntriesByCustomerViewModel
+                        {
+                            CustomerAccountId = g.Key.CustomerAccountId,
+                            CustomerName = g.Key.CustomerName,
+                            EntryCount = g.Count(),
+                            TotalQuantity = g.Sum(e => e.Quantity),
+                            TotalValue = (decimal)g.Sum(e => (e.Quantity * e.Rate) - e.Discount),
+                            UniqueProductCount = g.Select(e => e.ProductAccountId).Distinct().Count(),
+                            AverageQuantityPerEntry = (decimal)g.Average(e => e.Quantity),
+                            PercentOfTotal = totalQuantity > 0 ? ((decimal)g.Sum(e => e.Quantity) / totalQuantity) * 100 : 0,
+                            CustomerEntries = customerEntries // Include all entries for this customer
+                        };
+                    })
+                    .OrderByDescending(x => x.TotalQuantity)
+                    .ToList();
+                
+                return groupedByCustomer;
+            });
+        }
+
+        public async Task<List<MissedEntriesByProductViewModel>> GetMissedEntriesByProductAsync(MissedEntriesReportRequest request)
+        {
+            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
+            int? projectId = ParseNullableInt(request.ProjectId);
+            
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+                
+                var groupedByProduct = entries
+                    .GroupBy(e => new { e.ProductAccountId, ProductName = e.ProductAccount?.AccountName ?? "Unknown" })
+                    .Select(g => new MissedEntriesByProductViewModel
+                    {
+                        ProductAccountId = g.Key.ProductAccountId,
+                        ProductName = g.Key.ProductName,
+                        EntryCount = g.Count(),
+                        TotalQuantity = g.Sum(e => e.Quantity),
+                        TotalValue = (decimal)g.Sum(e => (e.Quantity * e.Rate) - e.Discount), // Cast to decimal
+                        UniqueCustomerCount = g.Select(e => e.CustomerAccountId).Distinct().Count(),
+                        AverageRate = (decimal)g.Average(e => e.Rate), // Cast to decimal
+                        AverageDiscount = (decimal)g.Average(e => e.Discount) // Cast to decimal
+                    })
+                    .OrderByDescending(x => x.TotalQuantity)
+                    .ToList();
+                
+                return groupedByProduct;
+            });
+        }
+
+        public async Task<MissedEntriesDetailViewModel> GetMissedEntriesDetailAsync(MissedEntriesReportRequest request)
+        {
+            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
+            int? projectId = ParseNullableInt(request.ProjectId);
+            int page = Math.Max(0, request.Page);
+            int pageSize = Math.Clamp(request.PageSize, 1, 500);
+
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                // Get raw entries
+                var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+                
+                // Filter by customer if specified
+                if (request.CustomerAccountId.HasValue)
+                {
+                    entries = entries.Where(e => e.CustomerAccountId == request.CustomerAccountId.Value).ToList();
+                }
+                
+                // Calculate total value for each entry
+                var mappedEntries = entries.Select(e => new MissedEntryDetailViewModel
+                {
+                    MissedEntryId = e.MissedEntryId,
+                    CustomerName = e.CustomerAccount?.AccountName ?? "Unknown Customer",
+                    ProductName = e.ProductAccount?.AccountName ?? "Unknown Product",
+                    ProjectName = e.Project?.ProjectName ?? "Unknown Project",
+                    MissedDate = e.MissedDate,
+                    Quantity = e.Quantity,
+                    Rate = e.Rate,
+                    Discount = e.Discount,
+                    Description = e.Description,
+                    TotalValue = (decimal)((e.Quantity * e.Rate) - e.Discount),
+                    CustomerAccountId = e.CustomerAccountId,
+                    ProductAccountId = e.ProductAccountId,
+                    ProjectId = e.ProjectId
+                }).ToList();
+                
+                // Apply paging
+                var pagedEntries = mappedEntries
+                    .Skip(page * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+                
+                // Create the view model
+                var viewModel = new MissedEntriesDetailViewModel
+                {
+                    Entries = pagedEntries,
+                    TotalEntries = mappedEntries.Count,
+                    TotalQuantity = mappedEntries.Sum(e => e.Quantity),
+                    TotalValue = mappedEntries.Sum(e => e.TotalValue),
+                    Page = page,
+                    PageSize = pageSize,
+                    HasMoreData = (page + 1) * pageSize < mappedEntries.Count
+                };
+                
+                return viewModel;
+            });
+        }
     }
 }

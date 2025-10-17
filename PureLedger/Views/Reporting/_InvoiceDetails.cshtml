@@ -64,17 +64,17 @@
 
 <!-- Invoice Items Table: Expanded size -->
 <div class="table-responsive mb-3">
-    <table class="table table-bordered table-striped" style="font-size: 12px;">
+    <table class="table table-bordered table-striped" style="font-size: 14px;">
         <thead>
             <tr>
                 <th style="width: 5%;">SR#</th>
-                <th style="width: 35%;">Product Name</th>
-                <th style="width: 8%; text-align: right;">Quantity</th>
-                <th style="width: 8%; text-align: right;">PKG</th>
+                <th style="width: 32%;">Product Name</th>
+                <th style="width: 40px !important; text-align: right;">Qty</th>
+                <th style="width: 8%; text-align: right;">Packaging</th>
                 <th style="width: 10%; text-align: right;">Rate</th>
-                <th style="width: 10%; text-align: right;">DISC %</th>
-                <th style="width: 10%; text-align: right;">NET Rate</th>
-                <th style="width: 14%; text-align: right;">AMOUNT</th>
+                <th style="width: 8%; text-align: right;">DISC%</th>
+                <th style="width: 12%; text-align: right;">NET Rate</th>
+                <th style="width: 15%; text-align: right;">Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -85,7 +85,7 @@
                     <tr>
                         <td>@(sr++)</td>
                         <td>@entry.AccountName</td>
-                        <td style="text-align: right;">@entry.Quantity</td>
+                        <td style="text-align: right; min-width: 35px; max-width: 45px;">@entry.Quantity</td>
                         <td style="text-align: right;">@entry.PKG</td>
                         <td style="text-align: right;">@((int)entry.Rate)</td>
                         <td style="text-align: right;">@((int)entry.Discount)</td>
@@ -96,9 +96,9 @@
             }
         </tbody>
         <tfoot>
-            <tr class="table-active">
+            <tr class="table-active" style="height: 32px;">
                 <th colspan="2" style="text-align: right;">Total</th>
-                <th style="text-align: right;">@Model.TotalQuantity</th>
+                <th style="text-align: right; min-width: 35px; max-width: 45px;">@Model.TotalQuantity</th>
                 <th style="text-align: right;"></th>
                 <th style="text-align: right;"></th>
                 <th style="text-align: right;"></th>

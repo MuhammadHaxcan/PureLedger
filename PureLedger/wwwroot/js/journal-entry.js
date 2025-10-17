@@ -86,7 +86,12 @@
             
             // Explicitly trigger row calculations for product accounts
             if ($row.attr('data-account-group') === 'product') {
-                this.updateRowCalculations($row[0], 'debit');
+                // Only auto-calculate if both debit and credit are empty
+                const debit = parseFloat($row.find('.debit-input').val()) || 0;
+                const credit = parseFloat($row.find('.credit-input').val()) || 0;
+                if (debit === 0 && credit === 0) {
+                    this.updateRowCalculations($row[0], 'debit');
+                }
             }
         } catch (error) {
             console.error('Error loading data for row:', error);
@@ -443,10 +448,12 @@
 
                     if (accountGroup === 'product') {
                         this.setupProductRequirements($row);
-                        
-                        // For product accounts, if quantity > 0, trigger calculations
+
+                        // Only trigger calculations if both debit and credit are empty (new row, not edit)
+                        const debit = this.parseFloatOrZero($row.find('.debit-input').val());
+                        const credit = this.parseFloatOrZero($row.find('.credit-input').val());
                         const qty = this.parseFloatOrZero($row.find('.qty-input').val());
-                        if (qty > 0) {
+                        if (qty > 0 && debit === 0 && credit === 0) {
                             this.updateRowCalculations($row[0], 'debit');
                         }
                     }
@@ -570,20 +577,17 @@
         const $row = $(row);
         const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
         const discount = this.parseFloatOrZero($row.find('.disc-input').val());
-        
-        // Skip for account group 'account' if both debit and credit are already set
-        const accountGroup = $row.attr('data-account-group') || '';
+
         const debitValue = this.parseFloatOrZero($row.find('.debit-input').val());
         const creditValue = this.parseFloatOrZero($row.find('.credit-input').val());
-        
-        // If it's an account entry and already has values, don't override
-        if (accountGroup === 'account' && (debitValue > 0 || creditValue > 0)) {
+
+        // If either debit or credit is already set, do NOT overwrite (edit mode)
+        if (debitValue > 0 || creditValue > 0) {
             return;
         }
 
         const amount = Math.round(totalAmount - discount);
 
-        // Only update if the amount is valid
         if (amount > 0) {
             if (focusField === 'debit' || (!focusField && !debitValue && !creditValue)) {
                 $row.find('.debit-input').val(amount);

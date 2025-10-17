@@ -78,23 +78,43 @@
 
 /* Table styles */
 .table {
-    font-size: 1rem; /* Increased from 0.9rem */
+    font-size: 0.95rem; /* Slightly reduced from 1rem */
+    width: 100%;
+    border-collapse: collapse;
 }
 
 .table th {
     background-color: #f8f9fa;
-    font-size: 1.05rem; /* Slightly larger headers */
-}
-
-/* Make invoice table more compact but readable */
-.table-striped > tbody > tr > td {
-    padding: 0.35rem 0.5rem; /* Slightly more vertical padding */
+    padding: 8px 4px; /* Reduced horizontal padding */
+    text-align: right;
+    white-space: nowrap; /* Prevent header text wrapping */
     vertical-align: middle;
 }
 
-/* Ensure product name column takes appropriate width */
-.table-striped th:nth-child(2) {
-    width: 30%;
+.table th:nth-child(2) {
+    text-align: left; /* Product name alignment */
+}
+
+/* Make invoice table rows taller and prevent text wrapping */
+.table-striped > tbody > tr > td {
+    padding: 10px 4px; /* Increased vertical padding */
+    vertical-align: middle;
+    white-space: nowrap; /* Prevent text wrapping */
+    height: 40px; /* Fixed height for rows */
+}
+
+.table-striped > tbody > tr > td:nth-child(2) {
+    white-space: normal; /* Allow product name to wrap */
+    text-align: left;
+}
+
+/* Quantity column specific styling */
+.table-striped th:nth-child(3),
+.table-striped td:nth-child(3) {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    padding-right: 4px !important;
 }
 
 /* Signature section */
@@ -118,6 +138,22 @@
     font-size: 1.05rem; /* Increased */
 }
 
+/* Footer row styling */
+.table tfoot tr {
+    height: 45px; /* Taller footer rows */
+}
+
+.table tfoot th {
+    padding: 10px 4px;
+    vertical-align: middle;
+}
+
+/* Right align all number columns */
+.table td:not(:nth-child(1)):not(:nth-child(2)),
+.table th:not(:nth-child(1)):not(:nth-child(2)) {
+    text-align: right;
+}
+
 /* Print styles */
 @media print {
     body {
@@ -139,9 +175,9 @@
     }
     
     .table {
+        font-size: 0.95rem !important;
         width: 100% !important;
         border-collapse: collapse !important;
-        font-size: 1rem !important; /* Ensure table text is larger in print */
     }
     
     .table th {
@@ -163,6 +199,15 @@
     .invoice-info {
         border: none;
         padding: 5px;
+    }
+    
+    .table-striped > tbody > tr > td {
+        padding: 10px 4px !important;
+        height: 40px !important;
+    }
+    
+    .table tfoot tr {
+        height: 45px !important;
     }
 }
 
