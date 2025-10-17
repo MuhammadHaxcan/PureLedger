@@ -26,12 +26,12 @@ namespace PureLedger.ViewModels
         public int CategoryId { get; set; } // Added to match JournalEntryRowModel
         public int AvailableQuantity { get; set; }
         public int ProcessQuantity { get; set; }
-        public int Rate { get; set; }
-        public int Debit { get; set; }
-        public int Credit { get; set; }
+        public decimal Rate { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
         public int AccountGroupId { get; set; }
         public int Percent { get; set; } // Added to match JournalEntryRowModel
-        public int Disc { get; set; } // Added to match JournalEntryRowModel
+        public decimal Disc { get; set; } // Added to match JournalEntryRowModel
         public string? Rbp { get; set; } // Added to match JournalEntryRowModel
         public string? Type { get; set; } // Added to match JournalEntryRowModel
         public List<int>? Tags { get; set; } // Added to match JournalEntryRowModel

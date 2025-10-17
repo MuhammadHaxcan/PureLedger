@@ -18,9 +18,9 @@ public class VoucherEntryDetailViewModel
     public string Category { get; set; } = "";
     public string Account { get; set; } = "";
     public int Quantity { get; set; }
-    public int Rate { get; set; }
-    public int Debit { get; set; }
-    public int Credit { get; set; }
+    public decimal Rate { get; set; }
+    public decimal Debit { get; set; }
+    public decimal Credit { get; set; }
     public bool IsModified { get; set; }
     public DateOnly? ModifyTime { get; set; }
 }

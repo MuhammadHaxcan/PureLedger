@@ -14,26 +14,26 @@ namespace PureLedger.ViewModels
             [Range(0, int.MaxValue)]
             public int Quantity { get; set; }
 
-            [Range(0, int.MaxValue)]
-            public int Rate { get; set; }
+            [Range(typeof(decimal), "0", "9999999999.9999")]
+            public decimal Rate { get; set; }
 
-            [Range(0, int.MaxValue)]
-            public int Discount { get; set; }
+            [Range(typeof(decimal), "0", "9999999999.9999")]
+            public decimal Discount { get; set; }
 
             [Range(0, 100)]
             public int DiscountPercent { get; set; }
 
-            [Range(0, int.MaxValue)]
-            public int Debit { get; set; }
+            [Range(typeof(decimal), "0", "9999999999.9999")]
+            public decimal Debit { get; set; }
 
-            [Range(0, int.MaxValue)]
-            public int Credit { get; set; }
+            [Range(typeof(decimal), "0", "9999999999.9999")]
+            public decimal Credit { get; set; }
 
             // Read-only properties for display purposes
             public string? AccountName { get; set; }
             public int ProjectId { get; set; } 
             public int CategoryId { get; set; }
-            public int AccountId { get; set; }
+            public int AccountId { get; set; }  
             public int AccountGroupId { get; set; }
             public int? DeliveryChallanEntryId { get; set; }
             public int? LocationId { get; set; }

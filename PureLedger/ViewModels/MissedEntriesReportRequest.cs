@@ -49,8 +49,8 @@ namespace PureLedger.ViewModels
         public string ProjectName { get; set; } = "";
         public DateOnly MissedDate { get; set; }
         public int Quantity { get; set; }
-        public int Rate { get; set; }
-        public int Discount { get; set; }
+        public decimal Rate { get; set; }
+        public decimal Discount { get; set; }
         public string? Description { get; set; }
         public decimal TotalValue { get; set; }
         public int CustomerAccountId { get; set; }

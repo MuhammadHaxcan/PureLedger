@@ -592,9 +592,9 @@ namespace PureLedger.Services
                         Quantity = entryToProcess.ProcessQuantity,
                         Rate = baseEntry.Rate,
                         DiscountPercent = baseEntry.DiscountPercent,
-                        Discount = (int)(baseEntry.Discount * (entryToProcess.ProcessQuantity / (double)baseEntry.Quantity)),
-                        Debit = baseEntry.Debit > 0 ? (int)(baseEntry.Debit * (entryToProcess.ProcessQuantity / (double)baseEntry.Quantity)) : 0,
-                        Credit = baseEntry.Credit > 0 ? (int)(baseEntry.Credit * (entryToProcess.ProcessQuantity / (double)baseEntry.Quantity)) : 0,
+                        Discount = baseEntry.Discount * (entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity),
+                        Debit = baseEntry.Debit > 0 ? baseEntry.Debit * (decimal)(entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity) : 0m,
+                        Credit = baseEntry.Credit > 0 ? baseEntry.Credit * (decimal)(entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity) : 0m,
                         Rbp = baseEntry.Rbp,
                         IsProcessed = false
                     };

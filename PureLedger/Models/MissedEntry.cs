@@ -25,11 +25,15 @@ public class MissedEntry
     
     [Required]
     public int Quantity { get; set; }
-    
-    public int Rate { get; set; }
-    
-    public int Discount { get; set; }
-    
+
+    [Range(0, 9999999999.9999, ErrorMessage = "Rate must be positive")]
+    [Column(TypeName = "decimal(14,4)")]
+    public decimal Rate { get; set; }
+
+    [Range(0, 9999999999.999, ErrorMessage = "Discount must be positive")]
+    [Column(TypeName = "decimal(14,4)")]
+    public decimal Discount { get; set; }
+
     [MaxLength(500)]
     public string? Description { get; set; }
 
