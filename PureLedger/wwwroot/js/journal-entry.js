@@ -494,10 +494,19 @@
     }
 
     setupCalculationHandlers() {
-        $(document).on('input blur', '.qty-input, .rate-input', (e) => {
+        // Only trigger calculation on blur for qty-input
+        $(document).off('input', '.qty-input'); // Remove any previous input handler for qty-input
+        $(document).on('blur', '.qty-input', (e) => {
             const row = $(e.target).closest('tr')[0];
             this.updateRowCalculations(row);
             this.validateQuantityForProduct(e.target);
+        });
+
+        // Keep both input and blur for rate-input (if you want live update for rate)
+        $(document).on('input blur', '.rate-input', (e) => {
+            const row = $(e.target).closest('tr')[0];
+            this.updateRowCalculations(row);
+            this.validateQuantityForProduct($(row).find('.qty-input')[0]);
         });
 
         $(document).on('input blur', '.pkg-input', (e) => {
@@ -564,10 +573,10 @@
 
         // Calculate discount based on percentage
         const discount = (totalAmount * percent) / 100;
-        
-        // Set the discount value and ensure it's readonly
+
+        // Set the discount value and ensure it's readonly, 4 decimal places
         $row.find('.disc-input')
-            .val(Math.round(discount))
+            .val(discount.toFixed(4))
             .prop('readonly', true)
             .attr('tabindex', '-1');
     }
@@ -585,14 +594,14 @@
             return;
         }
 
-        const amount = Math.round(totalAmount - discount);
+        const amount = totalAmount - discount;
 
         if (amount > 0) {
             if (focusField === 'debit' || (!focusField && !debitValue && !creditValue)) {
-                $row.find('.debit-input').val(amount);
+                $row.find('.debit-input').val(amount.toFixed(4));
                 $row.find('.credit-input').val('');
             } else if (focusField === 'credit') {
-                $row.find('.credit-input').val(amount);
+                $row.find('.credit-input').val(amount.toFixed(4));
                 $row.find('.debit-input').val('');
             }
         }
@@ -604,12 +613,12 @@
 
         $('#entryRows tr').each((index, row) => {
             const $row = $(row);
-            totalDebit += this.parseIntOrZero($row.find('.debit-input').val());
-            totalCredit += this.parseIntOrZero($row.find('.credit-input').val());
+            totalDebit += this.parseFloatOrZero($row.find('.debit-input').val());
+            totalCredit += this.parseFloatOrZero($row.find('.credit-input').val());
         });
 
-        $('#totalDebit').text(totalDebit);
-        $('#totalCredit').text(totalCredit);
+        $('#totalDebit').text(totalDebit.toFixed(4));
+        $('#totalCredit').text(totalCredit.toFixed(4));
     }
 
     addNewRow() {

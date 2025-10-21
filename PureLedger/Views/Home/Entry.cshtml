@@ -271,8 +271,8 @@
                                                name="Entries[@(i)].Rate"
                                                type="number"
                                                min="0"
-                                               step="0.01"
-                                               value="@(entry.Rate)" />
+                                               step="0.0001"
+                                               value="@($"{entry.Rate:F4}")" />
                                     </td>
                                     <td>
                                         <input class="form-control form-control-sm percent-input"
@@ -282,7 +282,7 @@
                                                min="0"
                                                max="100"
                                                step="0.01"
-                                               value="@(entry.Percent)" />
+                                               value="@($"{entry.Percent:F2}")" />
                                     </td>
                                     <td>
                                         <input class="form-control form-control-sm disc-input"
@@ -290,8 +290,8 @@
                                                name="Entries[@(i)].Disc"
                                                type="number"
                                                min="0"
-                                               step="1"
-                                               value="@(entry.Disc)"
+                                               step="0.0001"
+                                               value="@($"{entry.Disc:F4}")"
                                                readonly
                                                tabindex="-1" />
                                     </td>
@@ -301,8 +301,8 @@
                                                name="Entries[@(i)].Debit"
                                                type="number"
                                                min="0"
-                                               step="1"
-                                               value="@(entry.Debit)" />
+                                               step="0.0001"
+                                               value="@($"{entry.Debit:F4}")" />
                                     </td>
                                     <td>
                                         <input class="form-control form-control-sm credit-input"
@@ -310,8 +310,8 @@
                                                name="Entries[@(i)].Credit"
                                                type="number"
                                                min="0"
-                                               step="1"
-                                               value="@(entry.Credit)" />
+                                               step="0.0001"
+                                               value="@($"{entry.Credit:F4}")" />
                                     </td>
                                     <td>
                                         <button type="button" class="btn btn-danger btn-sm remove-row-btn">
@@ -393,18 +393,18 @@
                                            name="Entries[0].Rate"
                                            type="number"
                                            min="0"
-                                           step="0.01"
-                                           placeholder="0.00" />
+                                           step="0.0001"
+                                           placeholder="0.0000" />
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm percent-input"
                                            id="Entries_0_Percent"
                                            name="Entries[0].Percent"
                                            type="number"
-                                           min="0"
+                                           min="0"  
                                            max="100"
                                            step="0.01"
-                                           placeholder="0" />
+                                           placeholder="0.00" />
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm disc-input"
@@ -412,8 +412,8 @@
                                            name="Entries[0].Disc"
                                            type="number"
                                            min="0"
-                                           step="1"
-                                           placeholder="0"
+                                           step="0.0001"
+                                           placeholder="0.0000"
                                            readonly
                                            tabindex="-1" />
                                 </td>
@@ -423,8 +423,8 @@
                                            name="Entries[0].Debit"
                                            type="number"
                                            min="0"
-                                           step="1"
-                                           placeholder="0" />
+                                           step="0.0001"
+                                           placeholder="0.0000" />
                                 </td>
                                 <td>
                                     <input class="form-control form-control-sm credit-input"
@@ -432,8 +432,8 @@
                                            name="Entries[0].Credit"
                                            type="number"
                                            min="0"
-                                           step="1"
-                                           placeholder="0" />
+                                           step="0.0001"
+                                           placeholder="0.0000" />
                                 </td>
                                 <td>
                                     <button type="button" class="btn btn-danger btn-sm remove-row-btn">
