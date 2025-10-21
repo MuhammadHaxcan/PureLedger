@@ -95,7 +95,12 @@
                         <div class="btn-group column-toggles" role="group">
                             <input type="checkbox" class="btn-check" id="showDate" checked autocomplete="off">
                             <label class="btn btn-outline-primary btn-sm" for="showDate">
-                                <i class="fas fa-calendar-day"></i> Date
+                                <i class="fas fa-calendar-day"></i> Entry Date
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showCreditableDate" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showCreditableDate">
+                                <i class="fas fa-calendar-check"></i> Creditable Date
                             </label>
 
                             <input type="checkbox" class="btn-check" id="showDescription" checked autocomplete="off">
@@ -174,7 +179,8 @@
                         <thead class="table-light">
                             <tr>
                                 <th>ID</th>
-                                <th class="date-column">Date</th>
+                                <th class="date-column">Entry Date</th>
+                                <th class="creditable-date-column">Creditable Date</th>
                                 <th class="description-column">Description</th>
                                 <th class="account-column">Account</th>
                                 <th class="quantity-column text-end">Quantity</th>
@@ -186,7 +192,7 @@
                         <tbody id="reportData"></tbody>
                         <tfoot class="table-secondary">
                             <tr>
-                                <td colspan="4" class="text-end fw-bold">TOTAL</td>
+                                <td colspan="5" class="text-end fw-bold">TOTAL</td>
                                 <td class="quantity-column text-end fw-bold" id="totalQuantity">0</td>
                                 <td class="debit-column text-end fw-bold" id="totalDebit">0.00</td>
                                 <td class="credit-column text-end fw-bold" id="totalCredit">0.00</td>

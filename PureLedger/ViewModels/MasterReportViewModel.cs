@@ -42,6 +42,7 @@ namespace PureLedger.ViewModels
         public int JournalVoucherId { get; set; }
         public string FormattedId { get; set; } = string.Empty; // For x-y-z format
         public DateOnly TransactionDate { get; set; }
+        public DateOnly CreditableDate { get; set; }
         public string? Description { get; set; }
         public string AccountName { get; set; } = string.Empty;
         public int AccountId { get; set; }

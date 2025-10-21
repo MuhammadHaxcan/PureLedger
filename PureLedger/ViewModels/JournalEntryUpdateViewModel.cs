@@ -20,8 +20,8 @@ namespace PureLedger.ViewModels
             [Range(typeof(decimal), "0", "9999999999.9999")]
             public decimal Discount { get; set; }
 
-            [Range(0, 100)]
-            public int DiscountPercent { get; set; }
+            [Range(typeof(decimal), "0", "100", ErrorMessage = "Discount percentage must be between 0-100")]
+            public decimal DiscountPercent { get; set; }
 
             [Range(typeof(decimal), "0", "9999999999.9999")]
             public decimal Debit { get; set; }

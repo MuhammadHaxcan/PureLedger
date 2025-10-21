@@ -35,7 +35,8 @@ namespace PureLedger.Models
         public decimal Rate { get; set; }
 
         [Range(0, 100, ErrorMessage = "Discount percentage must be between 0-100")]
-        public int? DiscountPercent { get; set; }
+        [Column(TypeName = "decimal(5,2)")]
+        public decimal? DiscountPercent { get; set; }
 
         [Range(0, 9999999999.999, ErrorMessage = "Discount must be positive")]
         [Column(TypeName = "decimal(14,4)")]

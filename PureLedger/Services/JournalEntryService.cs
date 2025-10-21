@@ -134,7 +134,7 @@ namespace PureLedger.Services
                         Description = entryModel.Des,
                         Quantity = entryModel.Qty ?? 0,
                         Rate = entryModel.Rate ?? 0,
-                        DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null,
+                        DiscountPercent = entryModel.Percent.HasValue ? entryModel.Percent.Value : null,
                         Discount = entryModel.Disc ?? 0,
                         Debit = entryModel.Debit ?? 0,  
                         Credit = entryModel.Credit ?? 0, 
@@ -752,11 +752,11 @@ namespace PureLedger.Services
                         {
                             existingEntry.Description = entryModel.Des;
                             existingEntry.Quantity = entryModel.Qty ?? 0;
-                            existingEntry.Rate = (int)(entryModel.Rate ?? 0);
-                            existingEntry.DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null;
-                            existingEntry.Discount = (int)(entryModel.Disc ?? 0);
-                            existingEntry.Debit = (int)(entryModel.Debit ?? 0);
-                            existingEntry.Credit = (int)(entryModel.Credit ?? 0);
+                            existingEntry.Rate = entryModel.Rate ?? 0;
+                            existingEntry.DiscountPercent = entryModel.Percent.HasValue ? entryModel.Percent.Value : null;
+                            existingEntry.Discount = entryModel.Disc ?? 0;
+                            existingEntry.Debit = entryModel.Debit ?? 0;
+                            existingEntry.Credit = entryModel.Credit ?? 0;
                             existingEntry.Rbp = entryModel.Rbp ?? "Y";
 
                             // Set IsEdited and ModifiedDateTime when updating
@@ -776,11 +776,11 @@ namespace PureLedger.Services
                                 CategoryId = entryModel.CategoryId ?? 0,
                                 Description = entryModel.Des,
                                 Quantity = entryModel.Qty ?? 0,
-                                Rate = (int)(entryModel.Rate ?? 0),
+                                Rate = entryModel.Rate ?? 0,
                                 DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null,
-                                Discount = (int)(entryModel.Disc ?? 0),
-                                Debit = (int)(entryModel.Debit ?? 0),
-                                Credit = (int)(entryModel.Credit ?? 0),
+                                Discount = entryModel.Disc ?? 0,
+                                Debit = entryModel.Debit ?? 0,
+                                Credit = entryModel.Credit ?? 0,
                                 Rbp = entryModel.Rbp ?? "Y",
                                 IsProcessed = false,
                                 // Set IsEdited and ModifiedDateTime for new entries as well

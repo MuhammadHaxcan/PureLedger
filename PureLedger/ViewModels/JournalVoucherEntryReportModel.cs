@@ -22,6 +22,9 @@ namespace PureLedger.ViewModels
         // Credit is positive, debit is negative
         public decimal LineTotal => Credit > 0 ? Credit : -Debit;
 
+        public decimal LineTotal1 => Credit > 0 ? Credit : 0;
+        public decimal LineTotal2 => Credit > 0 ? 0 : -Debit;
+
         // RBP flag (Y or N)
         public string Rbp { get; set; } = "Y";
 

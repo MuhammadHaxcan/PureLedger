@@ -34,6 +34,8 @@ namespace PureLedger.ViewModels
         // Totals as calculated properties
         public int TotalQuantity => Entries.Sum(e => e.Quantity);
         public decimal TotalAmount => Entries.Sum(e => e.LineTotal);
+        public decimal TotalAmount1 => Entries.Sum(e => e.LineTotal1);
+        public decimal TotalAmount2 => Entries.Sum(e => e.LineTotal2);
         public decimal TotalActualAmount => Entries.Sum(e => e.ActualAmount);
 
         // Effective amount after deducting FOR charges and cartage

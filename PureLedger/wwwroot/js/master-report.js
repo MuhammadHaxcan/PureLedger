@@ -495,6 +495,7 @@ function renderAllEntriesWithBalance() {
                 `}
             </td>
             <td class="date-column">${formatDate(entry.transactionDate)}</td>
+            <td class="creditable-date-column">${formatDate(entry.creditableDate)}</td>
             <td class="description-column">${entry.description || ''}</td>
             <td class="account-column">${entry.accountName || ''}</td>
             <td class="quantity-column text-right">${entry.quantity ?? ''}</td>

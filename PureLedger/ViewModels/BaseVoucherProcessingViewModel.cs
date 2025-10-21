@@ -30,7 +30,7 @@ namespace PureLedger.ViewModels
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
         public int AccountGroupId { get; set; }
-        public int Percent { get; set; } // Added to match JournalEntryRowModel
+        public decimal Percent { get; set; } // Added to match JournalEntryRowModel
         public decimal Disc { get; set; } // Added to match JournalEntryRowModel
         public string? Rbp { get; set; } // Added to match JournalEntryRowModel
         public string? Type { get; set; } // Added to match JournalEntryRowModel

@@ -57,9 +57,9 @@
                     <td>@entry.AccountName</td>
                     <td>@entry.Description</td>
                     <td style="text-align: right;">@entry.Quantity</td>
-                    <td style="text-align: right;">@((int)entry.Rate)</td>
-                    <td style="text-align: right;">@((int)entry.Debit)</td>
-                    <td style="text-align: right;">@((int)entry.Credit)</td>
+                    <td style="text-align: right;">@(entry.Rate)</td>
+                    <td style="text-align: right;">@(entry.Debit)</td>
+                    <td style="text-align: right;">@(entry.Credit)</td>
                 </tr>
             }
         </tbody>
@@ -68,8 +68,8 @@
                 <th colspan="2" style="text-align: right;">Totals</th>
                 <th style="text-align: right;">@Model.TotalQuantity</th>
                 <th style="text-align: right;"></th>
-                <th style="text-align: right;">@((int)Model.TotalAmount)</th>
-                <th style="text-align: right;">@((int)Model.TotalAmount)</th>
+                <th style="text-align: right;">@(Model.TotalAmount2)</th>
+                <th style="text-align: right;">@(Model.TotalAmount1)</th>
             </tr>
         </tfoot>
     </table>
