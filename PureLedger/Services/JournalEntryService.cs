@@ -133,11 +133,11 @@ namespace PureLedger.Services
                         CategoryId = entryModel.CategoryId ?? 0,
                         Description = entryModel.Des,
                         Quantity = entryModel.Qty ?? 0,
-                        Rate = (int)(entryModel.Rate ?? 0),
+                        Rate = entryModel.Rate ?? 0,
                         DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null,
-                        Discount = (int)(entryModel.Disc ?? 0),
-                        Debit = (int)(entryModel.Debit ?? 0),
-                        Credit = (int)(entryModel.Credit ?? 0),
+                        Discount = entryModel.Disc ?? 0,
+                        Debit = entryModel.Debit ?? 0,  
+                        Credit = entryModel.Credit ?? 0, 
                         Rbp = entryModel.Rbp ?? "Y",
                         IsProcessed = false
                     };
