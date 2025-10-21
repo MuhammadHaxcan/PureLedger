@@ -78,12 +78,20 @@
             const accountText = $row.find('.account-select option:selected').text();
             $row.find('.account-search').val(accountText);
 
+            // Preserve the original rate value before loading product details
+            const originalRate = $row.find('.rate-input').val();
+
             // Load product details to set account group attributes
             await this.loadProductDetails($row, accountId);
+            
+            // If we had an original rate value, restore it (it might have been overwritten by loadProductDetails)
+            if (originalRate) {
+                $row.find('.rate-input').val(parseFloat(originalRate).toFixed(4));
+            }
 
             // Apply account type specific settings
             this.manageInputsBasedOnAccountGroup($row);
-            
+
             // Explicitly trigger row calculations for product accounts
             if ($row.attr('data-account-group') === 'product') {
                 // Only auto-calculate if both debit and credit are empty
@@ -432,8 +440,14 @@
             const product = await this.apiGet('/Home/GetProductDetails', { accountId });
 
             if (product) {
-                if (product.saleRate) {
-                    $row.find('.rate-input').val(product.saleRate);
+                const $rateInput = $row.find('.rate-input');
+                const currentRate = $rateInput.val();
+                
+                if (product.saleRate !== null && product.saleRate !== undefined) {
+                    if (!currentRate || !this.isEditMode()) {
+                        const formattedRate = parseFloat(product.saleRate).toFixed(4);
+                        $rateInput.val(formattedRate);
+                    }
                 }
 
                 if (product.pkg) {
@@ -494,19 +508,28 @@
     }
 
     setupCalculationHandlers() {
-        // Only trigger calculation on blur for qty-input
-        $(document).off('input', '.qty-input'); // Remove any previous input handler for qty-input
+        $(document).off('input', '.qty-input'); 
         $(document).on('blur', '.qty-input', (e) => {
             const row = $(e.target).closest('tr')[0];
             this.updateRowCalculations(row);
             this.validateQuantityForProduct(e.target);
         });
 
-        // Keep both input and blur for rate-input (if you want live update for rate)
-        $(document).on('input blur', '.rate-input', (e) => {
+        $(document).on('blur', '.rate-input', (e) => {
+            const $input = $(e.target);
+            const value = $input.val();
+            if (value) {
+                $input.val(this.formatDecimalValue(value));
+            }
+            const row = $input.closest('tr')[0];
+            this.updateRowCalculations(row);
+            const $row = $(row);
+            this.validateQuantityForProduct($row.find('.qty-input')[0]);
+        });
+
+        $(document).on('input', '.rate-input', (e) => {
             const row = $(e.target).closest('tr')[0];
             this.updateRowCalculations(row);
-            this.validateQuantityForProduct($(row).find('.qty-input')[0]);
         });
 
         $(document).on('input blur', '.pkg-input', (e) => {
@@ -563,7 +586,7 @@
             ? pkg * qty * rate
             : qty * rate;
 
-        row.setAttribute('data-total-amount', totalAmount.toString());
+        row.setAttribute('data-total-amount', totalAmount.toFixed(4));
     }
 
     updateDiscount(row) {
@@ -1218,6 +1241,7 @@
     }
 
     parseFloatOrZero(value) {
+        if (value === null || value === undefined || value === '') return 0;
         const parsed = parseFloat(value);
         return isNaN(parsed) ? 0 : parsed;
     }
@@ -1314,6 +1338,13 @@
         }
     }
 
+    // Add this method to the JournalEntryManager class
+    formatDecimalValue(value, decimals = 4) {
+        if (value === null || value === undefined || value === '') return '';
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? '' : parsed.toFixed(decimals);
+    }
+
     /**
      * Process a single row from a recipe
      */
@@ -1335,8 +1366,16 @@
             const accountText = $row.find('.account-select option:selected').text();
             $row.find('.account-search').val(accountText);
             
+            // Preserve rate value if it exists
+            const originalRate = $row.find('.rate-input').val();
+            
             // Load product details to set account group attributes
             await this.loadProductDetails($row, accountId);
+            
+            // If we had a rate value, restore it with proper formatting
+            if (originalRate) {
+                $row.find('.rate-input').val(this.formatDecimalValue(originalRate));
+            }
             
             // Apply account type specific settings
             this.manageInputsBasedOnAccountGroup($row);
