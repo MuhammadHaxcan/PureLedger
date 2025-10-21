@@ -3,6 +3,8 @@
         this.rowCounter = 0;
         this.isSubmitting = false;
         this.rowTemplate = null; // Store row template
+        this.dataService = window.journalDataService; // Reference to the data service
+
         this.captureRowTemplate(); // Capture the template on initialization
         this.init();
         this.setupSelectSearch();
@@ -16,16 +18,16 @@
             this.rowTemplate = initialRow.cloneNode(true);
         }
     }
-                    
+
     init() {
         console.log("Initializing Journal Entry Manager");
         this.rowCounter = $('#entryRows tr').length - 1;
         this.setupFormAction();
         this.initializeDatePickers();
-        
+
         // Make all discount inputs readonly
         $('.disc-input').prop('readonly', true).attr('tabindex', '-1');
-        
+
         this.setupEventHandlers();
 
         // Handle edit mode and load initial data
@@ -38,56 +40,16 @@
     }
 
     isEditMode() {
-        return $('#editingVoucherId').length > 0;
+        return this.dataService.isEditMode();
     }
 
     // Process data that was already loaded from the model
-    processExistingData() {
-        const projectId = $('#ProjectId').val();
-        if (!projectId) return;
+    async processExistingData() {
+        await this.dataService.processExistingData();
 
+        // Apply account-specific settings to each row
         $('#entryRows tr').each((index, row) => {
             const $row = $(row);
-            const categoryId = $row.data('category-id');
-            const accountId = $row.data('account-id');
-
-            if (categoryId && accountId) {
-                console.log(`Processing row ${index} with categoryId=${categoryId}, accountId=${accountId}`);
-
-                // Load categories and accounts in sequence
-                this.loadCategoryAndAccountData($row, projectId, categoryId, accountId);
-            }
-        });
-    }
-
-    async loadCategoryAndAccountData($row, projectId, categoryId, accountId) {
-        try {
-            // Load categories for this row
-            await this.loadCategories($row.find('.category-select'), projectId);
-
-            // Set category value and display text
-            $row.find('.category-select').val(categoryId);
-            const categoryText = $row.find('.category-select option:selected').text();
-            $row.find('.category-search').val(categoryText);
-
-            // Now load accounts based on category
-            await this.loadAccounts($row, categoryId);
-
-            // Set account value and display text
-            $row.find('.account-select').val(accountId);
-            const accountText = $row.find('.account-select option:selected').text();
-            $row.find('.account-search').val(accountText);
-
-            // Preserve the original rate value before loading product details
-            const originalRate = $row.find('.rate-input').val();
-
-            // Load product details to set account group attributes
-            await this.loadProductDetails($row, accountId);
-            
-            // If we had an original rate value, restore it (it might have been overwritten by loadProductDetails)
-            if (originalRate) {
-                $row.find('.rate-input').val(parseFloat(originalRate).toFixed(4));
-            }
 
             // Apply account type specific settings
             this.manageInputsBasedOnAccountGroup($row);
@@ -101,9 +63,7 @@
                     this.updateRowCalculations($row[0], 'debit');
                 }
             }
-        } catch (error) {
-            console.error('Error loading data for row:', error);
-        }
+        });
     }
 
     setupFormAction() {
@@ -127,7 +87,7 @@
     initializeDatePickers() {
         try {
             const today = new Date();
-            
+
             // Set up the entry date input without any date restrictions
             const entryDateInput = document.getElementById('EntryDate');
             if (entryDateInput) {
@@ -223,17 +183,17 @@
 
     loadInitialData() {
         const projectId = $('#ProjectId').val();
-        
+
         // For normal new entries (not edit mode and not recipe-based)
         if (projectId && !this.isEditMode()) {
             this.handleProjectChange(projectId);
         }
-        
+
         // For recipe-based entries
         if (!this.isEditMode()) {
             this.processRecipeEntries();
         }
-        
+
         this.updateDueDate();
         this.updateProductRequiredIndicator();
         this.updateBaseVoucherCheckbox();
@@ -284,7 +244,7 @@
             const $categorySelect = $row.find('.category-select');
             const existingCategoryId = $row.data('category-id');
 
-            await this.loadCategories($categorySelect, projectId);
+            await this.dataService.loadCategories($categorySelect, projectId);
 
             // If we have a data attribute with category ID, set it after loading options
             if (existingCategoryId) {
@@ -293,7 +253,7 @@
                 $row.find('.category-search').val(categoryText);
 
                 // Also load accounts based on this category
-                await this.loadAccounts($row, existingCategoryId);
+                await this.dataService.loadAccounts($row, existingCategoryId);
 
                 // Set account value if we have it
                 const existingAccountId = $row.data('account-id');
@@ -308,105 +268,14 @@
         }
     }
 
-    async loadCategories($categorySelect, projectId) {
-        try {
-            const $container = $categorySelect.closest('.select-container');
-            const $dropdown = $container.find('.select-dropdown');
-            const $searchInput = $container.find('.select-search');
-
-            $searchInput.val('').prop('disabled', true);
-            $dropdown.empty().append('<div class="select-option">Loading...</div>');
-
-            const categories = await this.apiGet('/Home/GetCategoriesByProject', { projectId });
-
-            $dropdown.empty();
-
-            const selectedValue = $categorySelect.val();
-
-            $categorySelect.empty().append('<option value="">Select Category</option>');
-
-            if (categories?.length > 0) {
-                categories.forEach(category => {
-                    $categorySelect.append(new Option(category.name, category.id));
-                    $dropdown.append(
-                        `<div class="select-option" data-value="${category.id}">${category.name}</div>`
-                    );
-                });
-
-                if (selectedValue && $categorySelect.find(`option[value="${selectedValue}"]`).length) {
-                    $categorySelect.val(selectedValue);
-                }
-            }
-
-            $searchInput.prop('disabled', false);
-            return categories;
-        } catch (error) {
-            console.error('Error loading categories:', error);
-            $categorySelect.empty().append('<option value="">Error loading categories</option>');
-            this.showError('Failed to load categories. Please try again.');
-            return [];
-        }
-    }
-
     async handleCategoryChange(event) {
         const $row = $(event.target).closest('tr');
         const categoryId = event.target.value;
 
-        await this.loadAccounts($row, categoryId);
+        await this.dataService.loadAccounts($row, categoryId);
         this.clearAccountRelatedData($row);
 
         $row.data('category-id', categoryId);
-    }
-
-    async loadAccounts($row, categoryId) {
-        const $accountSelect = $row.find('.account-select');
-        const $container = $accountSelect.closest('.select-container');
-        const $dropdown = $container.find('.select-dropdown');
-        const $searchInput = $container.find('.select-search');
-
-        try {
-            if (!categoryId) {
-                $accountSelect.empty().append('<option value="">Select Account</option>');
-                $dropdown.empty();
-                $searchInput.val('').prop('disabled', true);
-                return [];
-            }
-
-            $searchInput.val('').prop('disabled', true);
-            $dropdown.empty().append('<div class="select-option">Loading...</div>');
-
-            const accounts = await this.apiGet('/Home/GetAccountsByCategory', { categoryId });
-
-            $dropdown.empty();
-
-            const selectedValue = $accountSelect.val();
-
-            $accountSelect.empty().append('<option value="">Select Account</option>');
-
-            if (accounts?.length > 0) {
-                accounts.forEach(account => {
-                    const $option = $(new Option(account.name, account.id));
-                    $option.data('account-type', account.accountTypeName || '');
-                    $accountSelect.append($option);
-
-                    $dropdown.append(
-                        `<div class="select-option" data-value="${account.id}">${account.name}</div>`
-                    );
-                });
-
-                if (selectedValue && $accountSelect.find(`option[value="${selectedValue}"]`).length) {
-                    $accountSelect.val(selectedValue);
-                }
-            }
-
-            $searchInput.prop('disabled', false);
-            return accounts;
-        } catch (error) {
-            console.error('Error loading accounts:', error);
-            $accountSelect.empty().append('<option value="">Error loading accounts</option>');
-            this.showError('Failed to load accounts. Please try again.');
-            return [];
-        }
     }
 
     async handleAccountChange(event) {
@@ -425,60 +294,29 @@
         $row.data('account-id', accountId);
 
         try {
-            await this.loadProductDetails($row, accountId);
+            await this.dataService.loadProductDetails($row, accountId);
             this.manageInputsBasedOnAccountGroup($row);
             this.updateBaseVoucherCheckbox();
-            this.updateSaveRecipeCheckbox(); // Add this line
+            this.updateSaveRecipeCheckbox();
+
+            // For product accounts, set up requirements and trigger calculations
+            if ($row.attr('data-account-group') === 'product') {
+                this.setupProductRequirements($row);
+
+                // Only trigger calculations if both debit and credit are empty (new row, not edit)
+                const debit = this.parseFloatOrZero($row.find('.debit-input').val());
+                const credit = this.parseFloatOrZero($row.find('.credit-input').val());
+                const qty = this.parseFloatOrZero($row.find('.qty-input').val());
+                if (qty > 0 && debit === 0 && credit === 0) {
+                    this.updateRowCalculations($row[0], 'debit');
+                }
+            }
+
+            this.updateRowCalculations($row[0]);
+            this.updateProductRequiredIndicator();
         } catch (error) {
             console.error('Error loading product details:', error);
             this.showError('Failed to load product details.');
-        }
-    }
-
-    async loadProductDetails($row, accountId) {
-        try {
-            const product = await this.apiGet('/Home/GetProductDetails', { accountId });
-
-            if (product) {
-                const $rateInput = $row.find('.rate-input');
-                const currentRate = $rateInput.val();
-                
-                if (product.saleRate !== null && product.saleRate !== undefined) {
-                    if (!currentRate || !this.isEditMode()) {
-                        const formattedRate = parseFloat(product.saleRate).toFixed(4);
-                        $rateInput.val(formattedRate);
-                    }
-                }
-
-                if (product.pkg) {
-                    $row[0].setAttribute('data-pkg', product.pkg);
-                    $row.find('.pkg-input').val(product.pkg);
-                }
-
-                if (product.accountGroupId) {
-                    const accountGroup = product.accountGroupId === 1 ? 'account' : 'product';
-                    $row[0].setAttribute('data-account-group', accountGroup);
-
-                    if (accountGroup === 'product') {
-                        this.setupProductRequirements($row);
-
-                        // Only trigger calculations if both debit and credit are empty (new row, not edit)
-                        const debit = this.parseFloatOrZero($row.find('.debit-input').val());
-                        const credit = this.parseFloatOrZero($row.find('.credit-input').val());
-                        const qty = this.parseFloatOrZero($row.find('.qty-input').val());
-                        if (qty > 0 && debit === 0 && credit === 0) {
-                            this.updateRowCalculations($row[0], 'debit');
-                        }
-                    }
-                }
-
-                this.updateRowCalculations($row[0]);
-                this.updateProductRequiredIndicator();
-            }
-            return product;
-        } catch (error) {
-            console.error('Error loading product details:', error);
-            throw error;
         }
     }
 
@@ -508,7 +346,7 @@
     }
 
     setupCalculationHandlers() {
-        $(document).off('input', '.qty-input'); 
+        $(document).off('input', '.qty-input');
         $(document).on('blur', '.qty-input', (e) => {
             const row = $(e.target).closest('tr')[0];
             this.updateRowCalculations(row);
@@ -670,7 +508,7 @@
         const projectId = $('#ProjectId').val();
         if (projectId) {
             const $categorySelect = $newRow.find('.category-select');
-            this.loadCategories($categorySelect, projectId).then(() => {
+            this.dataService.loadCategories($categorySelect, projectId).then(() => {
                 // Focus on the category search input after categories are loaded
                 $firstSearchInput.focus();
 
@@ -685,18 +523,18 @@
         }
 
         this.updateBaseVoucherCheckbox();
-        this.updateSaveRecipeCheckbox(); // Add this line
+        this.updateSaveRecipeCheckbox();
         this.updateTotals();
     }
 
     // Update IDs and names with a more efficient regex
     resetRowElements($row, index) {
-        $row.find('[id]').each(function() {
+        $row.find('[id]').each(function () {
             const $el = $(this);
             $el.attr('id', $el.attr('id').replace(/(_\d+_|_\d+$)/, `_${index}_`));
         });
-        
-        $row.find('[name]').each(function() {
+
+        $row.find('[name]').each(function () {
             const $el = $(this);
             $el.attr('name', $el.attr('name').replace(/\[\d+\]/, `[${index}]`));
         });
@@ -704,7 +542,7 @@
         // Clear all input values and validation states
         $row.find('input').val('').removeClass('is-invalid required-field').removeAttr('required')
             .next('.invalid-feedback').remove();
-        
+
         // Reset selects to first option
         $row.find('select').prop('selectedIndex', 0);
 
@@ -719,34 +557,6 @@
 
         // Make sure discount input is readonly in new rows
         $row.find('.disc-input').prop('readonly', true).attr('tabindex', '-1');
-    }
-
-    // Update this method to ensure discount inputs are always readonly
-    manageInputsBasedOnAccountGroup($row) {
-        const accountGroup = $row.attr('data-account-group') || '';
-        const $pkgInput = $row.find('.pkg-input');
-        const $rbpSelect = $row.find('.rbp-select');
-        const $qtyInput = $row.find('.qty-input');
-        const $rateInput = $row.find('.rate-input');
-        const $discInput = $row.find('.disc-input');
-        const $percentInput = $row.find('.percent-input');
-        
-        // Always make discount input readonly
-        $discInput.prop('readonly', true).attr('tabindex', '-1');
-        $pkgInput.prop('disabled', true);
-
-        if (accountGroup === 'account') {
-            $rbpSelect.prop('disabled', true).val('Y');
-            $qtyInput.prop('disabled', true).val('0');
-            $rateInput.prop('disabled', true).val('0');
-            $discInput.val('0');
-            $percentInput.prop('disabled', true).val('0');
-        } else {
-            $rbpSelect.prop('disabled', false);
-            $qtyInput.prop('disabled', false);
-            $rateInput.prop('disabled', false);
-            $percentInput.prop('disabled', false);
-        }
     }
 
     updateSaveRecipeCheckbox() {
@@ -795,39 +605,39 @@
 
     setupSelectSearch() {
         const self = this;
-        
-        $(document).on('input', '.select-search', function() {
+
+        $(document).on('input', '.select-search', function () {
             const $input = $(this);
             const $container = $input.closest('.select-container');
             const $dropdown = $container.find('.select-dropdown');
             const $select = $container.find('select');
             const searchTerm = $input.val().toLowerCase();
-            
+
             // Filter options based on search term
             let visibleCount = 0;
-            $dropdown.find('.select-option').each(function() {
+            $dropdown.find('.select-option').each(function () {
                 const text = $(this).text().toLowerCase();
                 const shouldShow = text.includes(searchTerm) && visibleCount < 5;
                 $(this).toggleClass('filtered-out', !shouldShow);
                 if (shouldShow) visibleCount++;
             });
-            
+
             // Show dropdown
             $dropdown.addClass('show');
         });
-        
+
         // Show dropdown on focus and highlight the currently selected option
-        $(document).on('focus', '.select-search', function() {
+        $(document).on('focus', '.select-search', function () {
             $('.select-dropdown').removeClass('show');
-            
+
             const $container = $(this).closest('.select-container');
             const $dropdown = $container.find('.select-dropdown');
             const $select = $container.find('select');
             const currentValue = $select.val();
-            
+
             // Clear previous selection highlighting
             $dropdown.find('.select-option').removeClass('selected');
-            
+
             // If there's a currently selected value, highlight it in the dropdown
             if (currentValue) {
                 const $selectedOption = $dropdown.find(`.select-option[data-value="${currentValue}"]`);
@@ -835,22 +645,22 @@
                     $selectedOption.addClass('selected');
                 }
             }
-            
+
             $dropdown.addClass('show');
         });
-        
+
         // Navigation with keyboard
-        $(document).on('keydown', '.select-search', function(e) {
+        $(document).on('keydown', '.select-search', function (e) {
             const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
             const $options = $dropdown.find('.select-option:not(.filtered-out)');
             let $selected = $dropdown.find('.select-option.selected');
-            
+
             // If Tab key and dropdown is showing, just close the dropdown without changing selection
             if (e.key === 'Tab' && $dropdown.hasClass('show')) {
                 $dropdown.removeClass('show');
                 return; // Allow normal tab behavior
             }
-            
+
             switch (e.key) {
                 case 'ArrowDown':
                     e.preventDefault();
@@ -864,7 +674,7 @@
                         }
                     }
                     break;
-                
+
                 case 'ArrowUp':
                     e.preventDefault();
                     if (!$selected.length) {
@@ -877,7 +687,7 @@
                         }
                     }
                     break;
-                
+
                 case 'Enter':
                     if ($dropdown.hasClass('show')) {
                         e.preventDefault();
@@ -893,19 +703,19 @@
                         }
                     }
                     break;
-                
+
                 case 'Escape':
                     e.preventDefault();
                     $dropdown.removeClass('show');
                     break;
             }
         });
-        
-        $(document).on('click', '.select-option:not(.filtered-out)', function() {
+
+        $(document).on('click', '.select-option:not(.filtered-out)', function () {
             self.selectOption($(this), $(this).closest('.select-container'));
         });
-        
-        $(document).on('click', function(e) {
+
+        $(document).on('click', function (e) {
             // Only close dropdowns when clicking outside of any select container
             if (!$(e.target).closest('.select-container').length) {
                 $('.select-dropdown').removeClass('show');
@@ -916,11 +726,11 @@
     selectOption($option, $container) {
         const value = $option.data('value');
         const text = $option.text();
-        
+
         // Update select and input values
         $container.find('select').val(value).trigger('change');
         $container.find('.select-search').val(text);
-        
+
         // Hide dropdown and update the selected class
         $container.find('.select-dropdown').removeClass('show');
         $container.find('.select-option').removeClass('selected');
@@ -936,7 +746,7 @@
         this.showSubmitSpinner();
 
         try {
-            
+
             const validationErrors = this.validateJournalEntry();
 
             if (validationErrors.length > 0) {
@@ -1050,7 +860,6 @@
             }
         }
 
-
         if (Math.abs(totalDebit - totalCredit) > 0.01) {
             const difference = Math.abs(totalDebit - totalCredit).toFixed(2);
             errors.push(
@@ -1139,23 +948,6 @@
 
         $row.find('.disc-input, .percent-input')
             .prop('disabled', false);  // Ensure inputs are enabled by default
-    }
-
-    // API helper method
-    async apiGet(url, params = {}) {
-        return new Promise((resolve, reject) => {
-            if (typeof PureLedger === 'undefined' || !PureLedger.get) {
-                reject(new Error('PureLedger API not available'));
-                return;
-            }
-
-            PureLedger.get(url, params)
-                .done(resolve)
-                .fail((xhr, status, error) => {
-                    console.error(`API Error - ${url}:`, { xhr, status, error });
-                    reject(new Error(`API request failed: ${error}`));
-                });
-        });
     }
 
     // UI Helper Methods
@@ -1251,6 +1043,12 @@
         return isNaN(parsed) ? 0 : parsed;
     }
 
+    formatDecimalValue(value, decimals = 4) {
+        if (value === null || value === undefined || value === '') return '';
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? '' : parsed.toFixed(decimals);
+    }
+
     formatDateDDMMYYYY(date) {
         try {
             const day = String(date.getDate()).padStart(2, '0');
@@ -1272,25 +1070,25 @@
             if ($rows.length > 1) {
                 // Remove the row from the DOM
                 $row.remove();
-                
+
                 this.rowCounter = $rows.length - 2; // -1 for the removed row, -1 for zero-based indexing
-                
+
                 // Update the remaining rows' indices
                 $('#entryRows tr').each((idx, row) => {
                     const $r = $(row);
-                    
+
                     // Update row ID
                     $r.attr('id', `entryRow-${idx}`);
-                    
-                    $r.find('input, select').each(function() {
+
+                    $r.find('input, select').each(function () {
                         const $el = $(this);
                         const name = $el.attr('name');
                         const id = $el.attr('id');
-                        
+
                         if (name && name.includes('Entries[')) {
                             $el.attr('name', name.replace(/Entries\[\d+\]/, `Entries[${idx}]`));
                         }
-                        
+
                         if (id) {
                             $el.attr('id', id.replace(/(\d+)/, idx));
                         }
@@ -1300,8 +1098,8 @@
                 this.updateTotals();
                 this.updateProductRequiredIndicator();
                 this.updateBaseVoucherCheckbox();
-                this.updateSaveRecipeCheckbox(); // Add this line
-                
+                this.updateSaveRecipeCheckbox();
+
                 console.log(`Row removed successfully, ${$('#entryRows tr').length} rows remaining`);
             } else {
                 this.showError("Cannot delete the last row. At least one entry is required.");
@@ -1314,85 +1112,47 @@
 
     /**
      * Process a recipe-based journal entry
-     * This is called when the page is loaded with recipe data
      */
     processRecipeEntries() {
         // Check if there are any rows with preloaded data from a recipe
         let hasPreloadedData = false;
         const projectId = $('#ProjectId').val();
-        
+
         $('#entryRows tr').each((index, row) => {
             const $row = $(row);
             const categoryId = $row.data('category-id');
             const accountId = $row.data('account-id');
-            
+
             if (categoryId && accountId) {
                 hasPreloadedData = true;
                 // Process this recipe item row
-                this.processRecipeRow($row, projectId, categoryId, accountId);
+                this.dataService.processRecipeRow($row, projectId, categoryId, accountId, this.formatDecimalValue.bind(this))
+                    .then(() => {
+                        // Apply account type specific settings
+                        this.manageInputsBasedOnAccountGroup($row);
+
+                        // Focus on quantity field for product accounts to prompt user to enter value
+                        if ($row.attr('data-account-group') === 'product') {
+                            $row.find('.qty-input').focus();
+
+                            // Explicitly trigger row calculations
+                            this.updateRowCalculations($row[0], 'debit');
+                        }
+                    });
             }
         });
-        
+
         if (hasPreloadedData) {
             console.log("Processing recipe-based journal entry");
-        }
-    }
-
-    // Add this method to the JournalEntryManager class
-    formatDecimalValue(value, decimals = 4) {
-        if (value === null || value === undefined || value === '') return '';
-        const parsed = parseFloat(value);
-        return isNaN(parsed) ? '' : parsed.toFixed(decimals);
-    }
-
-    /**
-     * Process a single row from a recipe
-     */
-    async processRecipeRow($row, projectId, categoryId, accountId) {
-        try {
-            // Load categories for this row
-            await this.loadCategories($row.find('.category-select'), projectId);
-            
-            // Set category value and display text
-            $row.find('.category-select').val(categoryId);
-            const categoryText = $row.find('.category-select option:selected').text();
-            $row.find('.category-search').val(categoryText);
-            
-            // Load accounts based on category
-            await this.loadAccounts($row, categoryId);
-            
-            // Set account value and display text
-            $row.find('.account-select').val(accountId);
-            const accountText = $row.find('.account-select option:selected').text();
-            $row.find('.account-search').val(accountText);
-            
-            // Preserve rate value if it exists
-            const originalRate = $row.find('.rate-input').val();
-            
-            // Load product details to set account group attributes
-            await this.loadProductDetails($row, accountId);
-            
-            // If we had a rate value, restore it with proper formatting
-            if (originalRate) {
-                $row.find('.rate-input').val(this.formatDecimalValue(originalRate));
-            }
-            
-            // Apply account type specific settings
-            this.manageInputsBasedOnAccountGroup($row);
-            
-            // Focus on quantity field for product accounts to prompt user to enter value
-            if ($row.attr('data-account-group') === 'product') {
-                $row.find('.qty-input').focus();
-                
-                // Explicitly trigger row calculations
-                this.updateRowCalculations($row[0], 'debit');
-            }
-        } catch (error) {
-            console.error('Error processing recipe row:', error);
         }
     }
 }
 
 $(function () {
-    window.journalEntryManager = new JournalEntryManager();
+    // Create the manager after ensuring the data service is available
+    if (typeof window.journalDataService !== 'undefined') {
+        window.journalEntryManager = new JournalEntryManager();
+    } else {
+        console.error('Journal Data Service not found! Make sure load-data-journal-entry.js is loaded first.');
+    }
 });
