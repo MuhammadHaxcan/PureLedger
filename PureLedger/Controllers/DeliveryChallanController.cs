@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using PureLedger.Attributes;
 using PureLedger.Models;
-using PureLedger.Services;
+using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 
 namespace PureLedger.Controllers

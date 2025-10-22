@@ -28,6 +28,7 @@
     async function loadProjectData(projectId) {
         if (!projectId) {
             resetDropdowns();
+            clearImagePreview();
             return;
         }
 
@@ -35,17 +36,17 @@
         try {
             console.log('Loading data for project:', projectId);
             console.log('Using route:', routes.getProjectCartageSettingsByProject);
-            
+
             // Load categories first
             const categories = await $.getJSON(routes.getCategoriesByProject, { projectId });
             console.log('Categories loaded:', categories);
             updateCategoryDropdowns(categories);
-            
+
             // Then try to load settings separately (with error handling)
             try {
                 const settings = await $.getJSON(routes.getProjectCartageSettingsByProject, { projectId });
                 console.log('Settings loaded:', settings);
-                
+
                 if (settings) {
                     await loadProjectSettings(settings);
                 }
@@ -88,10 +89,37 @@
                 console.log('Setting cartage category:', settings.cartageTransporterCategoryId);
                 $('#CartageTransporterCategoryId').val(settings.cartageTransporterCategoryId);
             }
+
+            // Handle project image
+            if (settings.projectImage) {
+                updateImagePreview(settings.projectImage);
+            } else {
+                clearImagePreview();
+            }
         } catch (error) {
             console.error('Error loading project settings:', error);
             showError('Error loading project settings. Please try again.');
         }
+    }
+
+    function updateImagePreview(imageName) {
+        console.log('Updating image preview with:', imageName);
+
+        // Create or update the image preview
+        let $preview = $('.img-thumbnail');
+        const imageUrl = `/uploads/projects/${imageName}`;
+
+        if ($preview.length === 0) {
+            $preview = $('<img class="img-thumbnail mt-2" style="max-height: 200px;" alt="Project image">');
+            $('#projectImage').parent().after($preview);
+        }
+
+        $preview.attr('src', imageUrl);
+    }
+
+    function clearImagePreview() {
+        // Remove the image preview if it exists
+        $('.img-thumbnail').remove();
     }
 
     async function getCategoryForAccount(accountId) {
@@ -180,18 +208,42 @@
             e.preventDefault();
             return;
         }
-        
+
         // Custom validation: At least one of FOR account or Cartage category must be selected
         const forExpenseAccount = $('#ForExpenseAccountId').val();
         const cartageCategory = $('#CartageTransporterCategoryId').val();
-        
+
         if (!forExpenseAccount && !cartageCategory) {
             e.preventDefault();
             showError("At least one of FOR Expense Account or Cartage Transporter Category must be selected.");
             return;
         }
-        
+        // Create FormData object to handle file upload
+        const formData = new FormData(this);
+        const projectImage = $('#projectImage')[0].files[0];
+        if (projectImage) {
+            formData.append('projectImage', projectImage);
+        }
+
         setLoadingState(true);
+    });
+
+    // Add preview functionality for the image
+    $('#projectImage').on('change', function () {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                // Update or create preview
+                let $preview = $('.img-thumbnail');
+                if ($preview.length === 0) {
+                    $preview = $('<img class="img-thumbnail mt-2" style="max-height: 200px;" alt="Project image">');
+                    $('#projectImage').parent().after($preview);
+                }
+                $preview.attr('src', e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
     });
 
     // Initialize if project is selected

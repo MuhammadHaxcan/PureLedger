@@ -3,7 +3,7 @@ using PureLedger.ViewModels;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace PureLedger.Services
+namespace PureLedger.Services.Interface
 {
     public interface IReportingService
     {
@@ -27,5 +27,7 @@ namespace PureLedger.Services
         Task<List<MissedEntriesByCustomerViewModel>> GetMissedEntriesByCustomerAsync(MissedEntriesReportRequest request);
         Task<List<MissedEntriesByProductViewModel>> GetMissedEntriesByProductAsync(MissedEntriesReportRequest request);
         Task<MissedEntriesDetailViewModel> GetMissedEntriesDetailAsync(MissedEntriesReportRequest request);
+        Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
+        Task<JournalVoucher?> GetJournalVoucherAsync(int journalVoucherId);
     }
 }

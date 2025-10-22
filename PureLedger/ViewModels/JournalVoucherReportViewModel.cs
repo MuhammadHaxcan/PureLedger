@@ -9,6 +9,7 @@ namespace PureLedger.ViewModels
         public string? ProjectName { get; set; }
         public string? BookerName { get; set; }
         public DateOnly CreatedDate { get; set; }
+        public string? ProjectImage { get; set; } // Added property for project image
 
         // Particular Customer Data
         public string? CustomerAccountName { get; set; } // Customer account name (from JournalEntries with Quantity == 0)

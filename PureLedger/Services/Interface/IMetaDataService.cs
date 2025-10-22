@@ -1,6 +1,6 @@
 ﻿using PureLedger.Models;
 
-namespace PureLedger.Services
+namespace PureLedger.Services.Interface
 {
     public interface IMetaDataService
     {

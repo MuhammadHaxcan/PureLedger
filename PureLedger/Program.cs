@@ -9,6 +9,7 @@ using PureLedger.Middleware;
 using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
+using PureLedger.Services.Interface;
 
 var builder = WebApplication.CreateBuilder(args);
 

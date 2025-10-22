@@ -1,5 +1,6 @@
 ﻿using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.Services.Interface;
 
 namespace PureLedger.Services
 {

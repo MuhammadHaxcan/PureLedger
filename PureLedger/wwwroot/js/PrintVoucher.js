@@ -3,6 +3,7 @@
  */
 document.addEventListener('DOMContentLoaded', function() {
     initializeVoucherPage();
+    handleProjectImage();
 });
 
 function initializeVoucherPage() {
@@ -149,4 +150,19 @@ function formatNumber(num) {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     }).format(Math.round(num));
+}
+
+function handleProjectImage() {
+    // Ensure project image is properly sized and displayed
+    const logoImage = document.querySelector('.logo-container img');
+    if (logoImage) {
+        logoImage.addEventListener('error', function() {
+            // If image fails to load, fall back to default logo
+            this.src = '/images/logo.png';
+        });
+        
+        // Ensure the image is properly sized
+        logoImage.style.maxHeight = '100px';
+        logoImage.style.maxWidth = '200px';
+    }
 }

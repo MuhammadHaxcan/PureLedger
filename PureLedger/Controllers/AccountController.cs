@@ -2,9 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
-using PureLedger.Services;
 using PureLedger.ViewModels;
 using System.Security.Claims;
+using PureLedger.Services.Interface;
 
 namespace PureLedger.Controllers
 {

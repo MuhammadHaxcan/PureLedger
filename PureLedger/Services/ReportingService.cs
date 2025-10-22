@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -987,6 +988,16 @@ namespace PureLedger.Services
                 
                 return viewModel;
             });
+        }
+
+        public async Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId)
+        {
+            return await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(projectId);
+        }
+
+        public async Task<JournalVoucher?> GetJournalVoucherAsync(int journalVoucherId)
+        {
+            return await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
         }
     }
 }

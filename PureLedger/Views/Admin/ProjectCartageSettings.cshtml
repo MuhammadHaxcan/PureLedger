@@ -26,8 +26,10 @@
             </h6>
         </div>
         <div class="card-body">
-            <form asp-action="ProjectCartageSettings" method="post" id="cartage-settings-form">
+            <form asp-action="ProjectCartageSettings" method="post" id="cartage-settings-form" enctype="multipart/form-data">
                 <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input type="hidden" asp-for="Id" />
+                <input type="hidden" asp-for="ProjectImage" />
 
                 <div class="mb-3">
                     <label class="form-label">Project <span class="text-danger">*</span></label>
@@ -62,14 +64,30 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Cartage Transporter Category <span class="text-danger">*</span></label>
+                    <label class="form-label">Cartage Transporter Category</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-truck-loading"></i></span>
-                        <select asp-for="CartageTransporterCategoryId" class="form-select" id="CartageTransporterCategoryId" required>
+                        <select asp-for="CartageTransporterCategoryId" class="form-select" id="CartageTransporterCategoryId">
                             <option value="">-- Select Category --</option>
                         </select>
                     </div>
                     <span asp-validation-for="CartageTransporterCategoryId" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Project Image</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-image"></i></span>
+                        <input type="file" class="form-control" id="projectImage" name="projectImage" accept="image/*">
+                    </div>
+                    <div id="imagePreviewContainer" class="mt-2">
+                        @if (!string.IsNullOrEmpty(Model?.ProjectImage))
+                        {
+                            <img src="@Url.Content($"~/uploads/projects/{Model.ProjectImage}")"
+                                 class="img-thumbnail" style="max-height: 200px;"
+                                 alt="Project image">
+                        }
+                    </div>
                 </div>
 
                 <div class="d-flex justify-content-between mt-4">
@@ -86,7 +104,9 @@
 </div>
 
 @section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
     <script>
         // Add this before loading project-cartage-settings.js
         var routes = {

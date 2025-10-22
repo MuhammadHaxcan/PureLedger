@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using PureLedger.Models;
-using PureLedger.Services;
+using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 using System.Security.Claims;
 
@@ -288,8 +288,42 @@ namespace PureLedger.Controllers
         // POST: /Admin/ProjectCartageSettings
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ProjectCartageSettings(ProjectCartageSettings model)
+        public async Task<IActionResult> ProjectCartageSettings(ProjectCartageSettings model, IFormFile projectImage)
         {
+            if (projectImage != null)
+            {
+                // Generate unique filename
+                string uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileName(projectImage.FileName)}";
+                string uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects");
+                
+                // Create directory if it doesn't exist
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                // Save file
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await projectImage.CopyToAsync(fileStream);
+                }
+
+                // Delete old image if exists
+                if (!string.IsNullOrEmpty(model.ProjectImage))
+                {
+                    string oldFilePath = Path.Combine(uploadsFolder, model.ProjectImage);
+                    if (System.IO.File.Exists(oldFilePath))
+                    {
+                        System.IO.File.Delete(oldFilePath);
+                    }
+                }
+
+                // Update model with new image path
+                model.ProjectImage = uniqueFileName;
+            }
+
             await _authService.SaveProjectCartageSettingsAsync(model);
             TempData["SuccessMessage"] = "Project cartage settings updated successfully.";
             return RedirectToAction(nameof(ProjectCartageSettings), new { projectId = model.ProjectId });
@@ -325,23 +359,28 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<JsonResult> GetProjectCartageSettingsByProject(int projectId)
         {
-            try {
+            try
+            {
                 var settings = await _authService.GetProjectCartageSettingsAsync(projectId);
-                if (settings == null) {
+                if (settings == null)
+                {
                     return Json(null);
                 }
-                
+
                 // Create a simplified anonymous object without navigation properties to avoid circular references
-                var result = new {
+                var result = new
+                {
                     id = settings.Id,
                     projectId = settings.ProjectId,
                     forExpenseAccountId = settings.ForExpenseAccountId,
-                    cartageTransporterCategoryId = settings.CartageTransporterCategoryId
+                    cartageTransporterCategoryId = settings.CartageTransporterCategoryId,
+                    projectImage = settings.ProjectImage // Added project image
                 };
-                
+
                 return Json(result);
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 _logger.LogError(ex, "Error getting cartage settings for project {ProjectId}: {Message}", projectId, ex.Message);
                 return Json(null);
             }

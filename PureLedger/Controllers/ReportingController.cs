@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Models;
-using PureLedger.Services;
+using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 
 namespace PureLedger.Controllers
@@ -46,6 +46,21 @@ namespace PureLedger.Controllers
             if (type == VoucherType.JV)
             {
                 ViewBag.Filter = filter;
+            }
+
+            // Load project image if available
+            if (report.VoucherType != VoucherType.JV)
+            {
+                // Get project ID from the report
+                var voucher = await _reportingService.GetJournalVoucherAsync(journalVoucherId);
+                if (voucher != null)
+                {
+                    var projectCartageSettings = await _reportingService.GetProjectCartageSettingsAsync(voucher.ProjectId);
+                    if (projectCartageSettings != null && !string.IsNullOrEmpty(projectCartageSettings.ProjectImage))
+                    {
+                        report.ProjectImage = projectCartageSettings.ProjectImage;
+                    }
+                }
             }
 
             ViewBag.Type = type.ToString();

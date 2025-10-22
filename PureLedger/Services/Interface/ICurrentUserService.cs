@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 
-namespace PureLedger.Services
+namespace PureLedger.Services.Interface
 {
     public interface ICurrentUserService
     {

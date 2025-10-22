@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 
 namespace PureLedger.Services

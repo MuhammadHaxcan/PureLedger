@@ -11,15 +11,24 @@ namespace PureLedger.Models
         [Required]
         [ForeignKey("Project")]
         public int ProjectId { get; set; }
-        public virtual Project Project { get; set; }
+
+        // Make navigation properties nullable if they are optional
+        public virtual Project? Project { get; set; }
 
         [ForeignKey("Account")]
         public int? ForExpenseAccountId { get; set; }
-        public virtual Account ForExpenseAccount { get; set; }
+
+        // Mark as nullable
+        public virtual Account? ForExpenseAccount { get; set; }
 
         [ForeignKey("Category")]
         public int? CartageTransporterCategoryId { get; set; }
-        public virtual Category CartageTransporterCategory { get; set; }
+
+        // Mark as nullable
+        public virtual Category? CartageTransporterCategory { get; set; }
+
+        [StringLength(255)]
+        public string? ProjectImage { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

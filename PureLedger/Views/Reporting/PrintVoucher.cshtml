@@ -87,7 +87,16 @@
                         </div>
                     </div>
                     <div class="logo-container">
-                        <img src="/images/logo.png" class="logo" alt="Company Logo" />
+                        @if (!string.IsNullOrEmpty(Model.ProjectImage))
+                        {
+                            <!-- Use project specific image if available -->
+                            <img src="@Url.Content($"~/uploads/projects/{Model.ProjectImage}")" class="logo" alt="Project Logo" />
+                        }
+                        else
+                        {
+                            <!-- Fallback to default logo -->
+                            <img src="/images/logo.png" class="logo" alt="Company Logo" />
+                        }
                     </div>
                 </div>
 

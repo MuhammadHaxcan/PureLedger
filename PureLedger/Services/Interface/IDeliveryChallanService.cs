@@ -1,14 +1,14 @@
 using PureLedger.Models;
 using PureLedger.ViewModels;
 
-namespace PureLedger.Services
+namespace PureLedger.Services.Interface
 {
     public interface IDeliveryChallanService
     {
         #region Entity Retrieval
         Task<List<Project>> GetAllProjectsAsync();
         Task<List<Project>> GetAllProjectsForUserAsync(int userId);
-        Task<List<Models.Location>> GetAllLocationsAsync();
+        Task<List<Location>> GetAllLocationsAsync();
         Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
         
         // Entry retrieval methods
