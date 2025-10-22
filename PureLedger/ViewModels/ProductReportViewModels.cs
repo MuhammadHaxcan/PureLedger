@@ -30,23 +30,52 @@ namespace PureLedger.ViewModels
 
     public class ProductReportViewModel
     {
-        public List<ProductReportEntryViewModel> Entries { get; set; } = new List<ProductReportEntryViewModel>();
+        public List<ProductSummaryViewModel> ProductSummaries { get; set; } = new List<ProductSummaryViewModel>();
+        public ProductReportTotalsViewModel Totals { get; set; } = new ProductReportTotalsViewModel();
+    }
+
+    public class ProductReportTotalsViewModel
+    {
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
-        public decimal NetBalance { get; set; }
-        public int TotalQuantity { get; set; }
         public int TotalDebitQty { get; set; }
         public int TotalCreditQty { get; set; }
         public int NetQuantity { get; set; }
-        // Pagination metadata
-        public int TotalRecords { get; set; }
-        public int Page { get; set; }
-        public int PageSize { get; set; }
-        public bool HasMoreData { get; set; }
         public decimal TotalCOGS { get; set; }
         public decimal TotalMargin { get; set; }
+        public decimal MarginPercentage { get; set; }
     }
 
+    public class ProductSummaryViewModel
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; }
+        public int LastVoucherId { get; set; }
+        public string EntryDate { get; set; }
+        public string CreditableDate { get; set; }
+
+        // Previous balance data (before start date)
+        public int PreviousDebitQty { get; set; }
+        public int PreviousCreditQty { get; set; }
+        public int PreviousBalance { get; set; }
+        public decimal PreviousDebit { get; set; }
+        public decimal PreviousCredit { get; set; }
+        public decimal PreviousAvgRate { get; set; }
+        public bool HasPreviousBalance { get; set; }
+
+        // Current period data (within date range)
+        public int TotalDebitQty { get; set; }
+        public int TotalCreditQty { get; set; }
+        public int QtyBalance { get; set; }
+        public decimal AverageRate { get; set; }
+        public decimal TotalDebit { get; set; }
+        public decimal TotalCredit { get; set; }
+        public decimal COGS { get; set; }
+        public decimal Margin { get; set; }
+        public decimal MarginPercentage { get; set; }
+    }
+
+    // Legacy class maintained for backward compatibility
     public class ProductReportEntryViewModel
     {
         public int Id { get; set; }  // Journal Voucher ID

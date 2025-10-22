@@ -3,6 +3,10 @@ using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PureLedger.Controllers
 {
@@ -13,7 +17,7 @@ namespace PureLedger.Controllers
         private readonly ICurrentUserService _currentUserService;
 
         public ReportingController(
-            IReportingService reportingService, 
+            IReportingService reportingService,
             ICurrentUserService currentUserService)
         {
             _reportingService = reportingService;
@@ -140,7 +144,7 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> ProductReport()
         {
             var viewModel = await CreateReportBaseViewModel<ProductReportPageViewModel>();
-            
+
             // Get locations for the dropdown
             var locations = await _reportingService.GetAllLocationsAsync();
             viewModel.Locations = locations.Select(l => new LocationViewModel
@@ -148,13 +152,26 @@ namespace PureLedger.Controllers
                 Id = l.LocationId.ToString(),
                 Name = l.LocationName
             }).ToList();
-            
+
             return View(viewModel);
         }
 
         [HttpGet]
         public async Task<IActionResult> GetProductReportData([FromQuery] ProductReportRequest request)
         {
+            // Parse dates from query string - allow null values
+            if (request.StartDate == null && !string.IsNullOrEmpty(Request.Query["startDate"].ToString()))
+            {
+                if (DateOnly.TryParse(Request.Query["startDate"], out DateOnly startDate))
+                    request.StartDate = startDate;
+            }
+            
+            if (request.EndDate == null && !string.IsNullOrEmpty(Request.Query["endDate"].ToString()))
+            {
+                if (DateOnly.TryParse(Request.Query["endDate"], out DateOnly endDate))
+                    request.EndDate = endDate;
+            }
+            
             var report = await _reportingService.GetProductReportAsync(request);
             return Json(report);
         }
@@ -311,12 +328,10 @@ namespace PureLedger.Controllers
                 // Get current running balance
                 var balance = await _reportingService.GetAccountBalanceUpToVoucherAsync(journalVoucherId);
                 ViewBag.CustomerRunningBalance = balance;
-                
+
                 // Get previous balance (before this voucher)
                 var previousBalance = await _reportingService.GetAccountBalanceBeforeVoucherAsync(journalVoucherId);
                 ViewBag.PreviousBalance = previousBalance;
-
-                Console.WriteLine($"Customer balance for voucher {journalVoucherId}: {balance}, Previous: {previousBalance}");
             }
             catch (Exception ex)
             {

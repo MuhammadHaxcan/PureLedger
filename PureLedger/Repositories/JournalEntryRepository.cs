@@ -383,5 +383,72 @@ namespace PureLedger.Repositories
 
             return (totalDebit, totalCredit);
         }
+
+        public async Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
+    DateOnly startDate,
+    DateOnly endDate,
+    int projectId,
+    int? categoryId,
+    int? accountId,
+    int? locationId)
+        {
+            // Get all product entries in the date range
+            var query = _context.JournalEntries
+                .Include(je => je.JournalVoucher)
+                .Include(je => je.Account)
+                .Include(je => je.Category)
+                .Where(je =>
+                    je.JournalVoucher.ProjectId == projectId &&
+                    je.IsProcessed &&
+                    je.Quantity > 0 &&
+                    je.Account.AccountGroupId == 2 && // Only get product accounts
+                    je.JournalVoucher.EntryDate <= endDate); // Include all entries up to end date
+
+            // Apply start date filter only if we're not requesting all historical data
+            if (startDate != DateOnly.MinValue)
+            {
+                query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
+            }
+
+            // Apply additional filters
+            if (categoryId.HasValue)
+            {
+                query = query.Where(je => je.CategoryId == categoryId.Value);
+            }
+
+            if (accountId.HasValue)
+            {
+                query = query.Where(je => je.AccountId == accountId.Value);
+            }
+
+            // Apply ordering
+            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
+                        .ThenBy(je => je.JournalVoucherId)
+                        .ThenBy(je => je.JournalEntryId);
+
+            // Get entries with a LEFT JOIN to DeliveryChallanEntry
+            var entriesWithDC = await query
+                .GroupJoin(
+                    _context.DeliveryChallanEntries.Include(dce => dce.Location),
+                    je => je.JournalEntryId,
+                    dce => dce.JournalEntryId,
+                    (je, dces) => new { JournalEntry = je, DCEntries = dces })
+                .SelectMany(
+                    x => x.DCEntries.DefaultIfEmpty(),
+                    (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
+                .ToListAsync();
+
+            // Filter by location if specified
+            if (locationId.HasValue)
+            {
+                entriesWithDC = entriesWithDC
+                    .Where(x => x.DCEntry != null && x.DCEntry.LocationId == locationId.Value)
+                    .ToList();
+            }
+
+            // Transform to the return type
+            var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
+            return results;
+        }
     }
 }

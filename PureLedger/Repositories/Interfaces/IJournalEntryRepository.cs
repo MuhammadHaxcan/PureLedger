@@ -50,5 +50,13 @@ namespace PureLedger.Repositories.Interfaces
             int? projectId,
             int? categoryId,
             int? accountId);
+
+        Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
+    DateOnly startDate,
+    DateOnly endDate,
+    int projectId,
+    int? categoryId,
+    int? accountId,
+    int? locationId);
     }
 }

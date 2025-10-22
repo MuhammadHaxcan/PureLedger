@@ -485,7 +485,7 @@ namespace PureLedger.Controllers
         [HttpGet]
         [HttpPost]
         public async Task<IActionResult> GetCategoriesByProject(int projectId)
-        {
+                {
             var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
             return Json(categories);
         }

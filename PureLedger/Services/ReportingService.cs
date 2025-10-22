@@ -654,21 +654,24 @@ namespace PureLedger.Services
             int? accountId = !string.IsNullOrEmpty(request.AccountId) ? int.Parse(request.AccountId) : null;
             int? locationId = !string.IsNullOrEmpty(request.LocationId) ? int.Parse(request.LocationId) : null;
 
-            var startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
-            var endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
-
-            int page = Math.Max(0, request.Page); // Ensure page is not negative
-            int pageSize = Math.Clamp(request.PageSize, 1, 500); // Allow any size from 1 to 500
+            // If no start/end date, use min/max to include all data (like in MasterReport)
+            DateOnly startDate = request.StartDate ?? DateOnly.MinValue;
+            DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
 
             return await ExecuteInTransactionAsync(async () =>
             {
-                // Get paginated entries with total count
-                var (entriesWithDC, totalCount) = await _unitOfWork.JournalEntries.GetProcessedEntriesForProductReportAsync(
-                    startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
+                // Get ALL historical entries up to the end date
+                var allHistoricalEntries = await _unitOfWork.JournalEntries.GetAllEntriesForProductReportAsync(
+                    DateOnly.MinValue, endDate, projectId, categoryId, accountId, locationId);
 
-                var reportEntries = new List<ProductReportEntryViewModel>();
+                // Group all entries by product (AccountId)
+                var productGroups = allHistoricalEntries
+                    .GroupBy(x => x.Entry.AccountId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
-                // Initialize running totals
+                var productSummaries = new List<ProductSummaryViewModel>();
+
+                // Track totals for the report
                 decimal totalDebit = 0;
                 decimal totalCredit = 0;
                 int totalDebitQty = 0;
@@ -676,95 +679,145 @@ namespace PureLedger.Services
                 decimal totalCOGS = 0;
                 decimal totalMargin = 0;
 
-                // Group entries by product (AccountId) to calculate weighted average costs
-                var accountGroups = entriesWithDC.GroupBy(x => x.Entry.AccountId);
-
-                foreach (var accountGroup in accountGroups)
+                // Process each product
+                foreach (var productId in productGroups.Keys)
                 {
-                    // Sort entries by date for chronological processing
-                    var accountEntries = accountGroup.OrderBy(x => x.Entry.JournalVoucher.EntryDate)
-                                                   .ThenBy(x => x.Entry.JournalVoucherId)
-                                                   .ToList();
+                    var productEntries = productGroups[productId];
 
-                    // Track running totals for weighted average calculation
-                    decimal totalCost = 0;
-                    int totalPurchaseQty = 0;
-                    decimal weightedAvgCost = 0;
+                    if (!productEntries.Any())
+                        continue;
 
-                    foreach (var (entry, dcEntry) in accountEntries)
+                    // Get product name from first entry
+                    var productName = productEntries.First().Entry.Account?.AccountName ?? "Unknown Product";
+
+                    // Separate entries into "before filter" and "within filter"
+                    var entriesBeforeStartDate = productEntries
+                        .Where(x => x.Entry.JournalVoucher.EntryDate < startDate)
+                        .ToList();
+
+                    var entriesInDateRange = productEntries
+                        .Where(x => x.Entry.JournalVoucher.EntryDate >= startDate &&
+                                   x.Entry.JournalVoucher.EntryDate <= endDate)
+                        .ToList();
+
+                    // Calculate previous balance (up to start date)
+                    var prevDebitEntries = entriesBeforeStartDate.Where(x => x.Entry.Debit > 0).ToList();
+                    var prevCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
+
+                    int prevDebitQty = prevDebitEntries.Sum(x => x.Entry.Quantity);
+                    int prevCreditQty = prevCreditEntries.Sum(x => x.Entry.Quantity);
+                    int prevQtyBalance = prevDebitQty - prevCreditQty;
+
+                    decimal prevTotalDebit = prevDebitEntries.Sum(x => x.Entry.Debit);
+                    decimal prevTotalCredit = prevCreditEntries.Sum(x => x.Entry.Credit);
+                    decimal prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
+
+                    // Calculate current period totals
+                    var currentDebitEntries = entriesInDateRange.Where(x => x.Entry.Debit > 0).ToList();
+                    var currentCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
+
+                    int currentDebitQty = currentDebitEntries.Sum(x => x.Entry.Quantity);
+                    int currentCreditQty = currentCreditEntries.Sum(x => x.Entry.Quantity);
+
+                    decimal currentDebit = currentDebitEntries.Sum(x => x.Entry.Debit);
+                    decimal currentCredit = currentCreditEntries.Sum(x => x.Entry.Credit);
+
+                    // Calculate cumulative totals (previous + current)
+                    int totalProductDebitQty = prevDebitQty + currentDebitQty;
+                    int totalProductCreditQty = prevCreditQty + currentCreditQty;
+                    int qtyBalance = totalProductDebitQty - totalProductCreditQty;
+
+                    // Calculate average rate based on ALL history (up to end date)
+                    // This implements the weighted average cost calculation
+                    decimal averageRate = totalProductDebitQty > 0 ?
+                        (prevTotalDebit + currentDebit) / totalProductDebitQty :
+                        prevAvgRate; // If no debit entries in total, use previous average rate
+
+                    // Calculate COGS = Average Rate × Current Period Credit Quantity
+                    decimal cogs = averageRate * currentCreditQty;
+
+                    // Calculate margin = Current Period Credit - COGS
+                    decimal margin = currentCredit - cogs;
+
+                    // Calculate margin percentage
+                    decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
+
+                    // Find the last journal voucher for this product within the date range
+                    JournalEntry? lastEntry = null;
+
+                    if (entriesInDateRange.Any())
                     {
-                        // Calculate debit and credit quantities
-                        int debitQty = entry.Debit > 0 ? entry.Quantity : 0;
-                        int creditQty = entry.Credit > 0 ? entry.Quantity : 0;
-
-                        // Update running totals for purchases (debits represent inventory additions)
-                        if (debitQty > 0)
-                        {
-                            totalCost += entry.Debit;
-                            totalPurchaseQty += debitQty;
-                            weightedAvgCost = totalPurchaseQty > 0 ? totalCost / totalPurchaseQty : 0;
-                        }
-
-                        // Calculate COGS and margin
-                        decimal cogs = creditQty * weightedAvgCost;
-                        decimal margin = entry.Credit - cogs;
-
-                        // Add to report totals
-                        totalDebit += entry.Debit;
-                        totalCredit += entry.Credit;
-                        totalDebitQty += debitQty;
-                        totalCreditQty += creditQty;
-                        totalCOGS += cogs;
-                        totalMargin += margin;
-
-                        // Create entry view model
-                        var reportEntry = new ProductReportEntryViewModel
-                        {
-                            Id = entry.JournalVoucherId,
-                            EntryId = entry.JournalEntryId,  // Add the Entry ID
-                            EntryDate = entry.JournalVoucher.EntryDate.ToString("dd-MMM yyyy"),
-                            DueDate = entry.JournalVoucher.CreditableDate.ToString("dd-MMM yyyy"),
-                            Description = entry.Description ?? "",
-                            AccountName = entry.Account?.AccountName ?? "",
-                            Quantity = entry.Quantity,
-                            QtyBalance = totalPurchaseQty - (accountEntries.Take(accountEntries.IndexOf((entry, dcEntry)) + 1)
-                                                     .Sum(x => x.Entry.Credit > 0 ? x.Entry.Quantity : 0)),
-                            Rate = entry.Rate,
-                            DebitQty = debitQty,
-                            CreditQty = creditQty,
-                            QuantityBalance = debitQty - creditQty,
-                            AvgRate = weightedAvgCost,
-                            Debit = entry.Debit,
-                            Credit = entry.Credit,
-                            Balance = entry.Debit - entry.Credit,
-                            COGS = cogs,
-                            Margin = margin,
-                            LocationName = dcEntry?.Location?.LocationName ?? "N/A"
-                        };
-
-                        reportEntries.Add(reportEntry);
+                        lastEntry = entriesInDateRange
+                            .OrderByDescending(x => x.Entry.JournalVoucher.EntryDate)
+                            .ThenByDescending(x => x.Entry.JournalVoucherId)
+                            .First().Entry;
                     }
+                    else if (entriesBeforeStartDate.Any())
+                    {
+                        lastEntry = entriesBeforeStartDate
+                            .OrderByDescending(x => x.Entry.JournalVoucher.EntryDate)
+                            .ThenByDescending(x => x.Entry.JournalVoucherId)
+                            .First().Entry;
+                    }
+
+                    if (lastEntry == null)
+                        continue;
+
+                    // Create the product summary
+                    var summary = new ProductSummaryViewModel
+                    {
+                        ProductId = productId,
+                        ProductName = productName,
+                        LastVoucherId = lastEntry.JournalVoucherId,
+                        EntryDate = lastEntry.JournalVoucher.EntryDate.ToString("dd-MMM yyyy"),
+                        CreditableDate = lastEntry.JournalVoucher.CreditableDate.ToString("dd-MMM yyyy"),
+                        PreviousDebitQty = prevDebitQty,
+                        PreviousCreditQty = prevCreditQty,
+                        PreviousBalance = prevQtyBalance,
+                        PreviousDebit = prevTotalDebit,
+                        PreviousCredit = prevTotalCredit,
+                        PreviousAvgRate = prevAvgRate,
+                        TotalDebitQty = currentDebitQty,
+                        TotalCreditQty = currentCreditQty,
+                        QtyBalance = qtyBalance,
+                        AverageRate = averageRate,
+                        TotalDebit = currentDebit,
+                        TotalCredit = currentCredit,
+                        COGS = cogs,
+                        Margin = margin,
+                        MarginPercentage = marginPercentage,
+                        HasPreviousBalance = prevDebitQty > 0 || prevCreditQty > 0
+                    };
+
+                    productSummaries.Add(summary);
+
+                    // Update overall totals
+                    totalDebit += currentDebit;
+                    totalCredit += currentCredit;
+                    totalDebitQty += currentDebitQty;
+                    totalCreditQty += currentCreditQty;
+                    totalCOGS += cogs;
+                    totalMargin += margin;
                 }
 
-                // Create final view model with pagination
+                // Calculate overall margin percentage
+                decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
+
+                // Create the view model with product summaries and totals
                 var viewModel = new ProductReportViewModel
                 {
-                    Entries = reportEntries,
-                    TotalDebitQty = totalDebitQty,
-                    TotalCreditQty = totalCreditQty,
-                    NetQuantity = totalDebitQty - totalCreditQty,
-                    TotalDebit = totalDebit,
-                    TotalCredit = totalCredit,
-                    NetBalance = totalDebit - totalCredit,
-                    TotalQuantity = reportEntries.Sum(e => e.Quantity),
-                    TotalRecords = totalCount,
-                    TotalCOGS = totalCOGS,
-                    TotalMargin = totalMargin,
-
-                    // Pagination metadata
-                    Page = page,
-                    PageSize = pageSize,
-                    HasMoreData = (page + 1) * pageSize < totalCount
+                    ProductSummaries = productSummaries.OrderBy(p => p.ProductName).ToList(),
+                    Totals = new ProductReportTotalsViewModel
+                    {
+                        TotalDebit = totalDebit,
+                        TotalCredit = totalCredit,
+                        TotalDebitQty = totalDebitQty,
+                        TotalCreditQty = totalCreditQty,
+                        NetQuantity = totalDebitQty - totalCreditQty,
+                        TotalCOGS = totalCOGS,
+                        TotalMargin = totalMargin,
+                        MarginPercentage = totalMarginPercentage
+                    }
                 };
 
                 return viewModel;
