@@ -35,38 +35,48 @@
         <div class="card-body">
             <form id="agingReportForm">
                 <div class="row mb-3">
-                    <div class="col-md-4 mb-3 mb-md-0">
-                        <label class="form-label">Reference Date</label>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Reference Date <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
                             <input type="date" class="form-control" id="referenceDate" required>
                         </div>
                         <small class="form-text text-muted">The date to calculate aging from</small>
                     </div>
-                    <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="col-md-4 mb-3">
                         <label class="form-label">Project</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                            <select class="form-select" id="projectId">
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                                <input type="text" class="form-control select-search project-search"
+                                       placeholder="Search project..." autocomplete="off">
+                            </div>
+                            <select class="form-select d-none" id="projectId">
                                 <option value="">All Projects</option>
                                 @foreach (var project in Model.Projects)
                                 {
                                     <option value="@project.Id">@project.Name</option>
                                 }
                             </select>
+                            <div class="select-dropdown project-dropdown"></div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-3 mb-md-0">
-                        <label class="form-label">Category</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-list"></i></span>
-                            <select class="form-select" id="categoryId" required>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Category <span class="text-danger">*</span></label>
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-list"></i></span>
+                                <input type="text" class="form-control select-search category-search"
+                                       placeholder="Search category..." autocomplete="off" disabled>
+                            </div>
+                            <select class="form-select d-none" id="categoryId" required disabled>
                                 <option value="">Select Category</option>
                                 @foreach (var category in Model.Categories)
                                 {
                                     <option value="@category.Id">@category.Name</option>
                                 }
                             </select>
+                            <div class="select-dropdown category-dropdown"></div>
                         </div>
                     </div>
                 </div>
@@ -117,44 +127,12 @@
 </div>
 
 @section Scripts {
+    <script>
+        // Define API routes for aging report
+        var routes = {
+            getCategoriesByProject: '@Url.Action("GetCategoriesByProject", "Reporting")',
+            getAgingReportData: '@Url.Action("GetAgingReportData", "Reporting")'
+        };
+    </script>
     <script src="~/js/agingReport.js" asp-append-version="true"></script>
 }
-
-
-<style>
-    /* Remove dropdown arrows from all select elements */
-    select.form-select {
-        -webkit-appearance: none !important;
-        -moz-appearance: none !important;
-        appearance: none !important;
-        background-image: none !important;
-        padding-right: 0.75rem !important;
-    }
-    
-    /* For Firefox */
-    select.form-select::-ms-expand {
-        display: none;
-    }
-    
-    /* Table number columns alignment */
-    .text-end {
-        text-align: right !important;
-    }
-    
-    #agingReportTable td.text-end {
-        font-family: monospace;
-        font-size: 1rem;
-    }
-    
-    /* Highlight negative balances */
-    #agingReportTable .negative-balance {
-        color: #dc3545;
-    }
-    
-    /* Fix date input alignment */
-    input[type="date"].form-control {
-        line-height: 1.5;
-        padding: 0.375rem 0.75rem;
-    }
-    
-</style>

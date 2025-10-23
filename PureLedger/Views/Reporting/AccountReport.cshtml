@@ -33,60 +33,75 @@
             </h6>
         </div>
         <div class="card-body">
-            <div class="row align-items-end mb-3">
-                <div class="col-md-3 mb-3 mb-md-0">
-                    <label class="form-label">Project</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                        <select id="projectId" class="form-select">
-                            <option value="">Select Project</option>
-                            @foreach (var p in Model.Projects)
-                            {
-                                <option value="@p.Id">@p.Name</option>
-                            }
-                        </select>
+            <form id="accountReportForm">
+                <div class="row align-items-end mb-3">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Project <span class="text-danger">*</span></label>
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                                <input type="text" class="form-control select-search project-search"
+                                       placeholder="Search project..." autocomplete="off">
+                            </div>
+                            <select class="form-select d-none" id="projectId" required>
+                                <option value="">Select Project</option>
+                                @foreach (var project in Model.Projects)
+                                {
+                                    <option value="@project.Id">@project.Name</option>
+                                }
+                            </select>
+                            <div class="select-dropdown project-dropdown"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Category</label>
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-list"></i></span>
+                                <input type="text" class="form-control select-search category-search"
+                                       placeholder="Search category..." autocomplete="off" disabled>
+                            </div>
+                            <select class="form-select d-none" id="categoryId" disabled>
+                                <option value="">All Categories</option>
+                                @foreach (var category in Model.Categories)
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </select>
+                            <div class="select-dropdown category-dropdown"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Account</label>
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input type="text" class="form-control select-search account-search"
+                                       placeholder="Search account..." autocomplete="off" disabled>
+                            </div>
+                            <select class="form-select d-none" id="accountId" disabled>
+                                <option value="">All Accounts</option>
+                            </select>
+                            <div class="select-dropdown account-dropdown"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-1"></i> Generate Report
+                        </button>
                     </div>
                 </div>
-                <div class="col-md-3 mb-3 mb-md-0">
-                    <label class="form-label">Category</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-list"></i></span>
-                        <select id="categoryId" class="form-select">
-                            <option value="">Select Category</option>
-                            @foreach (var c in Model.Categories)
-                            {
-                                <option value="@c.Id">@c.Name</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-3 mb-3 mb-md-0">
-                    <label class="form-label">Account</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-file-invoice-dollar"></i></span>
-                        <select id="accountId" class="form-select" disabled>
-                            <option value="">All Accounts</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-3 mb-3 mb-md-0">
-                    <button id="goBtn" class="btn btn-primary me-2">
-                        <i class="fas fa-search me-1"></i> Search
-                    </button>
-                    <button id="allProjectBtn" class="btn btn-secondary">
-                        <i class="fas fa-globe me-1"></i> All Projects
-                    </button>
-                </div>
-            </div>
 
-            <div class="row">
-                <div class="col-12">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input id="searchBox" class="form-control" placeholder="Filter results..." />
+                <div class="row">
+                    <div class="col-12">
+                        <label class="form-label">Search</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input id="searchBox" class="form-control" placeholder="Filter results..." />
+                        </div>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
     </div>
 
@@ -112,7 +127,7 @@
                     </thead>
                     <tbody id="reportData">
                         <tr>
-                            <td colspan="6" class="text-center">Please select at least one filter</td>
+                            <td colspan="6" class="text-center">Please select a project to generate report</td>
                         </tr>
                     </tbody>
                 </table>
@@ -122,33 +137,13 @@
 </div>
 
 @section Scripts {
+    <script>
+        // Define API routes for account report
+        var routes = {
+            getCategoriesByProject: '@Url.Action("GetCategoriesByProject", "Reporting")',
+            getAccountsByCategory: '@Url.Action("GetAccountsByCategory", "Reporting")',
+            getAccountReportData: '@Url.Action("GetAccountReportData", "Reporting")'
+        };
+    </script>
     <script src="~/js/accountReport.js" asp-append-version="true"></script>
 }
-
-<style>
-    /* Remove dropdown arrows from all select elements */
-    select.form-select {
-        -webkit-appearance: none !important;
-        -moz-appearance: none !important;
-        appearance: none !important;
-        background-image: none !important;
-        padding-right: 0.75rem !important;
-    }
-
-        /* For Firefox */
-        select.form-select::-ms-expand {
-            display: none;
-        }
-
-    /* Table number columns alignment */
-    #accountReportTable td.text-end {
-        text-align: right;
-        font-family: monospace;
-        font-size: 1rem;
-    }
-
-    /* Highlight negative balances */
-    #accountReportTable .negative-balance {
-        color: #dc3545;
-    }
-</style>

@@ -312,21 +312,23 @@ namespace PureLedger.Services
 
         public async Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request)
         {
-
-            if (string.IsNullOrWhiteSpace(request.CategoryId) &&
-                string.IsNullOrWhiteSpace(request.ProjectId) &&
-                string.IsNullOrWhiteSpace(request.AccountId))
+            // Validate that ProjectId is required
+            if (string.IsNullOrWhiteSpace(request.ProjectId))
             {
                 return new List<AccountReportViewModel>();
             }
 
             int? categoryId = ParseNullableInt(request.CategoryId);
-            int? projectId = ParseNullableInt(request.ProjectId);
             int? accountId = ParseNullableInt(request.AccountId);
+            
+            // Parse projectId as required
+            if (!int.TryParse(request.ProjectId, out int projectId))
+            {
+                return new List<AccountReportViewModel>();
+            }
 
             return await ExecuteInTransactionAsync(async () =>
             {
-
                 List<Account> accounts = await GetFilteredAccountsAsync(accountId, categoryId, projectId);
 
                 if (!accounts.Any())
@@ -371,23 +373,31 @@ namespace PureLedger.Services
             });
         }
 
-        private async Task<List<Account>> GetFilteredAccountsAsync(int? accountId, int? categoryId, int? projectId)
+        private async Task<List<Account>> GetFilteredAccountsAsync(int? accountId, int? categoryId, int projectId)
         {
             if (accountId.HasValue)
             {
                 var account = await _unitOfWork.Accounts.GetByIdWithCategoryAsync(accountId.Value);
-                return account != null ? new List<Account> { account } : new List<Account>();
+                
+                // Ensure the account belongs to the specified project
+                if (account?.Category?.ProjectId == projectId)
+                {
+                    return new List<Account> { account };
+                }
+                return new List<Account>();
             }
             else if (categoryId.HasValue)
             {
-                return await _unitOfWork.Accounts.GetByCategoryIdWithCategoryAsync(categoryId.Value);
+                var accounts = await _unitOfWork.Accounts.GetByCategoryIdWithCategoryAsync(categoryId.Value);
+                
+                // Filter accounts that belong to the specified project
+                return accounts.Where(a => a.Category?.ProjectId == projectId).ToList();
             }
-            else if (projectId.HasValue)
+            else
             {
-                return await _unitOfWork.Accounts.GetAccountsWithEntriesInProjectAsync(projectId.Value);
+                // Get all accounts that have entries in the specified project
+                return await _unitOfWork.Accounts.GetAccountsWithEntriesInProjectAsync(projectId);
             }
-
-            return new List<Account>();
         }
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId)

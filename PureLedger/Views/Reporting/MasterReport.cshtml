@@ -55,7 +55,7 @@
                         <div class="select-container">
                             <div class="input-group">
                                 <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                                <input type="text" class="form-control select-search project-search" 
+                                <input type="text" class="form-control select-search project-search"
                                        placeholder="Search project..." autocomplete="off">
                             </div>
                             <select class="form-select d-none" id="projectId" required>
@@ -73,7 +73,7 @@
                         <div class="select-container">
                             <div class="input-group">
                                 <span class="input-group-text"><i class="fas fa-list"></i></span>
-                                <input type="text" class="form-control select-search category-search" 
+                                <input type="text" class="form-control select-search category-search"
                                        placeholder="Search category..." autocomplete="off" disabled>
                             </div>
                             <select class="form-select d-none" id="categoryId" disabled>
@@ -93,7 +93,7 @@
                         <div class="select-container">
                             <div class="input-group">
                                 <span class="input-group-text"><i class="fas fa-user"></i></span>
-                                <input type="text" class="form-control select-search account-search" 
+                                <input type="text" class="form-control select-search account-search"
                                        placeholder="Search account..." autocomplete="off" disabled>
                             </div>
                             <select class="form-select d-none" id="accountId" disabled>
@@ -108,7 +108,7 @@
                         <div class="select-container">
                             <div class="input-group">
                                 <span class="input-group-text"><i class="fas fa-user-tag"></i></span>
-                                <input type="text" class="form-control select-search booker-search" 
+                                <input type="text" class="form-control select-search booker-search"
                                        placeholder="Search booker..." autocomplete="off">
                             </div>
                             <select class="form-select d-none" id="bookerId">
@@ -303,166 +303,3 @@
     </script>
     <script src="~/js/master-report.js" asp-append-version="true"></script>
 }
-
-<style>
-    /* Remove dropdown arrows from all select elements */
-    select.form-select {
-        -webkit-appearance: none !important;
-        -moz-appearance: none !important;
-        appearance: none !important;
-        background-image: none !important;
-        padding-right: 0.75rem !important;
-    }
-
-        /* For Firefox */
-        select.form-select::-ms-expand {
-            display: none;
-        }
-
-    /* Table number columns alignment */
-    .text-end {
-        text-align: right !important;
-    }
-
-    /* Card header padding */
-    .card-header.py-3 {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-
-    /* Column toggle buttons */
-    .column-toggles .btn {
-        border-radius: 0;
-    }
-
-        .column-toggles .btn:first-child {
-            border-top-left-radius: 0.25rem;
-            border-bottom-left-radius: 0.25rem;
-        }
-
-        .column-toggles .btn:last-child {
-            border-top-right-radius: 0.25rem;
-            border-bottom-right-radius: 0.25rem;
-        }
-
-    /* Table styles */
-    #masterReportTable td,
-    #accountSummaryTable td,
-    #categorySummaryTable td {
-        vertical-align: middle;
-    }
-
-    /* Monospace for numbers */
-    .text-end {
-        font-family: monospace;
-        font-size: 0.9rem;
-    }
-
-    /* Negative values in red */
-    .negative-balance {
-        color: #dc3545;
-    }
-
-    /* Add this to your existing styles */
-    .id-container {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .voucher-link {
-        color: #375a7f;
-        text-decoration: none;
-        font-weight: 500;
-        display: block;
-        margin-bottom: 2px;
-    }
-
-        .voucher-link:hover {
-            color: #2a4766;
-            text-decoration: underline;
-        }
-
-    .entry-id {
-        font-size: 0.85em;
-        color: #6c757d;
-        display: block;
-    }
-
-    /* Update table styles to handle multi-line content better */
-    #masterReportTable td {
-        vertical-align: middle;
-        padding: 0.5rem;
-    }
-
-    /* Automatic loading indicator */
-    #loadingStatus {
-        font-size: 0.9rem;
-    }
-
-    .quantity-column {
-        text-align: right !important;
-        font-family: monospace;
-        font-size: 0.9rem;
-    }
-
-    /* Add styles for booker column */
-    .booker-column {
-        min-width: 120px;
-    }
-
-    /* Add horizontal padding between toggle checkboxes */
-    .column-toggles label.btn {
-        margin-right: 0.5rem;
-    }
-    .column-toggles label.btn:last-child {
-        margin-right: 0;
-    }
-
-    .select-container {
-        position: relative;
-        width: 100%;
-    }
-
-    .select-dropdown {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        width: 100%;
-        max-height: 200px;
-        overflow-y: auto;
-        background: white;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        z-index: 9999;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        display: none;
-    }
-
-    .select-dropdown.show {
-        display: block;
-    }
-
-    .select-option {
-        padding: 8px 12px;
-        cursor: pointer;
-    }
-
-    .select-option:hover {
-        background-color: #f0f7ff;
-    }
-
-    .select-option.selected {
-        background-color: #0d6efd;
-        color: white;
-        font-weight: 500;
-    }
-
-    .select-option.filtered-out {
-        display: none;
-    }
-
-    /* Hide original select */
-    .select-container select {
-        display: none;
-    }
-</style>
