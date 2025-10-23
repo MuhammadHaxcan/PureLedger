@@ -52,49 +52,69 @@
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Project <span class="text-danger">*</span></label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                            <select class="form-select" id="projectId" required>
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                                <input type="text" class="form-control select-search project-search" 
+                                       placeholder="Search project..." autocomplete="off">
+                            </div>
+                            <select class="form-select d-none" id="projectId" required>
                                 <option value="">Select Project</option>
                                 @foreach (var project in Model.Projects)
                                 {
                                     <option value="@project.Id">@project.Name</option>
                                 }
                             </select>
+                            <div class="select-dropdown project-dropdown"></div>
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Category</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-list"></i></span>
-                            <select class="form-select" id="categoryId">
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-list"></i></span>
+                                <input type="text" class="form-control select-search category-search" 
+                                       placeholder="Search category..." autocomplete="off" disabled>
+                            </div>
+                            <select class="form-select d-none" id="categoryId" disabled>
                                 <option value="">All Categories</option>
                                 @foreach (var category in Model.Categories)
                                 {
                                     <option value="@category.Id">@category.Name</option>
                                 }
                             </select>
+                            <div class="select-dropdown category-dropdown"></div>
                         </div>
                     </div>
                 </div>
                 <div class="row mb-3">
                     <div class="col-md-3">
                         <label class="form-label">Account</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-user"></i></span>
-                            <select class="form-select" id="accountId">
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input type="text" class="form-control select-search account-search" 
+                                       placeholder="Search account..." autocomplete="off" disabled>
+                            </div>
+                            <select class="form-select d-none" id="accountId" disabled>
                                 <option value="">All Accounts</option>
                             </select>
+                            <div class="select-dropdown account-dropdown"></div>
                         </div>
                     </div>
-                    <!-- Add Booker dropdown -->
+                    <!-- Update the Booker dropdown -->
                     <div class="col-md-3">
                         <label class="form-label">Booker</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-user-tag"></i></span>
-                            <select class="form-select" id="bookerId">
+                        <div class="select-container">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user-tag"></i></span>
+                                <input type="text" class="form-control select-search booker-search" 
+                                       placeholder="Search booker..." autocomplete="off">
+                            </div>
+                            <select class="form-select d-none" id="bookerId">
                                 <option value="">All Bookers</option>
                             </select>
+                            <div class="select-dropdown booker-dropdown"></div>
                         </div>
                     </div>
                 </div>
@@ -396,5 +416,53 @@
     }
     .column-toggles label.btn:last-child {
         margin-right: 0;
+    }
+
+    .select-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .select-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+        background: white;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        z-index: 9999;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        display: none;
+    }
+
+    .select-dropdown.show {
+        display: block;
+    }
+
+    .select-option {
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+
+    .select-option:hover {
+        background-color: #f0f7ff;
+    }
+
+    .select-option.selected {
+        background-color: #0d6efd;
+        color: white;
+        font-weight: 500;
+    }
+
+    .select-option.filtered-out {
+        display: none;
+    }
+
+    /* Hide original select */
+    .select-container select {
+        display: none;
     }
 </style>

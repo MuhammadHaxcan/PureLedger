@@ -1,5 +1,14 @@
-﻿document.addEventListener('DOMContentLoaded', () => {
+﻿/**
+ * Product Report JavaScript
+ * Handles all functionality for the Product Report page including:
+ * - Searchable dropdown filters
+ * - Column visibility toggles
+ * - Data fetching and rendering
+ */
+
+document.addEventListener('DOMContentLoaded', () => {
     initializeReportState();
+    initializeSelectDropdowns();
     setupEventListeners();
     setDefaultDates();
 });
@@ -27,6 +36,94 @@ function initializeReportState() {
     };
 }
 
+function initializeSelectDropdowns() {
+    // Create select-container structure for existing dropdowns
+    convertToSearchableSelect('projectId', 'Search project...');
+    convertToSearchableSelect('categoryId', 'Search category...');
+    convertToSearchableSelect('accountId', 'Search product...');
+    convertToSearchableSelect('locationId', 'Search location...');
+
+    // Populate initial dropdown options
+    populateDropdownOptions();
+}
+
+function convertToSearchableSelect(selectId, placeholder) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    // Only proceed if not already converted
+    if (select.parentElement.classList.contains('select-container')) return;
+
+    // Get the icon class based on the select ID
+    let iconClass = 'fa-list';
+    if (selectId === 'projectId') iconClass = 'fa-project-diagram';
+    else if (selectId === 'categoryId') iconClass = 'fa-sitemap';
+    else if (selectId === 'accountId') iconClass = 'fa-box';
+    else if (selectId === 'locationId') iconClass = 'fa-map-marker-alt';
+
+    // Get any existing input-group parent
+    const inputGroup = select.closest('.input-group');
+    const selectParent = inputGroup ? inputGroup.parentElement : select.parentElement;
+
+    // Create the new structure
+    const container = document.createElement('div');
+    container.className = 'select-container';
+
+    const newInputGroup = document.createElement('div');
+    newInputGroup.className = 'input-group';
+
+    // Icon span
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'input-group-text';
+    iconSpan.innerHTML = `<i class="fas ${iconClass}"></i>`;
+
+    // Search input
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = `form-control select-search ${selectId}-search`;
+    searchInput.placeholder = placeholder;
+    searchInput.autocomplete = 'off';
+    if (select.disabled) searchInput.disabled = true;
+
+    // Dropdown div
+    const dropdownDiv = document.createElement('div');
+    dropdownDiv.className = `select-dropdown ${selectId}-dropdown`;
+
+    // Clone the select and hide it
+    const clonedSelect = select.cloneNode(true);
+    clonedSelect.className = 'form-select d-none';
+
+    // Build the structure
+    newInputGroup.appendChild(iconSpan);
+    newInputGroup.appendChild(searchInput);
+    container.appendChild(newInputGroup);
+    container.appendChild(clonedSelect);
+    container.appendChild(dropdownDiv);
+
+    // Replace the old select with our new structure
+    selectParent.replaceChild(container, inputGroup || select);
+}
+
+function populateDropdownOptions() {
+    // Populate options for all select-container elements
+    document.querySelectorAll('.select-container').forEach(container => {
+        const select = container.querySelector('select');
+        const dropdown = container.querySelector('.select-dropdown');
+
+        if (select && dropdown) {
+            dropdown.innerHTML = '';
+
+            Array.from(select.options).forEach(option => {
+                const div = document.createElement('div');
+                div.className = 'select-option';
+                div.dataset.value = option.value;
+                div.textContent = option.textContent;
+                dropdown.appendChild(div);
+            });
+        }
+    });
+}
+
 function setupEventListeners() {
     document.getElementById('productReportForm').addEventListener('submit', e => {
         e.preventDefault();
@@ -35,10 +132,153 @@ function setupEventListeners() {
 
     initColumnToggles();
     initSearchFunctionality();
-    document.getElementById('projectId').addEventListener('change', loadCategoriesForProject);
-    document.getElementById('categoryId').addEventListener('change', loadAccountsForCategory);
+    setupSelectSearch();
 
-    // Removed clear dates button event listener
+    // Handle dropdown changes
+    $(document).on('change', '#projectId', loadCategoriesForProject);
+    $(document).on('change', '#categoryId', loadAccountsForCategory);
+}
+
+function setupSelectSearch() {
+    // Handle input in search box
+    $(document).on('input', '.select-search', function () {
+        const $input = $(this);
+
+        if ($input.prop('disabled')) {
+            return;
+        }
+
+        const $container = $input.closest('.select-container');
+        const $dropdown = $container.find('.select-dropdown');
+        const $select = $container.find('select');
+        const searchTerm = $input.val().toLowerCase();
+
+        let visibleCount = 0;
+        $dropdown.find('.select-option').each(function () {
+            const text = $(this).text().toLowerCase();
+            const shouldShow = text.includes(searchTerm) && visibleCount < 8;
+            $(this).toggleClass('filtered-out', !shouldShow);
+            if (shouldShow) visibleCount++;
+        });
+
+        $dropdown.addClass('show');
+    });
+
+    // Show dropdown on focus
+    $(document).on('focus', '.select-search', function () {
+        const $input = $(this);
+
+        if ($input.prop('disabled')) {
+            return;
+        }
+
+        $('.select-dropdown').removeClass('show');
+
+        const $container = $input.closest('.select-container');
+        const $dropdown = $container.find('.select-dropdown');
+        const $select = $container.find('select');
+        const currentValue = $select.val();
+
+        $dropdown.find('.select-option').removeClass('selected filtered-out');
+
+        if (currentValue) {
+            const $selectedOption = $dropdown.find(`.select-option[data-value="${currentValue}"]`);
+            if ($selectedOption.length) {
+                $selectedOption.addClass('selected');
+            }
+        }
+
+        $dropdown.addClass('show');
+    });
+
+    // Handle keyboard navigation
+    $(document).on('keydown', '.select-search', function (e) {
+        const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
+        const $options = $dropdown.find('.select-option:not(.filtered-out)');
+        let $selected = $dropdown.find('.select-option.selected');
+
+        if (e.key === 'Tab' && $dropdown.hasClass('show')) {
+            $dropdown.removeClass('show');
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                if (!$selected.length) {
+                    $options.first().addClass('selected');
+                } else {
+                    const $next = $selected.nextAll('.select-option:not(.filtered-out)').first();
+                    if ($next.length) {
+                        $selected.removeClass('selected');
+                        $next.addClass('selected');
+                    }
+                }
+                break;
+
+            case 'ArrowUp':
+                e.preventDefault();
+                if (!$selected.length) {
+                    $options.last().addClass('selected');
+                } else {
+                    const $prev = $selected.prevAll('.select-option:not(.filtered-out)').first();
+                    if ($prev.length) {
+                        $selected.removeClass('selected');
+                        $prev.addClass('selected');
+                    }
+                }
+                break;
+
+            case 'Enter':
+                if ($dropdown.hasClass('show')) {
+                    e.preventDefault();
+                    $selected = $dropdown.find('.select-option.selected');
+                    if ($selected.length) {
+                        selectOption($selected, $(this).closest('.select-container'));
+                    } else {
+                        const $firstOption = $options.first();
+                        if ($firstOption.length) {
+                            selectOption($firstOption, $(this).closest('.select-container'));
+                        }
+                    }
+                }
+                break;
+
+            case 'Escape':
+                e.preventDefault();
+                $dropdown.removeClass('show');
+                break;
+        }
+    });
+
+    // Handle click on dropdown option
+    $(document).on('click', '.select-option:not(.filtered-out)', function () {
+        selectOption($(this), $(this).closest('.select-container'));
+    });
+
+    // Close dropdown when clicking outside
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.select-container').length) {
+            $('.select-dropdown').removeClass('show');
+        }
+    });
+}
+
+function selectOption($option, $container) {
+    const value = $option.data('value');
+    const text = $option.text();
+
+    // Update the hidden select and trigger change event
+    const $select = $container.find('select');
+    $select.val(value).trigger('change');
+
+    // Update the search input text
+    $container.find('.select-search').val(text);
+
+    // Update the visual state of the dropdown
+    $container.find('.select-dropdown').removeClass('show');
+    $container.find('.select-option').removeClass('selected');
+    $option.addClass('selected');
 }
 
 function setDefaultDates() {
@@ -134,7 +374,6 @@ function initSearchFunctionality() {
     const globalSearchInput = document.getElementById('globalReportSearch');
     if (globalSearchInput) {
         globalSearchInput.addEventListener('keyup', debounce(performSearch, 250));
-        // Removed clear button logic
     }
 
     const reportSearch = document.getElementById('reportSearch');
@@ -164,7 +403,8 @@ function performSearch() {
 }
 
 function filterReportData(searchText) {
-    const rows = document.getElementById('reportData').getElementsByTagName('tr');
+    const rows = document.getElementById('reportData')?.getElementsByTagName('tr');
+    if (!rows || rows.length === 0) return;
 
     // Track products for grouping
     const productGroups = {};
@@ -234,15 +474,23 @@ function handleNoMatchingRows(tableId, noResultsId, shouldShowNoResults, searchT
 // ==================== DROPDOWNS & DATA LOADING ====================
 
 function loadCategoriesForProject() {
-    const projectId = document.getElementById('projectId').value;
+    const projectId = $('#projectId').val();
+
+    // Get the elements we need to update
+    const $categoryContainer = $('.select-container').has('#categoryId');
+    const $categorySearch = $categoryContainer.find('.select-search');
+    const $categoryDropdown = $categoryContainer.find('.select-dropdown');
     const categorySelect = document.getElementById('categoryId');
 
+    // Reset category and account
     resetSelect(categorySelect, 'All Categories', true);
+    $categorySearch.val('').prop('disabled', true);
+    $categoryDropdown.empty();
     resetAccountDropdown();
 
     if (!projectId) return;
 
-    categorySelect.innerHTML = '<option value="" disabled selected>Loading categories...</option>';
+    $categoryDropdown.html('<div class="select-option">Loading categories...</div>');
 
     $.ajax({
         url: routes.getCategoriesByProject,
@@ -250,6 +498,10 @@ function loadCategoriesForProject() {
         success: function (categories) {
             resetSelect(categorySelect, 'All Categories');
             categorySelect.disabled = false;
+            $categorySearch.prop('disabled', false);
+
+            $categoryDropdown.empty();
+            $categoryDropdown.append('<div class="select-option" data-value="">All Categories</div>');
 
             if (categories?.length > 0) {
                 categories.forEach(category => {
@@ -257,25 +509,41 @@ function loadCategoriesForProject() {
                     option.value = category.id;
                     option.textContent = category.name;
                     categorySelect.appendChild(option);
+
+                    // Add option to dropdown
+                    const div = document.createElement('div');
+                    div.className = 'select-option';
+                    div.dataset.value = category.id;
+                    div.textContent = category.name;
+                    $categoryDropdown.append(div);
                 });
             }
         },
         error: function () {
             resetSelect(categorySelect, 'All Categories');
+            $categorySearch.prop('disabled', true);
+            $categoryDropdown.empty();
             showError('Failed to load categories. Please try again.');
         }
     });
 }
 
 function loadAccountsForCategory() {
-    const categoryId = document.getElementById('categoryId').value;
+    const categoryId = $('#categoryId').val();
+
+    // Get the elements we need to update
+    const $accountContainer = $('.select-container').has('#accountId');
+    const $accountSearch = $accountContainer.find('.select-search');
+    const $accountDropdown = $accountContainer.find('.select-dropdown');
     const accountSelect = document.getElementById('accountId');
 
     resetSelect(accountSelect, 'All Products', true);
+    $accountSearch.val('').prop('disabled', true);
+    $accountDropdown.empty();
 
     if (!categoryId) return;
 
-    accountSelect.innerHTML = '<option value="" disabled selected>Loading products...</option>';
+    $accountDropdown.html('<div class="select-option">Loading products...</div>');
 
     $.ajax({
         url: routes.getAccountsByCategory,
@@ -283,6 +551,10 @@ function loadAccountsForCategory() {
         success: function (accounts) {
             resetSelect(accountSelect, 'All Products');
             accountSelect.disabled = false;
+            $accountSearch.prop('disabled', false);
+
+            $accountDropdown.empty();
+            $accountDropdown.append('<div class="select-option" data-value="">All Products</div>');
 
             if (accounts?.length > 0) {
                 accounts.forEach(account => {
@@ -290,33 +562,34 @@ function loadAccountsForCategory() {
                     option.value = account.id;
                     option.textContent = account.name;
                     accountSelect.appendChild(option);
+
+                    // Add option to dropdown
+                    const div = document.createElement('div');
+                    div.className = 'select-option';
+                    div.dataset.value = account.id;
+                    div.textContent = account.name;
+                    $accountDropdown.append(div);
                 });
             }
         },
         error: function () {
             resetSelect(accountSelect, 'All Products');
+            $accountSearch.prop('disabled', true);
+            $accountDropdown.empty();
             showError('Failed to load products. Please try again.');
         }
     });
 }
 
-function updateAccountDropdown(accounts) {
-    const accountSelect = document.getElementById('accountId');
-    resetSelect(accountSelect, 'All Products');
-
-    if (accounts?.length > 0) {
-        accounts.forEach(account => {
-            const option = document.createElement('option');
-            option.value = account.id;
-            option.textContent = account.name;
-            accountSelect.appendChild(option);
-        });
-    }
-}
-
 function resetAccountDropdown() {
     const accountSelect = document.getElementById('accountId');
+    const $accountContainer = $('.select-container').has('#accountId');
+    const $accountSearch = $accountContainer.find('.select-search');
+    const $accountDropdown = $accountContainer.find('.select-dropdown');
+
     resetSelect(accountSelect, 'All Products', true);
+    $accountSearch.val('').prop('disabled', true);
+    $accountDropdown.empty();
 }
 
 function resetSelect(select, defaultText, disable = false) {
@@ -375,18 +648,29 @@ function generateReport() {
 }
 
 function clearReportData() {
-    document.getElementById('reportData').innerHTML = '';
+    const reportDataElement = document.getElementById('reportData');
+    if (reportDataElement) {
+        reportDataElement.innerHTML = '';
+    }
+
     window.reportState.allProducts = {};
 
     // Reset summary totals
-    document.getElementById('totalDebitQty').textContent = '0';
-    document.getElementById('totalCreditQty').textContent = '0';
-    document.getElementById('netQty').textContent = '0';
-    document.getElementById('totalDebit').textContent = '0.00';
-    document.getElementById('totalCredit').textContent = '0.00';
-    document.getElementById('totalCOGS').textContent = '0.00';
-    document.getElementById('totalMargin').textContent = '0.00';
-    document.getElementById('avgMarginPercent').textContent = '0.00%';
+    updateElement('totalDebitQty', '0');
+    updateElement('totalCreditQty', '0');
+    updateElement('netQty', '0');
+    updateElement('totalDebit', '0.00');
+    updateElement('totalCredit', '0.00');
+    updateElement('totalCOGS', '0.00');
+    updateElement('totalMargin', '0.00');
+    updateElement('avgMarginPercent', '0.00%');
+}
+
+function updateElement(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
 }
 
 function createLoadingRow(colSpan) {
@@ -447,6 +731,8 @@ function processProductData(data) {
 
 function renderProductSummaries(productSummaries) {
     const tbody = document.getElementById('reportData');
+    if (!tbody) return;
+
     tbody.innerHTML = '';
 
     const fragment = document.createDocumentFragment();
@@ -457,7 +743,7 @@ function renderProductSummaries(productSummaries) {
             const prevBalanceRow = document.createElement('tr');
             prevBalanceRow.className = 'previous-balance-row';
 
-            prevBalanceRow.innerHTML = `
+            prevBalanceRow.innerHTML = `    
                 <td class="product-column">Previous Balance</td>
                 <td class="voucher-column text-end">-</td>
                 <td class="entry-date-column text-end">-</td>
@@ -512,14 +798,14 @@ function renderProductSummaries(productSummaries) {
 function updateTotals(totals) {
     if (!totals) return;
 
-    document.getElementById('totalDebitQty').textContent = formatNumber(totals.totalDebitQty);
-    document.getElementById('totalCreditQty').textContent = formatNumber(totals.totalCreditQty);
-    document.getElementById('netQty').textContent = formatNumberWithSign(totals.netQuantity);
-    document.getElementById('totalDebit').textContent = formatDecimal(totals.totalDebit);
-    document.getElementById('totalCredit').textContent = formatDecimal(totals.totalCredit);
-    document.getElementById('totalCOGS').textContent = formatDecimal(totals.totalCOGS);
-    document.getElementById('totalMargin').textContent = formatDecimalWithSign(totals.totalMargin);
-    document.getElementById('avgMarginPercent').textContent = formatPercent(totals.marginPercentage);
+    updateElement('totalDebitQty', formatNumber(totals.totalDebitQty));
+    updateElement('totalCreditQty', formatNumber(totals.totalCreditQty));
+    updateElement('netQty', formatNumberWithSign(totals.netQuantity));
+    updateElement('totalDebit', formatDecimal(totals.totalDebit));
+    updateElement('totalCredit', formatDecimal(totals.totalCredit));
+    updateElement('totalCOGS', formatDecimal(totals.totalCOGS));
+    updateElement('totalMargin', formatDecimalWithSign(totals.totalMargin));
+    updateElement('avgMarginPercent', formatPercent(totals.marginPercentage));
 }
 
 // ==================== UTILITY FUNCTIONS ====================
