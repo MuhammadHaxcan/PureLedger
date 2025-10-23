@@ -24,6 +24,7 @@ namespace PureLedger.Repositories.Interfaces
             int? projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId, // Add bookerId parameter
             int page,
             int pageSize);
 

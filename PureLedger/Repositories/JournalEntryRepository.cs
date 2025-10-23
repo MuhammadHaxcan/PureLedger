@@ -172,12 +172,15 @@ namespace PureLedger.Repositories
             int? projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId, // Add bookerId parameter
             int page,
             int pageSize)
         {
             var query = _context.JournalEntries
                 .Include(je => je.JournalVoucher)
                     .ThenInclude(jv => jv.Project)
+                .Include(je => je.JournalVoucher)
+                    .ThenInclude(jv => jv.Booker)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
                 .Where(je =>
@@ -198,6 +201,12 @@ namespace PureLedger.Repositories
             if (accountId.HasValue)
             {
                 query = query.Where(je => je.AccountId == accountId.Value);
+            }
+
+            // Add filtering by booker
+            if (bookerId.HasValue)
+            {
+                query = query.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
             // Get total count for pagination info

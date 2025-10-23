@@ -16,6 +16,7 @@ namespace PureLedger.ViewModels
         public string? ProjectId { get; set; }
         public string? CategoryId { get; set; }
         public string? AccountId { get; set; }
+        public string? BookerId { get; set; } // Add BookerId filter
         public int Page { get; set; } = 0;
         public int PageSize { get; set; } = 100;
     }
@@ -53,6 +54,8 @@ namespace PureLedger.ViewModels
         public int ProjectId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public int CategoryId { get; set; }
-        public int Quantity { get; set; } // <-- Add this line
+        public int Quantity { get; set; }
+        public int? BookerId { get; set; }
+        public string BookerName { get; set; } = string.Empty;
     }
 }

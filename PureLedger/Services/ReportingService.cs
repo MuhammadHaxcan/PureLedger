@@ -461,6 +461,7 @@ namespace PureLedger.Services
             int? projectId = ParseNullableInt(request.ProjectId);
             int? categoryId = ParseNullableInt(request.CategoryId);
             int? accountId = ParseNullableInt(request.AccountId);
+            int? bookerId = ParseNullableInt(request.BookerId); // Parse bookerId
 
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 500);
@@ -479,14 +480,14 @@ namespace PureLedger.Services
                 {
                     // Get all entries from page 0 to page-1
                     var (previousEntries, _) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
-                        startDate, endDate, projectId, categoryId, accountId, 0, page * pageSize);
+                        startDate, endDate, projectId, categoryId, accountId, bookerId, 0, page * pageSize);
 
                     previousBalance = openingBalance + previousEntries.Sum(e => e.Debit - e.Credit);
                 }
 
                 // 3. Get paged entries
                 var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
-                    startDate, endDate, projectId, categoryId, accountId, page, pageSize);
+                    startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
                 result.Entries = new List<MasterReportEntryViewModel>();
                 result.PreviousBalance = previousBalance;
@@ -542,7 +543,9 @@ namespace PureLedger.Services
                         ProjectId = entry.JournalVoucher.ProjectId,
                         CategoryName = entry.Category?.CategoryName ?? string.Empty,
                         CategoryId = entry.CategoryId,
-                        Quantity = entry.Quantity
+                        Quantity = entry.Quantity,
+                        BookerId = entry.JournalVoucher.BookerId,
+                        BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
                     });
                 }
 
@@ -829,21 +832,6 @@ namespace PureLedger.Services
             return await _unitOfWork.Locations.GetAllAsync();
         }
 
-        public async Task<MissedEntriesReportViewModel> GetMissedEntriesReportAsync(MissedEntriesReportRequest request)
-        {
-            DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
-            DateOnly endDate = request.EndDate ?? DateOnly.FromDateTime(DateTime.Today);
-            int? projectId = ParseNullableInt(request.ProjectId);
-            
-            // Create the base view model with Projects and Categories
-            var viewModel = new MissedEntriesReportViewModel
-            {
-                // Projects and Categories will be populated by the controller
-            };
-            
-            return viewModel;
-        }
-
         public async Task<MissedEntriesSummaryViewModel> GetMissedEntriesSummaryAsync(MissedEntriesSummaryRequest request)
         {
             DateOnly startDate = request.StartDate ?? DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
@@ -1052,5 +1040,11 @@ namespace PureLedger.Services
         {
             return await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
         }
+
+        public async Task<List<Booker>> GetAllBookersAsync()
+        {
+            return await _unitOfWork.Bookers.GetAllAsync();
+        }
+
     }
 }

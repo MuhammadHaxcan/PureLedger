@@ -35,8 +35,11 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> PrintVoucher(int journalVoucherId, VoucherType type, string filter = "all")
         {
-            if (!IsValidInput(journalVoucherId, type, out IActionResult errorResult))
-                return errorResult;
+            if (journalVoucherId <= 0)
+            {
+                TempData["Error"] = "Invalid input.";
+                return RedirectToAction("SingleDoc");
+            }
 
             var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, type);
             if (report == null)
@@ -52,15 +55,13 @@ namespace PureLedger.Controllers
                 ViewBag.Filter = filter;
             }
 
-            // Load project image if available
-            if (report.VoucherType != VoucherType.JV)
+            if (type != VoucherType.JV)
             {
-                // Get project ID from the report
                 var voucher = await _reportingService.GetJournalVoucherAsync(journalVoucherId);
                 if (voucher != null)
                 {
                     var projectCartageSettings = await _reportingService.GetProjectCartageSettingsAsync(voucher.ProjectId);
-                    if (projectCartageSettings != null && !string.IsNullOrEmpty(projectCartageSettings.ProjectImage))
+                    if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
                     {
                         report.ProjectImage = projectCartageSettings.ProjectImage;
                     }
@@ -255,22 +256,30 @@ namespace PureLedger.Controllers
             }
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetAllBookers()
+        {
+            try
+            {
+                var bookers = await _reportingService.GetAllBookersAsync();
+                
+                if (bookers == null || !bookers.Any())
+                {
+                    return Json(new object[] { });
+                }
+
+                var result = bookers.Select(b => new { id = b.BookerID, name = b.BookerName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = $"Error loading bookers: {ex.Message}" });
+            }
+        }
+
         #endregion
 
         #region Helper Methods
-
-        private bool IsValidInput(int journalVoucherId, VoucherType type, out IActionResult errorResult)
-        {
-            errorResult = null;
-            if (journalVoucherId <= 0)
-            {
-                TempData["Error"] = "Invalid input.";
-                errorResult = RedirectToAction("SingleDoc");
-                return false;
-            }
-            return true;
-        }
-
         private IActionResult HandleVoucherNotFound(int journalVoucherId, VoucherType type)
         {
             string message = type switch

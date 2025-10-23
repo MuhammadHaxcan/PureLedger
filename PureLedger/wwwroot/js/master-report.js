@@ -3,6 +3,7 @@
     setupEventListeners();
     setDefaultDates();
     initializeDropdownStates();
+    loadAllBookers();
 });
 
 // ==================== DROPDOWN LOCKING LOGIC ====================
@@ -12,11 +13,9 @@ function initializeDropdownStates() {
     const categoryId = document.getElementById('categoryId');
     const accountId = document.getElementById('accountId');
 
-    // Always reset and lock category/account on load
     resetSelect(categoryId, 'All Categories', true);
     resetSelect(accountId, 'All Accounts', true);
 
-    // If project is pre-selected, unlock category
     if (projectId.value) {
         categoryId.disabled = false;
     }
@@ -28,12 +27,10 @@ function handleProjectChange() {
     const accountId = document.getElementById('accountId');
 
     if (projectId.value) {
-        // Unlock category, lock account, and load categories
         resetSelect(categoryId, 'All Categories', false);
         resetSelect(accountId, 'All Accounts', true);
-        loadCategoriesForProject(); // <-- This line loads categories for the selected project
+        loadCategoriesForProject();
     } else {
-        // Lock both
         resetSelect(categoryId, 'All Categories', true);
         resetSelect(accountId, 'All Accounts', true);
     }
@@ -44,11 +41,9 @@ function handleCategoryChange() {
     const accountId = document.getElementById('accountId');
 
     if (categoryId.value) {
-        // Unlock account
         resetSelect(accountId, 'All Accounts', false);
         loadAccountsForCategory();
     } else {
-        // Lock account
         resetSelect(accountId, 'All Accounts', true);
     }
 }
@@ -58,39 +53,45 @@ function handleCategoryChange() {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 5,  // Small for testing, adjust as needed
+        pageSize: 5,
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
         allEntries: [],
         reportParams: null,
-        previousBalance: 0
+        previousBalance: 0,
+        visibleColumns: {
+            date: true,
+            creditableDate: true,
+            description: true,
+            account: true,
+            booker: true,
+            quantity: true,
+            debit: true,
+            credit: true,
+            balance: true
+        }
     };
 }
 
 // ==================== EVENT LISTENERS ====================
 
 function setupEventListeners() {
-    // Form submission
     document.getElementById('masterReportForm').addEventListener('submit', e => {
         e.preventDefault();
         generateReport();
     });
 
-    // UI controls
     initColumnToggles();
     initSearchFunctionality();
-    
-    // Dropdowns with dependencies
+
     document.getElementById('projectId').addEventListener('change', handleProjectChange);
     document.getElementById('categoryId').addEventListener('change', handleCategoryChange);
 
-    // Infinite scroll
     window.addEventListener('scroll', throttle(checkIfShouldLoadMore, 100));
 }
 
 function setDefaultDates() {
-    // Leave the date fields empty by default
     document.getElementById('startDate').value = '';
     document.getElementById('endDate').value = '';
 }
@@ -98,43 +99,87 @@ function setDefaultDates() {
 // ==================== UI CONTROLS ====================
 
 function initColumnToggles() {
+    const columnMap = {
+        'showDate': 'date',
+        'showCreditableDate': 'creditableDate',
+        'showDescription': 'description',
+        'showAccount': 'account',
+        'showBooker': 'booker',
+        'showQuantity': 'quantity',
+        'showDebit': 'debit',
+        'showCredit': 'credit',
+        'showBalance': 'balance'
+    };
+
     document.querySelectorAll('.column-toggles input[type="checkbox"]').forEach(checkbox => {
         checkbox.addEventListener('change', function () {
-            const columnClass = this.id.replace('show', '').toLowerCase() + '-column';
+            const columnKey = columnMap[this.id];
             const isVisible = this.checked;
-            document.querySelectorAll('.' + columnClass).forEach(cell => {
-                cell.style.display = isVisible ? 'table-cell' : 'none';
-            });
-            // Also toggle the footer cell
-            const footerCell = document.querySelector('tfoot .' + columnClass);
-            if (footerCell) {
-                footerCell.style.display = isVisible ? 'table-cell' : 'none';
-            }
+
+            // Update state
+            window.reportState.visibleColumns[columnKey] = isVisible;
+
+            // Apply visibility
+            updateColumnVisibility();
         });
     });
-    // Ensure all columns are shown/hidden on load
-    document.querySelectorAll('.column-toggles input[type="checkbox"]').forEach(checkbox => {
-        checkbox.dispatchEvent(new Event('change'));
+
+    // Initial visibility setup
+    updateColumnVisibility();
+}
+
+function updateColumnVisibility() {
+    const columnClasses = {
+        date: 'date-column',
+        creditableDate: 'creditable-date-column',
+        description: 'description-column',
+        account: 'account-column',
+        booker: 'booker-column',
+        quantity: 'quantity-column',
+        debit: 'debit-column',
+        credit: 'credit-column',
+        balance: 'balance-column'
+    };
+
+    // Update all column cells
+    Object.keys(columnClasses).forEach(key => {
+        const isVisible = window.reportState.visibleColumns[key];
+        const displayValue = isVisible ? '' : 'none';
+
+        document.querySelectorAll('.' + columnClasses[key]).forEach(cell => {
+            cell.style.display = displayValue;
+        });
     });
+
+    // Update footer colspan
+    updateFooterColspan();
+}
+
+function updateFooterColspan() {
+    const footerTotalCell = document.querySelector('#masterReportTable tfoot td:first-child');
+    if (!footerTotalCell) return;
+
+    // Count visible columns before the numeric columns
+    // Fixed columns: ID (1)
+    // Optional columns: date, creditableDate, description, account, booker
+    let colspan = 1; // Start with ID column
+
+    if (window.reportState.visibleColumns.date) colspan++;
+    if (window.reportState.visibleColumns.creditableDate) colspan++;
+    if (window.reportState.visibleColumns.description) colspan++;
+    if (window.reportState.visibleColumns.account) colspan++;
+    if (window.reportState.visibleColumns.booker) colspan++;
+
+    footerTotalCell.setAttribute('colspan', colspan);
 }
 
 function initSearchFunctionality() {
-    // Global search
     const globalSearchInput = document.getElementById('globalReportSearch');
     if (globalSearchInput) {
         globalSearchInput.addEventListener('keyup', debounce(performSearch, 250));
-
-        // Clear search button
-        const clearButton = document.getElementById('clearSearch');
-        if (clearButton) {
-            clearButton.addEventListener('click', () => {
-                globalSearchInput.value = '';
-                performSearch();
-            });
-        }
+        // Removed clear button logic
     }
 
-    // In-table search
     const reportSearch = document.getElementById('reportSearch');
     if (reportSearch) {
         reportSearch.addEventListener('keyup', debounce(function () {
@@ -143,7 +188,6 @@ function initSearchFunctionality() {
     }
 }
 
-// Performance optimization with debounce
 function debounce(func, wait) {
     let timeout;
     return function (...args) {
@@ -152,7 +196,6 @@ function debounce(func, wait) {
     };
 }
 
-// Performance optimization with throttle
 function throttle(func, limit) {
     let inThrottle;
     return function () {
@@ -169,12 +212,10 @@ function throttle(func, limit) {
 function performSearch() {
     const searchText = document.getElementById('globalReportSearch').value.toLowerCase();
 
-    // Filter all tables
     filterReportData(searchText);
     filterSummaryData('accountGroupData', searchText);
     filterSummaryData('categoryGroupData', searchText);
 
-    // Sync the in-table search box
     const reportSearch = document.getElementById('reportSearch');
     if (reportSearch) {
         reportSearch.value = searchText;
@@ -185,7 +226,6 @@ function filterReportData(searchText) {
     const rows = document.getElementById('reportData').getElementsByTagName('tr');
     let hasVisibleRows = false;
 
-    // Hide/show rows based on search
     for (const row of rows) {
         const isVisible = row.textContent.toLowerCase().includes(searchText);
         row.style.display = isVisible ? '' : 'none';
@@ -193,14 +233,13 @@ function filterReportData(searchText) {
     }
 
     handleNoMatchingRows('reportData', 'noSearchResults', !hasVisibleRows && rows.length > 0,
-        searchText, 7);
+        searchText, 10); // Max possible columns
 }
 
 function filterSummaryData(tableId, searchText) {
     const rows = document.getElementById(tableId).getElementsByTagName('tr');
     let hasVisibleRows = false;
 
-    // Hide/show rows based on search
     for (const row of rows) {
         const isVisible = row.textContent.toLowerCase().includes(searchText);
         row.style.display = isVisible ? '' : 'none';
@@ -212,11 +251,9 @@ function filterSummaryData(tableId, searchText) {
 }
 
 function handleNoMatchingRows(tableId, noResultsId, shouldShowNoResults, searchText, colSpan) {
-    // Remove existing "no results" message
     const previousNoResults = document.getElementById(noResultsId);
     if (previousNoResults) previousNoResults.remove();
 
-    // Add "no results" message if needed
     if (shouldShowNoResults && searchText.length > 0) {
         const noDataRow = document.createElement('tr');
         noDataRow.id = noResultsId;
@@ -231,20 +268,17 @@ function loadCategoriesForProject() {
     const projectId = document.getElementById('projectId').value;
     const categorySelect = document.getElementById('categoryId');
 
-    // Reset dropdowns
     resetSelect(categorySelect, 'All Categories', true);
     resetAccountDropdown();
 
     if (!projectId) return;
 
-    // Show loading state
     categorySelect.innerHTML = '<option value="" disabled selected>Loading categories...</option>';
 
-    // Use routes object instead of hardcoded URL
     PureLedger.get(routes.getCategoriesByProject, { projectId: projectId })
         .done(categories => {
             resetSelect(categorySelect, 'All Categories');
-            
+
             if (categories?.length > 0) {
                 categories.forEach(category => {
                     const option = document.createElement('option');
@@ -268,10 +302,8 @@ function loadAccountsForCategory() {
 
     if (!categoryId) return;
 
-    // Show loading state
     accountSelect.innerHTML = '<option value="" disabled selected>Loading accounts...</option>';
 
-    // Use routes object instead of hardcoded URL
     PureLedger.get(routes.getAccountsByCategory, { categoryId: categoryId })
         .done(accounts => {
             resetSelect(accountSelect, 'All Accounts');
@@ -280,6 +312,31 @@ function loadAccountsForCategory() {
         .fail(() => {
             resetSelect(accountSelect, 'All Accounts');
             showError('Failed to load accounts. Please try again.');
+        });
+}
+
+function loadAllBookers() {
+    const bookerSelect = document.getElementById('bookerId');
+
+    bookerSelect.innerHTML = '<option value="" disabled selected>Loading bookers...</option>';
+
+    fetch('/Reporting/GetAllBookers')
+        .then(response => response.json())
+        .then(bookers => {
+            resetSelect(bookerSelect, 'All Bookers');
+
+            if (bookers?.length > 0) {
+                bookers.forEach(booker => {
+                    const option = document.createElement('option');
+                    option.value = booker.id;
+                    option.textContent = booker.name;
+                    bookerSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading bookers:', error);
+            resetSelect(bookerSelect, 'All Bookers');
         });
 }
 
@@ -308,17 +365,14 @@ function resetSelect(select, defaultText, disable = false) {
 }
 
 function showError(message) {
-    // You could implement a more sophisticated error handling here
     alert(message);
 }
 
 // ==================== REPORT GENERATION ====================
 
 function generateReport() {
-    // Reset report state
     initializeReportState();
 
-    // Get form values
     const startDateValue = document.getElementById('startDate').value;
     const endDateValue = document.getElementById('endDate').value;
 
@@ -332,22 +386,20 @@ function generateReport() {
     const projectId = document.getElementById('projectId').value;
     const categoryId = document.getElementById('categoryId').value;
     const accountId = document.getElementById('accountId').value;
+    const bookerId = document.getElementById('bookerId').value;
 
     if (projectId) params.ProjectId = projectId;
     if (categoryId) params.CategoryId = categoryId;
     if (accountId) params.AccountId = accountId;
+    if (bookerId) params.BookerId = bookerId;
 
-    // Store params for subsequent requests
     window.reportState.reportParams = params;
 
-    // Clear existing data
     clearReportData();
 
-    // Show loading indicators
     document.getElementById('reportResults').style.display = 'block';
-    document.getElementById('reportData').innerHTML = createLoadingRow(7);
+    document.getElementById('reportData').innerHTML = createLoadingRow(10);
 
-    // Fetch first data chunk
     fetchReportChunk();
 }
 
@@ -355,11 +407,11 @@ function clearReportData() {
     document.getElementById('reportData').innerHTML = '';
     document.getElementById('accountGroupData').innerHTML = '';
     document.getElementById('categoryGroupData').innerHTML = '';
+    document.getElementById('totalQuantity').textContent = '0';
     document.getElementById('totalDebit').textContent = '0.00';
     document.getElementById('totalCredit').textContent = '0.00';
     document.getElementById('netBalance').textContent = '0.00';
 
-    // Remove any existing UI elements
     removeElements(['loadMoreContainer', 'loadingStatus', 'autoLoadIndicator']);
 }
 
@@ -390,9 +442,10 @@ function checkIfShouldLoadMore() {
         return;
     }
 
-    const scrollPosition = window.innerHeight + window.pageYOffset;
+    // Replace deprecated pageYOffset with scrollY
+    const scrollPosition = window.innerHeight + window.scrollY;
     const bodyHeight = document.body.offsetHeight;
-    const scrollThreshold = bodyHeight - 500; // Load more when 500px from bottom
+    const scrollThreshold = bodyHeight - 500;
 
     if (scrollPosition >= scrollThreshold) {
         fetchReportChunk();
@@ -409,13 +462,10 @@ function fetchReportChunk() {
     window.reportState.isLoading = true;
     updateLoadMoreButton();
 
-    // Create request parameters
     const params = { ...window.reportState.reportParams };
     params.Page = window.reportState.currentPage;
 
-    // Prevent caching
     const timestamp = new Date().getTime();
-    // Use routes object instead of hardcoded URL
     const url = `${routes.getMasterReportData}?_=${timestamp}`;
 
     $.ajax({
@@ -426,26 +476,22 @@ function fetchReportChunk() {
         cache: false
     })
         .done(data => {
-            // First page initialization
             if (window.reportState.currentPage === 0) {
                 initializeDisplay();
             }
 
-            // Process data
             processAndDisplayEntries(data.entries);
 
-            // Update report state
             window.reportState.currentPage++;
             window.reportState.hasMoreData = data.hasMoreData;
             window.reportState.totalRecords = data.totalRecords;
             window.reportState.previousBalance = data.previousBalance || 0;
 
-            // Update UI
             updateLoadingStatus();
         })
         .fail(() => {
-            document.getElementById('reportData').innerHTML =   
-                '<tr><td colspan="7" class="text-center text-danger">Error loading report data. Please try again.</td></tr>';
+            document.getElementById('reportData').innerHTML =
+                '<tr><td colspan="10" class="text-center text-danger">Error loading report data. Please try again.</td></tr>';
         })
         .always(() => {
             window.reportState.isLoading = false;
@@ -458,15 +504,12 @@ function fetchReportChunk() {
 function processAndDisplayEntries(entries) {
     if (!entries?.length) return;
 
-    // Accumulate entries for infinite scroll
     window.reportState.allEntries = [...window.reportState.allEntries, ...entries];
 
-    // Re-render tables
     renderAllEntriesWithBalance();
     generateAccountGroups(window.reportState.allEntries);
     generateCategoryGroups(window.reportState.allEntries);
 
-    // Update totals
     updateTotals();
 }
 
@@ -498,10 +541,11 @@ function renderAllEntriesWithBalance() {
             <td class="creditable-date-column">${formatDate(entry.creditableDate)}</td>
             <td class="description-column">${entry.description || ''}</td>
             <td class="account-column">${entry.accountName || ''}</td>
-            <td class="quantity-column text-right">${entry.quantity ?? ''}</td>
-            <td class="debit-column text-right">${formatCurrency(entry.debit)}</td>
-            <td class="credit-column text-right">${formatCurrency(entry.credit)}</td>
-            <td class="balance-column text-right">${formatCurrency(entry.balance)}</td>
+            <td class="booker-column">${entry.bookerName || ''}</td>
+            <td class="quantity-column text-end">${entry.quantity ?? ''}</td>
+            <td class="debit-column text-end">${formatCurrency(entry.debit)}</td>
+            <td class="credit-column text-end">${formatCurrency(entry.credit)}</td>
+            <td class="balance-column text-end">${formatCurrency(entry.balance)}</td>
         `;
         if (isOpening) {
             row.classList.add('table-info');
@@ -510,12 +554,12 @@ function renderAllEntriesWithBalance() {
     });
 
     tbody.appendChild(fragment);
+    updateColumnVisibility();
 }
 
 function generateAccountGroups(entries) {
     const groupedByAccount = {};
 
-    // Group by account
     entries.forEach(entry => {
         if (!entry.accountId) return;
 
@@ -534,14 +578,12 @@ function generateAccountGroups(entries) {
         groupedByAccount[accountKey].credit += entry.credit;
     });
 
-    // Generate rows
     renderSummaryTable('accountGroupData', groupedByAccount);
 }
 
 function generateCategoryGroups(entries) {
     const groupedByCategory = {};
 
-    // Group by category
     entries.forEach(entry => {
         if (!entry.categoryId) return;
 
@@ -560,7 +602,6 @@ function generateCategoryGroups(entries) {
         groupedByCategory[categoryKey].credit += entry.credit;
     });
 
-    // Generate rows
     renderSummaryTable('categoryGroupData', groupedByCategory);
 }
 
@@ -573,7 +614,6 @@ function renderSummaryTable(tableId, groupedData) {
         return;
     }
 
-    // Use DocumentFragment for better performance
     const fragment = document.createDocumentFragment();
 
     Object.values(groupedData).forEach(data => {
@@ -582,9 +622,9 @@ function renderSummaryTable(tableId, groupedData) {
         row.innerHTML = `
             <td>${data.id}</td>
             <td>${data.name}</td>
-            <td class="text-right">${formatCurrency(data.debit)}</td>
-            <td class="text-right">${formatCurrency(data.credit)}</td>
-            <td class="text-right">${formatCurrency(balance)}</td>
+            <td class="text-end">${formatCurrency(data.debit)}</td>
+            <td class="text-end">${formatCurrency(data.credit)}</td>
+            <td class="text-end">${formatCurrency(balance)}</td>
         `;
         fragment.appendChild(row);
     });
@@ -595,18 +635,14 @@ function renderSummaryTable(tableId, groupedData) {
 // ==================== UI UPDATES ====================
 
 function initializeDisplay() {
-    // Reset data and balance
     document.getElementById('reportData').innerHTML = '';
     window.reportState.runningBalance = 0;
 
-    // Clear summary tables
     document.getElementById('accountGroupData').innerHTML = '';
     document.getElementById('categoryGroupData').innerHTML = '';
 
-    // Remove any existing status indicators
     removeElements(['loadingStatus', 'autoLoadIndicator']);
 
-    // Add loading status indicator
     addLoadingStatus();
     addAutoLoadIndicator();
 }
@@ -636,13 +672,11 @@ function addAutoLoadIndicator() {
 }
 
 function updateLoadingStatus() {
-    // Remove existing status
     const existingStatus = document.getElementById('loadingStatus');
     if (existingStatus) {
         existingStatus.remove();
     }
 
-    // Create new status
     const tableContainer = document.querySelector('#masterReportTable').closest('.table-responsive');
     const loadingStatus = document.createElement('div');
     loadingStatus.id = 'loadingStatus';
@@ -661,18 +695,15 @@ function updateLoadMoreButton() {
         loadMoreSpinner.classList.add('d-none');
     }
 
-    // Update loading status
     updateLoadingStatus();
 }
 
 function updateTotals() {
-    // Calculate totals from all loaded entries
     const totalQuantity = window.reportState.allEntries.reduce((sum, entry) => sum + (entry.quantity || 0), 0);
     const totalDebit = window.reportState.allEntries.reduce((sum, entry) => sum + entry.debit, 0);
     const totalCredit = window.reportState.allEntries.reduce((sum, entry) => sum + entry.credit, 0);
     const netBalance = totalDebit - totalCredit;
 
-    // Update the display
     document.getElementById('totalQuantity').textContent = totalQuantity;
     document.getElementById('totalDebit').textContent = formatCurrency(totalDebit);
     document.getElementById('totalCredit').textContent = formatCurrency(totalCredit);

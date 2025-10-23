@@ -87,6 +87,16 @@
                             </select>
                         </div>
                     </div>
+                    <!-- Add Booker dropdown -->
+                    <div class="col-md-3">
+                        <label class="form-label">Booker</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user-tag"></i></span>
+                            <select class="form-select" id="bookerId">
+                                <option value="">All Bookers</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="row mb-3">
@@ -113,6 +123,16 @@
                                 <i class="fas fa-user"></i> Account
                             </label>
 
+                            <input type="checkbox" class="btn-check" id="showBooker" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showBooker">
+                                <i class="fas fa-user-tag"></i> Booker
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showQuantity" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showQuantity">
+                                <i class="fas fa-cubes"></i> Quantity
+                            </label>
+
                             <input type="checkbox" class="btn-check" id="showDebit" checked autocomplete="off">
                             <label class="btn btn-outline-primary btn-sm" for="showDebit">
                                 <i class="fas fa-plus"></i> Debit
@@ -128,10 +148,6 @@
                                 <i class="fas fa-balance-scale"></i> Balance
                             </label>
 
-                            <input type="checkbox" class="btn-check" id="showQuantity" checked autocomplete="off">
-                            <label class="btn btn-outline-primary btn-sm" for="showQuantity">
-                                <i class="fas fa-cubes"></i> Quantity
-                            </label>
                         </div>
                     </div>
                 </div>
@@ -143,9 +159,6 @@
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-search"></i></span>
                             <input type="text" class="form-control" id="globalReportSearch" placeholder="Search all report data...">
-                            <button type="button" class="btn btn-outline-secondary" id="clearSearch">
-                                <i class="fas fa-times"></i> Clear
-                            </button>
                         </div>
                         <small class="form-text text-muted">Search across all report data including accounts, descriptions, and values</small>
                     </div>
@@ -183,6 +196,7 @@
                                 <th class="creditable-date-column">Creditable Date</th>
                                 <th class="description-column">Description</th>
                                 <th class="account-column">Account</th>
+                                <th class="booker-column">Booker</th>  <!-- Add this line -->
                                 <th class="quantity-column text-end">Quantity</th>
                                 <th class="debit-column text-end">Debit</th>
                                 <th class="credit-column text-end">Credit</th>
@@ -192,7 +206,7 @@
                         <tbody id="reportData"></tbody>
                         <tfoot class="table-secondary">
                             <tr>
-                                <td colspan="5" class="text-end fw-bold">TOTAL</td>
+                                <td colspan="6" class="text-end fw-bold">TOTAL</td> <!-- Update colspan to 6 -->
                                 <td class="quantity-column text-end fw-bold" id="totalQuantity">0</td>
                                 <td class="debit-column text-end fw-bold" id="totalDebit">0.00</td>
                                 <td class="credit-column text-end fw-bold" id="totalCredit">0.00</td>
@@ -369,5 +383,18 @@
         text-align: right !important;
         font-family: monospace;
         font-size: 0.9rem;
+    }
+
+    /* Add styles for booker column */
+    .booker-column {
+        min-width: 120px;
+    }
+
+    /* Add horizontal padding between toggle checkboxes */
+    .column-toggles label.btn {
+        margin-right: 0.5rem;
+    }
+    .column-toggles label.btn:last-child {
+        margin-right: 0;
     }
 </style>
