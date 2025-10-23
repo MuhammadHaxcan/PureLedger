@@ -8,7 +8,22 @@ function initializeReportState() {
     window.reportState = {
         isLoading: false,
         allProducts: {},
-        reportParams: null
+        reportParams: null,
+        visibleColumns: {
+            product: true,
+            voucher: true,
+            entryDate: true,
+            dueDate: true,
+            debitQty: true,
+            creditQty: true,
+            balanceQty: true,
+            avgRate: true,
+            totalDebit: true,
+            totalCredit: true,
+            cogs: true,
+            margin: true,
+            marginPercent: true
+        }
     };
 }
 
@@ -18,42 +33,108 @@ function setupEventListeners() {
         generateReport();
     });
 
+    initColumnToggles();
     initSearchFunctionality();
     document.getElementById('projectId').addEventListener('change', loadCategoriesForProject);
     document.getElementById('categoryId').addEventListener('change', loadAccountsForCategory);
-    
-    // Add event listener for the clear dates button
-    const clearDatesBtn = document.getElementById('clearDatesBtn');
-    if (clearDatesBtn) {
-        clearDatesBtn.addEventListener('click', clearDates);
-    }
+
+    // Removed clear dates button event listener
 }
 
 function setDefaultDates() {
-    // Leave date fields empty by default - similar to master-report.js
-    document.getElementById('startDate').value = '';
-    document.getElementById('endDate').value = '';
-}
-
-function clearDates() {
+    // Leave date fields empty by default
     document.getElementById('startDate').value = '';
     document.getElementById('endDate').value = '';
 }
 
 // ==================== UI CONTROLS ====================
 
+function initColumnToggles() {
+    const columnMap = {
+        'showProduct': 'product',
+        'showVoucher': 'voucher',
+        'showEntryDate': 'entryDate',
+        'showDueDate': 'dueDate',
+        'showDebitQty': 'debitQty',
+        'showCreditQty': 'creditQty',
+        'showBalanceQty': 'balanceQty',
+        'showAvgRate': 'avgRate',
+        'showTotalDebit': 'totalDebit',
+        'showTotalCredit': 'totalCredit',
+        'showCOGS': 'cogs',
+        'showMargin': 'margin',
+        'showMarginPercent': 'marginPercent'
+    };
+
+    document.querySelectorAll('.column-toggles input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            const columnKey = columnMap[this.id];
+            const isVisible = this.checked;
+
+            // Update state
+            window.reportState.visibleColumns[columnKey] = isVisible;
+
+            // Apply visibility
+            updateColumnVisibility();
+        });
+    });
+
+    // Initial visibility setup
+    updateColumnVisibility();
+}
+
+function updateColumnVisibility() {
+    const columnClasses = {
+        product: 'product-column',
+        voucher: 'voucher-column',
+        entryDate: 'entry-date-column',
+        dueDate: 'due-date-column',
+        debitQty: 'debit-qty-column',
+        creditQty: 'credit-qty-column',
+        balanceQty: 'balance-qty-column',
+        avgRate: 'avg-rate-column',
+        totalDebit: 'total-debit-column',
+        totalCredit: 'total-credit-column',
+        cogs: 'cogs-column',
+        margin: 'margin-column',
+        marginPercent: 'margin-percent-column'
+    };
+
+    // Update all column cells
+    Object.keys(columnClasses).forEach(key => {
+        const isVisible = window.reportState.visibleColumns[key];
+        const displayValue = isVisible ? '' : 'none';
+
+        document.querySelectorAll('.' + columnClasses[key]).forEach(cell => {
+            cell.style.display = displayValue;
+        });
+    });
+
+    // Update footer colspan
+    updateFooterColspan();
+}
+
+function updateFooterColspan() {
+    const footerTotalCell = document.querySelector('#productReportTable tfoot td:first-child');
+    if (!footerTotalCell) return;
+
+    // Count visible columns before the numeric columns
+    // Check first 4 columns: product, voucher, entryDate, dueDate
+    let colspan = 0;
+
+    if (window.reportState.visibleColumns.product) colspan++;
+    if (window.reportState.visibleColumns.voucher) colspan++;
+    if (window.reportState.visibleColumns.entryDate) colspan++;
+    if (window.reportState.visibleColumns.dueDate) colspan++;
+
+    footerTotalCell.setAttribute('colspan', colspan);
+}
+
 function initSearchFunctionality() {
     const globalSearchInput = document.getElementById('globalReportSearch');
     if (globalSearchInput) {
         globalSearchInput.addEventListener('keyup', debounce(performSearch, 250));
-
-        const clearButton = document.getElementById('clearSearch');
-        if (clearButton) {
-            clearButton.addEventListener('click', () => {
-                globalSearchInput.value = '';
-                performSearch();
-            });
-        }
+        // Removed clear button logic
     }
 
     const reportSearch = document.getElementById('reportSearch');
@@ -202,7 +283,7 @@ function loadAccountsForCategory() {
         success: function (accounts) {
             resetSelect(accountSelect, 'All Products');
             accountSelect.disabled = false;
-            
+
             if (accounts?.length > 0) {
                 accounts.forEach(account => {
                     const option = document.createElement('option');
@@ -260,7 +341,7 @@ function generateReport() {
 
     const startDateValue = document.getElementById('startDate').value;
     const endDateValue = document.getElementById('endDate').value;
-    
+
     // Create params object with null dates if fields are empty
     const params = {
         startDate: startDateValue || null,
@@ -361,6 +442,7 @@ function processProductData(data) {
 
     renderProductSummaries(data.productSummaries);
     updateTotals(data.totals);
+    updateColumnVisibility();
 }
 
 function renderProductSummaries(productSummaries) {
@@ -376,19 +458,19 @@ function renderProductSummaries(productSummaries) {
             prevBalanceRow.className = 'previous-balance-row';
 
             prevBalanceRow.innerHTML = `
-                <td>Previous Balance</td>
-                <td class="text-end">-</td>
-                <td class="text-end">-</td>
-                <td class="text-end">-</td>
-                <td class="text-end">${formatNumber(product.previousDebitQty)}</td>
-                <td class="text-end">${formatNumber(product.previousCreditQty)}</td>
-                <td class="text-end ${(product.previousBalance < 0) ? 'negative-balance' : ''}">${formatNumberWithSign(product.previousBalance)}</td>
-                <td class="text-end">${formatDecimal(product.previousAvgRate)}</td>
-                <td class="text-end">${formatDecimal(product.previousDebit)}</td>
-                <td class="text-end">${formatDecimal(product.previousCredit)}</td>
-                <td class="text-end">-</td>
-                <td class="text-end">-</td>
-                <td class="text-end">-</td>
+                <td class="product-column">Previous Balance</td>
+                <td class="voucher-column text-end">-</td>
+                <td class="entry-date-column text-end">-</td>
+                <td class="due-date-column text-end">-</td>
+                <td class="debit-qty-column text-end">${formatNumber(product.previousDebitQty)}</td>
+                <td class="credit-qty-column text-end">${formatNumber(product.previousCreditQty)}</td>
+                <td class="balance-qty-column text-end ${(product.previousBalance < 0) ? 'negative-balance' : ''}">${formatNumberWithSign(product.previousBalance)}</td>
+                <td class="avg-rate-column text-end">${formatDecimal(product.previousAvgRate)}</td>
+                <td class="total-debit-column text-end">${formatDecimal(product.previousDebit)}</td>
+                <td class="total-credit-column text-end">${formatDecimal(product.previousCredit)}</td>
+                <td class="cogs-column text-end">-</td>
+                <td class="margin-column text-end">-</td>
+                <td class="margin-percent-column text-end">-</td>
             `;
 
             fragment.appendChild(prevBalanceRow);
@@ -406,19 +488,19 @@ function renderProductSummaries(productSummaries) {
                            </a>`;
 
         row.innerHTML = `
-            <td>${product.productName}</td>
-            <td class="text-end">${voucherLink}</td>
-            <td class="text-end">${product.entryDate}</td>
-            <td class="text-end">${product.creditableDate}</td>
-            <td class="text-end">${formatNumber(product.totalDebitQty)}</td>
-            <td class="text-end">${formatNumber(product.totalCreditQty)}</td>
-            <td class="text-end ${(product.qtyBalance < 0) ? 'negative-balance' : ''}">${formatNumberWithSign(product.qtyBalance)}</td>
-            <td class="text-end">${formatDecimal(product.averageRate)}</td>
-            <td class="text-end">${formatDecimal(product.totalDebit)}</td>
-            <td class="text-end">${formatDecimal(product.totalCredit)}</td>
-            <td class="text-end">${formatDecimal(product.cogs)}</td>
-            <td class="text-end ${(product.margin < 0) ? 'negative-balance' : 'positive-margin'}">${formatDecimalWithSign(product.margin)}</td>
-            <td class="text-end ${(product.marginPercentage < 0) ? 'negative-balance' : 'positive-margin'}">${formatPercent(product.marginPercentage)}</td>
+            <td class="product-column">${product.productName}</td>
+            <td class="voucher-column text-end">${voucherLink}</td>
+            <td class="entry-date-column text-end">${product.entryDate}</td>
+            <td class="due-date-column text-end">${product.creditableDate}</td>
+            <td class="debit-qty-column text-end">${formatNumber(product.totalDebitQty)}</td>
+            <td class="credit-qty-column text-end">${formatNumber(product.totalCreditQty)}</td>
+            <td class="balance-qty-column text-end ${(product.qtyBalance < 0) ? 'negative-balance' : ''}">${formatNumberWithSign(product.qtyBalance)}</td>
+            <td class="avg-rate-column text-end">${formatDecimal(product.averageRate)}</td>
+            <td class="total-debit-column text-end">${formatDecimal(product.totalDebit)}</td>
+            <td class="total-credit-column text-end">${formatDecimal(product.totalCredit)}</td>
+            <td class="cogs-column text-end">${formatDecimal(product.cogs)}</td>
+            <td class="margin-column text-end ${(product.margin < 0) ? 'negative-balance' : 'positive-margin'}">${formatDecimalWithSign(product.margin)}</td>
+            <td class="margin-percent-column text-end ${(product.marginPercentage < 0) ? 'negative-balance' : 'positive-margin'}">${formatPercent(product.marginPercentage)}</td>
         `;
 
         fragment.appendChild(row);

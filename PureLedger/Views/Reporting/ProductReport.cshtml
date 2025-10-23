@@ -36,14 +36,14 @@
             <form id="productReportForm">
                 <div class="row mb-3">
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">Since <small class="text-muted">(Optional - Leave empty for all data)</small></label>
+                        <label class="form-label">Since </label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
                             <input type="date" class="form-control" id="startDate">
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <label class="form-label">To <small class="text-muted">(Optional - Leave empty for all data)</small></label>
+                        <label class="form-label">To </label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
                             <input type="date" class="form-control" id="endDate">
@@ -95,10 +95,78 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-3 mb-3 d-flex align-items-end">
-                        <button type="button" id="clearDatesBtn" class="btn btn-outline-secondary">
-                            <i class="fas fa-calendar-times"></i> Clear Dates
-                        </button>
+                </div>
+
+                <!-- Add Column Visibility section -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label d-block">Column Visibility</label>
+                        <div class="btn-group column-toggles" role="group">
+                            <input type="checkbox" class="btn-check" id="showProduct" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showProduct">
+                                <i class="fas fa-box"></i> Product
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showVoucher" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showVoucher">
+                                <i class="fas fa-file-invoice"></i> Voucher
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showEntryDate" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showEntryDate">
+                                <i class="fas fa-calendar-day"></i> Entry Date
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showDueDate" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showDueDate">
+                                <i class="fas fa-calendar-check"></i> Due Date
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showDebitQty" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showDebitQty">
+                                <i class="fas fa-plus"></i> Debit Qty
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showCreditQty" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showCreditQty">
+                                <i class="fas fa-minus"></i> Credit Qty
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showBalanceQty" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showBalanceQty">
+                                <i class="fas fa-balance-scale"></i> Balance Qty
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showAvgRate" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showAvgRate">
+                                <i class="fas fa-tag"></i> Avg Rate
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showTotalDebit" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showTotalDebit">
+                                <i class="fas fa-money-bill-wave"></i> Total Debit
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showTotalCredit" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showTotalCredit">
+                                <i class="fas fa-money-bill-wave-alt"></i> Total Credit
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showCOGS" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showCOGS">
+                                <i class="fas fa-cash-register"></i> COGS
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showMargin" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showMargin">
+                                <i class="fas fa-chart-line"></i> Margin
+                            </label>
+
+                            <input type="checkbox" class="btn-check" id="showMarginPercent" checked autocomplete="off">
+                            <label class="btn btn-outline-primary btn-sm" for="showMarginPercent">
+                                <i class="fas fa-percentage"></i> Margin %
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -108,9 +176,6 @@
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-search"></i></span>
                             <input type="text" class="form-control" id="globalReportSearch" placeholder="Search products...">
-                            <button type="button" class="btn btn-outline-secondary" id="clearSearch">
-                                <i class="fas fa-times"></i> Clear
-                            </button>
                         </div>
                     </div>
                     <div class="col-md-6 text-end">
@@ -139,19 +204,19 @@
                     <table class="table table-bordered table-striped" id="productReportTable" width="100%" cellspacing="0">
                         <thead class="table-light">
                             <tr>
-                                <th>Product</th>
-                                <th class="text-end">Last Voucher</th>
-                                <th class="text-end">Entry Date</th>
-                                <th class="text-end">Due Date</th>
-                                <th class="text-end">Debit Qty</th>
-                                <th class="text-end">Credit Qty</th>
-                                <th class="text-end">Balance Qty</th>
-                                <th class="text-end">Avg Rate</th>
-                                <th class="text-end">Total Debit</th>
-                                <th class="text-end">Total Credit</th>
-                                <th class="text-end">COGS</th>
-                                <th class="text-end">Margin</th>
-                                <th class="text-end">Margin %</th>
+                                <th class="product-column">Product</th>
+                                <th class="voucher-column text-end">Last Voucher</th>
+                                <th class="entry-date-column text-end">Entry Date</th>
+                                <th class="due-date-column text-end">Due Date</th>
+                                <th class="debit-qty-column text-end">Debit Qty</th>
+                                <th class="credit-qty-column text-end">Credit Qty</th>
+                                <th class="balance-qty-column text-end">Balance Qty</th>
+                                <th class="avg-rate-column text-end">Avg Rate</th>
+                                <th class="total-debit-column text-end">Total Debit</th>
+                                <th class="total-credit-column text-end">Total Credit</th>
+                                <th class="cogs-column text-end">COGS</th>
+                                <th class="margin-column text-end">Margin</th>
+                                <th class="margin-percent-column text-end">Margin %</th>
                             </tr>
                         </thead>
                         <tbody id="reportData">
@@ -160,15 +225,15 @@
                         <tfoot class="table-secondary">
                             <tr>
                                 <td colspan="4" class="text-end fw-bold">TOTALS</td>
-                                <td class="text-end fw-bold" id="totalDebitQty">0</td>
-                                <td class="text-end fw-bold" id="totalCreditQty">0</td>
-                                <td class="text-end fw-bold" id="netQty">0</td>
-                                <td class="text-end fw-bold">-</td>
-                                <td class="text-end fw-bold" id="totalDebit">0.00</td>
-                                <td class="text-end fw-bold" id="totalCredit">0.00</td>
-                                <td class="text-end fw-bold" id="totalCOGS">0.00</td>
-                                <td class="text-end fw-bold" id="totalMargin">0.00</td>
-                                <td class="text-end fw-bold" id="avgMarginPercent">0.00%</td>
+                                <td class="debit-qty-column text-end fw-bold" id="totalDebitQty">0</td>
+                                <td class="credit-qty-column text-end fw-bold" id="totalCreditQty">0</td>
+                                <td class="balance-qty-column text-end fw-bold" id="netQty">0</td>
+                                <td class="avg-rate-column text-end fw-bold">-</td>
+                                <td class="total-debit-column text-end fw-bold" id="totalDebit">0.00</td>
+                                <td class="total-credit-column text-end fw-bold" id="totalCredit">0.00</td>
+                                <td class="cogs-column text-end fw-bold" id="totalCOGS">0.00</td>
+                                <td class="margin-column text-end fw-bold" id="totalMargin">0.00</td>
+                                <td class="margin-percent-column text-end fw-bold" id="avgMarginPercent">0.00%</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -224,4 +289,42 @@
         background-color: #f2f2f2;
         font-style: italic;
     }
+
+    /* Column toggle buttons */
+    .column-toggles .btn {
+        border-radius: 0;
+    }
+
+        .column-toggles .btn:first-child {
+            border-top-left-radius: 0.25rem;
+            border-bottom-left-radius: 0.25rem;
+        }
+
+        .column-toggles .btn:last-child {
+            border-top-right-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+    /* Add horizontal padding between toggle checkboxes */
+    .column-toggles label.btn {
+        margin-right: 0.5rem;
+    }
+
+        .column-toggles label.btn:last-child {
+            margin-right: 0;
+        }
+
+    /* Remove dropdown arrows from all select elements */
+    select.form-select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        background-image: none !important;
+        padding-right: 0.75rem !important;
+    }
+
+        /* For Firefox */
+        select.form-select::-ms-expand {
+            display: none;
+        }
 </style>
