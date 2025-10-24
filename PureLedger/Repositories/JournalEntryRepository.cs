@@ -459,5 +459,56 @@ namespace PureLedger.Repositories
             var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
             return results;
         }
+
+        // Add this method to the JournalEntryRepository class
+        public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+            int projectId,
+            int? categoryId,
+            int? accountId,
+            int page,
+            int pageSize)
+        {
+            var baseQuery = _context.JournalEntries
+                .Include(je => je.Account)
+                    .ThenInclude(a => a.Category)
+                .Include(je => je.JournalVoucher)
+                .Where(je => 
+                    je.JournalVoucher.ProjectId == projectId &&
+                    je.JournalVoucher.IsCompleted);
+
+            if (categoryId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.CategoryId == categoryId.Value);
+            }
+
+            if (accountId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.AccountId == accountId.Value);
+            }
+
+            // Get all entries that match the criteria
+            var allEntries = await baseQuery.ToListAsync();
+
+            // Group by account and get distinct accounts
+            var groupedByAccount = allEntries
+                .GroupBy(je => je.AccountId)
+                .ToList();
+
+            int totalUniqueAccounts = groupedByAccount.Count;
+
+            // Apply pagination to the grouped accounts
+            var pagedAccountGroups = groupedByAccount
+                .OrderBy(g => g.First().Account?.AccountName)
+                .Skip(page * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            // Flatten the paged groups back to entries
+            var pagedEntries = pagedAccountGroups
+                .SelectMany(g => g)
+                .ToList();
+
+            return (pagedEntries, totalUniqueAccounts);
+        }
     }
 }

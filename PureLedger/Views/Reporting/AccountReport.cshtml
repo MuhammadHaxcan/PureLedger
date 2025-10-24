@@ -105,32 +105,41 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-list-alt me-2"></i>Account Report Results
-            </h6>
-            <div id="reportSummary"></div>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="accountReportTable" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Category</th>
-                            <th>Account Name</th>
-                            <th class="text-end">Debit</th>
-                            <th class="text-end">Credit</th>
-                            <th class="text-end">Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody id="reportData">
-                        <tr>
-                            <td colspan="6" class="text-center">Please select a project to generate report</td>
-                        </tr>
-                    </tbody>
-                </table>
+    <!-- Add the hidden results container similar to Master Report -->
+    <div id="reportResults" style="display:none;">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-list-alt me-2"></i>Account Report Results
+                </h6>
+                <div id="reportSummary"></div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="accountReportTable" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Category</th>
+                                <th>Account Name</th>
+                                <th class="text-end">Debit</th>
+                                <th class="text-end">Credit</th>
+                                <th class="text-end">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportData">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                        <tfoot class="table-secondary">
+                            <tr class="fw-bold">
+                                <td colspan="3" class="text-end">TOTAL</td>
+                                <td class="text-end" id="totalDebit">0.00</td>
+                                <td class="text-end" id="totalCredit">0.00</td>
+                                <td class="text-end" id="totalBalance">0.00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

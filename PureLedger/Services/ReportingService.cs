@@ -309,67 +309,57 @@ namespace PureLedger.Services
                 return result;
             });
         }
-
-        public async Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request)
+        
+        public async Task<AccountReportResponseViewModel> GetAccountReportAsync(AccountReportRequestViewModel request)
         {
-            // Validate that ProjectId is required
             if (string.IsNullOrWhiteSpace(request.ProjectId))
             {
-                return new List<AccountReportViewModel>();
+                return new AccountReportResponseViewModel();
             }
 
             int? categoryId = ParseNullableInt(request.CategoryId);
             int? accountId = ParseNullableInt(request.AccountId);
             
-            // Parse projectId as required
             if (!int.TryParse(request.ProjectId, out int projectId))
             {
-                return new List<AccountReportViewModel>();
+                return new AccountReportResponseViewModel();
             }
 
             return await ExecuteInTransactionAsync(async () =>
             {
-                List<Account> accounts = await GetFilteredAccountsAsync(accountId, categoryId, projectId);
+                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForAccountReportAsync(
+                    projectId, 
+                    categoryId, 
+                    accountId,
+                    request.Page,
+                    request.PageSize);
 
-                if (!accounts.Any())
-                    return new List<AccountReportViewModel>();
-
-                var accountIds = accounts.Select(a => a.AccountId).ToList();
-
-                var journalEntries = await _unitOfWork.JournalEntries.GetJournalEntriesByFiltersAsync(
-                    accountIds, categoryId, projectId);
-
-                var accountTotals = journalEntries
-                    .GroupBy(e => e.AccountId)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => new
-                        {
-                            TotalDebit = g.Sum(e => e.Debit),
-                            TotalCredit = g.Sum(e => e.Credit)
-                        });
-
-                var result = new List<AccountReportViewModel>();
-                foreach (var account in accounts)
-                {
-
-                    if (!accountTotals.ContainsKey(account.AccountId))
-                        continue;
-
-                    var totals = accountTotals[account.AccountId];
-
-                    result.Add(new AccountReportViewModel
+                // Group entries by account and sum up the values
+                var groupedEntries = entries
+                    .GroupBy(e => new { 
+                        e.AccountId, 
+                        AccountName = e.Account?.AccountName ?? "Unknown Account", 
+                        CategoryName = e.Account?.Category?.CategoryName ?? "Unknown Category" 
+                    })
+                    .Select(g => new AccountReportViewModel
                     {
-                        AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
-                        AccountName = account.AccountName ?? "",
-                        CategoryName = account.Category?.CategoryName ?? "",
-                        TotalDebit = totals.TotalDebit,
-                        TotalCredit = totals.TotalCredit,
-                        NetBalance = totals.TotalDebit - totals.TotalCredit
-                    });
-                }
+                        AccountId = g.Key.AccountId.ToString(),
+                        AccountName = g.Key.AccountName,
+                        CategoryName = g.Key.CategoryName,
+                        TotalDebit = g.Sum(e => e.Debit),
+                        TotalCredit = g.Sum(e => e.Credit),
+                        NetBalance = g.Sum(e => e.Debit - e.Credit)
+                    })
+                    .ToList();
 
-                return result;
+                return new AccountReportResponseViewModel
+                {
+                    Entries = groupedEntries,
+                    TotalRecords = totalCount,
+                    Page = request.Page,
+                    PageSize = request.PageSize,
+                    HasMoreData = (request.Page + 1) * request.PageSize < totalCount
+                };
             });
         }
 

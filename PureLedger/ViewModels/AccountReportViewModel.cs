@@ -9,4 +9,13 @@ namespace PureLedger.ViewModels
         public decimal TotalCredit { get; set; }
         public decimal NetBalance { get; set; }
     }
+
+    public class AccountReportResponseViewModel
+    {
+        public List<AccountReportViewModel> Entries { get; set; } = new();
+        public int TotalRecords { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public bool HasMoreData { get; set; }
+    }
 }

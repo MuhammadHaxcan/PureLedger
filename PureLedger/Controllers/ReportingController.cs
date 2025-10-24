@@ -113,7 +113,7 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAccountReportData([FromQuery] AccountReportRequest request)
+        public async Task<IActionResult> GetAccountReportData([FromQuery] AccountReportRequestViewModel request)
         {
             // Validate the request
             if (!ModelState.IsValid)

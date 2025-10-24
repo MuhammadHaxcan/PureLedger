@@ -9,7 +9,7 @@ namespace PureLedger.Services.Interface
     {
         Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, VoucherType voucherType);
         Task<List<AgingReportViewModel>> GetAgingReportAsync(AgingReportRequest request);
-        Task<List<AccountReportViewModel>> GetAccountReportAsync(AccountReportRequest request);
+        Task<AccountReportResponseViewModel> GetAccountReportAsync(AccountReportRequestViewModel request);
         Task<List<Project>> GetAllProjectsForUserAsync(int userId);
         Task<List<Category>> GetAllCategoriesAsync();
         Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId);

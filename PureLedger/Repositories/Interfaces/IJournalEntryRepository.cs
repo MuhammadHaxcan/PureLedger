@@ -59,5 +59,13 @@ namespace PureLedger.Repositories.Interfaces
     int? categoryId,
     int? accountId,
     int? locationId);
-    }
+
+        Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+    int projectId,
+    int? categoryId,
+    int? accountId,
+    int page,
+    int pageSize);
+
+        }
 }
