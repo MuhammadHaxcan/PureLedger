@@ -134,7 +134,7 @@ namespace PureLedger.Controllers
             var projects = userId.HasValue
                 ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
                 : new List<Project>();
-                
+
             ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName");
             ViewBag.AccountTypes = new SelectList(
                 await _metaDataService.GetAllAccountTypesAsync(),
@@ -159,7 +159,7 @@ namespace PureLedger.Controllers
                 var projects = userId.HasValue
                     ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
                     : new List<Project>();
-                    
+
                 ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
@@ -180,7 +180,7 @@ namespace PureLedger.Controllers
                 var projects = userId.HasValue
                     ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
                     : new List<Project>();
-                    
+
                 ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
@@ -206,7 +206,7 @@ namespace PureLedger.Controllers
             var projects = userId.HasValue
                 ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
                 : new List<Project>();
-                
+
             ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
             ViewBag.AccountTypes = new SelectList(
                 await _metaDataService.GetAllAccountTypesAsync(),
@@ -232,7 +232,7 @@ namespace PureLedger.Controllers
                 var projects = userId.HasValue
                     ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
                     : new List<Project>();
-                    
+
                 ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
@@ -251,7 +251,7 @@ namespace PureLedger.Controllers
                 var projects = userId.HasValue
                     ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
                     : new List<Project>();
-                    
+
                 ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName", category.ProjectId);
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
@@ -282,7 +282,7 @@ namespace PureLedger.Controllers
             var projects = userId.HasValue
                 ? await _metaDataService.GetProjectsForAccountsForUserAsync(userId.Value)
                 : new List<Project>();
-                
+
             ViewBag.Projects = new SelectList(projects, "ProjectId", "ProjectName");
             ViewBag.Categories = new SelectList(new List<object>(), "categoryId", "categoryName");
             ViewBag.AccountGroups = new SelectList(
@@ -306,7 +306,7 @@ namespace PureLedger.Controllers
                 var projectsForAccounts = userIdForProjects.HasValue
                     ? await _metaDataService.GetProjectsForAccountsForUserAsync(userIdForProjects.Value)
                     : new List<Project>();
-                    
+
                 ViewBag.Projects = new SelectList(projectsForAccounts, "ProjectId", "ProjectName", selectedProjectId);
 
                 var categories = selectedProjectId > 0
@@ -336,7 +336,7 @@ namespace PureLedger.Controllers
                 var projectsForAccounts = userIdForProjects.HasValue
                     ? await _metaDataService.GetProjectsForAccountsForUserAsync(userIdForProjects.Value)
                     : new List<Project>();
-                    
+
                 ViewBag.Projects = new SelectList(projectsForAccounts, "ProjectId", "ProjectName", selectedProjectId);
 
                 var categories = selectedProjectId > 0
@@ -428,7 +428,7 @@ namespace PureLedger.Controllers
         public async Task<IActionResult> DeleteAccount(int id)
         {
             var (success, associatedVoucherIds) = await _metaDataService.DeleteAccountAsync(id);
-            
+
             if (!success)
             {
                 if (associatedVoucherIds.Any())
@@ -459,25 +459,25 @@ namespace PureLedger.Controllers
 
             // Check for associated journal entries
             var associatedVoucherIds = await _metaDataService.GetAssociatedVoucherIdsAsync(id);
-            
+
             if (associatedVoucherIds.Any())
             {
                 // Take just first few to avoid making message too long
-                var idsToShow = associatedVoucherIds.Count > 5 
-                    ? associatedVoucherIds.Take(5).ToList() 
+                var idsToShow = associatedVoucherIds.Count > 5
+                    ? associatedVoucherIds.Take(5).ToList()
                     : associatedVoucherIds;
-                    
+
                 string idList = string.Join(", ", idsToShow);
                 string message = $"This account cannot be deleted because it is associated with journal voucher(s): {idList}";
-                
+
                 if (associatedVoucherIds.Count > 5)
                 {
                     message += $" and {associatedVoucherIds.Count - 5} more";
                 }
-                
+
                 return Json(new { canDelete = false, message });
             }
-            
+
             return Json(new { canDelete = true });
         }
 
@@ -485,7 +485,7 @@ namespace PureLedger.Controllers
         [HttpGet]
         [HttpPost]
         public async Task<IActionResult> GetCategoriesByProject(int projectId)
-                {
+        {
             var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
             return Json(categories);
         }
@@ -650,6 +650,165 @@ namespace PureLedger.Controllers
         }
 
         #endregion
+
+        #endregion
+
+        #region New Methods
+
+        [HttpGet]
+        public async Task<IActionResult> GetAllProjectsForCategories()
+        {
+            try
+            {
+                _logger.LogInformation("GetAllProjectsForCategories called");
+                
+                var userId = _currentUserService.GetCurrentUserId();
+                _logger.LogInformation("Current user ID: {UserId}", userId);
+                
+                var projects = userId.HasValue
+                    ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
+                    : new List<Project>();
+
+                _logger.LogInformation("Found {ProjectCount} projects", projects.Count);
+                
+                var result = projects.Select(p => new {
+                    projectId = p.ProjectId,
+                    projectName = p.ProjectName
+                }).ToList();
+
+                _logger.LogInformation("Returning {ResultCount} project results", result.Count);
+                
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading projects in GetAllProjectsForCategories");
+                return BadRequest(new { error = $"Error loading projects: {ex.Message}" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProjectForView(int projectId)
+        {
+            try
+            {
+                _logger.LogInformation("GetCategoriesByProjectForView called with projectId: {ProjectId}", projectId);
+                
+                var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
+                _logger.LogInformation("Found {CategoryCount} categories for project {ProjectId}", categories.Count, projectId);
+                
+                // Get full category details with navigation properties
+                var fullCategories = new List<object>();
+                foreach (var category in categories)
+                {
+                    dynamic categoryData = category;
+                    int categoryId = categoryData.categoryId;
+
+                    var fullCategory = await _metaDataService.GetCategoryByIdAsync(categoryId);
+                    if (fullCategory != null)
+                    {
+                        fullCategories.Add(new
+                        {
+                            categoryId = fullCategory.CategoryId,
+                            categoryName = fullCategory.CategoryName,
+                            projectId = fullCategory.ProjectId,
+                            accountTypeId = fullCategory.AccountTypeId,
+                            project = new
+                            {
+                                projectId = fullCategory.Project?.ProjectId,
+                                projectName = fullCategory.Project?.ProjectName
+                            },
+                            accountType = new
+                            {
+                                accountTypeId = fullCategory.AccountType?.AccountTypeId,
+                                accountTypeName = fullCategory.AccountType?.AccountTypeName
+                            }
+                        });
+                    }
+                }
+
+                _logger.LogInformation("Returning {FullCategoryCount} full category results", fullCategories.Count);
+                return Json(fullCategories);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading categories for project {ProjectId}", projectId);
+                return BadRequest(new { error = $"Error loading categories: {ex.Message}" });
+            }
+        }
+
+        #endregion
+
+        #region New Account Methods
+
+        [HttpGet]
+        public async Task<IActionResult> GetAllProjectsForAccounts()
+        {
+            try
+            {
+                _logger.LogInformation("GetAllProjectsForAccounts called");
+                
+                var userId = _currentUserService.GetCurrentUserId();
+                _logger.LogInformation("Current user ID: {UserId}", userId);
+                
+                var projects = userId.HasValue
+                    ? await _metaDataService.GetProjectsForAccountsForUserAsync(userId.Value)
+                    : new List<Project>();
+
+                _logger.LogInformation("Found {ProjectCount} projects", projects.Count);
+                
+                var result = projects.Select(p => new {
+                    projectId = p.ProjectId,
+                    projectName = p.ProjectName
+                }).ToList();
+
+                _logger.LogInformation("Returning {ResultCount} project results", result.Count);
+                
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading projects in GetAllProjectsForAccounts");
+                return BadRequest(new { error = $"Error loading projects: {ex.Message}" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAccountsByCriteria(int projectId, int? categoryId = null)
+        {
+            try
+            {
+                _logger.LogInformation("GetAccountsByCriteria called with projectId: {ProjectId}, categoryId: {CategoryId}", projectId, categoryId);
+                
+                // Get all accounts with details
+                var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                
+                // Filter by project (through category relationship)
+                var filteredAccounts = allAccounts.Where(a => 
+                    a.Category != null && 
+                    a.Category.ProjectId == projectId &&
+                    (!categoryId.HasValue || a.CategoryId == categoryId.Value)
+                ).Select(a => new {
+                    accountId = a.AccountId,
+                    accountName = a.AccountName,
+                    categoryId = a.CategoryId,
+                    categoryName = a.Category?.CategoryName,
+                    accountGroupId = a.AccountGroupId,
+                    accountGroupName = a.AccountGroup?.AccountGroupName,
+                    projectId = a.Category?.ProjectId,
+                    projectName = a.Category?.Project?.ProjectName
+                }).ToList();
+
+                _logger.LogInformation("Returning {AccountCount} accounts for project {ProjectId}", filteredAccounts.Count, projectId);
+                
+                return Json(filteredAccounts);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading accounts for project {ProjectId}, category {CategoryId}", projectId, categoryId);
+                return BadRequest(new { error = $"Error loading accounts: {ex.Message}" });
+            }
+        }
 
         #endregion
     }

@@ -119,7 +119,18 @@ namespace PureLedger.Services
 
         public async Task<List<Project>> GetAllProjectsForCategoriesForUserAsync(int userId)
         {
-            return await _unitOfWork.Projects.GetAllForUserAsync(userId);
+            try
+            {
+                _logger.LogInformation("Getting projects for user {UserId}", userId);
+                var result = await _unitOfWork.Projects.GetAllForUserAsync(userId);
+                _logger.LogInformation("Found {ProjectCount} projects for user {UserId}", result.Count, userId);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting projects for user {UserId}", userId);
+                throw;
+            }
         }
 
         public async Task<List<AccountType>> GetAllAccountTypesAsync()
