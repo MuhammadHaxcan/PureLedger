@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 2,
+        pageSize: 5, // Smaller page size for better performance like Master Report
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,

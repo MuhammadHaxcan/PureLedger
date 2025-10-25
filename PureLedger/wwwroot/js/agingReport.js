@@ -3,16 +3,36 @@
  * Handles all functionality for the Aging Report page including:
  * - Searchable dropdown filters
  * - AJAX category loading based on project selection
- * - Data fetching and rendering
+ * - Data fetching and rendering with pagination
+ * - Infinite scrolling
+ * - Total row calculations
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeReportState();
     initializeSelectDropdowns();
     initializeForm();
     setDefaultReferenceDate();
 });
 
-let dataTable = null;
+// ==================== STATE MANAGEMENT ====================
+
+function initializeReportState() {
+    window.reportState = {
+        currentPage: 0,
+        pageSize: 1,
+        isLoading: false,
+        hasMoreData: true,
+        totalRecords: 0,
+        allEntries: [],
+        reportParams: null,
+        grandTotals: {
+            totalDebit: 0,
+            totalCredit: 0,
+            totalBalance: 0
+        }
+    };
+}
 
 // ==================== SEARCHABLE DROPDOWN LOGIC ====================
 
@@ -124,151 +144,137 @@ function initializeDropdownStates() {
 
 function setupSelectSearch() {
     // Handle input in search box
-    document.addEventListener('input', function (e) {
-        if (!e.target.classList.contains('select-search')) return;
+    $(document).on('input', '.select-search', function () {
+        const $input = $(this);
+        if ($input.prop('disabled')) return;
 
-        const input = e.target;
-        if (input.disabled) return;
-
-        const container = input.closest('.select-container');
-        const dropdown = container.querySelector('.select-dropdown');
-        const searchTerm = input.value.toLowerCase();
+        const $container = $input.closest('.select-container');
+        const $dropdown = $container.find('.select-dropdown');
+        const searchTerm = $input.val().toLowerCase();
 
         let visibleCount = 0;
-        dropdown.querySelectorAll('.select-option').forEach(option => {
-            const text = option.textContent.toLowerCase();
+        $dropdown.find('.select-option').each(function () {
+            const text = $(this).text().toLowerCase();
             const shouldShow = text.includes(searchTerm) && visibleCount < 8;
-            option.classList.toggle('filtered-out', !shouldShow);
+            $(this).toggleClass('filtered-out', !shouldShow);
             if (shouldShow) visibleCount++;
         });
 
-        dropdown.classList.add('show');
+        $dropdown.addClass('show');
     });
 
     // Show dropdown on focus
-    document.addEventListener('focus', function (e) {
-        if (!e.target.classList.contains('select-search')) return;
+    $(document).on('focus', '.select-search', function () {
+        const $input = $(this);
+        if ($input.prop('disabled')) return;
 
-        const input = e.target;
-        if (input.disabled) return;
+        $('.select-dropdown').removeClass('show');
 
-        // Hide all other dropdowns
-        document.querySelectorAll('.select-dropdown').forEach(dd => dd.classList.remove('show'));
+        const $container = $input.closest('.select-container');
+        const $dropdown = $container.find('.select-dropdown');
+        const $select = $container.find('select');
+        const currentValue = $select.val();
 
-        const container = input.closest('.select-container');
-        const dropdown = container.querySelector('.select-dropdown');
-        const select = container.querySelector('select');
-        const currentValue = select.value;
-
-        dropdown.querySelectorAll('.select-option').forEach(option => {
-            option.classList.remove('selected', 'filtered-out');
-        });
+        $dropdown.find('.select-option').removeClass('selected filtered-out');
 
         if (currentValue) {
-            const selectedOption = dropdown.querySelector(`.select-option[data-value="${currentValue}"]`);
-            if (selectedOption) {
-                selectedOption.classList.add('selected');
+            const $selectedOption = $dropdown.find(`.select-option[data-value="${currentValue}"]`);
+            if ($selectedOption.length) {
+                $selectedOption.addClass('selected');
             }
         }
 
-        dropdown.classList.add('show');
-    }, true);
+        $dropdown.addClass('show');
+    });
 
     // Handle keyboard navigation
-    document.addEventListener('keydown', function (e) {
-        if (!e.target.classList.contains('select-search')) return;
+    $(document).on('keydown', '.select-search', function (e) {
+        const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
+        const $options = $dropdown.find('.select-option:not(.filtered-out)');
+        let $selected = $dropdown.find('.select-option.selected');
 
-        const dropdown = e.target.closest('.select-container').querySelector('.select-dropdown');
-        const options = dropdown.querySelectorAll('.select-option:not(.filtered-out)');
-        let selected = dropdown.querySelector('.select-option.selected');
-
-        if (e.key === 'Tab' && dropdown.classList.contains('show')) {
-            dropdown.classList.remove('show');
+        if (e.key === 'Tab' && $dropdown.hasClass('show')) {
+            $dropdown.removeClass('show');
             return;
         }
 
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                if (!selected) {
-                    options[0]?.classList.add('selected');
+                if (!$selected.length) {
+                    $options.first().addClass('selected');
                 } else {
-                    const currentIndex = Array.from(options).indexOf(selected);
-                    if (currentIndex < options.length - 1) {
-                        selected.classList.remove('selected');
-                        options[currentIndex + 1].classList.add('selected');
+                    const $next = $selected.nextAll('.select-option:not(.filtered-out)').first();
+                    if ($next.length) {
+                        $selected.removeClass('selected');
+                        $next.addClass('selected');
                     }
                 }
                 break;
 
             case 'ArrowUp':
                 e.preventDefault();
-                if (!selected) {
-                    options[options.length - 1]?.classList.add('selected');
+                if (!$selected.length) {
+                    $options.last().addClass('selected');
                 } else {
-                    const currentIndex = Array.from(options).indexOf(selected);
-                    if (currentIndex > 0) {
-                        selected.classList.remove('selected');
-                        options[currentIndex - 1].classList.add('selected');
+                    const $prev = $selected.prevAll('.select-option:not(.filtered-out)').first();
+                    if ($prev.length) {
+                        $selected.removeClass('selected');
+                        $prev.addClass('selected');
                     }
                 }
                 break;
 
             case 'Enter':
-                if (dropdown.classList.contains('show')) {
+                if ($dropdown.hasClass('show')) {
                     e.preventDefault();
-                    selected = dropdown.querySelector('.select-option.selected');
-                    if (selected) {
-                        selectOption(selected, e.target.closest('.select-container'));
-                    } else if (options.length > 0) {
-                        selectOption(options[0], e.target.closest('.select-container'));
+                    $selected = $dropdown.find('.select-option.selected');
+                    if ($selected.length) {
+                        selectOption($selected, $(this).closest('.select-container'));
+                    } else {
+                        const $firstOption = $options.first();
+                        if ($firstOption.length) {
+                            selectOption($firstOption, $(this).closest('.select-container'));
+                        }
                     }
                 }
                 break;
 
             case 'Escape':
                 e.preventDefault();
-                dropdown.classList.remove('show');
+                $dropdown.removeClass('show');
                 break;
         }
     });
 
     // Handle click on dropdown option
-    document.addEventListener('click', function (e) {
-        if (e.target.classList.contains('select-option') && !e.target.classList.contains('filtered-out')) {
-            selectOption(e.target, e.target.closest('.select-container'));
-        }
+    $(document).on('click', '.select-option:not(.filtered-out)', function () {
+        selectOption($(this), $(this).closest('.select-container'));
     });
 
     // Close dropdown when clicking outside
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest('.select-container')) {
-            document.querySelectorAll('.select-dropdown').forEach(dd => dd.classList.remove('show'));
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('.select-container').length) {
+            $('.select-dropdown').removeClass('show');
         }
     });
 }
 
-function selectOption(option, container) {
-    const value = option.dataset.value;
-    const text = option.textContent;
+function selectOption($option, $container) {
+    const value = $option.data('value');
+    const text = $option.text();
 
     // Update the hidden select and trigger change event
-    const select = container.querySelector('select');
-    select.value = value;
-
-    // Create and dispatch change event
-    const changeEvent = new Event('change', { bubbles: true });
-    select.dispatchEvent(changeEvent);
+    const $select = $container.find('select');
+    $select.val(value).trigger('change');
 
     // Update the search input text
-    const searchInput = container.querySelector('.select-search');
-    searchInput.value = text;
+    $container.find('.select-search').val(text);
 
     // Update the visual state of the dropdown
-    const dropdown = container.querySelector('.select-dropdown');
-    dropdown.classList.remove('show');
-    dropdown.querySelectorAll('.select-option').forEach(opt => opt.classList.remove('selected'));
-    option.classList.add('selected');
+    $container.find('.select-dropdown').removeClass('show');
+    $container.find('.select-option').removeClass('selected');
+    $option.addClass('selected');
 }
 
 // ==================== DROPDOWN LOCKING LOGIC ====================
@@ -277,53 +283,50 @@ function handleProjectChange() {
     const projectId = document.getElementById('projectId');
     const categoryId = document.getElementById('categoryId');
 
-    const categoryContainer = document.querySelector('.select-container:has(#categoryId)');
-    const categorySearch = categoryContainer?.querySelector('.select-search');
-    const categoryDropdown = categoryContainer?.querySelector('.select-dropdown');
+    const $categoryContainer = $('.select-container').has('#categoryId');
+    const $categorySearch = $categoryContainer.find('.select-search');
+    const $categoryDropdown = $categoryContainer.find('.select-dropdown');
 
     if (!projectId || !categoryId) return;
 
     if (projectId.value) {
         // Project selected - enable category and load categories via AJAX
         resetSelect(categoryId, 'Select Category', false);
-        if (categorySearch) {
-            categorySearch.value = '';
-            categorySearch.disabled = false;
+        if ($categorySearch.length) {
+            $categorySearch.val('').prop('disabled', false);
         }
         loadCategoriesForProject();
     } else {
         // No project selected - lock category
         resetSelect(categoryId, 'Select Category', true);
-        if (categorySearch) {
-            categorySearch.value = '';
-            categorySearch.disabled = true;
+        if ($categorySearch.length) {
+            $categorySearch.val('').prop('disabled', true);
         }
-        if (categoryDropdown) categoryDropdown.innerHTML = '';
+        if ($categoryDropdown.length) $categoryDropdown.empty();
     }
 }
 
 function loadCategoriesForProject() {
-    const projectId = document.getElementById('projectId').value;
+    const projectId = $('#projectId').val();
 
     // Get the elements we need to update
-    const categoryContainer = document.querySelector('.select-container:has(#categoryId)');
-    const categorySearch = categoryContainer?.querySelector('.select-search');
-    const categoryDropdown = categoryContainer?.querySelector('.select-dropdown');
+    const $categoryContainer = $('.select-container').has('#categoryId');
+    const $categorySearch = $categoryContainer.find('.select-search');
+    const $categoryDropdown = $categoryContainer.find('.select-dropdown');
     const categorySelect = document.getElementById('categoryId');
 
     // Reset category dropdown
     resetSelect(categorySelect, 'Select Category', true);
-    if (categorySearch) {
-        categorySearch.value = '';
-        categorySearch.disabled = true;
+    if ($categorySearch.length) {
+        $categorySearch.val('').prop('disabled', true);
     }
-    if (categoryDropdown) categoryDropdown.innerHTML = '';
+    if ($categoryDropdown.length) $categoryDropdown.empty();
 
     if (!projectId) return;
 
     // Show loading state
-    if (categoryDropdown) {
-        categoryDropdown.innerHTML = '<div class="select-option">Loading categories...</div>';
+    if ($categoryDropdown.length) {
+        $categoryDropdown.html('<div class="select-option">Loading categories...</div>');
     }
 
     // Use jQuery AJAX to match master-report.js implementation
@@ -337,16 +340,16 @@ function loadCategoriesForProject() {
             // Reset and enable category dropdown
             resetSelect(categorySelect, 'Select Category');
             categorySelect.disabled = false;
-            if (categorySearch) categorySearch.disabled = false;
+            if ($categorySearch.length) $categorySearch.prop('disabled', false);
 
             // Clear dropdown and add default option
-            if (categoryDropdown) {
-                categoryDropdown.innerHTML = '';
+            if ($categoryDropdown.length) {
+                $categoryDropdown.empty();
                 const defaultOption = document.createElement('div');
                 defaultOption.className = 'select-option';
                 defaultOption.dataset.value = '';
                 defaultOption.textContent = 'Select Category';
-                categoryDropdown.appendChild(defaultOption);
+                $categoryDropdown.append(defaultOption);
             }
 
             // Add categories to both select and dropdown
@@ -359,12 +362,12 @@ function loadCategoriesForProject() {
                     categorySelect.appendChild(option);
 
                     // Add to dropdown
-                    if (categoryDropdown) {
+                    if ($categoryDropdown.length) {
                         const div = document.createElement('div');
                         div.className = 'select-option';
                         div.dataset.value = category.id;
                         div.textContent = category.name;
-                        categoryDropdown.appendChild(div);
+                        $categoryDropdown.append(div);
                     }
                 });
             }
@@ -374,10 +377,10 @@ function loadCategoriesForProject() {
 
             // Reset to disabled state on error
             resetSelect(categorySelect, 'Select Category', true);
-            if (categorySearch) categorySearch.disabled = true;
-            if (categoryDropdown) categoryDropdown.innerHTML = '';
+            if ($categorySearch.length) $categorySearch.prop('disabled', true);
+            if ($categoryDropdown.length) $categoryDropdown.empty();
 
-            showAlert('danger', 'Failed to load categories: ' + (error || 'Unknown error'));
+            showError('Failed to load categories: ' + (error || 'Unknown error'));
         });
 }
 
@@ -394,20 +397,20 @@ function initializeForm() {
     try {
         const form = document.getElementById('agingReportForm');
         if (form) {
-            form.addEventListener('submit', async function (e) {
+            form.addEventListener('submit', function (e) {
                 e.preventDefault();
-                await generateReport();
+                generateReport();
             });
         }
 
         setupSelectSearch();
+        initSearchFunctionality();
 
         // Set up project change handlers for AJAX category loading
-        document.addEventListener('change', function (e) {
-            if (e.target.id === 'projectId') {
-                handleProjectChange();
-            }
-        });
+        $(document).on('change', '#projectId', handleProjectChange);
+
+        // Add infinite scroll handler
+        window.addEventListener('scroll', throttle(checkIfShouldLoadMore, 100));
 
         // Press Enter to submit on key inputs
         const referenceDate = document.getElementById('referenceDate');
@@ -420,7 +423,89 @@ function initializeForm() {
         }
     } catch (err) {
         console.error('Error initializing form:', err);
-        showAlert('danger', 'Error initializing form: ' + err.message);
+        showError('Error initializing form: ' + err.message);
+    }
+}
+
+function initSearchFunctionality() {
+    const searchBox = document.getElementById('searchBox');
+    if (searchBox) {
+        searchBox.addEventListener('input', debounce(function () {
+            filterReportData(this.value.toLowerCase());
+        }, 250));
+    }
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+function throttle(func, limit) {
+    let inThrottle;
+    return function () {
+        if (!inThrottle) {
+            func.apply(this, arguments);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
+function filterReportData(searchText) {
+    const reportData = document.getElementById('reportData');
+    if (!reportData) return;
+
+    const rows = reportData.getElementsByTagName('tr');
+    let hasVisibleRows = false;
+    let filteredTotals = { totalDebit: 0, totalCredit: 0, totalBalance: 0 };
+
+    for (const row of rows) {
+        const isVisible = row.textContent.toLowerCase().includes(searchText);
+        row.style.display = isVisible ? '' : 'none';
+
+        if (isVisible) {
+            hasVisibleRows = true;
+            // Calculate filtered totals
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 4) {
+                const debit = parseFloat(cells[1].textContent.replace(/,/g, '')) || 0;
+                const credit = parseFloat(cells[2].textContent.replace(/,/g, '')) || 0;
+                const balance = parseFloat(cells[3].textContent.replace(/,/g, '')) || 0;
+
+                filteredTotals.totalDebit += debit;
+                filteredTotals.totalCredit += credit;
+                filteredTotals.totalBalance += balance;
+            }
+        }
+    }
+
+    // Update totals based on filtered data
+    if (searchText.length > 0) {
+        updateTotalRow(filteredTotals.totalDebit, filteredTotals.totalCredit, filteredTotals.totalBalance);
+    } else {
+        // Reset to original totals when no filter
+        updateTotalRow(
+            window.reportState.grandTotals.totalDebit,
+            window.reportState.grandTotals.totalCredit,
+            window.reportState.grandTotals.totalBalance
+        );
+    }
+
+    if (!hasVisibleRows && rows.length > 0 && searchText.length > 0) {
+        const noResultsRow = document.createElement('tr');
+        noResultsRow.id = 'noSearchResults';
+        noResultsRow.innerHTML = '<td colspan="4" class="text-center">No matching accounts found</td>';
+        reportData.appendChild(noResultsRow);
+
+        // Reset totals when no results
+        updateTotalRow(0, 0, 0);
+    } else {
+        const existingNoResults = document.getElementById('noSearchResults');
+        if (existingNoResults) existingNoResults.remove();
     }
 }
 
@@ -434,145 +519,299 @@ function setDefaultReferenceDate() {
 
 // ==================== REPORT GENERATION ====================
 
-async function generateReport() {
+function generateReport() {
+    initializeReportState();
+
     const referenceDate = document.getElementById('referenceDate').value;
     const projectId = document.getElementById('projectId').value;
     const categoryId = document.getElementById('categoryId').value;
 
     if (!referenceDate || !categoryId) {
-        showAlert('warning', 'Please select a reference date and category.');
+        showError('Please select a reference date and category.');
         return;
     }
-
-    // Clear previous results and show loading
-    document.getElementById('reportData').innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>';
-    document.getElementById('reportResults').style.display = 'block';
 
     const params = {
         referenceDate: referenceDate,
         projectId: projectId || '',
-        categoryId: categoryId
+        categoryId: categoryId,
+        Page: 0,
+        PageSize: window.reportState.pageSize
     };
 
-    try {
-        // Use jQuery AJAX for consistency with category loading
-        const data = await new Promise((resolve, reject) => {
-            $.ajax({
-                url: routes.getAgingReportData,
-                method: 'GET',
-                data: params,
-                dataType: 'json'
-            })
-                .done(resolve)
-                .fail((xhr, status, error) => {
-                    reject(new Error(error || 'Unknown error'));
-                });
-        });
+    window.reportState.reportParams = params;
 
-        displayReport(data);
-    } catch (error) {
-        console.error('Error generating report:', error);
-        let errorMessage = 'Error generating report: ' + error.message;
-        document.getElementById('reportData').innerHTML = `<tr><td colspan="4" class="text-center text-danger">${errorMessage}</td></tr>`;
-        showAlert('danger', 'Failed to generate report: ' + error.message);
+    clearReportData();
+
+    // Show the results container (similar to other reports)
+    const reportResults = document.getElementById('reportResults');
+    if (reportResults) reportResults.style.display = 'block';
+
+    const reportData = document.getElementById('reportData');
+    if (reportData) {
+        reportData.innerHTML = createLoadingRow(4);
+    }
+
+    fetchReportChunk();
+}
+
+function clearReportData() {
+    updateElement('reportData', '');
+    updateReportSummary(0);
+    updateTotalRow(0, 0, 0);
+    removeElements(['loadingStatus', 'autoLoadIndicator']);
+}
+
+function updateElement(id, content) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.innerHTML = content;
     }
 }
 
-function displayReport(data) {
-    // Destroy existing DataTable if it exists
-    if (dataTable) {
-        dataTable.destroy();
-        dataTable = null;
-    }
+function removeElements(ids) {
+    ids.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.remove();
+    });
+}
 
-    const tbody = document.getElementById('reportData');
-    tbody.innerHTML = '';
+function createLoadingRow(colSpan) {
+    return `<tr><td colspan="${colSpan}" class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </td></tr>`;
+}
 
-    if (!data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center">No data found</td></tr>';
-        updateTotals(0, 0, 0);
+// ==================== INFINITE SCROLL ====================
+
+function checkIfShouldLoadMore() {
+    if (!window.reportState?.hasMoreData || window.reportState?.isLoading) {
         return;
     }
 
+    // Check if the results div is visible
+    const reportResults = document.getElementById('reportResults');
+    if (!reportResults || reportResults.style.display === 'none') {
+        return;
+    }
+
+    const reportData = document.getElementById('reportData');
+    if (!reportData || !reportData.children.length) {
+        return;
+    }
+
+    const scrollPosition = window.innerHeight + window.scrollY;
+    const bodyHeight = document.body.offsetHeight;
+    const scrollThreshold = bodyHeight - 500;
+
+    if (scrollPosition >= scrollThreshold) {
+        fetchReportChunk();
+    }
+}
+
+// ==================== DATA FETCHING ====================
+
+function fetchReportChunk() {
+    if (window.reportState.isLoading || !window.reportState.hasMoreData) {
+        return;
+    }
+
+    window.reportState.isLoading = true;
+    updateLoadMoreButton();
+
+    const params = { ...window.reportState.reportParams };
+    params.Page = window.reportState.currentPage;
+
+    console.log('Fetching report chunk with params:', params); // Debug log
+
+    const timestamp = new Date().getTime();
+    const url = `${routes.getAgingReportData}?_=${timestamp}`;
+
+    $.ajax({
+        url: url,
+        method: 'GET',
+        data: params,
+        dataType: 'json',
+        cache: false
+    })
+        .done(data => {
+            console.log('Received data:', data); // Debug log
+
+            if (window.reportState.currentPage === 0) {
+                initializeDisplay();
+            }
+
+            processAndDisplayEntries(data.entries || []);
+
+            window.reportState.currentPage++;
+            window.reportState.hasMoreData = data.hasMoreData || false;
+            window.reportState.totalRecords = data.totalRecords || 0;
+
+            updateLoadingStatus();
+        })
+        .fail((xhr, status, error) => {
+            console.error('AJAX Error:', xhr.responseText); // Debug log
+            const reportData = document.getElementById('reportData');
+            if (reportData) {
+                reportData.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading report data. Please try again.</td></tr>';
+            }
+            showError('Failed to load report data. Please check your connection and try again.');
+        })
+        .always(() => {
+            window.reportState.isLoading = false;
+            updateLoadMoreButton();
+        });
+}
+
+// ==================== DATA PROCESSING ====================
+
+function processAndDisplayEntries(entries) {
+    if (!entries?.length) return;
+
+    window.reportState.allEntries = [...window.reportState.allEntries, ...entries];
+    renderAllEntries();
+}
+
+function renderAllEntries() {
+    const tbody = document.getElementById('reportData');
+    if (!tbody) return;
+
+    if (!window.reportState.allEntries.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center">No accounts found</td></tr>';
+        updateReportSummary(0);
+        updateTotalRow(0, 0, 0);
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
     let totalDebit = 0;
     let totalCredit = 0;
-    let totalNet = 0;
+    let totalBalance = 0;
 
-    data.forEach(item => {
-        const debit = parseFloat(item.totalDebit) || 0;
-        const credit = parseFloat(item.totalCredit) || 0;
-        const net = parseFloat(item.netBalance) || 0;
+    window.reportState.allEntries.forEach(entry => {
+        const debit = parseFloat(entry.totalDebit) || 0;
+        const credit = parseFloat(entry.totalCredit) || 0;
+        const balance = parseFloat(entry.netBalance) || 0;
 
         totalDebit += debit;
         totalCredit += credit;
-        totalNet += net;
+        totalBalance += balance;
 
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${item.accountName}</td>
+            <td>${entry.accountName}</td>
             <td class="text-end">${formatCurrency(debit)}</td>
             <td class="text-end">${formatCurrency(credit)}</td>
-            <td class="text-end ${net < 0 ? 'negative-balance' : ''}">${formatCurrency(net)}</td>
+            <td class="text-end ${balance < 0 ? 'negative-balance' : ''}">${formatCurrency(balance)}</td>
         `;
-        tbody.appendChild(row);
+        fragment.appendChild(row);
     });
 
-    // Update totals in footer
-    updateTotals(totalDebit, totalCredit, totalNet);
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
 
-    // Initialize DataTable
-    try {
-        dataTable = $('#agingReportTable').DataTable({
-            "order": [[0, "asc"]],
-            "language": {
-                "emptyTable": "No aging data available",
-                "search": "Search accounts:",
-                "info": "Showing _START_ to _END_ of _TOTAL_ accounts",
-                "lengthMenu": "Show _MENU_ accounts"
-            },
-            "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
-            "dom": 'lBfrtip',
-            "buttons": [
-                {
-                    extend: 'excel',
-                    text: '<i class="fas fa-file-excel"></i> Excel',
-                    className: 'btn btn-sm btn-success',
-                    title: 'Aging Report ' + document.getElementById('referenceDate').value,
-                    footer: true
-                },
-                {
-                    extend: 'pdf',
-                    text: '<i class="fas fa-file-pdf"></i> PDF',
-                    className: 'btn btn-sm btn-danger',
-                    title: 'Aging Report ' + document.getElementById('referenceDate').value,
-                    footer: true
-                },
-                {
-                    extend: 'print',
-                    text: '<i class="fas fa-print"></i> Print',
-                    className: 'btn btn-sm btn-info',
-                    title: 'Aging Report ' + document.getElementById('referenceDate').value,
-                    footer: true
-                }
-            ]
-        });
-    } catch (error) {
-        console.error('Error initializing DataTable:', error);
+    // Store grand totals
+    window.reportState.grandTotals = {
+        totalDebit: totalDebit,
+        totalCredit: totalCredit,
+        totalBalance: totalBalance
+    };
+
+    updateReportSummary(window.reportState.allEntries.length, totalDebit, totalCredit, totalBalance);
+    updateTotalRow(totalDebit, totalCredit, totalBalance);
+}
+
+// ==================== TOTAL ROW MANAGEMENT ====================
+
+function updateTotalRow(totalDebit, totalCredit, totalBalance) {
+    const totalDebitElement = document.getElementById('totalDebit');
+    const totalCreditElement = document.getElementById('totalCredit');
+    const totalNetElement = document.getElementById('totalNet');
+
+    if (totalDebitElement) {
+        totalDebitElement.textContent = formatCurrency(totalDebit);
     }
 
-    updateReportSummary(data.length, totalNet);
+    if (totalCreditElement) {
+        totalCreditElement.textContent = formatCurrency(totalCredit);
+    }
+
+    if (totalNetElement) {
+        totalNetElement.textContent = formatCurrency(totalBalance);
+
+        // Apply styling based on balance
+        totalNetElement.className = totalBalance < 0 ? 'text-end text-danger' : 'text-end text-success';
+    }
 }
 
-// ==================== UTILITY FUNCTIONS ====================
+// ==================== UI UPDATES ====================
 
-function updateTotals(totalDebit, totalCredit, totalNet) {
-    document.getElementById('totalDebit').textContent = formatCurrency(totalDebit);
-    document.getElementById('totalCredit').textContent = formatCurrency(totalCredit);
-    document.getElementById('totalNet').textContent = formatCurrency(totalNet);
+function initializeDisplay() {
+    updateElement('reportData', '');
+    removeElements(['loadingStatus', 'autoLoadIndicator']);
+    addLoadingStatus();
+    addAutoLoadIndicator();
 }
 
-function updateReportSummary(count, totalBalance = 0) {
+function addLoadingStatus() {
+    const tableContainer = document.querySelector('#agingReportTable')?.closest('.table-responsive');
+    if (!tableContainer) return;
+
+    const loadingStatus = document.createElement('div');
+    loadingStatus.id = 'loadingStatus';
+    loadingStatus.className = 'text-center mt-3 text-muted';
+    loadingStatus.textContent = `Loaded 0 of ${window.reportState.totalRecords} accounts`;
+    tableContainer.parentNode.insertBefore(loadingStatus, tableContainer.nextSibling);
+}
+
+function addAutoLoadIndicator() {
+    const tableContainer = document.querySelector('#agingReportTable')?.closest('.table-responsive');
+    if (!tableContainer) return;
+
+    const loadingStatus = document.getElementById('loadingStatus');
+    if (!loadingStatus) return;
+
+    const autoLoadIndicator = document.createElement('div');
+    autoLoadIndicator.id = 'autoLoadIndicator';
+    autoLoadIndicator.className = 'text-center mt-1 mb-3';
+    autoLoadIndicator.innerHTML = `
+        <div class="spinner-border spinner-border-sm text-primary d-none" id="loadMoreSpinner" role="status">
+            <span class="visually-hidden">Loading more accounts...</span>
+        </div>
+    `;
+    tableContainer.parentNode.insertBefore(autoLoadIndicator, loadingStatus.nextSibling);
+}
+
+function updateLoadingStatus() {
+    const existingStatus = document.getElementById('loadingStatus');
+    if (existingStatus) {
+        existingStatus.remove();
+    }
+
+    const tableContainer = document.querySelector('#agingReportTable')?.closest('.table-responsive');
+    if (!tableContainer) return;
+
+    const loadingStatus = document.createElement('div');
+    loadingStatus.id = 'loadingStatus';
+    loadingStatus.className = 'text-center mt-3 text-muted';
+    loadingStatus.textContent = `Loaded ${window.reportState.allEntries.length} of ${window.reportState.totalRecords} accounts`;
+    tableContainer.parentNode.insertBefore(loadingStatus, tableContainer.nextSibling);
+}
+
+function updateLoadMoreButton() {
+    const loadMoreSpinner = document.getElementById('loadMoreSpinner');
+    if (!loadMoreSpinner) return;
+
+    if (window.reportState.isLoading) {
+        loadMoreSpinner.classList.remove('d-none');
+    } else {
+        loadMoreSpinner.classList.add('d-none');
+    }
+}
+
+function updateReportSummary(count, totalDebit = 0, totalCredit = 0, totalBalance = 0) {
     const summaryElement = document.getElementById('reportSummary');
     if (!summaryElement) return;
 
@@ -587,36 +826,40 @@ function updateReportSummary(count, totalBalance = 0) {
     }
 }
 
+// ==================== UTILITY FUNCTIONS ====================
+
 function formatCurrency(value) {
     return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }).format(value);
+    }).format(value || 0);
 }
 
-function showAlert(type, message) {
-    const icon = type === 'success' ? 'check-circle' :
-        type === 'warning' ? 'exclamation-triangle' :
-            'exclamation-circle';
+function showError(message) {
+    const alertArea = document.getElementById('alertArea');
+    if (!alertArea) {
+        console.error(message);
+        return;
+    }
 
     const alertElement = document.createElement('div');
-    alertElement.className = `alert alert-${type} alert-dismissible fade show`;
+    alertElement.className = 'alert alert-danger alert-dismissible fade show';
     alertElement.setAttribute('role', 'alert');
     alertElement.innerHTML = `
-        <i class="fas fa-${icon} me-2"></i>${message}
+        <i class="fas fa-exclamation-circle me-2"></i>${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     `;
 
-    const alertArea = document.getElementById('alertArea');
-    if (alertArea) {
-        alertArea.innerHTML = ''; // Clear existing alerts
-        alertArea.appendChild(alertElement);
+    alertArea.appendChild(alertElement);
 
-        // Auto dismiss after 5 seconds
-        setTimeout(function () {
-            if (alertElement.parentNode) {
-                alertElement.parentNode.removeChild(alertElement);
-            }
-        }, 5000);
-    }
+    // Auto dismiss after 5 seconds
+    setTimeout(function () {
+        if (alertElement.parentNode) {
+            alertElement.parentNode.removeChild(alertElement);
+        }
+    }, 5000);
+}
+
+function showAlert(type, message) {
+    showError(message);
 }

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.ViewModels;
 
 namespace PureLedger.Repositories
 {
@@ -17,6 +18,7 @@ namespace PureLedger.Repositories
         public async Task<JournalEntry?> GetByIdWithDetailsAsync(int id)
         {
             return await _context.JournalEntries
+                .AsNoTracking()
                 .Include(e => e.Account)
                 .Include(e => e.Category)
                 .Include(e => e.JournalVoucher)
@@ -43,6 +45,7 @@ namespace PureLedger.Repositories
             int? accountId)
         {
             IQueryable<JournalEntry> query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.Account)
                 .Where(je => je.JournalVoucherId == voucherId);
 
@@ -72,16 +75,15 @@ namespace PureLedger.Repositories
 
         public async Task<JournalEntry?> GetByCartageId(int id)
         {
-            return await _context.JournalEntries.FirstOrDefaultAsync(e => e.JournalVoucherId == id && e.Debit == 0 && e.Credit > 0);
+            return await _context.JournalEntries.AsNoTracking().FirstOrDefaultAsync(e => e.JournalVoucherId == id && e.Debit == 0 && e.Credit > 0);
         }
-
-        // New optimized methods
 
         public async Task<List<JournalEntry>> GetEntriesByCriteriaAsync(
             List<int> accountIds, int categoryId, int? projectId, DateOnly referenceDate)
         {
-            // Build a query that filters at the database level
+
             var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.JournalVoucher)
                 .Where(je =>
                     accountIds.Contains(je.AccountId) &&
@@ -89,59 +91,55 @@ namespace PureLedger.Repositories
                     je.JournalVoucher.IsCompleted &&
                     je.JournalVoucher.CreditableDate <= referenceDate);
 
-            // Apply project filter if specified
             if (projectId.HasValue)
             {
                 query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
             }
 
-            // Execute the optimized query
             return await query.ToListAsync();
         }
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int accountId, int maxVoucherId)
         {
-            // Calculate the base balance directly in the database
-            var balance = await _context.JournalEntries
+
+            var balanceQuery = _context.JournalEntries
+                .AsNoTracking()
                 .Where(je =>
                     je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
-                    je.JournalVoucherId < maxVoucherId  // Get balance up to but not including this voucher
+                    je.JournalVoucherId < maxVoucherId
                 )
-                .Select(je => new { je.Debit, je.Credit })
-                .ToListAsync();
+                .Select(je => new { je.Debit, je.Credit });
 
-            // Sum up the results
-            decimal totalDebit = balance.Sum(e => e.Debit);
-            decimal totalCredit = balance.Sum(e => e.Credit);
+            var totalDebit = await balanceQuery.SumAsync(e => e.Debit);
+            var totalCredit = await balanceQuery.SumAsync(e => e.Credit);
 
             return totalDebit - totalCredit;
         }
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsyncMinus1(int accountId, int maxVoucherId)
         {
-            // Calculate the base balance directly in the database
-            var balance = await _context.JournalEntries
+            var balanceQuery = _context.JournalEntries
+                .AsNoTracking()
                 .Where(je =>
                     je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
-                    je.JournalVoucherId <= maxVoucherId
-                )
-                .Select(je => new { je.Debit, je.Credit })
-                .ToListAsync();
+                    je.JournalVoucherId <= maxVoucherId);
 
-            // Sum up the results
-            decimal totalDebit = balance.Sum(e => e.Debit);
-            decimal totalCredit = balance.Sum(e => e.Credit);
+            // Use SumAsync to calculate at database level
+            var totalDebit = await balanceQuery.SumAsync(e => (decimal?)e.Debit) ?? 0m;
+            var totalCredit = await balanceQuery.SumAsync(e => (decimal?)e.Credit) ?? 0m;
 
             return totalDebit - totalCredit;
         }
 
+
         public async Task<List<JournalEntry>> GetJournalEntriesByFiltersAsync(
             List<int> accountIds, int? categoryId, int? projectId)
         {
-            // Start with a base query that includes account filtering
+
             var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.JournalVoucher)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
@@ -149,22 +147,18 @@ namespace PureLedger.Repositories
                     accountIds.Contains(je.AccountId) &&
                     je.JournalVoucher.IsCompleted);
 
-            // Apply category filter if specified
             if (categoryId.HasValue)
             {
                 query = query.Where(je => je.CategoryId == categoryId.Value);
             }
 
-            // Apply project filter if specified
             if (projectId.HasValue)
             {
                 query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
             }
 
-            // Execute the optimized query
             return await query.ToListAsync();
         }
-
 
         public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
             DateOnly startDate,
@@ -172,11 +166,12 @@ namespace PureLedger.Repositories
             int? projectId,
             int? categoryId,
             int? accountId,
-            int? bookerId, // Add bookerId parameter
+            int? bookerId,
             int page,
             int pageSize)
         {
             var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.JournalVoucher)
                     .ThenInclude(jv => jv.Project)
                 .Include(je => je.JournalVoucher)
@@ -203,16 +198,13 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Add filtering by booker
             if (bookerId.HasValue)
             {
                 query = query.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
-            // Get total count for pagination info
             int totalCount = await query.CountAsync();
 
-            // Order by EntryDate for consistent reports and apply pagination
             var pagedResults = await query
                 .OrderBy(je => je.JournalVoucher.EntryDate)
                 .ThenBy(je => je.JournalVoucherId)
@@ -226,8 +218,9 @@ namespace PureLedger.Repositories
 
         public async Task<List<JournalEntry>> GetCartageEntriesByJournalVoucherIdAsync(int journalVoucherId)
         {
-            // Get all cartage references for this voucher
+
             var cartageReferences = await _context.JournalVoucherReferences
+                .AsNoTracking()
                 .Where(r => r.MainVoucherId == journalVoucherId && r.ReferenceType == "Cartage")
                 .ToListAsync();
 
@@ -236,7 +229,6 @@ namespace PureLedger.Repositories
 
             List<JournalEntry> cartageEntries = new List<JournalEntry>();
 
-            // Process each referenced cartage voucher
             foreach (var reference in cartageReferences)
             {
                 var cartageEntry = await GetByCartageId(reference.ReferencedVoucherId);
@@ -255,11 +247,18 @@ namespace PureLedger.Repositories
             int? projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId,
             int page,
             int pageSize)
         {
-            // Build the same query as the main report
-            var query = _context.JournalEntries
+            if (page <= 0 || pageSize <= 0)
+            {
+                return 0m;
+            }
+
+            var baseQuery = _context.JournalEntries
+                .AsNoTracking()
+                .Include(je => je.JournalVoucher)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     je.JournalVoucher.EntryDate >= startDate &&
@@ -267,32 +266,41 @@ namespace PureLedger.Repositories
 
             if (projectId.HasValue)
             {
-                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+                baseQuery = baseQuery.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
             }
 
             if (categoryId.HasValue)
             {
-                query = query.Where(je => je.CategoryId == categoryId.Value);
+                baseQuery = baseQuery.Where(je => je.CategoryId == categoryId.Value);
             }
 
             if (accountId.HasValue)
             {
-                query = query.Where(je => je.AccountId == accountId.Value);
+                baseQuery = baseQuery.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Order the same as the main report
-            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
+            if (bookerId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
+            }
+
+            var ordered = baseQuery
+                .OrderBy(je => je.JournalVoucher.EntryDate)
                 .ThenBy(je => je.JournalVoucherId)
-                .ThenBy(je => je.JournalEntryId);
+                .ThenBy(je => je.JournalEntryId)
+                .Select(je => new { je.Debit, je.Credit });
 
-            // Take all entries before the current page
-            var previousEntries = await query
-                .Take(page * pageSize)
-                .Select(je => new { je.Debit, je.Credit })
-                .ToListAsync();
+            int takeCount = page * pageSize;
 
-            decimal balance = previousEntries.Sum(e => e.Debit - e.Credit);
-            return balance;
+            // Sum previous entries directly in the database
+            var previousDebit = await ordered
+                .Take(takeCount)
+                .SumAsync(x => (decimal?)x.Debit) ?? 0m;
+            var previousCredit = await ordered
+                .Take(takeCount)
+                .SumAsync(x => (decimal?)x.Credit) ?? 0m;
+
+            return previousDebit - previousCredit;
         }
 
         public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(
@@ -305,19 +313,19 @@ namespace PureLedger.Repositories
     int page,
     int pageSize)
         {
-            // Start with a query for all JournalEntries that match our basic criteria
+
             var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.JournalVoucher)
                 .Include(je => je.Account)
                 .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
                     je.IsProcessed &&
-                    je.Quantity > 0 && // Only get entries with quantity for product report
-                    je.Account.AccountGroupId == 2 && // Only get product accounts (AccountGroupId = 2)
+                    je.Quantity > 0 &&
+                    je.Account.AccountGroupId == 2 &&
                     je.JournalVoucher.EntryDate >= startDate &&
                     je.JournalVoucher.EntryDate <= endDate);
 
-            // Apply additional filters
             if (categoryId.HasValue)
             {
                 query = query.Where(je => je.CategoryId == categoryId.Value);
@@ -328,18 +336,14 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Get total count for pagination
             int totalCount = await query.CountAsync();
 
-            // Apply ordering before pagination
             query = query.OrderBy(je => je.JournalVoucher.EntryDate)
                         .ThenBy(je => je.JournalVoucherId)
                         .ThenBy(je => je.JournalEntryId);
 
-            // Apply pagination
             query = query.Skip(page * pageSize).Take(pageSize);
 
-            // Get entries with a LEFT JOIN to DeliveryChallanEntry
             var entriesWithDC = await query
                 .GroupJoin(
                     _context.DeliveryChallanEntries.Include(dce => dce.Location),
@@ -351,7 +355,6 @@ namespace PureLedger.Repositories
                     (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
                 .ToListAsync();
 
-            // Filter by location if specified
             if (locationId.HasValue)
             {
                 entriesWithDC = entriesWithDC
@@ -359,7 +362,6 @@ namespace PureLedger.Repositories
                     .ToList();
             }
 
-            // Transform to the return type
             var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
 
             return (results, totalCount);
@@ -372,6 +374,7 @@ namespace PureLedger.Repositories
             int? accountId)
         {
             var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.JournalVoucher)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
@@ -386,11 +389,10 @@ namespace PureLedger.Repositories
             if (accountId.HasValue)
                 query = query.Where(je => je.AccountId == accountId.Value);
 
-            var entries = await query.ToListAsync();
-            decimal totalDebit = entries.Sum(e => e.Debit);
-            decimal totalCredit = entries.Sum(e => e.Credit);
+            var debit = await query.SumAsync(e => (decimal?)e.Debit) ?? 0m;
+            var credit = await query.SumAsync(e => (decimal?)e.Credit) ?? 0m;
 
-            return (totalDebit, totalCredit);
+            return (debit, credit);
         }
 
         public async Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
@@ -401,8 +403,9 @@ namespace PureLedger.Repositories
     int? accountId,
     int? locationId)
         {
-            // Get all product entries in the date range
+
             var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.JournalVoucher)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
@@ -410,16 +413,14 @@ namespace PureLedger.Repositories
                     je.JournalVoucher.ProjectId == projectId &&
                     je.IsProcessed &&
                     je.Quantity > 0 &&
-                    je.Account.AccountGroupId == 2 && // Only get product accounts
-                    je.JournalVoucher.EntryDate <= endDate); // Include all entries up to end date
+                    je.Account.AccountGroupId == 2 &&
+                    je.JournalVoucher.EntryDate <= endDate);
 
-            // Apply start date filter only if we're not requesting all historical data
             if (startDate != DateOnly.MinValue)
             {
                 query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
             }
 
-            // Apply additional filters
             if (categoryId.HasValue)
             {
                 query = query.Where(je => je.CategoryId == categoryId.Value);
@@ -430,12 +431,10 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Apply ordering
             query = query.OrderBy(je => je.JournalVoucher.EntryDate)
                         .ThenBy(je => je.JournalVoucherId)
                         .ThenBy(je => je.JournalEntryId);
 
-            // Get entries with a LEFT JOIN to DeliveryChallanEntry
             var entriesWithDC = await query
                 .GroupJoin(
                     _context.DeliveryChallanEntries.Include(dce => dce.Location),
@@ -447,7 +446,6 @@ namespace PureLedger.Repositories
                     (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
                 .ToListAsync();
 
-            // Filter by location if specified
             if (locationId.HasValue)
             {
                 entriesWithDC = entriesWithDC
@@ -455,60 +453,116 @@ namespace PureLedger.Repositories
                     .ToList();
             }
 
-            // Transform to the return type
             var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
             return results;
         }
 
-        // Add this method to the JournalEntryRepository class
-        public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+        public async Task<(List<AccountReportViewModel> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
             int projectId,
             int? categoryId,
             int? accountId,
             int page,
             int pageSize)
         {
-            var baseQuery = _context.JournalEntries
+
+            var query = _context.JournalEntries
+                .AsNoTracking()
                 .Include(je => je.Account)
                     .ThenInclude(a => a.Category)
                 .Include(je => je.JournalVoucher)
-                .Where(je => 
+                .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
                     je.JournalVoucher.IsCompleted);
 
             if (categoryId.HasValue)
             {
-                baseQuery = baseQuery.Where(je => je.CategoryId == categoryId.Value);
+                query = query.Where(je => je.CategoryId == categoryId.Value);
             }
 
             if (accountId.HasValue)
             {
-                baseQuery = baseQuery.Where(je => je.AccountId == accountId.Value);
+                query = query.Where(je => je.AccountId == accountId.Value);
             }
 
-            // Get all entries that match the criteria
-            var allEntries = await baseQuery.ToListAsync();
+            var groupedQuery = query
+                .GroupBy(je => new {
+                    je.AccountId,
+                    AccountName = je.Account.AccountName,
+                    CategoryName = je.Account.Category.CategoryName
+                })
+                .Select(g => new AccountReportViewModel
+                {
+                    AccountId = g.Key.AccountId.ToString(),
+                    AccountName = g.Key.AccountName ?? "Unknown Account",
+                    CategoryName = g.Key.CategoryName ?? "Unknown Category",
+                    TotalDebit = g.Sum(je => je.Debit),
+                    TotalCredit = g.Sum(je => je.Credit),
+                    NetBalance = g.Sum(je => je.Debit) - g.Sum(je => je.Credit)
+                });
 
-            // Group by account and get distinct accounts
-            var groupedByAccount = allEntries
-                .GroupBy(je => je.AccountId)
-                .ToList();
+            int totalCount = await groupedQuery.CountAsync();
 
-            int totalUniqueAccounts = groupedByAccount.Count;
-
-            // Apply pagination to the grouped accounts
-            var pagedAccountGroups = groupedByAccount
-                .OrderBy(g => g.First().Account?.AccountName)
+            var pagedResults = await groupedQuery
+                .OrderBy(g => g.AccountName)
                 .Skip(page * pageSize)
                 .Take(pageSize)
-                .ToList();
+                .ToListAsync();
 
-            // Flatten the paged groups back to entries
-            var pagedEntries = pagedAccountGroups
-                .SelectMany(g => g)
-                .ToList();
+            return (pagedResults, totalCount);
+        }
 
-            return (pagedEntries, totalUniqueAccounts);
+        public async Task<(List<AgingReportViewModel> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
+            List<int> accountIds,
+            int categoryId,
+            int? projectId,
+            DateOnly referenceDate,
+            int page,
+            int pageSize)
+        {
+
+            var query = _context.JournalEntries
+                .AsNoTracking()
+                .Include(je => je.JournalVoucher)
+                .Include(je => je.Account)
+                .Where(je =>
+                    accountIds.Contains(je.AccountId) &&
+                    je.CategoryId == categoryId &&
+                    je.JournalVoucher.IsCompleted &&
+                    je.JournalVoucher.CreditableDate <= referenceDate);
+
+            if (projectId.HasValue)
+            {
+                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+            }
+
+            var groupedQuery = query
+                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
+                .Select(g => new
+                {
+                    AccountId = g.Key.AccountId,
+                    AccountName = g.Key.AccountName,
+                    TotalDebit = g.Sum(je => je.Debit),
+                    TotalCredit = g.Sum(je => je.Credit)
+                });
+
+            int totalCount = await groupedQuery.CountAsync();
+
+            var pagedResults = await groupedQuery
+                .OrderBy(g => g.AccountName)
+                .Skip(page * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var agingReportEntries = pagedResults.Select(result => new AgingReportViewModel
+            {
+                AccountId = result.AccountId.ToString(),
+                AccountName = result.AccountName ?? "Unknown Account",
+                TotalDebit = result.TotalDebit,
+                TotalCredit = result.TotalCredit,
+                NetBalance = result.TotalDebit - result.TotalCredit
+            }).ToList();
+
+            return (agingReportEntries, totalCount);
         }
     }
 }

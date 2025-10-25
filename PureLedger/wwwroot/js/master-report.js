@@ -321,13 +321,17 @@ function handleCategoryChange() {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 5,
+        pageSize: 5, // larger pages to reduce round-trips
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
         allEntries: [],
         reportParams: null,
         previousBalance: 0,
+        // incremental aggregates
+        totals: { quantity: 0, debit: 0, credit: 0 },
+        accountGroupsMap: {},
+        categoryGroupsMap: {},
         visibleColumns: {
             date: true,
             creditableDate: true,
@@ -913,24 +917,56 @@ function fetchReportChunk() {
 function processAndDisplayEntries(entries) {
     if (!entries?.length) return;
 
-    window.reportState.allEntries = [...window.reportState.allEntries, ...entries];
+    // append to state
+    for (const entry of entries) {
+        window.reportState.allEntries.push(entry);
+        // update incremental totals
+        window.reportState.totals.quantity += (entry.quantity || 0);
+        window.reportState.totals.debit += (entry.debit || 0);
+        window.reportState.totals.credit += (entry.credit || 0);
 
-    renderAllEntriesWithBalance();
-    generateAccountGroups(window.reportState.allEntries);
-    generateCategoryGroups(window.reportState.allEntries);
+        // update account groups
+        if (entry.accountId) {
+            const key = String(entry.accountId);
+            const existing = window.reportState.accountGroupsMap[key] || {
+                id: `${entry.projectId}-${entry.categoryId}-${entry.accountId}`,
+                name: entry.accountName,
+                debit: 0,
+                credit: 0
+            };
+            existing.debit += (entry.debit || 0);
+            existing.credit += (entry.credit || 0);
+            window.reportState.accountGroupsMap[key] = existing;
+        }
+        // update category groups
+        if (entry.categoryId) {
+            const ckey = String(entry.categoryId);
+            const cexisting = window.reportState.categoryGroupsMap[ckey] || {
+                id: `${entry.projectId}-${entry.categoryId}`,
+                name: entry.categoryName,
+                debit: 0,
+                credit: 0
+            };
+            cexisting.debit += (entry.debit || 0);
+            cexisting.credit += (entry.credit || 0);
+            window.reportState.categoryGroupsMap[ckey] = cexisting;
+        }
+    }
+
+    appendRows(entries);
+    renderSummaryTable('accountGroupData', window.reportState.accountGroupsMap);
+    renderSummaryTable('categoryGroupData', window.reportState.categoryGroupsMap);
 
     updateTotals();
 }
 
-function renderAllEntriesWithBalance() {
+function appendRows(entries) {
     const tbody = document.getElementById('reportData');
     if (!tbody) return;
 
-    tbody.innerHTML = '';
-
     const fragment = document.createDocumentFragment();
 
-    window.reportState.allEntries.forEach((entry) => {
+    entries.forEach((entry) => {
         const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
 
         const row = document.createElement('tr');
@@ -968,61 +1004,14 @@ function renderAllEntriesWithBalance() {
     updateColumnVisibility();
 }
 
-function generateAccountGroups(entries) {
-    const groupedByAccount = {};
-
-    entries.forEach(entry => {
-        if (!entry.accountId) return;
-
-        const accountKey = entry.accountId.toString();
-        if (!groupedByAccount[accountKey]) {
-            const formattedId = `${entry.projectId}-${entry.categoryId}-${entry.accountId}`;
-            groupedByAccount[accountKey] = {
-                debit: 0,
-                credit: 0,
-                id: formattedId,
-                name: entry.accountName
-            };
-        }
-
-        groupedByAccount[accountKey].debit += entry.debit || 0;
-        groupedByAccount[accountKey].credit += entry.credit || 0;
-    });
-
-    renderSummaryTable('accountGroupData', groupedByAccount);
-}
-
-function generateCategoryGroups(entries) {
-    const groupedByCategory = {};
-
-    entries.forEach(entry => {
-        if (!entry.categoryId) return;
-
-        const categoryKey = entry.categoryId.toString();
-        if (!groupedByCategory[categoryKey]) {
-            const formattedId = `${entry.projectId}-${entry.categoryId}`;
-            groupedByCategory[categoryKey] = {
-                debit: 0,
-                credit: 0,
-                id: formattedId,
-                name: entry.categoryName
-            };
-        }
-
-        groupedByCategory[categoryKey].debit += entry.debit || 0;
-        groupedByCategory[categoryKey].credit += entry.credit || 0;
-    });
-
-    renderSummaryTable('categoryGroupData', groupedByCategory);
-}
-
 function renderSummaryTable(tableId, groupedData) {
     const tbody = document.getElementById(tableId);
     if (!tbody) return;
 
     tbody.innerHTML = '';
 
-    if (Object.keys(groupedData).length === 0) {
+    const keys = Object.keys(groupedData);
+    if (keys.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">No data available</td></tr>';
         return;
     }
@@ -1119,9 +1108,9 @@ function updateLoadMoreButton() {
 }
 
 function updateTotals() {
-    const totalQuantity = window.reportState.allEntries.reduce((sum, entry) => sum + (entry.quantity || 0), 0);
-    const totalDebit = window.reportState.allEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
-    const totalCredit = window.reportState.allEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+    const totalQuantity = window.reportState.totals.quantity;
+    const totalDebit = window.reportState.totals.debit;
+    const totalCredit = window.reportState.totals.credit;
     const netBalance = totalDebit - totalCredit;
 
     updateElementText('totalQuantity', formatNumber(totalQuantity));

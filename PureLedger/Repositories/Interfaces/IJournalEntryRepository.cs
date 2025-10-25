@@ -1,4 +1,5 @@
 using PureLedger.Models;
+using PureLedger.ViewModels;
 
 namespace PureLedger.Repositories.Interfaces
 {
@@ -34,6 +35,7 @@ namespace PureLedger.Repositories.Interfaces
             int? projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId,
             int page,
             int pageSize);
         Task<decimal> GetAccountBalanceUpToVoucherAsyncMinus1(int accountId, int maxVoucherId);
@@ -60,12 +62,20 @@ namespace PureLedger.Repositories.Interfaces
     int? accountId,
     int? locationId);
 
-        Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int page,
-    int pageSize);
+        Task<(List<AccountReportViewModel> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+            int projectId,
+            int? categoryId,
+            int? accountId,
+            int page,
+            int pageSize);
 
-        }
+        Task<(List<AgingReportViewModel> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
+            List<int> accountIds,
+            int categoryId,
+            int? projectId,
+            DateOnly referenceDate,
+            int page,
+            int pageSize);
+
+    }
 }
