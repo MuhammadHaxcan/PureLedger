@@ -35,6 +35,7 @@ namespace PureLedger.Repositories.Interfaces
             int? projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId,
             int page,
             int pageSize);
         Task<decimal> GetAccountBalanceUpToVoucherAsyncMinus1(int accountId, int maxVoucherId);

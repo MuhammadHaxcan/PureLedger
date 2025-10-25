@@ -435,11 +435,10 @@ namespace PureLedger.Services
                 decimal previousBalance = openingBalance;
                 if (page > 0)
                 {
+                    var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceAsync(
+                        startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
-                    var (previousEntries, _) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
-                        startDate, endDate, projectId, categoryId, accountId, bookerId, 0, page * pageSize);
-
-                    previousBalance = openingBalance + previousEntries.Sum(e => e.Debit - e.Credit);
+                    previousBalance = openingBalance + previousEntriesBalance;
                 }
 
                 var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
