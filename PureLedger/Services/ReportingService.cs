@@ -263,53 +263,41 @@ namespace PureLedger.Services
 
         #region Public API Methods
 
-        public async Task<List<AgingReportViewModel>> GetAgingReportAsync(AgingReportRequest request)
+        public async Task<AgingReportResponseViewModel> GetAgingReportAsync(AgingReportRequest request)
         {
             if (!int.TryParse(request.CategoryId, out int categoryId))
-                return new List<AgingReportViewModel>();
+                return new AgingReportResponseViewModel();
 
             int? projectId = ParseNullableInt(request.ProjectId);
 
-            var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
-            if (accounts.Count == 0)
-                return new List<AgingReportViewModel>();
-
-            var accountIds = accounts.Select(a => a.AccountId).ToList();
-
             return await ExecuteInTransactionAsync(async () =>
             {
+                var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+                if (accounts.Count == 0)
+                    return new AgingReportResponseViewModel();
 
-                var filteredEntries = await _unitOfWork.JournalEntries.GetEntriesByCriteriaAsync(
-                    accountIds, categoryId, projectId, request.ReferenceDate);
+                var accountIds = accounts.Select(a => a.AccountId).ToList();
 
-                var result = new List<AgingReportViewModel>();
+                // Use the new efficient repository method with database-side pagination
+                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForAgingReportAsync(
+                    accountIds,
+                    categoryId,
+                    projectId,
+                    request.ReferenceDate,
+                    request.Page,
+                    request.PageSize);
 
-                foreach (var account in accounts)
+                return new AgingReportResponseViewModel
                 {
-                    var accountEntries = filteredEntries
-                        .Where(e => e.AccountId == account.AccountId)
-                        .ToList();
-
-                    if (accountEntries.Count == 0)
-                        continue;
-
-                    decimal totalDebit = accountEntries.Sum(e => e.Debit);
-                    decimal totalCredit = accountEntries.Sum(e => e.Credit);
-
-                    result.Add(new AgingReportViewModel
-                    {
-                        AccountId = account.AccountId.ToString(CultureInfo.InvariantCulture),
-                        AccountName = account.AccountName ?? "",
-                        TotalDebit = totalDebit,
-                        TotalCredit = totalCredit,
-                        NetBalance = totalDebit - totalCredit
-                    });
-                }
-
-                return result;
+                    Entries = entries,
+                    TotalRecords = totalCount,
+                    Page = request.Page,
+                    PageSize = request.PageSize,
+                    HasMoreData = (request.Page + 1) * request.PageSize < totalCount
+                };
             });
         }
-        
+
         public async Task<AccountReportResponseViewModel> GetAccountReportAsync(AccountReportRequestViewModel request)
         {
             if (string.IsNullOrWhiteSpace(request.ProjectId))

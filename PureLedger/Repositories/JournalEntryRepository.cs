@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.ViewModels;
 
 namespace PureLedger.Repositories
 {
@@ -472,7 +473,7 @@ namespace PureLedger.Repositories
                 .Include(je => je.Account)
                     .ThenInclude(a => a.Category)
                 .Include(je => je.JournalVoucher)
-                .Where(je => 
+                .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
                     je.JournalVoucher.IsCompleted);
 
@@ -509,6 +510,65 @@ namespace PureLedger.Repositories
                 .ToList();
 
             return (pagedEntries, totalUniqueAccounts);
+        }
+
+        // Add this new method for efficient aging report pagination
+        public async Task<(List<AgingReportViewModel> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
+            List<int> accountIds,
+            int categoryId,
+            int? projectId,
+            DateOnly referenceDate,
+            int page,
+            int pageSize)
+        {
+            // Build the base query with filters at database level
+            var query = _context.JournalEntries
+                .Include(je => je.JournalVoucher)
+                .Include(je => je.Account)
+                .Where(je =>
+                    accountIds.Contains(je.AccountId) &&
+                    je.CategoryId == categoryId &&
+                    je.JournalVoucher.IsCompleted &&
+                    je.JournalVoucher.CreditableDate <= referenceDate);
+
+            // Apply project filter if specified
+            if (projectId.HasValue)
+            {
+                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+            }
+
+            // Group by account and calculate totals at database level
+            var groupedQuery = query
+                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
+                .Select(g => new
+                {
+                    AccountId = g.Key.AccountId,
+                    AccountName = g.Key.AccountName,
+                    TotalDebit = g.Sum(je => je.Debit),
+                    TotalCredit = g.Sum(je => je.Credit)
+                });
+
+            // Get total count for pagination
+            int totalCount = await groupedQuery.CountAsync();
+
+            // Apply pagination and ordering
+            var pagedResults = await groupedQuery
+                .OrderBy(g => g.AccountName)
+                .Skip(page * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            // Transform to view models
+            var agingReportEntries = pagedResults.Select(result => new AgingReportViewModel
+            {
+                AccountId = result.AccountId.ToString(),
+                AccountName = result.AccountName ?? "Unknown Account",
+                TotalDebit = result.TotalDebit,
+                TotalCredit = result.TotalCredit,
+                NetBalance = result.TotalDebit - result.TotalCredit
+            }).ToList();
+
+            return (agingReportEntries, totalCount);
         }
     }
 }

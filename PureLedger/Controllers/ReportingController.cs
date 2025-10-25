@@ -97,8 +97,24 @@ namespace PureLedger.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAgingReportData([FromQuery] AgingReportRequest request)
         {
-            var report = await _reportingService.GetAgingReportAsync(request);
-            return Json(report);
+            // Validate the request
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage);
+                return BadRequest(new { errors });
+            }
+
+            try
+            {
+                var report = await _reportingService.GetAgingReportAsync(request);
+                return Json(report);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = $"Error generating report: {ex.Message}" });
+            }
         }
 
         #endregion
