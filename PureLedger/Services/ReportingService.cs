@@ -319,19 +319,9 @@ namespace PureLedger.Services
                     request.Page,
                     request.PageSize);
 
-                var accountReportEntries = entries.Select(entry => new AccountReportViewModel
-                {
-                    AccountId = entry.AccountId.ToString(),
-                    AccountName = entry.Account?.AccountName ?? "Unknown Account",
-                    CategoryName = entry.Account?.Category?.CategoryName ?? "Unknown Category",
-                    TotalDebit = entry.Debit,
-                    TotalCredit = entry.Credit,
-                    NetBalance = entry.Debit - entry.Credit
-                }).ToList();
-
                 return new AccountReportResponseViewModel
                 {
-                    Entries = accountReportEntries,
+                    Entries = entries,
                     TotalRecords = totalCount,
                     Page = request.Page,
                     PageSize = request.PageSize,

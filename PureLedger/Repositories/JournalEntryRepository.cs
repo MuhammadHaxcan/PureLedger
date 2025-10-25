@@ -432,7 +432,7 @@ namespace PureLedger.Repositories
             return results;
         }
 
-        public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+        public async Task<(List<AccountReportViewModel> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
             int projectId,
             int? categoryId,
             int? accountId,
@@ -464,11 +464,11 @@ namespace PureLedger.Repositories
                     AccountName = je.Account.AccountName,
                     CategoryName = je.Account.Category.CategoryName
                 })
-                .Select(g => new
+                .Select(g => new AccountReportViewModel
                 {
-                    AccountId = g.Key.AccountId,
-                    AccountName = g.Key.AccountName,
-                    CategoryName = g.Key.CategoryName,
+                    AccountId = g.Key.AccountId.ToString(),
+                    AccountName = g.Key.AccountName ?? "Unknown Account",
+                    CategoryName = g.Key.CategoryName ?? "Unknown Category",
                     TotalDebit = g.Sum(je => je.Debit),
                     TotalCredit = g.Sum(je => je.Credit),
                     NetBalance = g.Sum(je => je.Debit) - g.Sum(je => je.Credit)
@@ -482,27 +482,7 @@ namespace PureLedger.Repositories
                 .Take(pageSize)
                 .ToListAsync();
 
-            var mockEntries = pagedResults.Select(result =>
-            {
-                var mockEntry = new JournalEntry
-                {
-                    AccountId = result.AccountId,
-                    Debit = result.TotalDebit,
-                    Credit = result.TotalCredit,
-                    Account = new Account
-                    {
-                        AccountId = result.AccountId,
-                        AccountName = result.AccountName ?? "Unknown Account",
-                        Category = new Category
-                        {
-                            CategoryName = result.CategoryName ?? "Unknown Category"
-                        }
-                    }
-                };
-                return mockEntry;
-            }).ToList();
-
-            return (mockEntries, totalCount);
+            return (pagedResults, totalCount);
         }
 
         public async Task<(List<AgingReportViewModel> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
