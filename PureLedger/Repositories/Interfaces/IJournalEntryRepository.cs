@@ -77,5 +77,15 @@ namespace PureLedger.Repositories.Interfaces
             int page,
             int pageSize);
 
+        Task<(List<int> ProductIds, int TotalCount)> GetProductIdsForReportAsync(
+    DateOnly startDate,
+    DateOnly endDate,
+    int projectId,
+    int? categoryId,
+    int? accountId,
+    int? locationId,
+    int page,
+    int pageSize);
+
     }
 }

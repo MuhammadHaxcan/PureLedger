@@ -595,7 +595,6 @@ namespace PureLedger.Services
 
         public async Task<ProductReportViewModel> GetProductReportAsync(ProductReportRequest request)
         {
-
             if (string.IsNullOrEmpty(request.ProjectId))
             {
                 return new ProductReportViewModel();
@@ -609,13 +608,33 @@ namespace PureLedger.Services
             DateOnly startDate = request.StartDate ?? DateOnly.MinValue;
             DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
 
+            int page = Math.Max(0, request.Page);
+            int pageSize = Math.Clamp(request.PageSize, 1, 500);
+
             return await ExecuteInTransactionAsync(async () =>
             {
+                // Get paginated product IDs
+                var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
+                    startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
 
+                if (!productIds.Any())
+                {
+                    return new ProductReportViewModel
+                    {
+                        TotalRecords = 0,
+                        Page = page,
+                        PageSize = pageSize,
+                        HasMoreData = false
+                    };
+                }
+
+                // Get all historical entries for the paginated products
                 var allHistoricalEntries = await _unitOfWork.JournalEntries.GetAllEntriesForProductReportAsync(
-                    DateOnly.MinValue, endDate, projectId, categoryId, accountId, locationId);
+                    DateOnly.MinValue, endDate, projectId, categoryId, null, locationId);
 
+                // Filter to only include the paginated product IDs
                 var productGroups = allHistoricalEntries
+                    .Where(x => productIds.Contains(x.Entry.AccountId))
                     .GroupBy(x => x.Entry.AccountId)
                     .ToDictionary(g => g.Key, g => g.ToList());
 
@@ -628,8 +647,11 @@ namespace PureLedger.Services
                 decimal totalCOGS = 0;
                 decimal totalMargin = 0;
 
-                foreach (var productId in productGroups.Keys)
+                foreach (var productId in productIds)
                 {
+                    if (!productGroups.ContainsKey(productId))
+                        continue;
+
                     var productEntries = productGroups[productId];
 
                     if (!productEntries.Any())
@@ -675,9 +697,7 @@ namespace PureLedger.Services
                         prevAvgRate;
 
                     decimal cogs = averageRate * currentCreditQty;
-
                     decimal margin = currentCredit - cogs;
-
                     decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
 
                     JournalEntry? lastEntry = null;
@@ -750,7 +770,11 @@ namespace PureLedger.Services
                         TotalCOGS = totalCOGS,
                         TotalMargin = totalMargin,
                         MarginPercentage = totalMarginPercentage
-                    }
+                    },
+                    TotalRecords = totalCount,
+                    Page = page,
+                    PageSize = pageSize,
+                    HasMoreData = (page + 1) * pageSize < totalCount
                 };
 
                 return viewModel;

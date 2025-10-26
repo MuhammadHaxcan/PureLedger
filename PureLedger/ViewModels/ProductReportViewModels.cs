@@ -32,6 +32,12 @@ namespace PureLedger.ViewModels
     {
         public List<ProductSummaryViewModel> ProductSummaries { get; set; } = new List<ProductSummaryViewModel>();
         public ProductReportTotalsViewModel Totals { get; set; } = new ProductReportTotalsViewModel();
+        
+        // Pagination metadata
+        public int TotalRecords { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public bool HasMoreData { get; set; }
     }
 
     public class ProductReportTotalsViewModel
@@ -73,29 +79,5 @@ namespace PureLedger.ViewModels
         public decimal COGS { get; set; }
         public decimal Margin { get; set; }
         public decimal MarginPercentage { get; set; }
-    }
-
-    // Legacy class maintained for backward compatibility
-    public class ProductReportEntryViewModel
-    {
-        public int Id { get; set; }  // Journal Voucher ID
-        public int EntryId { get; set; }  // Journal Entry ID
-        public string EntryDate { get; set; }
-        public string DueDate { get; set; }
-        public string Description { get; set; }
-        public string AccountName { get; set; }
-        public int Quantity { get; set; }
-        public int QtyBalance { get; set; }
-        public decimal Rate { get; set; }
-        public int DebitQty { get; set; }
-        public int CreditQty { get; set; }
-        public int QuantityBalance { get; set; }
-        public decimal AvgRate { get; set; }
-        public decimal Debit { get; set; }
-        public decimal Credit { get; set; }
-        public decimal Balance { get; set; }
-        public decimal COGS { get; set; }
-        public decimal Margin { get; set; }
-        public string LocationName { get; set; }
     }
 }

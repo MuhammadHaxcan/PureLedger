@@ -564,5 +564,71 @@ namespace PureLedger.Repositories
 
             return (agingReportEntries, totalCount);
         }
+
+        public async Task<(List<int> ProductIds, int TotalCount)> GetProductIdsForReportAsync(
+    DateOnly startDate,
+    DateOnly endDate,
+    int projectId,
+    int? categoryId,
+    int? accountId,
+    int? locationId,
+    int page,
+    int pageSize)
+{
+    var query = _context.JournalEntries
+        .AsNoTracking()
+        .Include(je => je.JournalVoucher)
+        .Include(je => je.Account)
+        .Where(je =>
+            je.JournalVoucher.ProjectId == projectId &&
+            je.IsProcessed &&
+            je.Quantity > 0 &&
+            je.Account.AccountGroupId == 2 &&
+            je.JournalVoucher.EntryDate <= endDate);
+
+    if (startDate != DateOnly.MinValue)
+    {
+        query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
+    }
+
+    if (categoryId.HasValue)
+    {
+        query = query.Where(je => je.CategoryId == categoryId.Value);
+    }
+
+    if (accountId.HasValue)
+    {
+        query = query.Where(je => je.AccountId == accountId.Value);
+    }
+
+    // Apply location filter if needed
+    if (locationId.HasValue)
+    {
+        var validEntryIds = await _context.DeliveryChallanEntries
+            .AsNoTracking()
+            .Where(dce => dce.LocationId == locationId.Value)
+            .Select(dce => dce.JournalEntryId)
+            .ToListAsync();
+
+        query = query.Where(je => validEntryIds.Contains(je.JournalEntryId));
+    }
+
+    // Get distinct product IDs
+    var distinctProductIds = await query
+        .Select(je => je.AccountId)
+        .Distinct()
+        .OrderBy(id => id)
+        .ToListAsync();
+
+    int totalCount = distinctProductIds.Count;
+
+    // Apply pagination to product IDs
+    var pagedProductIds = distinctProductIds
+        .Skip(page * pageSize)
+        .Take(pageSize)
+        .ToList();
+
+    return (pagedProductIds, totalCount);
+}
     }
 }
