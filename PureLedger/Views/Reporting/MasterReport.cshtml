@@ -88,7 +88,7 @@
                     </div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-md-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Account</label>
                         <div class="select-container">
                             <div class="input-group">
@@ -102,8 +102,7 @@
                             <div class="select-dropdown account-dropdown"></div>
                         </div>
                     </div>
-                    <!-- Update the Booker dropdown -->
-                    <div class="col-md-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Booker</label>
                         <div class="select-container">
                             <div class="input-group">
@@ -117,8 +116,15 @@
                             <div class="select-dropdown booker-dropdown"></div>
                         </div>
                     </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-chart-bar me-1"></i> Generate Report
+                            </button>
+                        </div>
+                    </div>
                 </div>
-
                 <div class="row mb-3">
                     <div class="col-12">
                         <label class="form-label d-block">Column Visibility</label>
@@ -167,28 +173,7 @@
                             <label class="btn btn-outline-primary btn-sm" for="showBalance">
                                 <i class="fas fa-balance-scale"></i> Balance
                             </label>
-
                         </div>
-                    </div>
-                </div>
-
-                <!-- Add this after the Column Visibility section and before the Generate Report button -->
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Search</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input type="text" class="form-control" id="globalReportSearch" placeholder="Search all report data...">
-                        </div>
-                        <small class="form-text text-muted">Search across all report data including accounts, descriptions, and values</small>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-chart-bar me-1"></i> Generate Report
-                        </button>
                     </div>
                 </div>
             </form>
@@ -201,12 +186,17 @@
                 <h6 class="m-0 font-weight-bold text-primary">
                     <i class="fas fa-table me-2"></i>Master Report Results
                 </h6>
-                <div class="input-group input-group-sm" style="width: 250px;">
-                    <span class="input-group-text"><i class="fas fa-search"></i></span>
-                    <input type="text" id="reportSearch" class="form-control" placeholder="Search records...">
-                </div>
             </div>
             <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Search</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input id="searchBox" class="form-control" placeholder="Filter results..." />
+                        </div>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered" id="masterReportTable" width="100%" cellspacing="0">
                         <thead class="table-light">
@@ -216,7 +206,7 @@
                                 <th class="creditable-date-column">Creditable Date</th>
                                 <th class="description-column">Description</th>
                                 <th class="account-column">Account</th>
-                                <th class="booker-column">Booker</th>  <!-- Add this line -->
+                                <th class="booker-column">Booker</th>
                                 <th class="quantity-column text-end">Quantity</th>
                                 <th class="debit-column text-end">Debit</th>
                                 <th class="credit-column text-end">Credit</th>
@@ -226,7 +216,7 @@
                         <tbody id="reportData"></tbody>
                         <tfoot class="table-secondary">
                             <tr>
-                                <td colspan="6" class="text-end fw-bold">TOTAL</td> <!-- Update colspan to 6 -->
+                                <td colspan="6" class="text-end fw-bold">TOTAL</td>
                                 <td class="quantity-column text-end fw-bold" id="totalQuantity">0</td>
                                 <td class="debit-column text-end fw-bold" id="totalDebit">0.00</td>
                                 <td class="credit-column text-end fw-bold" id="totalCredit">0.00</td>

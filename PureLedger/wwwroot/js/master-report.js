@@ -3,7 +3,7 @@
  * Handles all functionality for the Master Report page including:
  * - Searchable dropdown filters
  * - Column visibility toggles
- * - Data fetching and rendering with infinite scrolling
+ * - Data fetching and rendering with auto-loading
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,16 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==================== SEARCHABLE DROPDOWN LOGIC ====================
 
 function initializeSelectDropdowns() {
-    // Create select-container structure for existing dropdowns if needed
     convertToSearchableSelect('projectId', 'Search project...');
     convertToSearchableSelect('categoryId', 'Search category...');
     convertToSearchableSelect('accountId', 'Search account...');
     convertToSearchableSelect('bookerId', 'Search booker...');
 
-    // Populate initial dropdown options
     populateDropdownOptions();
-
-    // Initialize dropdown states
     initializeDropdownStates();
 }
 
@@ -34,33 +30,27 @@ function convertToSearchableSelect(selectId, placeholder) {
     const select = document.getElementById(selectId);
     if (!select) return;
 
-    // Only proceed if not already converted
     if (select.parentElement.classList.contains('select-container')) return;
 
-    // Get the icon class based on the select ID
     let iconClass = 'fa-list';
     if (selectId === 'projectId') iconClass = 'fa-project-diagram';
     else if (selectId === 'categoryId') iconClass = 'fa-sitemap';
     else if (selectId === 'accountId') iconClass = 'fa-user';
     else if (selectId === 'bookerId') iconClass = 'fa-user-tag';
 
-    // Get any existing input-group parent
     const inputGroup = select.closest('.input-group');
     const selectParent = inputGroup ? inputGroup.parentElement : select.parentElement;
 
-    // Create the new structure
     const container = document.createElement('div');
     container.className = 'select-container';
 
     const newInputGroup = document.createElement('div');
     newInputGroup.className = 'input-group';
 
-    // Icon span
     const iconSpan = document.createElement('span');
     iconSpan.className = 'input-group-text';
     iconSpan.innerHTML = `<i class="fas ${iconClass}"></i>`;
 
-    // Search input
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.className = `form-control select-search ${selectId}-search`;
@@ -68,27 +58,22 @@ function convertToSearchableSelect(selectId, placeholder) {
     searchInput.autocomplete = 'off';
     if (select.disabled) searchInput.disabled = true;
 
-    // Dropdown div
     const dropdownDiv = document.createElement('div');
     dropdownDiv.className = `select-dropdown ${selectId}-dropdown`;
 
-    // Clone the select and hide it
     const clonedSelect = select.cloneNode(true);
     clonedSelect.className = 'form-select d-none';
 
-    // Build the structure
     newInputGroup.appendChild(iconSpan);
     newInputGroup.appendChild(searchInput);
     container.appendChild(newInputGroup);
     container.appendChild(clonedSelect);
     container.appendChild(dropdownDiv);
 
-    // Replace the old select with our new structure
     selectParent.replaceChild(container, inputGroup || select);
 }
 
 function populateDropdownOptions() {
-    // Populate options for all select-container elements
     document.querySelectorAll('.select-container').forEach(container => {
         const select = container.querySelector('select');
         const dropdown = container.querySelector('.select-dropdown');
@@ -108,7 +93,6 @@ function populateDropdownOptions() {
 }
 
 function setupSelectSearch() {
-    // Handle input in search box
     $(document).on('input', '.select-search', function () {
         const $input = $(this);
 
@@ -131,7 +115,6 @@ function setupSelectSearch() {
         $dropdown.addClass('show');
     });
 
-    // Show dropdown on focus
     $(document).on('focus', '.select-search', function () {
         const $input = $(this);
 
@@ -158,7 +141,6 @@ function setupSelectSearch() {
         $dropdown.addClass('show');
     });
 
-    // Handle keyboard navigation
     $(document).on('keydown', '.select-search', function (e) {
         const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
         const $options = $dropdown.find('.select-option:not(.filtered-out)');
@@ -218,12 +200,10 @@ function setupSelectSearch() {
         }
     });
 
-    // Handle click on dropdown option
     $(document).on('click', '.select-option:not(.filtered-out)', function () {
         selectOption($(this), $(this).closest('.select-container'));
     });
 
-    // Close dropdown when clicking outside
     $(document).on('click', function (e) {
         if (!$(e.target).closest('.select-container').length) {
             $('.select-dropdown').removeClass('show');
@@ -235,14 +215,11 @@ function selectOption($option, $container) {
     const value = $option.data('value');
     const text = $option.text();
 
-    // Update the hidden select and trigger change event
     const $select = $container.find('select');
     $select.val(value).trigger('change');
 
-    // Update the search input text
     $container.find('.select-search').val(text);
 
-    // Update the visual state of the dropdown
     $container.find('.select-dropdown').removeClass('show');
     $container.find('.select-option').removeClass('selected');
     $option.addClass('selected');
@@ -321,14 +298,13 @@ function handleCategoryChange() {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 5, // larger pages to reduce round-trips
+        pageSize: 5,
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
         allEntries: [],
         reportParams: null,
         previousBalance: 0,
-        // incremental aggregates
         totals: { quantity: 0, debit: 0, credit: 0 },
         accountGroupsMap: {},
         categoryGroupsMap: {},
@@ -353,6 +329,7 @@ function setupEventListeners() {
     if (form) {
         form.addEventListener('submit', e => {
             e.preventDefault();
+            setGenerateReportEnabled(false);
             generateReport();
         });
     }
@@ -361,11 +338,8 @@ function setupEventListeners() {
     initSearchFunctionality();
     setupSelectSearch();
 
-    // Use jQuery event handlers for consistency with dropdown functionality
     $(document).on('change', '#projectId', handleProjectChange);
     $(document).on('change', '#categoryId', handleCategoryChange);
-
-    window.addEventListener('scroll', throttle(checkIfShouldLoadMore, 100));
 }
 
 function setDefaultDates() {
@@ -397,16 +371,11 @@ function initColumnToggles() {
             if (!columnKey) return;
 
             const isVisible = this.checked;
-
-            // Update state
             window.reportState.visibleColumns[columnKey] = isVisible;
-
-            // Apply visibility
             updateColumnVisibility();
         });
     });
 
-    // Initial visibility setup
     updateColumnVisibility();
 }
 
@@ -423,7 +392,6 @@ function updateColumnVisibility() {
         balance: 'balance-column'
     };
 
-    // Update all column cells
     Object.keys(columnClasses).forEach(key => {
         const isVisible = window.reportState.visibleColumns[key];
         const displayValue = isVisible ? '' : 'none';
@@ -433,7 +401,6 @@ function updateColumnVisibility() {
         });
     });
 
-    // Update footer colspan
     updateFooterColspan();
 }
 
@@ -441,10 +408,7 @@ function updateFooterColspan() {
     const footerTotalCell = document.querySelector('#masterReportTable tfoot td:first-child');
     if (!footerTotalCell) return;
 
-    // Count visible columns before the numeric columns
-    // Fixed columns: ID (1)
-    // Optional columns: date, creditableDate, description, account, booker
-    let colspan = 1; // Start with ID column
+    let colspan = 1;
 
     if (window.reportState.visibleColumns.date) colspan++;
     if (window.reportState.visibleColumns.creditableDate) colspan++;
@@ -456,14 +420,9 @@ function updateFooterColspan() {
 }
 
 function initSearchFunctionality() {
-    const globalSearchInput = document.getElementById('globalReportSearch');
-    if (globalSearchInput) {
-        globalSearchInput.addEventListener('keyup', debounce(performSearch, 250));
-    }
-
-    const reportSearch = document.getElementById('reportSearch');
-    if (reportSearch) {
-        reportSearch.addEventListener('keyup', debounce(function () {
+    const searchBox = document.getElementById('searchBox');
+    if (searchBox) {
+        searchBox.addEventListener('input', debounce(function () {
             filterReportData(this.value.toLowerCase());
         }, 250));
     }
@@ -477,47 +436,64 @@ function debounce(func, wait) {
     };
 }
 
-function throttle(func, limit) {
-    let inThrottle;
-    return function () {
-        if (!inThrottle) {
-            func.apply(this, arguments);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    };
-}
-
 // ==================== SEARCH FUNCTIONALITY ====================
-
-function performSearch() {
-    const searchText = document.getElementById('globalReportSearch').value.toLowerCase();
-
-    filterReportData(searchText);
-    filterSummaryData('accountGroupData', searchText);
-    filterSummaryData('categoryGroupData', searchText);
-
-    const reportSearch = document.getElementById('reportSearch');
-    if (reportSearch) {
-        reportSearch.value = searchText;
-    }
-}
 
 function filterReportData(searchText) {
     const reportData = document.getElementById('reportData');
     if (!reportData) return;
 
-    const rows = reportData.getElementsByTagName('tr');
-    let hasVisibleRows = false;
+    const existingNoResults = document.getElementById('noSearchResults');
+    if (existingNoResults) existingNoResults.remove();
 
-    for (const row of rows) {
+    const rows = Array.from(reportData.getElementsByTagName('tr'));
+    let hasVisibleRows = false;
+    let filteredTotals = { quantity: 0, debit: 0, credit: 0, balance: 0 };
+    let runningBalance = window.reportState.previousBalance || 0;
+
+    rows.forEach(row => {
         const isVisible = row.textContent.toLowerCase().includes(searchText);
         row.style.display = isVisible ? '' : 'none';
-        if (isVisible) hasVisibleRows = true;
+
+        if (isVisible) {
+            hasVisibleRows = true;
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 10) {
+                const debit = parseFloat(cells[7].textContent.replace(/,/g, '')) || 0;
+                const credit = parseFloat(cells[8].textContent.replace(/,/g, '')) || 0;
+                const quantity = parseFloat(cells[6].textContent.replace(/,/g, '')) || 0;
+
+                runningBalance += debit - credit;
+                filteredTotals.quantity += quantity;
+                filteredTotals.debit += debit;
+                filteredTotals.credit += credit;
+                filteredTotals.balance = runningBalance;
+
+                cells[9].textContent = formatCurrency(runningBalance);
+                cells[9].className = 'balance-column text-end' + (runningBalance < 0 ? ' text-danger' : ' text-success');
+            }
+        }
+    });
+
+    if (searchText.length > 0) {
+        updateElementText('totalQuantity', formatNumber(filteredTotals.quantity));
+        updateElementText('totalDebit', formatCurrency(filteredTotals.debit));
+        updateElementText('totalCredit', formatCurrency(filteredTotals.credit));
+        updateElementText('netBalance', formatCurrency(filteredTotals.balance));
+    } else {
+        updateTotals();
     }
 
-    handleNoMatchingRows('reportData', 'noSearchResults', !hasVisibleRows && rows.length > 0,
-        searchText, 10); // Max possible columns
+    if (!hasVisibleRows && rows.length > 0 && searchText.length > 0) {
+        const noResultsRow = document.createElement('tr');
+        noResultsRow.id = 'noSearchResults';
+        noResultsRow.innerHTML = '<td colspan="10" class="text-center">No matching accounts found</td>';
+        reportData.appendChild(noResultsRow);
+
+        updateElementText('totalQuantity', '0');
+        updateElementText('totalDebit', '0.00');
+        updateElementText('totalCredit', '0.00');
+        updateElementText('netBalance', '0.00');
+    }
 }
 
 function filterSummaryData(tableId, searchText) {
@@ -533,8 +509,7 @@ function filterSummaryData(tableId, searchText) {
         if (isVisible) hasVisibleRows = true;
     }
 
-    handleNoMatchingRows(tableId, 'noResults' + tableId, !hasVisibleRows && rows.length > 0,
-        searchText, 5);
+    handleNoMatchingRows(tableId, 'noResults' + tableId, !hasVisibleRows && rows.length > 0, searchText, 5);
 }
 
 function handleNoMatchingRows(tableId, noResultsId, shouldShowNoResults, searchText, colSpan) {
@@ -554,13 +529,11 @@ function handleNoMatchingRows(tableId, noResultsId, shouldShowNoResults, searchT
 function loadCategoriesForProject() {
     const projectId = $('#projectId').val();
 
-    // Get the elements we need to update
     const $categoryContainer = $('.select-container').has('#categoryId');
     const $categorySearch = $categoryContainer.find('.select-search');
     const $categoryDropdown = $categoryContainer.find('.select-dropdown');
     const categorySelect = document.getElementById('categoryId');
 
-    // Reset category and account
     resetSelect(categorySelect, 'All Categories', true);
     if ($categorySearch.length) $categorySearch.val('').prop('disabled', true);
     if ($categoryDropdown.length) $categoryDropdown.empty();
@@ -594,7 +567,6 @@ function loadCategoriesForProject() {
                     option.textContent = category.name;
                     categorySelect.appendChild(option);
 
-                    // Add option to dropdown
                     if ($categoryDropdown.length) {
                         const div = document.createElement('div');
                         div.className = 'select-option';
@@ -604,6 +576,8 @@ function loadCategoriesForProject() {
                     }
                 });
             }
+            categorySelect.value = "";
+            $categorySearch.val('All Categories');
         },
         error: function () {
             resetSelect(categorySelect, 'All Categories');
@@ -617,7 +591,6 @@ function loadCategoriesForProject() {
 function loadAccountsForCategory() {
     const categoryId = $('#categoryId').val();
 
-    // Get the elements we need to update
     const $accountContainer = $('.select-container').has('#accountId');
     const $accountSearch = $accountContainer.find('.select-search');
     const $accountDropdown = $accountContainer.find('.select-dropdown');
@@ -655,7 +628,6 @@ function loadAccountsForCategory() {
                     option.textContent = account.name;
                     accountSelect.appendChild(option);
 
-                    // Add option to dropdown
                     if ($accountDropdown.length) {
                         const div = document.createElement('div');
                         div.className = 'select-option';
@@ -665,6 +637,8 @@ function loadAccountsForCategory() {
                     }
                 });
             }
+            accountSelect.value = "";
+            $accountSearch.val('All Accounts');
         },
         error: function () {
             resetSelect(accountSelect, 'All Accounts');
@@ -704,7 +678,6 @@ function loadAllBookers() {
                     option.textContent = booker.name;
                     bookerSelect.appendChild(option);
 
-                    // Add option to dropdown
                     if ($bookerDropdown.length) {
                         const div = document.createElement('div');
                         div.className = 'select-option';
@@ -760,7 +733,22 @@ function showError(message) {
 
 // ==================== REPORT GENERATION ====================
 
+function setSearchBoxEnabled(enabled) {
+    const searchBox = document.getElementById('searchBox');
+    if (searchBox) searchBox.disabled = !enabled;
+}
+
+function setGenerateReportEnabled(enabled) {
+    const btn = document.querySelector('#masterReportForm button[type="submit"]');
+    if (btn) btn.disabled = !enabled;
+}
+
 function generateReport() {
+    const searchBox = document.getElementById('searchBox');
+    if (searchBox && searchBox.value.trim() !== '') {
+        searchBox.value = '';
+    }
+
     initializeReportState();
 
     const startDate = document.getElementById('startDate');
@@ -772,6 +760,7 @@ function generateReport() {
 
     if (!projectId) {
         showError('Project field not found.');
+        setGenerateReportEnabled(true);
         return;
     }
 
@@ -787,6 +776,7 @@ function generateReport() {
 
     if (!projectId.value) {
         showError('Project selection is required.');
+        setGenerateReportEnabled(true);
         return;
     }
 
@@ -799,13 +789,15 @@ function generateReport() {
 
     clearReportData();
 
+    setSearchBoxEnabled(false);
+
     const reportResults = document.getElementById('reportResults');
     if (reportResults) reportResults.style.display = 'block';
 
     const reportData = document.getElementById('reportData');
     if (reportData) reportData.innerHTML = createLoadingRow(10);
 
-    fetchReportChunk();
+    fetchReportChunk(true);
 }
 
 function clearReportData() {
@@ -842,30 +834,9 @@ function createLoadingRow(colSpan) {
     </td></tr>`;
 }
 
-// ==================== INFINITE SCROLL ====================
+// ==================== AUTO-LOAD DATA FETCHING ====================
 
-function checkIfShouldLoadMore() {
-    if (!window.reportState?.hasMoreData || window.reportState?.isLoading) {
-        return;
-    }
-
-    const reportResults = document.getElementById('reportResults');
-    if (!reportResults || reportResults.style.display === 'none') {
-        return;
-    }
-
-    const scrollPosition = window.innerHeight + window.scrollY;
-    const bodyHeight = document.body.offsetHeight;
-    const scrollThreshold = bodyHeight - 500;
-
-    if (scrollPosition >= scrollThreshold) {
-        fetchReportChunk();
-    }
-}
-
-// ==================== DATA FETCHING ====================
-
-function fetchReportChunk() {
+function fetchReportChunk(autoLoad) {
     if (window.reportState.isLoading || !window.reportState.hasMoreData) {
         return;
     }
@@ -905,10 +876,22 @@ function fetchReportChunk() {
             if (reportData) {
                 reportData.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Error loading report data. Please try again.</td></tr>';
             }
+            setGenerateReportEnabled(true);
         })
         .always(() => {
             window.reportState.isLoading = false;
             updateLoadMoreButton();
+
+            if (!window.reportState.hasMoreData && !window.reportState.isLoading) {
+                setSearchBoxEnabled(true);
+                setGenerateReportEnabled(true);
+            }
+
+            const searchBox = document.getElementById('searchBox');
+            const isSearching = searchBox && searchBox.value.trim() !== '';
+            if (autoLoad && window.reportState.hasMoreData && !isSearching) {
+                fetchReportChunk(true);
+            }
         });
 }
 
@@ -917,15 +900,12 @@ function fetchReportChunk() {
 function processAndDisplayEntries(entries) {
     if (!entries?.length) return;
 
-    // append to state
     for (const entry of entries) {
         window.reportState.allEntries.push(entry);
-        // update incremental totals
         window.reportState.totals.quantity += (entry.quantity || 0);
         window.reportState.totals.debit += (entry.debit || 0);
         window.reportState.totals.credit += (entry.credit || 0);
 
-        // update account groups
         if (entry.accountId) {
             const key = String(entry.accountId);
             const existing = window.reportState.accountGroupsMap[key] || {
@@ -938,7 +918,7 @@ function processAndDisplayEntries(entries) {
             existing.credit += (entry.credit || 0);
             window.reportState.accountGroupsMap[key] = existing;
         }
-        // update category groups
+
         if (entry.categoryId) {
             const ckey = String(entry.categoryId);
             const cexisting = window.reportState.categoryGroupsMap[ckey] || {
@@ -1026,7 +1006,7 @@ function renderSummaryTable(tableId, groupedData) {
             <td>${data.name}</td>
             <td class="text-end">${formatCurrency(data.debit)}</td>
             <td class="text-end">${formatCurrency(data.credit)}</td>
-            <td class="text-end ${balance < 0 ? 'negative-balance' : ''}">${formatCurrency(balance)}</td>
+            <td class="text-end ${balance < 0 ? 'text-danger' : 'text-success'}">${formatCurrency(balance)}</td>
         `;
         fragment.appendChild(row);
     });

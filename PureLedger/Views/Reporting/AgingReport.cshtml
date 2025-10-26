@@ -35,7 +35,7 @@
         <div class="card-body">
             <form id="agingReportForm">
                 <div class="row mb-3">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Reference Date <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
@@ -43,7 +43,7 @@
                         </div>
                         <small class="form-text text-muted">The date to calculate aging from</small>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Project</label>
                         <div class="select-container">
                             <div class="input-group">
@@ -61,7 +61,7 @@
                             <div class="select-dropdown project-dropdown"></div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label class="form-label">Category <span class="text-danger">*</span></label>
                         <div class="select-container">
                             <div class="input-group">
@@ -79,12 +79,13 @@
                             <div class="select-dropdown category-dropdown"></div>
                         </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-12 text-end">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-chart-bar me-1"></i> Generate Report
-                        </button>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-chart-bar me-1"></i> Generate Report
+                            </button>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -112,7 +113,7 @@
                 </div>
                 <div class="table-responsive">
                     <table class="table table-bordered" id="agingReportTable" width="100%" cellspacing="0">
-                        <thead>
+                        <thead class="table-light">
                             <tr>
                                 <th>Account</th>
                                 <th class="text-end">Total Debit</th>

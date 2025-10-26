@@ -29,12 +29,12 @@
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-filter me-2"></i>Filter Options
+                <i class="fas fa-filter me-2"></i>Report Parameters
             </h6>
         </div>
         <div class="card-body">
             <form id="accountReportForm">
-                <div class="row align-items-end mb-3">
+                <div class="row mb-3">
                     <div class="col-md-3 mb-3">
                         <label class="form-label">Project <span class="text-danger">*</span></label>
                         <div class="select-container">
@@ -86,18 +86,11 @@
                         </div>
                     </div>
                     <div class="col-md-3 mb-3">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-search me-1"></i> Generate Report
-                        </button>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-12">
-                        <label class="form-label">Search</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input id="searchBox" class="form-control" placeholder="Filter results..." />
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-chart-bar me-1"></i> Generate Report
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -110,14 +103,23 @@
         <div class="card shadow mb-4">
             <div class="card-header py-3 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-list-alt me-2"></i>Account Report Results
+                    <i class="fas fa-table me-2"></i>Account Report Results
                 </h6>
                 <div id="reportSummary"></div>
             </div>
             <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Search</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input id="searchBox" class="form-control" placeholder="Filter results..." />
+                        </div>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-bordered" id="accountReportTable" width="100%" cellspacing="0">
-                        <thead>
+                        <thead class="table-light">
                             <tr>
                                 <th>ID</th>
                                 <th>Category</th>
