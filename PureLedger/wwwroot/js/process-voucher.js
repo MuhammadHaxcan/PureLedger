@@ -346,15 +346,15 @@
         submitBtn.html('<span class="spinner-border spinner-border-sm me-2"></span>Processing...');
     });
 
-    // Initialize datepicker for Creditable Date field
-    $('#CreditableDate').datepicker({
-        dateFormat: 'yy-mm-dd',
-        changeMonth: true,
-        changeYear: true,
-        minDate: 0
+    // Calendar icon click opens the native date picker
+    $(document).on('click', '.calendar-icon', function () {
+        const $input = $(this).siblings('input[type="date"]');
+        if ($input.length > 0 && !$input.prop('disabled')) {
+            $input[0].showPicker();
+        }
     });
 
-    // Initial update
+    // Initial update   
     updateSelectedCount();
 
     // Style account entry checkboxes to indicate they're automatic

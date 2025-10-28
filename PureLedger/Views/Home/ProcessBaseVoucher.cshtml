@@ -156,11 +156,17 @@
         <div class="row mb-3">
             <div class="col-md-4">
                 <label class="form-label" for="CreditableDate">Creditable Date</label>
-                <input class="form-control"
-                       id="CreditableDate"
-                       name="CreditableDate"
-                       type="date"
-                       value="@(DateTime.Now.ToString("yyyy-MM-dd"))" required />
+                <div class="input-group">
+                    <span class="input-group-text calendar-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </span>
+                    <input class="form-control"
+                           id="CreditableDate"
+                           name="CreditableDate"
+                           type="date"
+                           value="@(DateTime.Now.ToString("yyyy-MM-dd"))"
+                           required />
+                </div>
             </div>
         </div>
 
