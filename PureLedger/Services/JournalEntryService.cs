@@ -19,25 +19,62 @@ namespace PureLedger.Services
             _logger = logger;
         }
 
-        public async Task<List<Project>> GetAllProjectsAsync()
+        #region Project & Booker Retrieval
+        public Task<List<Project>> GetAllProjectsForUserAsync(int userId)
+            => _unitOfWork.Projects.GetAllForUserAsync(userId);
+
+        public Task<List<Booker>> GetAllBookersAsync()
+            => _unitOfWork.Bookers.GetAllAsync();
+
+        #endregion
+
+        #region Voucher Retrieval
+
+        public Task<List<JournalVoucher>> GetAllVouchersAsync()
+            => _unitOfWork.JournalVouchers.GetAllWithEntriesAsync();
+
+        public Task<JournalVoucher?> GetVoucherWithEntriesAsync(int jvId)
+            => _unitOfWork.JournalVouchers.GetWithEntriesAsync(jvId);
+
+        public Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
+            => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync();
+
+        public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
         {
-            return await _unitOfWork.Projects.GetAllAsync();
+            try
+            {
+                var baseVouchers = await _unitOfWork.JournalVouchers.GetAllBaseVouchersAsync();
+
+                // Load entries for vouchers that don't have them
+                foreach (var voucher in baseVouchers.Where(v => v.JournalEntries == null || !v.JournalEntries.Any()))
+                {
+                    _logger.LogWarning("Voucher {VoucherId} has no entries loaded, loading them explicitly", voucher.JournalVoucherId);
+
+                    var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucher.JournalVoucherId, null, null);
+                    voucher.JournalEntries ??= new List<JournalEntry>();
+
+                    foreach (var entry in entries)
+                    {
+                        voucher.JournalEntries.Add(entry);
+                    }
+                }
+
+                _logger.LogInformation("Retrieved {Count} base vouchers with their entries", baseVouchers.Count);
+                return baseVouchers;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving base vouchers");
+                throw;
+            }
         }
 
-        public async Task<List<Project>> GetAllProjectsForUserAsync(int userId)
-        {
-            return await _unitOfWork.Projects.GetAllForUserAsync(userId);
-        }
+        public Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
+            => _unitOfWork.JournalVouchers.GetBaseVoucherWithUnprocessedEntriesAsync(id);
 
-        public async Task<List<JournalVoucher>> GetAllVouchersAsync()
-        {
-            return await _unitOfWork.JournalVouchers.GetAllWithEntriesAsync();
-        }
+        #endregion
 
-        public async Task<JournalVoucher?> GetVoucherWithEntriesAsync(int jvId)
-        {
-            return await _unitOfWork.JournalVouchers.GetWithEntriesAsync(jvId);
-        }
+        #region Voucher Mapping & Summary
 
         public async Task<JournalEntryViewModel> MapVoucherToViewModelAsync(JournalVoucher voucher)
         {
@@ -45,11 +82,9 @@ namespace PureLedger.Services
             {
                 _logger.LogInformation("Mapping voucher ID {VoucherId} to view model", voucher.JournalVoucherId);
 
-                int creditDays = 0;
-                if (voucher.CreditableDate > voucher.EntryDate)
-                {
-                    creditDays = (voucher.CreditableDate.DayNumber - voucher.EntryDate.DayNumber);
-                }
+                int creditDays = voucher.CreditableDate > voucher.EntryDate
+                    ? voucher.CreditableDate.DayNumber - voucher.EntryDate.DayNumber
+                    : 0;
 
                 var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucher.JournalVoucherId, null, null);
                 _logger.LogInformation("Found {Count} entries for voucher ID {VoucherId}", entries.Count, voucher.JournalVoucherId);
@@ -62,25 +97,10 @@ namespace PureLedger.Services
                     CreditDays = creditDays,
                     IsBaseVoucher = voucher.IsBaseVoucher,
                     BookerId = voucher.BookerId,
-                    Entries = entries.Select(e => new JournalEntryRowModel
-                    {
-                        CategoryId = e.CategoryId,
-                        AccountId = e.AccountId,
-                        Pkg = e.Account?.ProductData?.Pkg,
-                        Des = e.Description,
-                        Qty = e.Quantity,
-                        Rate = e.Rate,
-                        Percent = e.DiscountPercent ?? 0,
-                        Disc = e.Discount,
-                        Debit = e.Debit,
-                        Credit = e.Credit,
-                        Rbp = e.Rbp ?? "Y"
-                    }).ToList()
+                    Entries = entries.Select(MapToRowModel).ToList()
                 };
 
-                _logger.LogInformation("Successfully mapped voucher to view model with {EntriesCount} entries",
-                    viewModel.Entries.Count);
-
+                _logger.LogInformation("Successfully mapped voucher to view model with {EntriesCount} entries", viewModel.Entries.Count);
                 return viewModel;
             }
             catch (Exception ex)
@@ -89,6 +109,33 @@ namespace PureLedger.Services
                 throw;
             }
         }
+
+        public async Task<object> GetVoucherSummaryAsync(int voucherId)
+        {
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+
+            if (voucher == null)
+                return new { entries = new List<object>(), jvId = voucherId };
+
+            var entries = voucher.JournalEntries.Select(e => new
+            {
+                entryId = e.JournalEntryId,
+                accountName = e.Account?.AccountName,
+                description = e.Description,
+                quantity = e.Quantity,
+                rate = e.Rate,
+                discount = e.Discount,
+                discountPercent = e.DiscountPercent,
+                debit = e.Debit,
+                credit = e.Credit
+            }).ToList();
+
+            return new { entries, jvId = voucher.JournalVoucherId };
+        }
+
+        #endregion
+
+        #region Voucher Creation & Update
 
         public async Task<JournalVoucher> CreateJournalVoucherAsync(JournalEntryViewModel model)
         {
@@ -106,7 +153,7 @@ namespace PureLedger.Services
 
                 journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
                 await CreateJournalEntriesAsync(journalVoucher.JournalVoucherId, model.Entries);
-                await UpdateVoucherStatusBasedOnAccountsAsync(journalVoucher.JournalVoucherId);
+                await UpdateVoucherCompletionStatusAsync(journalVoucher.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
 
                 return journalVoucher;
@@ -118,68 +165,87 @@ namespace PureLedger.Services
             }
         }
 
-        private async Task CreateJournalEntriesAsync(int journalVoucherId, List<JournalEntryRowModel> entryModels)
+        public async Task<JournalVoucher> UpdateJournalVoucherAsync(int voucherId, JournalEntryViewModel model)
         {
-            foreach (var entryModel in entryModels)
+            try
             {
+                var existingVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+                if (existingVoucher == null)
+                    throw new InvalidOperationException($"Voucher with ID {voucherId} not found");
+
+                bool wasBaseVoucher = existingVoucher.IsBaseVoucher;
+                bool wasCompleted = existingVoucher.IsCompleted;
+
+                using var transaction = await _unitOfWork.BeginTransactionAsync();
                 try
                 {
-                    _logger.LogInformation("Creating journal entry with AccountId={AccountId}", entryModel.AccountId);
+                    // Update voucher properties
+                    existingVoucher.ProjectId = model.ProjectId;
+                    existingVoucher.EntryDate = model.EntryDate;
+                    existingVoucher.CreditableDate = model.DueDate;
+                    existingVoucher.BookerId = model.BookerId;
 
-                    var journalEntry = new JournalEntry
+                    // Check if voucher has references (derived vouchers exist)
+                    var hasReferences = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAsync(voucherId);
+                    existingVoucher.IsBaseVoucher = hasReferences.Any() ? wasBaseVoucher : model.IsBaseVoucher;
+
+                    // Process entries: match existing, add new, delete orphaned
+                    var existingEntries = existingVoucher.JournalEntries.ToList();
+                    bool newEntryAdded = false;
+
+                    foreach (var entryModel in model.Entries)
                     {
-                        JournalVoucherId = journalVoucherId,
-                        AccountId = entryModel.AccountId ?? 0,
-                        CategoryId = entryModel.CategoryId ?? 0,
-                        Description = entryModel.Des,
-                        Quantity = entryModel.Qty ?? 0,
-                        Rate = entryModel.Rate ?? 0,
-                        DiscountPercent = entryModel.Percent.HasValue ? entryModel.Percent.Value : null,
-                        Discount = entryModel.Disc ?? 0,
-                        Debit = entryModel.Debit ?? 0,  
-                        Credit = entryModel.Credit ?? 0, 
-                        Rbp = entryModel.Rbp ?? "Y",
-                        IsProcessed = false
-                    };
+                        var existingEntry = existingEntries.FirstOrDefault(e =>
+                            e.AccountId == entryModel.AccountId &&
+                            e.CategoryId == entryModel.CategoryId &&
+                            string.Equals(e.Description, entryModel.Des, StringComparison.OrdinalIgnoreCase));
 
-                    journalEntry = await _unitOfWork.JournalEntries.AddAsync(journalEntry);
+                        if (existingEntry != null)
+                        {
+                            UpdateExistingEntry(existingEntry, entryModel);
+                            await _unitOfWork.JournalEntries.UpdateAsync(existingEntry);
+                            existingEntries.Remove(existingEntry);
+                        }
+                        else
+                        {
+                            await CreateNewEntry(voucherId, entryModel);
+                            newEntryAdded = true;
+                        }
+                    }
+
+                    // Delete orphaned entries
+                    foreach (var entryToDelete in existingEntries)
+                    {
+                        await DeleteJournalEntryAsync(entryToDelete.JournalEntryId);
+                    }
+
+                    // Update completion status
+                    existingVoucher.IsCompleted = newEntryAdded ? false : wasCompleted;
+                    await UpdateVoucherCompletionStatusAsync(existingVoucher.JournalVoucherId);
+
+                    await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
                     await _unitOfWork.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    _logger.LogInformation("Successfully updated voucher {VoucherId} with {EntryCount} entries", voucherId, model.Entries.Count);
+                    return existingVoucher;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    _logger.LogError(ex, "Error creating journal entry for account {AccountId}", entryModel.AccountId);
+                    await transaction.RollbackAsync();
                     throw;
                 }
             }
-        }
-
-        private async Task UpdateVoucherStatusBasedOnAccountsAsync(int journalVoucherId)
-        {
-            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
-            if (voucher == null) return;
-
-            var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
-
-            var accounts = new List<Account>();
-            foreach (var accountId in accountIds)
+            catch (Exception ex)
             {
-                var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
-                if (account != null)
-                    accounts.Add(account);
-            }
-
-            bool allAccountGroup1 = accounts.All(a => a.AccountGroupId == 1);
-
-            voucher.IsCompleted = allAccountGroup1;
-            await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-
-            var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(journalVoucherId, null, null);
-            foreach (var entry in entries)
-            {
-                entry.IsProcessed = allAccountGroup1;
-                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                _logger.LogError(ex, "Error updating journal voucher {VoucherId}", voucherId);
+                throw;
             }
         }
+
+        #endregion
+
+        #region Entry CRUD Operations
 
         public async Task<JournalEntryUpdateViewModel?> GetJournalEntryForEditAsync(int entryId)
         {
@@ -187,25 +253,27 @@ namespace PureLedger.Services
             if (entry == null)
                 return null;
 
-            var projectId = entry.JournalVoucher?.ProjectId ?? 0;
-            int? deliveryChallanEntryId = null;
-            int? locationId = null;
-            List<Location>? allLocations = null;
-
             var account = entry.AccountId > 0
                 ? await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId)
                 : null;
             int accountGroupId = account?.AccountGroupId ?? 0;
 
+            // Load delivery challan data for inventory items (AccountGroup 2)
+            int? deliveryChallanEntryId = null;
+            int? locationId = null;
+            List<Location>? allLocations = null;
+
             if (accountGroupId == 2)
             {
                 var dcEntry = await _unitOfWork.DeliveryChallanEntries
                     .GetByDeliveryChallanIdAndJournalEntryIdAsync(entry.JournalVoucherId, entry.JournalEntryId);
+
                 if (dcEntry != null)
                 {
                     deliveryChallanEntryId = dcEntry.DeliveryChallanEntryId;
                     locationId = dcEntry.LocationId;
                 }
+
                 allLocations = await _unitOfWork.Locations.GetAllAsync();
             }
 
@@ -222,7 +290,7 @@ namespace PureLedger.Services
                 Credit = entry.Credit,
                 AccountId = entry.AccountId,
                 CategoryId = entry.CategoryId,
-                ProjectId = projectId,
+                ProjectId = entry.JournalVoucher?.ProjectId ?? 0,
                 AccountGroupId = accountGroupId,
                 DeliveryChallanEntryId = deliveryChallanEntryId,
                 LocationId = locationId,
@@ -239,9 +307,9 @@ namespace PureLedger.Services
                     return false;
 
                 UpdateEntryFromViewModel(entry, model);
-
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
 
+                // Update delivery challan location if applicable
                 if (model.AccountGroupId == 2 && model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
                 {
                     await UpdateDeliveryChallanEntryLocationAsync(model.DeliveryChallanEntryId.Value, model.LocationId.Value);
@@ -257,69 +325,6 @@ namespace PureLedger.Services
             }
         }
 
-        private void UpdateEntryFromViewModel(JournalEntry entry, JournalEntryUpdateViewModel model)
-        {
-            entry.Description = model.Description;
-            entry.Quantity = model.Quantity;
-            entry.Rate = model.Rate;
-            entry.Discount = model.Discount;
-            entry.DiscountPercent = model.DiscountPercent;
-            entry.Debit = model.Debit;
-            entry.Credit = model.Credit;
-
-            if (model.AccountId > 0 && model.AccountId != entry.AccountId)
-            {
-                entry.AccountId = model.AccountId;
-            }
-
-            if (model.CategoryId > 0 && model.CategoryId != entry.CategoryId)
-            {
-                entry.CategoryId = model.CategoryId;
-            }
-
-            entry.IsEdited = true;
-            entry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now);
-            ;
-
-        }
-
-        private async Task UpdateDeliveryChallanEntryLocationAsync(int deliveryChallanEntryId, int locationId)
-        {
-            var dcEntry = await _unitOfWork.DeliveryChallanEntries.GetByIdAsync(deliveryChallanEntryId);
-            if (dcEntry != null)
-            {
-                dcEntry.LocationId = locationId;
-                await _unitOfWork.DeliveryChallanEntries.UpdateAsync(dcEntry);
-            }
-        }
-
-        public async Task<object> GetVoucherSummaryAsync(int voucherId)
-        {
-            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
-
-            if (voucher == null)
-                return new { entries = new List<object>(), jvId = voucherId };
-
-            var entries = voucher.JournalEntries.Select(e => new {
-                entryId = e.JournalEntryId,
-                accountName = e.Account?.AccountName,
-                description = e.Description,
-                quantity = e.Quantity,
-                rate = e.Rate,
-                discount = e.Discount,
-                discountPercent = e.DiscountPercent,
-                debit = e.Debit,
-                credit = e.Credit
-            }).ToList();
-
-            return new { entries, jvId = voucher.JournalVoucherId };
-        }
-
-        public async Task<object?> GetProductDetailsAsync(int accountId)
-        {
-            return await _unitOfWork.Accounts.GetProductDetailsAsync(accountId);
-        }
-
         public async Task<bool> DeleteJournalEntryAsync(int entryId)
         {
             try
@@ -329,20 +334,19 @@ namespace PureLedger.Services
                     return false;
 
                 var voucherId = entry.JournalVoucherId;
-
                 var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
 
                 if (entries.Count == 1)
                 {
+                    // Delete entire voucher if this is the last entry
                     await DeleteVoucherWithLastEntryAsync(entryId, voucherId);
                 }
                 else
                 {
+                    // Delete only the entry
                     await _unitOfWork.JournalEntries.DeleteAsync(entryId);
-
                     await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
-
-                    await UpdateVoucherOnDelete(voucherId);
+                    await UpdateVoucherCompletionStatusAsync(voucherId);
                 }
 
                 await _unitOfWork.SaveChangesAsync();
@@ -355,37 +359,21 @@ namespace PureLedger.Services
             }
         }
 
-        private async Task DeleteVoucherWithLastEntryAsync(int entryId, int voucherId)
+        #endregion
+
+        #region Category & Account Lookups
+
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
         {
-
-            await _unitOfWork.JournalEntries.DeleteAsync(entryId);
-
-            await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
-
-            var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
-            if (deliveryChallanVoucher != null)
+            try
             {
-                await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
+                return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
             }
-
-            await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
-        }
-
-        private async Task DeleteRelatedDeliveryChallanEntriesAsync(int voucherId, int entryId)
-        {
-            var deliveryChallanEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(voucherId);
-            if (deliveryChallanEntries != null && deliveryChallanEntries.Any())
+            catch (Exception ex)
             {
-                foreach (var dcEntry in deliveryChallanEntries.Where(e => e.JournalEntryId == entryId))
-                {
-                    await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
-                }
+                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                throw;
             }
-        }
-
-        public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
-        {
-            return await _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync();
         }
 
         public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
@@ -401,95 +389,12 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
-        {
-            try
-            {
+        public Task<object?> GetProductDetailsAsync(int accountId)
+            => _unitOfWork.Accounts.GetProductDetailsAsync(accountId);
 
-                return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
-                throw;
-            }
-        }
+        #endregion
 
-        public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
-        {
-            try
-            {
-
-                var baseVouchers = await _unitOfWork.JournalVouchers.GetAllBaseVouchersAsync();
-
-                foreach (var voucher in baseVouchers)
-                {
-                    if (voucher.JournalEntries == null || !voucher.JournalEntries.Any())
-                    {
-                        _logger.LogWarning("Voucher {VoucherId} has no entries loaded, loading them explicitly",
-                            voucher.JournalVoucherId);
-
-                        var entriesForVoucher = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                            voucher.JournalVoucherId, null, null);
-
-                        if (voucher.JournalEntries == null)
-                            voucher.JournalEntries = new List<JournalEntry>();
-
-                        if (entriesForVoucher.Any())
-                        {
-                            foreach (var entry in entriesForVoucher)
-                            {
-                                voucher.JournalEntries.Add(entry);
-                            }
-                        }
-                    }
-                }
-
-                _logger.LogInformation("Retrieved {Count} base vouchers with their entries", baseVouchers.Count);
-                return baseVouchers;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving base vouchers");
-                throw;
-            }
-        }
-
-        public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
-        {
-            return await _unitOfWork.JournalVouchers.GetBaseVoucherWithUnprocessedEntriesAsync(id);
-        }
-
-        private async Task<bool> ShouldProcessAsFullVoucher(
-            int baseVoucherId,
-            List<BaseVoucherEntryViewModel> entriesToProcess)
-        {
-            var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
-            if (baseVoucher == null || !baseVoucher.IsBaseVoucher) return false;
-
-            var existingReferences = await _unitOfWork.JournalVoucherReferences
-                .GetByMainVoucherIdAsync(baseVoucherId);
-            if (existingReferences.Any()) return false;
-
-            var regularEntries = baseVoucher.JournalEntries
-                .Where(e => !e.IsProcessed)
-                .ToList();
-
-            if (!regularEntries.Any()) return false;
-
-            foreach (var entry in regularEntries)
-            {
-                var processEntry = entriesToProcess
-                    .FirstOrDefault(e => e.EntryId == entry.JournalEntryId);
-
-                if (processEntry == null || processEntry.ProcessQuantity != entry.Quantity)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+        #region Derived Voucher Operations
 
         public async Task<int> CreateDerivedVoucherAsync(
             int baseVoucherId,
@@ -501,31 +406,30 @@ namespace PureLedger.Services
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-
-                if (await ShouldProcessAsFullVoucher(baseVoucherId, entriesToProcess))
+                // Check if we should process as full voucher (convert base to regular)
+                if (await ShouldProcessAsFullVoucherAsync(baseVoucherId, entriesToProcess))
                 {
-                    var baseVoucherToOff = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
-                    if (baseVoucherToOff != null)
+                    var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
+                    if (baseVoucher != null)
                     {
-                        baseVoucherToOff.IsBaseVoucher = false;
-
-                        await _unitOfWork.JournalVouchers.UpdateAsync(baseVoucherToOff);
+                        baseVoucher.IsBaseVoucher = false;
+                        await _unitOfWork.JournalVouchers.UpdateAsync(baseVoucher);
                         await _unitOfWork.SaveChangesAsync();
                         await transaction.CommitAsync();
 
-                        _logger.LogInformation("Base voucher {VoucherId} processed completely and turned off", baseVoucherId);
-                        return baseVoucherToOff.JournalVoucherId;
-
+                        _logger.LogInformation("Base voucher {VoucherId} processed completely and converted to regular voucher", baseVoucherId);
+                        return baseVoucher.JournalVoucherId;
                     }
                 }
 
-                var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
-                if (baseVoucher == null || !baseVoucher.IsBaseVoucher)
+                // Create derived voucher
+                var baseVoucherData = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
+                if (baseVoucherData == null || !baseVoucherData.IsBaseVoucher)
                     throw new InvalidOperationException("Base voucher not found");
 
                 var derivedVoucher = new JournalVoucher
                 {
-                    ProjectId = baseVoucher.ProjectId,
+                    ProjectId = baseVoucherData.ProjectId,
                     EntryDate = DateOnly.FromDateTime(DateTime.Now),
                     CreditableDate = creditableDate ?? DateOnly.FromDateTime(DateTime.Now),
                     IsCompleted = false
@@ -534,6 +438,7 @@ namespace PureLedger.Services
                 derivedVoucher = await _unitOfWork.JournalVouchers.AddAsync(derivedVoucher);
                 await _unitOfWork.SaveChangesAsync();
 
+                // Create reference between base and derived voucher
                 await _unitOfWork.JournalVoucherReferences.AddAsync(new JournalVoucherReference
                 {
                     MainVoucherId = baseVoucherId,
@@ -541,73 +446,13 @@ namespace PureLedger.Services
                     ReferenceType = "DerivedVoucher"
                 });
 
-                bool accountEntryAdded = false;
-
-                foreach (var entryToProcess in entriesToProcess)
-                {
-                    var baseEntry = baseVoucher.JournalEntries
-                        .FirstOrDefault(e => e.JournalEntryId == entryToProcess.EntryId);
-
-                    if (baseEntry == null || baseEntry.IsProcessed)
-                        continue;
-
-                    var account = await _unitOfWork.Accounts.GetByIdAsync(baseEntry.AccountId);
-                    bool isAccountEntry = account != null && account.AccountGroupId == 1;
-
-                    if (!isAccountEntry && (entryToProcess.ProcessQuantity <= 0 ||
-                        entryToProcess.ProcessQuantity > baseEntry.Quantity))
-                        continue;
-
-                    if (isAccountEntry)
-                    {
-                        accountEntryAdded = true;
-
-                        var newEntry = new JournalEntry
-                        {
-                            JournalVoucherId = derivedVoucher.JournalVoucherId,
-                            AccountId = baseEntry.AccountId,
-                            CategoryId = baseEntry.CategoryId,
-                            Description = baseEntry.Description,
-                            Quantity = 0,
-                            Rate = baseEntry.Rate,
-                            DiscountPercent = baseEntry.DiscountPercent,
-                            Discount = 0,
-                            Debit = accountEntryIsDebit ? accountEntryAmount : 0,
-                            Credit = !accountEntryIsDebit ? accountEntryAmount : 0,
-                            Rbp = baseEntry.Rbp,
-                            IsProcessed = false
-                        };
-
-                        var savedEntry = await _unitOfWork.JournalEntries.AddAsync(newEntry);
-
-                        continue;
-                    }
-
-                    var newRegularEntry = new JournalEntry
-                    {
-                        JournalVoucherId = derivedVoucher.JournalVoucherId,
-                        AccountId = baseEntry.AccountId,
-                        CategoryId = baseEntry.CategoryId,
-                        Description = baseEntry.Description,
-                        Quantity = entryToProcess.ProcessQuantity,
-                        Rate = baseEntry.Rate,
-                        DiscountPercent = baseEntry.DiscountPercent,
-                        Discount = baseEntry.Discount * (entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity),
-                        Debit = baseEntry.Debit > 0 ? baseEntry.Debit * (decimal)(entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity) : 0m,
-                        Credit = baseEntry.Credit > 0 ? baseEntry.Credit * (decimal)(entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity) : 0m,
-                        Rbp = baseEntry.Rbp,
-                        IsProcessed = false
-                    };
-
-                    var savedRegularEntry = await _unitOfWork.JournalEntries.AddAsync(newRegularEntry);
-
-                    baseEntry.Quantity -= entryToProcess.ProcessQuantity;
-                    if (baseEntry.Quantity <= 0)
-                    {
-                        baseEntry.IsProcessed = true;
-                    }
-                    await _unitOfWork.JournalEntries.UpdateAsync(baseEntry);
-                }
+                // Process entries
+                await ProcessDerivedVoucherEntriesAsync(
+                    baseVoucherData,
+                    derivedVoucher.JournalVoucherId,
+                    entriesToProcess,
+                    accountEntryAmount,
+                    accountEntryIsDebit);
 
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -621,7 +466,11 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task MarkEntriesAsMissed(int voucherId)
+        #endregion
+
+        #region Missed Entries
+
+        public async Task MarkEntriesAsMissedAsync(int voucherId)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -630,14 +479,12 @@ namespace PureLedger.Services
                 if (voucher == null || !voucher.IsBaseVoucher)
                     throw new InvalidOperationException("Invalid voucher");
 
-                var customerAccount = await GetCustomerAccountFromEntries(voucher.JournalEntries);
+                var customerAccount = await GetCustomerAccountFromEntriesAsync(voucher.JournalEntries);
                 if (customerAccount == null)
                     throw new InvalidOperationException("No customer account found in voucher");
 
                 var unprocessedEntries = voucher.JournalEntries
-                    .Where(e => !e.IsProcessed &&
-                           e.Quantity > 0 &&
-                           e.Account.AccountGroupId == 2)
+                    .Where(e => !e.IsProcessed && e.Quantity > 0 && e.Account.AccountGroupId == 2)
                     .ToList();
 
                 foreach (var entry in unprocessedEntries)
@@ -655,7 +502,6 @@ namespace PureLedger.Services
                     };
 
                     await _unitOfWork.MissedEntries.AddAsync(missedEntry);
-
                     entry.Quantity = 0;
                     await _unitOfWork.JournalEntries.UpdateAsync(entry);
                 }
@@ -674,7 +520,9 @@ namespace PureLedger.Services
         }
 
         public async Task<List<MissedEntryViewModel>> GetFilteredMissedEntriesAsync(
-    DateOnly? startDate, DateOnly? endDate, int? projectId)
+            DateOnly? startDate,
+            DateOnly? endDate,
+            int? projectId)
         {
             var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
 
@@ -692,157 +540,18 @@ namespace PureLedger.Services
             }).ToList();
         }
 
-        private async Task<Account?> GetCustomerAccountFromEntries(IEnumerable<JournalEntry> entries)
-        {
-            foreach (var entry in entries)
-            {
-                var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId);
-                if (account?.AccountGroupId == 1)
-                {
-                    return account;
-                }
-            }
-            return null;
-        }
+        #endregion
 
-        public async Task<JournalVoucher> UpdateJournalVoucherAsync(int voucherId, JournalEntryViewModel model)
-        {
-            try
-            {
-                var existingVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
-                if (existingVoucher == null)
-                    throw new InvalidOperationException($"Voucher with ID {voucherId} not found");
-
-                bool wasBaseVoucher = existingVoucher.IsBaseVoucher;
-                bool wasCompleted = existingVoucher.IsCompleted;
-
-                using var transaction = await _unitOfWork.BeginTransactionAsync();
-                try
-                {
-                    existingVoucher.ProjectId = model.ProjectId;
-                    existingVoucher.EntryDate = model.EntryDate;
-                    existingVoucher.CreditableDate = model.DueDate;
-                    existingVoucher.BookerId = model.BookerId; 
-
-                    var hasReferences = await _unitOfWork.JournalVoucherReferences
-                        .GetByMainVoucherIdAsync(voucherId);
-
-                    if (!hasReferences.Any())
-                    {
-                        existingVoucher.IsBaseVoucher = model.IsBaseVoucher;
-                    }
-                    else
-                    {
-                        existingVoucher.IsBaseVoucher = wasBaseVoucher;
-                    }
-
-                    var existingEntries = existingVoucher.JournalEntries.ToList();
-                    var entriesToDelete = new List<JournalEntry>();
-
-                    bool newEntryAdded = false;
-
-                    foreach (var entryModel in model.Entries)
-                    {
-                        var existingEntry = existingEntries.FirstOrDefault(e =>
-                            e.AccountId == entryModel.AccountId &&
-                            e.CategoryId == entryModel.CategoryId &&
-                            string.Equals(e.Description, entryModel.Des, StringComparison.OrdinalIgnoreCase));
-
-                        if (existingEntry != null)
-                        {
-                            existingEntry.Description = entryModel.Des;
-                            existingEntry.Quantity = entryModel.Qty ?? 0;
-                            existingEntry.Rate = entryModel.Rate ?? 0;
-                            existingEntry.DiscountPercent = entryModel.Percent.HasValue ? entryModel.Percent.Value : null;
-                            existingEntry.Discount = entryModel.Disc ?? 0;
-                            existingEntry.Debit = entryModel.Debit ?? 0;
-                            existingEntry.Credit = entryModel.Credit ?? 0;
-                            existingEntry.Rbp = entryModel.Rbp ?? "Y";
-
-                            // Set IsEdited and ModifiedDateTime when updating
-                            existingEntry.IsEdited = true;
-                            existingEntry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now);
-
-                            await _unitOfWork.JournalEntries.UpdateAsync(existingEntry);
-
-                            existingEntries.Remove(existingEntry);
-                        }
-                        else
-                        {
-                            var newEntry = new JournalEntry
-                            {
-                                JournalVoucherId = voucherId,
-                                AccountId = entryModel.AccountId ?? 0,
-                                CategoryId = entryModel.CategoryId ?? 0,
-                                Description = entryModel.Des,
-                                Quantity = entryModel.Qty ?? 0,
-                                Rate = entryModel.Rate ?? 0,
-                                DiscountPercent = entryModel.Percent.HasValue ? (int?)entryModel.Percent.Value : null,
-                                Discount = entryModel.Disc ?? 0,
-                                Debit = entryModel.Debit ?? 0,
-                                Credit = entryModel.Credit ?? 0,
-                                Rbp = entryModel.Rbp ?? "Y",
-                                IsProcessed = false,
-                                // Set IsEdited and ModifiedDateTime for new entries as well
-                                IsEdited = true,
-                                ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now)
-                            };
-
-                            await _unitOfWork.JournalEntries.AddAsync(newEntry);
-                            newEntryAdded = true;
-                        }
-                    }
-
-                    foreach (var entryToDelete in existingEntries)
-                    {
-                        await DeleteJournalEntryAsync(entryToDelete.JournalEntryId);
-                    }
-
-                    if (newEntryAdded)
-                    {
-                        existingVoucher.IsCompleted = false;
-                    }
-                    else
-                    {
-                        existingVoucher.IsCompleted = wasCompleted;
-                    }
-
-                    await UpdateVoucherOnDelete(existingVoucher.JournalVoucherId);
-
-                    await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
-
-                    await _unitOfWork.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Successfully updated voucher {VoucherId} with {EntryCount} entries",
-                        voucherId, model.Entries.Count);
-
-                    return existingVoucher;
-                }
-                catch (Exception)
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating journal voucher {VoucherId}", voucherId);
-                throw;
-            }
-        }
+        #region Recipe Management
 
         public async Task<int> CreateRecipeFromVoucherAsync(JournalEntryViewModel model, int journalVoucherId)
         {
             try
             {
                 if (!model.SaveAsRecipe || string.IsNullOrWhiteSpace(model.RecipeName))
-                {
                     return 0;
-                }
 
-                _logger.LogInformation("Creating recipe '{RecipeName}' from voucher {VoucherId}",
-                    model.RecipeName, journalVoucherId);
+                _logger.LogInformation("Creating recipe '{RecipeName}' from voucher {VoucherId}", model.RecipeName, journalVoucherId);
 
                 var recipe = new Recipe
                 {
@@ -858,9 +567,6 @@ namespace PureLedger.Services
 
                 foreach (var entry in productEntries)
                 {
-                    if (!entry.AccountId.HasValue || !entry.CategoryId.HasValue)
-                        continue;
-
                     var recipeItem = new RecipeItem
                     {
                         RecipeId = recipe.RecipeId,
@@ -872,8 +578,7 @@ namespace PureLedger.Services
                 }
 
                 await _unitOfWork.SaveChangesAsync();
-                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items",
-                    recipe.RecipeId, productEntries.Count);
+                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items", recipe.RecipeId, productEntries.Count);
 
                 return recipe.RecipeId;
             }
@@ -913,8 +618,7 @@ namespace PureLedger.Services
                     return null;
                 }
 
-                _logger.LogInformation("Found recipe '{RecipeName}' with {ItemCount} items",
-                    recipe.RecipeName, recipe.RecipeItems?.Count ?? 0);
+                _logger.LogInformation("Found recipe '{RecipeName}' with {ItemCount} items", recipe.RecipeName, recipe.RecipeItems?.Count ?? 0);
                 return recipe;
             }
             catch (Exception ex)
@@ -939,11 +643,8 @@ namespace PureLedger.Services
 
                 if (recipe.ProjectId != projectId)
                 {
-                    _logger.LogWarning(
-                        "Recipe project ID mismatch. Recipe {RecipeId} belongs to project {RecipeProjectId}, " +
-                        "but was requested for project {RequestedProjectId}",
+                    _logger.LogWarning("Recipe project ID mismatch. Recipe {RecipeId} belongs to project {RecipeProjectId}, but was requested for project {RequestedProjectId}",
                         recipeId, recipe.ProjectId, projectId);
-
                     throw new ArgumentException("Recipe does not belong to the selected project");
                 }
 
@@ -960,7 +661,6 @@ namespace PureLedger.Services
 
                 foreach (var item in recipe.RecipeItems)
                 {
-
                     var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(item.AccountId);
 
                     var entry = new JournalEntryRowModel
@@ -981,9 +681,7 @@ namespace PureLedger.Services
                     viewModel.Entries.Add(entry);
                 }
 
-                _logger.LogInformation("Created journal entry view model from recipe {RecipeId} with {EntryCount} entries",
-                    recipeId, viewModel.Entries.Count);
-
+                _logger.LogInformation("Created journal entry view model from recipe {RecipeId} with {EntryCount} entries", recipeId, viewModel.Entries.Count);
                 return viewModel;
             }
             catch (Exception ex) when (ex is not ArgumentException)
@@ -993,54 +691,343 @@ namespace PureLedger.Services
             }
         }
 
-        private async Task UpdateVoucherOnDelete(int voucherId)
+        #endregion
+
+        #region Private Helper Methods
+
+        private static JournalEntryRowModel MapToRowModel(JournalEntry e) => new()
         {
-            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
-            if (voucher == null) return;
+            CategoryId = e.CategoryId,
+            AccountId = e.AccountId,
+            Pkg = e.Account?.ProductData?.Pkg,
+            Des = e.Description,
+            Qty = e.Quantity,
+            Rate = e.Rate,
+            Percent = e.DiscountPercent ?? 0,
+            Disc = e.Discount,
+            Debit = e.Debit,
+            Credit = e.Credit,
+            Rbp = e.Rbp ?? "Y"
+        };
 
-            var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
-            if (entries.Count == 0) return;
+        private async Task CreateJournalEntriesAsync(int journalVoucherId, List<JournalEntryRowModel> entryModels)
+        {
+            foreach (var entryModel in entryModels)
+            {
+                try
+                {
+                    _logger.LogInformation("Creating journal entry with AccountId={AccountId}", entryModel.AccountId);
 
+                    var journalEntry = new JournalEntry
+                    {
+                        JournalVoucherId = journalVoucherId,
+                        AccountId = entryModel.AccountId ?? 0,
+                        CategoryId = entryModel.CategoryId ?? 0,
+                        Description = entryModel.Des,
+                        Quantity = entryModel.Qty ?? 0,
+                        Rate = entryModel.Rate ?? 0,
+                        DiscountPercent = entryModel.Percent,
+                        Discount = entryModel.Disc ?? 0,
+                        Debit = entryModel.Debit ?? 0,
+                        Credit = entryModel.Credit ?? 0,
+                        Rbp = entryModel.Rbp ?? "Y",
+                        IsProcessed = false
+                    };
+
+                    await _unitOfWork.JournalEntries.AddAsync(journalEntry);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error creating journal entry for account {AccountId}", entryModel.AccountId);
+                    throw;
+                }
+            }
+        }
+
+        private async Task CreateNewEntry(int voucherId, JournalEntryRowModel entryModel)
+        {
+            var newEntry = new JournalEntry
+            {
+                JournalVoucherId = voucherId,
+                AccountId = entryModel.AccountId ?? 0,
+                CategoryId = entryModel.CategoryId ?? 0,
+                Description = entryModel.Des,
+                Quantity = entryModel.Qty ?? 0,
+                Rate = entryModel.Rate ?? 0,
+                DiscountPercent = entryModel.Percent,
+                Discount = entryModel.Disc ?? 0,
+                Debit = entryModel.Debit ?? 0,
+                Credit = entryModel.Credit ?? 0,
+                Rbp = entryModel.Rbp ?? "Y",
+                IsProcessed = false,
+                IsEdited = true,
+                ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now)
+            };
+
+            await _unitOfWork.JournalEntries.AddAsync(newEntry);
+        }
+
+        private static void UpdateExistingEntry(JournalEntry entry, JournalEntryRowModel model)
+        {
+            entry.Description = model.Des;
+            entry.Quantity = model.Qty ?? 0;
+            entry.Rate = model.Rate ?? 0;
+            entry.DiscountPercent = model.Percent;
+            entry.Discount = model.Disc ?? 0;
+            entry.Debit = model.Debit ?? 0;
+            entry.Credit = model.Credit ?? 0;
+            entry.Rbp = model.Rbp ?? "Y";
+            entry.IsEdited = true;
+            entry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now);
+        }
+
+        private static void UpdateEntryFromViewModel(JournalEntry entry, JournalEntryUpdateViewModel model)
+        {
+            entry.Description = model.Description;
+            entry.Quantity = model.Quantity;
+            entry.Rate = model.Rate;
+            entry.Discount = model.Discount;
+            entry.DiscountPercent = model.DiscountPercent;
+            entry.Debit = model.Debit;
+            entry.Credit = model.Credit;
+
+            if (model.AccountId > 0 && model.AccountId != entry.AccountId)
+                entry.AccountId = model.AccountId;
+
+            if (model.CategoryId > 0 && model.CategoryId != entry.CategoryId)
+                entry.CategoryId = model.CategoryId;
+
+            entry.IsEdited = true;
+            entry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now);
+        }
+
+        private async Task UpdateDeliveryChallanEntryLocationAsync(int deliveryChallanEntryId, int locationId)
+        {
+            var dcEntry = await _unitOfWork.DeliveryChallanEntries.GetByIdAsync(deliveryChallanEntryId);
+            if (dcEntry != null)
+            {
+                dcEntry.LocationId = locationId;
+                await _unitOfWork.DeliveryChallanEntries.UpdateAsync(dcEntry);
+            }
+        }
+
+        private async Task UpdateVoucherCompletionStatusAsync(int journalVoucherId)
+        {
+            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+            if (voucher == null)
+                return;
+
+            var entries = voucher.JournalEntries.ToList();
+            if (!entries.Any())
+                return;
+
+            // Get all unique account IDs and fetch accounts in batch
             var accountIds = entries.Select(e => e.AccountId).Distinct().ToList();
-            var accounts = new Dictionary<int, Account>();
+            var accountsDict = new Dictionary<int, Account>();
+
             foreach (var accountId in accountIds)
             {
                 var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
                 if (account != null)
-                    accounts[accountId] = account;
+                    accountsDict[accountId] = account;
             }
 
-            if (entries.All(e => e.IsProcessed))
-            {
-                voucher.IsCompleted = true;
-                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-                return;
-            }
+            // Check if all entries belong to AccountGroup 1 (customer accounts)
+            bool allAccountGroup1 = entries.All(e =>
+                accountsDict.ContainsKey(e.AccountId) && accountsDict[e.AccountId].AccountGroupId == 1);
 
-            var unprocessedEntries = entries.Where(e => !e.IsProcessed).ToList();
-            if (unprocessedEntries.Count > 0 && unprocessedEntries.All(e => accounts.ContainsKey(e.AccountId) && accounts[e.AccountId].AccountGroupId == 1))
+            voucher.IsCompleted = allAccountGroup1;
+            await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+
+            // Mark all entries as processed if all are from AccountGroup 1
+            if (allAccountGroup1)
             {
-                foreach (var entry in unprocessedEntries)
+                foreach (var entry in entries.Where(e => !e.IsProcessed))
                 {
                     entry.IsProcessed = true;
-                    await _unitOfWork.JournalEntries.UpdateAsync(entry);
                 }
-                voucher.IsCompleted = true;
-                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
             }
         }
 
-        public async Task<List<Booker>> GetAllBookersAsync()
+        private async Task DeleteVoucherWithLastEntryAsync(int entryId, int voucherId)
         {
-            try
+            await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+            await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
+
+            var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
+            if (deliveryChallanVoucher != null)
             {
-                return await _unitOfWork.Bookers.GetAllAsync();
+                await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
             }
-            catch (Exception ex)
+
+            await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
+        }
+
+        private async Task DeleteRelatedDeliveryChallanEntriesAsync(int voucherId, int entryId)
+        {
+            var deliveryChallanEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(voucherId);
+            if (deliveryChallanEntries != null && deliveryChallanEntries.Any())
             {
-                _logger.LogError(ex, "Error getting all bookers");
-                return new List<Booker>();
+                var entriesToDelete = deliveryChallanEntries.Where(e => e.JournalEntryId == entryId).ToList();
+                foreach (var dcEntry in entriesToDelete)
+                {
+                    await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
+                }
             }
         }
+
+        private async Task<bool> ShouldProcessAsFullVoucherAsync(
+            int baseVoucherId,
+            List<BaseVoucherEntryViewModel> entriesToProcess)
+        {
+            var baseVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(baseVoucherId);
+            if (baseVoucher == null || !baseVoucher.IsBaseVoucher)
+                return false;
+
+            // Check if this base voucher has already been partially processed
+            var existingReferences = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAsync(baseVoucherId);
+            if (existingReferences.Any())
+                return false;
+
+            // Get all unprocessed regular entries (non-account entries)
+            var regularEntries = baseVoucher.JournalEntries
+                .Where(e => !e.IsProcessed)
+                .ToList();
+
+            if (!regularEntries.Any())
+                return false;
+
+            // Check if all regular entries are being processed with full quantities
+            foreach (var entry in regularEntries)
+            {
+                var processEntry = entriesToProcess.FirstOrDefault(e => e.EntryId == entry.JournalEntryId);
+                if (processEntry == null || processEntry.ProcessQuantity != entry.Quantity)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private async Task ProcessDerivedVoucherEntriesAsync(
+            JournalVoucher baseVoucher,
+            int derivedVoucherId,
+            List<BaseVoucherEntryViewModel> entriesToProcess,
+            int accountEntryAmount,
+            bool accountEntryIsDebit)
+        {
+            bool accountEntryAdded = false;
+
+            foreach (var entryToProcess in entriesToProcess)
+            {
+                var baseEntry = baseVoucher.JournalEntries
+                    .FirstOrDefault(e => e.JournalEntryId == entryToProcess.EntryId);
+
+                if (baseEntry == null || baseEntry.IsProcessed)
+                    continue;
+
+                var account = await _unitOfWork.Accounts.GetByIdAsync(baseEntry.AccountId);
+                bool isAccountEntry = account?.AccountGroupId == 1;
+
+                // Validate regular entry quantities
+                if (!isAccountEntry && (entryToProcess.ProcessQuantity <= 0 ||
+                    entryToProcess.ProcessQuantity > baseEntry.Quantity))
+                    continue;
+
+                if (isAccountEntry)
+                {
+                    // Process account entry (customer/supplier)
+                    if (!accountEntryAdded)
+                    {
+                        accountEntryAdded = true;
+                        await CreateAccountEntryForDerivedVoucherAsync(
+                            derivedVoucherId,
+                            baseEntry,
+                            accountEntryAmount,
+                            accountEntryIsDebit);
+                    }
+                }
+                else
+                {
+                    // Process regular product/service entry
+                    await CreateRegularEntryForDerivedVoucherAsync(
+                        derivedVoucherId,
+                        baseEntry,
+                        entryToProcess.ProcessQuantity);
+
+                    // Update base entry quantity
+                    baseEntry.Quantity -= entryToProcess.ProcessQuantity;
+                    if (baseEntry.Quantity <= 0)
+                    {
+                        baseEntry.IsProcessed = true;
+                    }
+                    await _unitOfWork.JournalEntries.UpdateAsync(baseEntry);
+                }
+            }
+        }
+
+        private async Task CreateAccountEntryForDerivedVoucherAsync(
+            int derivedVoucherId,
+            JournalEntry baseEntry,
+            int accountEntryAmount,
+            bool accountEntryIsDebit)
+        {
+            var newEntry = new JournalEntry
+            {
+                JournalVoucherId = derivedVoucherId,
+                AccountId = baseEntry.AccountId,
+                CategoryId = baseEntry.CategoryId,
+                Description = baseEntry.Description,
+                Quantity = 0,
+                Rate = baseEntry.Rate,
+                DiscountPercent = baseEntry.DiscountPercent,
+                Discount = 0,
+                Debit = accountEntryIsDebit ? accountEntryAmount : 0,
+                Credit = !accountEntryIsDebit ? accountEntryAmount : 0,
+                Rbp = baseEntry.Rbp,
+                IsProcessed = false
+            };
+
+            await _unitOfWork.JournalEntries.AddAsync(newEntry);
+        }
+
+        private async Task CreateRegularEntryForDerivedVoucherAsync(
+            int derivedVoucherId,
+            JournalEntry baseEntry,
+            int processQuantity)
+        {
+            decimal quantityRatio = processQuantity / baseEntry.Quantity;
+
+            var newEntry = new JournalEntry
+            {
+                JournalVoucherId = derivedVoucherId,
+                AccountId = baseEntry.AccountId,
+                CategoryId = baseEntry.CategoryId,
+                Description = baseEntry.Description,
+                Quantity = processQuantity,
+                Rate = baseEntry.Rate,
+                DiscountPercent = baseEntry.DiscountPercent,
+                Discount = baseEntry.Discount * quantityRatio,
+                Debit = baseEntry.Debit > 0 ? baseEntry.Debit * quantityRatio : 0m,
+                Credit = baseEntry.Credit > 0 ? baseEntry.Credit * quantityRatio : 0m,
+                Rbp = baseEntry.Rbp,
+                IsProcessed = false
+            };
+
+            await _unitOfWork.JournalEntries.AddAsync(newEntry);
+        }
+
+        private async Task<Account?> GetCustomerAccountFromEntriesAsync(IEnumerable<JournalEntry> entries)
+        {
+            foreach (var entry in entries)
+            {
+                var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId);
+                if (account?.AccountGroupId == 1)
+                    return account;
+            }
+            return null;
+        }
+
+        #endregion
     }
 }

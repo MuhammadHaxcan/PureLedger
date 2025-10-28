@@ -1,16 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
-using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 using PureLedger.ViewModels.PureLedger.ViewModels;
-using System.Diagnostics;
 
 namespace PureLedger.Controllers
 {
-    [ControllerAccess] 
+    [ControllerAccess]
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
@@ -27,85 +25,134 @@ namespace PureLedger.Controllers
             _logger = logger;
         }
 
+        #region Journal Entry Management
+
         [HttpGet]
         [ActionName("Entry")]
         public async Task<IActionResult> Entry(int? projectId = null)
         {
-            await LoadProjectsData(projectId);
+            await LoadProjectsDataAsync(projectId);
             return View();
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetProductDetails(int accountId)
-        {
-            var productData = await _journalService.GetProductDetailsAsync(accountId);
-            return Json(productData);
         }
 
         [HttpPost]
         public async Task<IActionResult> Entry(JournalEntryViewModel model, string action, int? editingVoucherId = null)
         {
             try
-            { 
-                 JournalVoucher journalVoucher;
-                                                                                                 
+            {
+                JournalVoucher journalVoucher;
+
                 if (editingVoucherId.HasValue)
                 {
-                    // Update existing voucher
-                    journalVoucher = await _journalService.UpdateJournalVoucherAsync(editingVoucherId.Value, model);
-                    TempData["Success"] = $"Journal voucher updated. Jv-{journalVoucher.JournalVoucherId}";
+                    journalVoucher = await UpdateExistingVoucherAsync(editingVoucherId.Value, model);
                 }
                 else
                 {
-                    // Create new voucher (existing functionality)
-                    journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
-                    TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
-
-                    // If the save recipe checkbox is checked and a name is provided, create a recipe
-                    if (model.SaveAsRecipe && !string.IsNullOrWhiteSpace(model.RecipeName))
-                    {
-                        try
-                        {
-                            int recipeId = await _journalService.CreateRecipeFromVoucherAsync(model, journalVoucher.JournalVoucherId);
-                            if (recipeId > 0)
-                            {
-                                TempData["Success"] = $"{TempData["Success"]} Recipe '{model.RecipeName}' was saved.";
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error saving recipe from voucher {VoucherId}", journalVoucher.JournalVoucherId);
-                            // Don't interrupt the main workflow if recipe creation fails
-                        }
-                    }
+                    journalVoucher = await CreateNewVoucherAsync(model);
                 }
 
                 if (action == "submit_print")
                 {
-                    // Redirect to the print page with the new JV id using URL helper
-                    // This creates a proper, dynamic URL rather than hardcoding it
-                    return RedirectToAction("PrintVoucher", "Reporting", 
-                        new { 
-                            journalVoucherId = journalVoucher.JournalVoucherId, 
-                            type = "JV" 
+                    return RedirectToAction("PrintVoucher", "Reporting",
+                        new
+                        {
+                            journalVoucherId = journalVoucher.JournalVoucherId,
+                            type = "JV"
                         });
                 }
-                
+
                 return RedirectToAction(nameof(Entry), new { projectId = model.ProjectId });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving journal entries");
-                await LoadProjectsData(model.ProjectId);
+                await LoadProjectsDataAsync(model.ProjectId);
                 ViewBag.Error = "An error occurred while saving. Please try again.";
                 return View(model);
             }
         }
 
         [HttpGet]
+        [Route("Home/EditVoucher/{id}")]
+        public async Task<IActionResult> EditVoucher(int id)
+        {
+            try
+            {
+                _logger.LogInformation("Attempting to edit voucher with ID {VoucherId}", id);
+
+                var voucher = await _journalService.GetVoucherWithEntriesAsync(id);
+                if (voucher == null)
+                {
+                    _logger.LogWarning("Voucher with ID {VoucherId} not found", id);
+                    return NotFound("Voucher not found");
+                }
+
+                _logger.LogInformation("Found voucher with {EntriesCount} entries", voucher.JournalEntries.Count);
+
+                var model = await _journalService.MapVoucherToViewModelAsync(voucher);
+                _logger.LogInformation("Mapped to view model with {EntriesCount} entries", model.Entries.Count);
+
+                await LoadProjectsDataAsync(voucher.ProjectId);
+
+                ViewBag.EditingVoucherId = id;
+                ViewBag.Title = $"Edit Journal Voucher #{id}";
+                ViewBag.SelectedProjectId = voucher.ProjectId;
+
+                return View("Entry", model);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error preparing voucher {VoucherId} for editing", id);
+                TempData["Error"] = "An error occurred while loading the voucher. Please try again.";
+                return RedirectToAction("VoucherEntry");
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetJournalEntry(int entryId)
+        {
+            var model = await _journalService.GetJournalEntryForEditAsync(entryId);
+            return model == null ? NotFound() : Json(model);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateJournalEntry([FromForm] JournalEntryUpdateViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return JsonError(ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList());
+            }
+
+            try
+            {
+                var success = await _journalService.UpdateJournalEntryAsync(model);
+                return success ? JsonSuccess() : JsonError("Error updating entry");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in UpdateJournalEntry: {Message}", ex.Message);
+                return JsonError("An unexpected error occurred");
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DeleteJournalEntry(int entryId)
+        {
+            var success = await _journalService.DeleteJournalEntryAsync(entryId);
+            return success ? JsonSuccess() : JsonError("Invalid entry.");
+        }
+
+        #endregion
+
+        #region Voucher Management
+
+        [HttpGet]
         public async Task<IActionResult> VoucherEntry(int? jvId = null)
         {
-            await LoadProjectsData();
+            await LoadProjectsDataAsync();
 
             if (jvId.HasValue)
             {
@@ -128,88 +175,10 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        [Route("Home/EditVoucher/{id}")] // Add explicit route with 'id' parameter
-        public async Task<IActionResult> EditVoucher(int id) // Change parameter name from jvId to id
-        {
-            try
-            {
-                _logger.LogInformation("Attempting to edit voucher with ID {VoucherId}", id);
-                
-                var voucher = await _journalService.GetVoucherWithEntriesAsync(id);
-                if (voucher == null)
-                {
-                    _logger.LogWarning("Voucher with ID {VoucherId} not found", id);
-                    return NotFound("Voucher not found");
-                }
-
-                _logger.LogInformation("Found voucher with {EntriesCount} entries", voucher.JournalEntries.Count);
-
-                // Map the voucher to view model
-                var model = await _journalService.MapVoucherToViewModelAsync(voucher);
-                
-                // Log mapped model entries for debugging
-                _logger.LogInformation("Mapped to view model with {EntriesCount} entries", model.Entries.Count);
-                
-                // Load projects into ViewBag
-                await LoadProjectsData(voucher.ProjectId);
-                
-                // Pass voucher ID and set up the page title
-                ViewBag.EditingVoucherId = id;
-                ViewBag.Title = $"Edit Journal Voucher #{id}";
-                
-                // Make sure the selected project is set correctly
-                ViewBag.SelectedProjectId = voucher.ProjectId;
-
-                return View("Entry", model);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error preparing voucher {VoucherId} for editing", id);
-                TempData["Error"] = "An error occurred while loading the voucher. Please try again.";
-                return RedirectToAction("VoucherEntry");
-            }
-        }
-
-        [HttpGet]
         public async Task<IActionResult> GetVoucherSummary(int voucherId)
         {
             var summary = await _journalService.GetVoucherSummaryAsync(voucherId);
             return Json(summary);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetJournalEntry(int entryId)
-        {
-            var model = await _journalService.GetJournalEntryForEditAsync(entryId);
-            if (model == null)
-                return NotFound();
-
-            return Json(model);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> UpdateJournalEntry([FromForm] JournalEntryUpdateViewModel model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return JsonError(ModelState.Values
-                    .SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage)
-                    .ToList());
-            }
-
-            try
-            {
-                var success = await _journalService.UpdateJournalEntryAsync(model);
-                return success
-                    ? JsonSuccess()
-                    : JsonError("Error updating entry");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in UpdateJournalEntry: {Message}", ex.Message);
-                return JsonError("An unexpected error occurred");
-            }
         }
 
         [HttpGet]
@@ -225,15 +194,6 @@ namespace PureLedger.Controllers
             }).ToList();
 
             return View(modifiedEntriesSummary);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> DeleteJournalEntry(int entryId)
-        {
-            var success = await _journalService.DeleteJournalEntryAsync(entryId);
-            return success
-                ? JsonSuccess()
-                : JsonError("Invalid entry.");
         }
 
         [HttpGet]
@@ -263,47 +223,9 @@ namespace PureLedger.Controllers
             return View(model);
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetCategoriesByProject(int projectId)
-        {
-            try
-            {
-                // Get categories directly from repository through the service
-                // We need to add this method to JournalEntryService if it doesn't exist
-                var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
-                
-                if (categories == null || !categories.Any())
-                {
-                    // Return empty array instead of 404 for better frontend handling
-                    return Json(new object[] { });
-                }
-                
-                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
-                return Json(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
-                return Json(new { error = "Error loading categories" });
-            }
-        }
+        #endregion
 
-        [HttpGet]
-        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
-        {
-            try
-            {
-                // This uses the JournalEntryService to get accounts by category
-                var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
-                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
-                return Json(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
-                return Json(new { error = "Error loading accounts" });
-            }
-        }
+        #region Base Voucher Processing
 
         [HttpGet]
         public async Task<IActionResult> BaseVouchers()
@@ -311,17 +233,16 @@ namespace PureLedger.Controllers
             try
             {
                 var baseVouchers = await _journalService.GetAllBaseVouchersAsync();
-                
-                // Log some diagnostic info
+
                 foreach (var voucher in baseVouchers)
                 {
                     int unprocessedEntries = voucher.JournalEntries?.Count(e => !e.IsProcessed && e.Quantity > 0) ?? 0;
                     int totalEntries = voucher.JournalEntries?.Count ?? 0;
-                    
-                    _logger.LogInformation("Base voucher {VoucherId}: {UnprocessedEntries}/{TotalEntries} entries available", 
+
+                    _logger.LogInformation("Base voucher {VoucherId}: {UnprocessedEntries}/{TotalEntries} entries available",
                         voucher.JournalVoucherId, unprocessedEntries, totalEntries);
                 }
-                
+
                 return View(baseVouchers);
             }
             catch (Exception ex)
@@ -342,35 +263,35 @@ namespace PureLedger.Controllers
                     _logger.LogWarning("Base voucher with ID {Id} not found", id);
                     return NotFound();
                 }
-                
-                var model = new BaseVoucherProcessingViewModel 
-                { 
+
+                var model = new BaseVoucherProcessingViewModel
+                {
                     BaseVoucherId = id,
                     ProjectId = voucher.ProjectId,
                     Entries = voucher.JournalEntries
-                        .OrderBy(e => e.IsProcessed) // Unprocessed entries first
+                        .OrderBy(e => e.IsProcessed)
                         .ThenBy(e => e.JournalEntryId)
-                        .Select(e => new PureLedger.ViewModels.BaseVoucherEntryViewModel 
+                        .Select(e => new BaseVoucherEntryViewModel
                         {
                             EntryId = e.JournalEntryId,
                             Description = e.Description,
                             AccountName = e.Account?.AccountName,
                             AccountId = e.AccountId,
-                            CategoryId = e.CategoryId, // Include CategoryId
+                            CategoryId = e.CategoryId,
                             AvailableQuantity = e.IsProcessed ? 0 : e.Quantity,
-                            ProcessQuantity = 0,  // Default to 0, user will set this
+                            ProcessQuantity = 0,
                             Rate = e.Rate,
                             Debit = e.Debit,
                             Credit = e.Credit,
-                            Percent = e.DiscountPercent ?? 0, // Include discount percent
-                            Disc = e.Discount, // Include discount amount
-                            Rbp = e.Rbp, // Include Rbp
+                            Percent = e.DiscountPercent ?? 0,
+                            Disc = e.Discount,
+                            Rbp = e.Rbp,
                             AccountGroupId = e.Account?.AccountGroupId ?? 0,
                         })
                         .ToList()
                 };
-                
-                _logger.LogInformation("Prepared processing model for base voucher {Id} with {EntryCount} entries", 
+
+                _logger.LogInformation("Prepared processing model for base voucher {Id} with {EntryCount} entries",
                     id, model.Entries.Count);
                 return View(model);
             }
@@ -393,13 +314,9 @@ namespace PureLedger.Controllers
             try
             {
                 var entriesToProcess = model.Entries
-                    .Where(e => e.ProcessQuantity > 0)
+                    .Where(e => e.ProcessQuantity > 0 || e.AccountGroupId == 1)
                     .ToList();
 
-                // Add entries where AccountGroupId == 1
-                entriesToProcess.AddRange(
-                    model.Entries.Where(e => e.AccountGroupId == 1)
-                );
                 if (!entriesToProcess.Any())
                 {
                     ModelState.AddModelError("", "Please select at least one entry to process.");
@@ -414,16 +331,15 @@ namespace PureLedger.Controllers
                     entriesToProcess,
                     model.AccountEntryAmount,
                     model.AccountEntryIsDebit,
-                    model.CreditableDate // <-- Pass the creditable date
-                );
+                    model.CreditableDate);
 
-                _logger.LogInformation("Created derived voucher {DerivedId} from base voucher {BaseId}", 
+                _logger.LogInformation("Created derived voucher {DerivedId} from base voucher {BaseId}",
                     derivedVoucherId, model.BaseVoucherId);
-                    
+
                 TempData["Success"] = $"Successfully created derived voucher JV-{derivedVoucherId}";
                 return RedirectToAction("VoucherEntry", new { jvId = derivedVoucherId });
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating derived voucher from base voucher {Id}", model.BaseVoucherId);
                 ModelState.AddModelError("", ex.Message);
@@ -436,7 +352,7 @@ namespace PureLedger.Controllers
         {
             try
             {
-                await _journalService.MarkEntriesAsMissed(voucherId);
+                await _journalService.MarkEntriesAsMissedAsync(voucherId);
                 return JsonSuccess();
             }
             catch (Exception ex)
@@ -446,10 +362,14 @@ namespace PureLedger.Controllers
             }
         }
 
+        #endregion
+
+        #region Missed Entries
+
         [HttpGet]
         public async Task<IActionResult> MissedEntries()
         {
-            await LoadProjectsData(); // This loads projects into ViewBag
+            await LoadProjectsDataAsync();
             return View(new MissedEntriesListViewModel());
         }
 
@@ -468,19 +388,20 @@ namespace PureLedger.Controllers
             }
         }
 
+        #endregion
+
+        #region Recipe Management
+
         [HttpGet]
         public async Task<IActionResult> Recipes(int? projectId = null)
         {
-            // Load projects for dropdown
-            await LoadProjectsData(projectId);
-            
-            // Initialize view model
+            await LoadProjectsDataAsync(projectId);
+
             var viewModel = new RecipesViewModel
             {
                 ProjectId = projectId ?? 0
             };
-            
-            // If project is selected, load recipes
+
             if (projectId.HasValue)
             {
                 try
@@ -492,8 +413,8 @@ namespace PureLedger.Controllers
                         RecipeName = r.RecipeName,
                         ProjectName = r.Project?.ProjectName ?? "Unknown Project"
                     }).ToList();
-                    
-                    _logger.LogInformation("Loaded {Count} recipes for project {ProjectId}", 
+
+                    _logger.LogInformation("Loaded {Count} recipes for project {ProjectId}",
                         viewModel.Recipes.Count, projectId.Value);
                 }
                 catch (Exception ex)
@@ -502,7 +423,7 @@ namespace PureLedger.Controllers
                     ViewBag.Error = "Failed to load recipes. Please try again.";
                 }
             }
-            
+
             return View(viewModel);
         }
 
@@ -514,21 +435,19 @@ namespace PureLedger.Controllers
                 var recipe = await _journalService.GetRecipeWithItemsAsync(recipeId);
                 if (recipe == null)
                     return NotFound();
-                    
-                var recipeItems = recipe.RecipeItems.Select(item => new RecipeItemViewModel
-                {
-                    RecipeItemId = item.RecipeItemId,
-                    CategoryName = item.Category?.CategoryName ?? "Unknown Category",
-                    AccountName = item.Account?.AccountName ?? "Unknown Account"
-                }).ToList();
-                
+
                 var result = new
                 {
                     recipeName = recipe.RecipeName,
                     projectName = recipe.Project?.ProjectName ?? "Unknown Project",
-                    items = recipeItems
+                    items = recipe.RecipeItems.Select(item => new
+                    {
+                        recipeItemId = item.RecipeItemId,
+                        categoryName = item.Category?.CategoryName ?? "Unknown Category",
+                        accountName = item.Account?.AccountName ?? "Unknown Account"
+                    }).ToList()
                 };
-                
+
                 return Json(result);
             }
             catch (Exception ex)
@@ -543,21 +462,16 @@ namespace PureLedger.Controllers
         {
             try
             {
-                _logger.LogInformation("Creating new journal entry from recipe {RecipeId} for project {ProjectId}", 
+                _logger.LogInformation("Creating new journal entry from recipe {RecipeId} for project {ProjectId}",
                     recipeId, projectId);
-            
-                // Load projects into ViewBag
-                await LoadProjectsData(projectId);
-        
-                // Create view model from recipe
+
+                await LoadProjectsDataAsync(projectId);
+
                 var model = await _journalService.CreateViewModelFromRecipeAsync(recipeId, projectId);
-        
-                // Set ViewBag title
+
                 ViewBag.Title = "New Journal Entry from Recipe";
-        
-                // Pass selected project ID
                 ViewBag.SelectedProjectId = projectId;
-        
+
                 return View("Entry", model);
             }
             catch (ArgumentException ex)
@@ -573,17 +487,71 @@ namespace PureLedger.Controllers
                 return RedirectToAction(nameof(Recipes), new { projectId });
             }
         }
-        
+
+        #endregion
+
+        #region Lookup Endpoints
+
+        [HttpGet]
+        public async Task<IActionResult> GetCategoriesByProject(int projectId)
+        {
+            try
+            {
+                var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
+
+                if (categories == null || !categories.Any())
+                {
+                    return Json(Array.Empty<object>());
+                }
+
+                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories for project {ProjectId}", projectId);
+                return Json(new { error = "Error loading categories" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAccountsByCategory(int categoryId)
+        {
+            try
+            {
+                var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
+                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
+                return Json(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting accounts for category {CategoryId}", categoryId);
+                return Json(new { error = "Error loading accounts" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetProductDetails(int accountId)
+        {
+            var productData = await _journalService.GetProductDetailsAsync(accountId);
+            return Json(productData);
+        }
+
+        #endregion
+
         #region Helper Methods
-        private async Task LoadProjectsData(int? selectedProjectId = null)
+
+        private async Task LoadProjectsDataAsync(int? selectedProjectId = null)
         {
             var userId = _currentUserService.GetCurrentUserId();
+
             if (userId.HasValue)
             {
                 var projects = await _journalService.GetAllProjectsForUserAsync(userId.Value);
-                var bookers = await _journalService.GetAllBookersAsync(); // Add this line
+                var bookers = await _journalService.GetAllBookersAsync();
+
                 ViewBag.Projects = projects;
-                ViewBag.Bookers = bookers; // Add this line
+                ViewBag.Bookers = bookers;
                 ViewBag.SelectedProjectId = selectedProjectId;
             }
             else
@@ -592,6 +560,38 @@ namespace PureLedger.Controllers
                 ViewBag.Bookers = new List<Booker>();
                 ViewBag.SelectedProjectId = selectedProjectId;
             }
+        }
+
+        private async Task<JournalVoucher> CreateNewVoucherAsync(JournalEntryViewModel model)
+        {
+            var journalVoucher = await _journalService.CreateJournalVoucherAsync(model);
+            TempData["Success"] = $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}";
+
+            if (model.SaveAsRecipe && !string.IsNullOrWhiteSpace(model.RecipeName))
+            {
+                try
+                {
+                    int recipeId = await _journalService.CreateRecipeFromVoucherAsync(model, journalVoucher.JournalVoucherId);
+                    if (recipeId > 0)
+                    {
+                        TempData["Success"] = $"{TempData["Success"]} Recipe '{model.RecipeName}' was saved.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error saving recipe from voucher {VoucherId}", journalVoucher.JournalVoucherId);
+                    // Don't interrupt the main workflow if recipe creation fails
+                }
+            }
+
+            return journalVoucher;
+        }
+
+        private async Task<JournalVoucher> UpdateExistingVoucherAsync(int voucherId, JournalEntryViewModel model)
+        {
+            var journalVoucher = await _journalService.UpdateJournalVoucherAsync(voucherId, model);
+            TempData["Success"] = $"Journal voucher updated. Jv-{journalVoucher.JournalVoucherId}";
+            return journalVoucher;
         }
 
         private IActionResult JsonSuccess(object? data = null)
@@ -610,6 +610,7 @@ namespace PureLedger.Controllers
         {
             return Json(new { success = false, errors });
         }
+
         #endregion
     }
 }
