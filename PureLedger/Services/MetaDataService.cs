@@ -215,6 +215,35 @@ namespace PureLedger.Services
                 .Cast<object>()
                 .ToList();
         }
+
+        public async Task<List<int>> GetAssociatedAccountIdsAsync(int categoryId)
+        {
+            // Returns a list of AccountIds associated with the given category
+            var accounts = await _unitOfWork.Accounts.GetAllAsync();
+            return accounts.Where(a => a.CategoryId == categoryId)
+                          .Select(a => a.AccountId)
+                          .ToList();
+        }
+
+        public async Task<(bool Success, List<int> AssociatedAccountIds)> DeleteCategoryAsync(int id)
+        {
+            var category = await _unitOfWork.Categories.GetByIdWithDetailsAsync(id);
+            if (category == null)
+            {
+                return (false, new List<int>());
+            }
+
+            // Check if category has associated accounts
+            var associatedAccountIds = await GetAssociatedAccountIdsAsync(id);
+            if (associatedAccountIds.Any())
+            {
+                return (false, associatedAccountIds);
+            }
+
+            // Delete the category
+            var result = await _unitOfWork.Categories.DeleteAsync(category);
+            return (result, new List<int>());
+        }
         #endregion
 
         #region Account Operations
@@ -443,6 +472,35 @@ namespace PureLedger.Services
             // Returns a list of JournalVoucherIds associated with the given account
             return await _unitOfWork.Accounts.GetAssociatedJournalVoucherIds(accountId);
         }
+
+        public async Task<List<string>> ToggleAccountStatusAsync(int accountId)
+        {
+            var errors = new List<string>();
+
+            try
+            {
+                var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
+                if (account == null)
+                {
+                    errors.Add("Account not found.");
+                    return errors;
+                }
+
+                // Toggle the status
+                account.IsEnabled = !account.IsEnabled;
+
+                await _unitOfWork.SaveChangesAsync();
+
+                _logger.LogInformation("Account {AccountId} status changed to {Status}", accountId, account.IsEnabled ? "Enabled" : "Disabled");
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating account status.");
+                errors.Add("An error occurred while updating the account status.");
+            }
+
+            return errors;
+        }
         #endregion
 
         #region Location Operations
@@ -593,6 +651,35 @@ namespace PureLedger.Services
             {
                 _logger.LogError(ex, "Error while updating booker.");
                 errors.Add("An unexpected error occurred while updating the booker.");
+            }
+
+            return errors;
+        }
+
+        public async Task<List<string>> ToggleBookerStatusAsync(int bookerId)
+        {
+            var errors = new List<string>();
+
+            try
+            {
+                var booker = await _unitOfWork.Bookers.GetByIdAsync(bookerId);
+                if (booker == null)
+                {
+                    errors.Add("Booker not found.");
+                    return errors;
+                }
+
+                // Toggle the status
+                booker.IsEnabled = !booker.IsEnabled;
+
+                await _unitOfWork.SaveChangesAsync();
+                
+                _logger.LogInformation("Booker {BookerId} status changed to {Status}", bookerId, booker.IsEnabled ? "Enabled" : "Disabled");
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while updating booker status.");
+                errors.Add("An error occurred while updating the booker status.");
             }
 
             return errors;

@@ -22,6 +22,10 @@ namespace PureLedger.Models
         [StringLength(30, MinimumLength = 2, ErrorMessage = "Account name must be between 2-30 characters")]
         public string AccountName { get; set; }
 
+        [Required]
+        public bool IsEnabled { get; set; } = true; // Default to enabled (true = enabled, false = disabled)
+
+
         public virtual AccountData? AccountData { get; set; }
         public virtual ProductData? ProductData { get; set; }
         public virtual Category Category { get; set; }

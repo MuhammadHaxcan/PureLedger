@@ -11,5 +11,6 @@ namespace PureLedger.Repositories.Interfaces
         Task<Category> AddAsync(Category category);
         Task<Category> UpdateAsync(Category category);
         Task<List<Category>> GetAllAsync();
+        Task<bool> DeleteAsync(Category category);
     }
 }

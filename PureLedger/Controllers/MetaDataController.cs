@@ -202,6 +202,10 @@ namespace PureLedger.Controllers
                 return NotFound();
             }
 
+            // Check if category is associated with any accounts
+            var associatedAccountIds = await _metaDataService.GetAssociatedAccountIdsAsync(id);
+            bool hasAssociations = associatedAccountIds.Any();
+
             var userId = _currentUserService.GetCurrentUserId();
             var projects = userId.HasValue
                 ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
@@ -212,6 +216,33 @@ namespace PureLedger.Controllers
                 await _metaDataService.GetAllAccountTypesAsync(),
                 "AccountTypeId", "AccountTypeName", category.AccountTypeId);
 
+            // Pass the association status to the view
+            ViewBag.HasAccountAssociations = hasAssociations;
+            ViewBag.AssociatedAccountCount = associatedAccountIds.Count;
+            
+            if (hasAssociations)
+            {
+                // Get account names for better user experience
+                var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                var associatedAccounts = allAccounts.Where(a => associatedAccountIds.Contains(a.AccountId))
+                                                   .Select(a => a.AccountName)
+                                                   .ToList();
+
+                var accountsToShow = associatedAccounts.Count > 5 
+                    ? associatedAccounts.Take(5).ToList() 
+                    : associatedAccounts;
+                ViewBag.AssociatedAccountNames = string.Join(", ", accountsToShow);
+                
+                if (associatedAccounts.Count > 5)
+                {
+                    ViewBag.AssociatedAccountMessage = $"This category is associated with {associatedAccounts.Count} accounts (showing first 5: {ViewBag.AssociatedAccountNames} and {associatedAccounts.Count - 5} more). Only the category name can be changed.";
+                }
+                else
+                {
+                    ViewBag.AssociatedAccountMessage = $"This category is associated with account(s): {ViewBag.AssociatedAccountNames}. Only the category name can be changed.";
+                }
+            }
+
             return View(category);
         }
 
@@ -220,6 +251,29 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditCategory(Category category)
         {
+            // Check if category is associated with accounts
+            var associatedAccountIds = await _metaDataService.GetAssociatedAccountIdsAsync(category.CategoryId);
+            bool hasAssociations = associatedAccountIds.Any();
+
+            // If category has associations, get the original category data to preserve ProjectId and AccountTypeId
+            if (hasAssociations)
+            {
+                var originalCategory = await _metaDataService.GetCategoryByIdAsync(category.CategoryId);
+                if (originalCategory != null)
+                {
+                    // Preserve the original ProjectId and AccountTypeId
+                    category.ProjectId = originalCategory.ProjectId;
+                    category.AccountTypeId = originalCategory.AccountTypeId;
+                }
+                
+                // Add a custom validation message if user tried to change restricted fields
+                if (Request.Form["ProjectId"] != originalCategory?.ProjectId.ToString() || 
+                    Request.Form["AccountTypeId"] != originalCategory?.AccountTypeId.ToString())
+                {
+                    ModelState.AddModelError("", "Project and Account Type cannot be changed because this category is associated with accounts.");
+                }
+            }
+
             var errors = await _validationService.ValidateCategoryAsync(category);
             if (errors.Count > 0)
             {
@@ -228,6 +282,7 @@ namespace PureLedger.Controllers
                     ModelState.AddModelError("", error);
                 }
 
+                // Reload ViewBag data for the form
                 var userId = _currentUserService.GetCurrentUserId();
                 var projects = userId.HasValue
                     ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
@@ -237,6 +292,32 @@ namespace PureLedger.Controllers
                 ViewBag.AccountTypes = new SelectList(
                     await _metaDataService.GetAllAccountTypesAsync(),
                     "AccountTypeId", "AccountTypeName", category.AccountTypeId);
+
+                // Pass association status back to view
+                ViewBag.HasAccountAssociations = hasAssociations;
+                ViewBag.AssociatedAccountCount = associatedAccountIds.Count;
+                
+                if (hasAssociations)
+                {
+                    var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                    var associatedAccounts = allAccounts.Where(a => associatedAccountIds.Contains(a.AccountId))
+                                                       .Select(a => a.AccountName)
+                                                       .ToList();
+
+                    var accountsToShow = associatedAccounts.Count > 5 
+                        ? associatedAccounts.Take(5).ToList() 
+                        : associatedAccounts;
+                    ViewBag.AssociatedAccountNames = string.Join(", ", accountsToShow);
+                    
+                    if (associatedAccounts.Count > 5)
+                    {
+                        ViewBag.AssociatedAccountMessage = $"This category is associated with {associatedAccounts.Count} accounts (showing first 5: {ViewBag.AssociatedAccountNames} and {associatedAccounts.Count - 5} more). Only the category name can be changed.";
+                    }
+                    else
+                    {
+                        ViewBag.AssociatedAccountMessage = $"This category is associated with account(s): {ViewBag.AssociatedAccountNames}. Only the category name can be changed.";
+                    }
+                }
 
                 return View(category);
             }
@@ -247,6 +328,7 @@ namespace PureLedger.Controllers
                 foreach (var error in updateErrors)
                     ModelState.AddModelError("", error);
 
+                // Reload ViewBag data for the form
                 var userId = _currentUserService.GetCurrentUserId();
                 var projects = userId.HasValue
                     ? await _metaDataService.GetAllProjectsForCategoriesForUserAsync(userId.Value)
@@ -257,10 +339,108 @@ namespace PureLedger.Controllers
                     await _metaDataService.GetAllAccountTypesAsync(),
                     "AccountTypeId", "AccountTypeName", category.AccountTypeId);
 
+                // Pass association status back to view
+                ViewBag.HasAccountAssociations = hasAssociations;
+                ViewBag.AssociatedAccountCount = associatedAccountIds.Count;
+                
+                if (hasAssociations)
+                {
+                    var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                    var associatedAccounts = allAccounts.Where(a => associatedAccountIds.Contains(a.AccountId))
+                                                       .Select(a => a.AccountName)
+                                                       .ToList();
+
+                    var accountsToShow = associatedAccounts.Count > 5 
+                        ? associatedAccounts.Take(5).ToList() 
+                        : associatedAccounts;
+                    ViewBag.AssociatedAccountNames = string.Join(", ", accountsToShow);
+                    
+                    if (associatedAccounts.Count > 5)
+                    {
+                        ViewBag.AssociatedAccountMessage = $"This category is associated with {associatedAccounts.Count} accounts (showing first 5: {ViewBag.AssociatedAccountNames} and {associatedAccounts.Count - 5} more). Only the category name can be changed.";
+                    }
+                    else
+                    {
+                        ViewBag.AssociatedAccountMessage = $"This category is associated with account(s): {ViewBag.AssociatedAccountNames}. Only the category name can be changed.";
+                    }
+                }
+
                 return View(category);
             }
 
             TempData["SuccessMessage"] = "Category updated successfully.";
+            return RedirectToAction(nameof(Categories));
+        }
+
+        // GET: /MetaData/CanDeleteCategory/5
+        [HttpGet]
+        public async Task<IActionResult> CanDeleteCategory(int id)
+        {
+            // Check if category exists
+            var category = await _metaDataService.GetCategoryByIdAsync(id);
+            if (category == null)
+            {
+                return Json(new { canDelete = false, message = "Category not found." });
+            }
+
+            // Check for associated accounts
+            var associatedAccountIds = await _metaDataService.GetAssociatedAccountIdsAsync(id);
+
+            if (associatedAccountIds.Any())
+            {
+                // Get account names for better user experience
+                var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                var associatedAccounts = allAccounts.Where(a => associatedAccountIds.Contains(a.AccountId))
+                                                   .Select(a => a.AccountName)
+                                                   .ToList();
+
+                // Take just first few to avoid making message too long
+                var accountsToShow = associatedAccounts.Count > 5
+                    ? associatedAccounts.Take(5).ToList()
+                    : associatedAccounts;
+
+                string accountList = string.Join(", ", accountsToShow);
+                string message = $"This category cannot be deleted because it is associated with account(s): {accountList}";
+
+                if (associatedAccounts.Count > 5)
+                {
+                    message += $" and {associatedAccounts.Count - 5} more";
+                }
+
+                return Json(new { canDelete = false, message });
+            }
+
+            return Json(new { canDelete = true });
+        }
+
+        // POST: /MetaData/DeleteCategory/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteCategory(int id)
+        {
+            var (success, associatedAccountIds) = await _metaDataService.DeleteCategoryAsync(id);
+
+            if (!success)
+            {
+                if (associatedAccountIds.Any())
+                {
+                    // Get account names for better user experience
+                    var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                    var associatedAccounts = allAccounts.Where(a => associatedAccountIds.Contains(a.AccountId))
+                                                       .Select(a => a.AccountName)
+                                                       .Take(5)
+                                                       .ToList();
+
+                    TempData["ErrorMessage"] = $"This category cannot be deleted because it is associated with account(s): {string.Join(", ", associatedAccounts)}";
+                }
+                else
+                {
+                    TempData["ErrorMessage"] = "Failed to delete the category.";
+                }
+                return RedirectToAction(nameof(Categories));
+            }
+
+            TempData["SuccessMessage"] = "Category deleted successfully.";
             return RedirectToAction(nameof(Categories));
         }
 
@@ -367,12 +547,38 @@ namespace PureLedger.Controllers
                 return NotFound();
             }
 
+            // Check if account is associated with any journal vouchers
+            var associatedVoucherIds = await _metaDataService.GetAssociatedVoucherIdsAsync(id);
+            bool hasAssociations = associatedVoucherIds.Any();
+
             ViewBag.Categories = new SelectList(
                 await _metaDataService.GetCategoriesForAccountsAsync(),
                 "CategoryId", "CategoryName", account.CategoryId);
             ViewBag.AccountGroups = new SelectList(
                 await _metaDataService.GetAccountGroupsAsync(),
                 "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+
+            // Pass the association status to the view
+            ViewBag.HasJournalAssociations = hasAssociations;
+            ViewBag.AssociatedVoucherCount = associatedVoucherIds.Count;
+            
+            if (hasAssociations)
+            {
+                // Provide information about the associations
+                var voucherIdsToShow = associatedVoucherIds.Count > 5 
+                    ? associatedVoucherIds.Take(5).ToList() 
+                    : associatedVoucherIds;
+                ViewBag.AssociatedVoucherIds = string.Join(", ", voucherIdsToShow);
+                
+                if (associatedVoucherIds.Count > 5)
+                {
+                    ViewBag.AssociatedVoucherMessage = $"This account is associated with {associatedVoucherIds.Count} journal vouchers (showing first 5: {ViewBag.AssociatedVoucherIds} and {associatedVoucherIds.Count - 5} more). Category and Account Group cannot be changed.";
+                }
+                else
+                {
+                    ViewBag.AssociatedVoucherMessage = $"This account is associated with journal voucher(s): {ViewBag.AssociatedVoucherIds}. Category and Account Group cannot be changed.";
+                }
+            }
 
             return View(account);
         }
@@ -382,6 +588,29 @@ namespace PureLedger.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditAccount(Account account)
         {
+            // Check if account is associated with journal vouchers
+            var associatedVoucherIds = await _metaDataService.GetAssociatedVoucherIdsAsync(account.AccountId);
+            bool hasAssociations = associatedVoucherIds.Any();
+
+            // If account has associations, get the original account data to preserve CategoryId and AccountGroupId
+            if (hasAssociations)
+            {
+                var originalAccount = await _metaDataService.GetAccountByIdAsync(account.AccountId);
+                if (originalAccount != null)
+                {
+                    // Preserve the original CategoryId and AccountGroupId
+                    account.CategoryId = originalAccount.CategoryId;
+                    account.AccountGroupId = originalAccount.AccountGroupId;
+                }
+                
+                // Add a custom validation message if user tried to change restricted fields
+                if (Request.Form["CategoryId"] != originalAccount?.CategoryId.ToString() || 
+                    Request.Form["AccountGroupId"] != originalAccount?.AccountGroupId.ToString())
+                {
+                    ModelState.AddModelError("", "Category and Account Group cannot be changed because this account is associated with journal vouchers.");
+                }
+            }
+
             var errors = await _validationService.ValidateAccountAsync(account);
             if (errors.Count > 0)
             {
@@ -390,12 +619,34 @@ namespace PureLedger.Controllers
                     ModelState.AddModelError("", error);
                 }
 
+                // Reload ViewBag data for the form
                 ViewBag.Categories = new SelectList(
                     await _metaDataService.GetCategoriesForAccountsAsync(),
                     "CategoryId", "CategoryName", account.CategoryId);
                 ViewBag.AccountGroups = new SelectList(
                     await _metaDataService.GetAccountGroupsAsync(),
                     "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+
+                // Pass association status back to view
+                ViewBag.HasJournalAssociations = hasAssociations;
+                ViewBag.AssociatedVoucherCount = associatedVoucherIds.Count;
+                
+                if (hasAssociations)
+                {
+                    var voucherIdsToShow = associatedVoucherIds.Count > 5 
+                        ? associatedVoucherIds.Take(5).ToList() 
+                        : associatedVoucherIds;
+                    ViewBag.AssociatedVoucherIds = string.Join(", ", voucherIdsToShow);
+                    
+                    if (associatedVoucherIds.Count > 5)
+                    {
+                        ViewBag.AssociatedVoucherMessage = $"This account is associated with {associatedVoucherIds.Count} journal vouchers (showing first 5: {ViewBag.AssociatedVoucherIds} and {associatedVoucherIds.Count - 5} more). Category and Account Group cannot be changed.";
+                    }
+                    else
+                    {
+                        ViewBag.AssociatedVoucherMessage = $"This account is associated with journal voucher(s): {ViewBag.AssociatedVoucherIds}. Category and Account Group cannot be changed.";
+                    }
+                }
 
                 return View(account);
             }
@@ -408,12 +659,34 @@ namespace PureLedger.Controllers
                     ModelState.AddModelError("", error);
                 }
 
+                // Reload ViewBag data for the form
                 ViewBag.Categories = new SelectList(
                     await _metaDataService.GetCategoriesForAccountsAsync(),
                     "CategoryId", "CategoryName", account.CategoryId);
                 ViewBag.AccountGroups = new SelectList(
                     await _metaDataService.GetAccountGroupsAsync(),
                     "AccountGroupId", "AccountGroupName", account.AccountGroupId);
+
+                // Pass association status back to view
+                ViewBag.HasJournalAssociations = hasAssociations;
+                ViewBag.AssociatedVoucherCount = associatedVoucherIds.Count;
+                
+                if (hasAssociations)
+                {
+                    var voucherIdsToShow = associatedVoucherIds.Count > 5 
+                        ? associatedVoucherIds.Take(5).ToList() 
+                        : associatedVoucherIds;
+                    ViewBag.AssociatedVoucherIds = string.Join(", ", voucherIdsToShow);
+                    
+                    if (associatedVoucherIds.Count > 5)
+                    {
+                        ViewBag.AssociatedVoucherMessage = $"This account is associated with {associatedVoucherIds.Count} journal vouchers (showing first 5: {ViewBag.AssociatedVoucherIds} and {associatedVoucherIds.Count - 5} more). Category and Account Group cannot be changed.";
+                    }
+                    else
+                    {
+                        ViewBag.AssociatedVoucherMessage = $"This account is associated with journal voucher(s): {ViewBag.AssociatedVoucherIds}. Category and Account Group cannot be changed.";
+                    }
+                }
 
                 return View(account);
             }
@@ -490,6 +763,77 @@ namespace PureLedger.Controllers
             return Json(categories);
         }
 
+        // Add these methods to the Account region
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleAccountStatus(int id)
+        {
+            try
+            {
+                var errors = await _metaDataService.ToggleAccountStatusAsync(id);
+
+                if (errors.Any())
+                {
+                    TempData["ErrorMessage"] = string.Join("; ", errors);
+                }
+                else
+                {
+                    // Get the updated account to show the correct message
+                    var account = await _metaDataService.GetAccountByIdAsync(id);
+                    if (account != null)
+                    {
+                        TempData["SuccessMessage"] = $"Account '{account.AccountName}' has been {(account.IsEnabled ? "enabled" : "disabled")} successfully.";
+                    }
+                    else
+                    {
+                        TempData["SuccessMessage"] = "Account status updated successfully.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error toggling account status for ID {AccountId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the account status.";
+            }
+
+            return RedirectToAction(nameof(Accounts));
+        }
+
+        // Also add this AJAX endpoint for real-time updates
+        [HttpPost]
+        public async Task<IActionResult> ToggleAccountStatusAjax(int id)
+        {
+            try
+            {
+                var errors = await _metaDataService.ToggleAccountStatusAsync(id);
+
+                if (errors.Any())
+                {
+                    return Json(new { success = false, message = string.Join("; ", errors) });
+                }
+
+                // Get the updated account status
+                var account = await _metaDataService.GetAccountByIdAsync(id);
+                if (account != null)
+                {
+                    return Json(new
+                    {
+                        success = true,
+                        isEnabled = account.IsEnabled,
+                        message = $"Account '{account.AccountName}' has been {(account.IsEnabled ? "enabled" : "disabled")} successfully."
+                    });
+                }
+
+                return Json(new { success = true, message = "Account status updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error toggling account status for ID {AccountId}", id);
+                return Json(new { success = false, message = "An error occurred while updating the account status." });
+            }
+
+        }
         #endregion
 
         #region Location
@@ -577,9 +921,7 @@ namespace PureLedger.Controllers
 
         #endregion
 
-        #region Booker
 
-        // Add these methods to MetaDataController class
         #region Booker
 
         public async Task<IActionResult> Bookers()
@@ -649,9 +991,77 @@ namespace PureLedger.Controllers
             return RedirectToAction(nameof(Bookers));
         }
 
-        #endregion
+        // Add this method to the Booker region
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ToggleBookerStatus(int id)
+        {
+            try
+            {
+                var errors = await _metaDataService.ToggleBookerStatusAsync(id);
+                
+                if (errors.Any())
+                {
+                    TempData["ErrorMessage"] = string.Join("; ", errors);
+                }
+                else
+                {
+                    // Get the updated booker to show the correct message
+                    var booker = await _metaDataService.GetBookerByIdAsync(id);
+                    if (booker != null)
+                    {
+                        TempData["SuccessMessage"] = $"Booker '{booker.BookerName}' has been {(booker.IsEnabled ? "enabled" : "disabled")} successfully.";
+                    }
+                    else
+                    {
+                        TempData["SuccessMessage"] = "Booker status updated successfully.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error toggling booker status for ID {BookerId}", id);
+                TempData["ErrorMessage"] = "An error occurred while updating the booker status.";
+            }
+
+            return RedirectToAction(nameof(Bookers));
+        }
+
+        // Also add this AJAX endpoint for real-time updates
+        [HttpPost]
+        public async Task<IActionResult> ToggleBookerStatusAjax(int id)
+        {
+            try
+            {
+                var errors = await _metaDataService.ToggleBookerStatusAsync(id);
+                
+                if (errors.Any())
+                {
+                    return Json(new { success = false, message = string.Join("; ", errors) });
+                }
+
+                // Get the updated booker status
+                var booker = await _metaDataService.GetBookerByIdAsync(id);
+                if (booker != null)
+                {
+                    return Json(new { 
+                        success = true, 
+                        isEnabled = booker.IsEnabled,
+                        message = $"Booker '{booker.BookerName}' has been {(booker.IsEnabled ? "enabled" : "disabled")} successfully."
+                    });
+                }
+
+                return Json(new { success = true, message = "Booker status updated successfully." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error toggling booker status for ID {BookerId}", id);
+                return Json(new { success = false, message = "An error occurred while updating the booker status." });
+            }
+        }
 
         #endregion
+
 
         #region New Methods
 
@@ -796,7 +1206,8 @@ namespace PureLedger.Controllers
                     accountGroupId = a.AccountGroupId,
                     accountGroupName = a.AccountGroup?.AccountGroupName,
                     projectId = a.Category?.ProjectId,
-                    projectName = a.Category?.Project?.ProjectName
+                    projectName = a.Category?.Project?.ProjectName,
+                    isEnabled = a.IsEnabled  // Add this property
                 }).ToList();
 
                 _logger.LogInformation("Returning {AccountCount} accounts for project {ProjectId}", filteredAccounts.Count, projectId);

@@ -19,6 +19,14 @@
         </div>
     }
 
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
     <div id="alertArea">
         <!-- Dynamic alerts will be shown here -->
     </div>
@@ -106,6 +114,32 @@
             </div>
         </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteCategoryModal" tabindex="-1" aria-labelledby="deleteCategoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-sm">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-semibold" id="deleteCategoryModalLabel">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">
+                        Are you sure you want to delete the category "<strong id="deleteCategoryName"></strong>"?
+                    </p>
+                    <div id="deleteCategoryError" class="alert alert-danger d-none"></div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form id="deleteCategoryForm" asp-action="DeleteCategory" method="post" class="m-0">
+                        <input type="hidden" id="deleteCategoryId" name="id" />
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @section Scripts {
@@ -113,7 +147,8 @@
         // Define API routes for categories
         var routes = {
             getCategoriesByProject: '@Url.Action("GetCategoriesByProjectForView", "MetaData")',
-            getAllProjectsForCategories: '@Url.Action("GetAllProjectsForCategories", "MetaData")'
+            getAllProjectsForCategories: '@Url.Action("GetAllProjectsForCategories", "MetaData")',
+            canDeleteCategory: '@Url.Action("CanDeleteCategory", "MetaData")'
         };
     </script>
     <script src="~/js/categories.js" asp-append-version="true"></script>

@@ -55,6 +55,9 @@ function setupEventListeners() {
 
     // Setup searchable dropdown
     setupSearchableDropdown();
+    
+    // Setup delete handlers
+    setupDeleteHandlers();
 }
 
 function setupSearchableDropdown() {
@@ -383,12 +386,65 @@ function renderCategories(categories) {
             <td>${category.accountType?.accountTypeName || 'N/A'}</td>
             <td>
                 <a href="/MetaData/EditCategory/${category.categoryId}" 
-                   class="btn btn-sm btn-outline-primary">
-                    <i class="fas fa-edit me-1"></i> Edit
+                   class="btn btn-sm btn-outline-primary me-1">
+                    <i class="fas fa-edit me-1"></i>Edit
                 </a>
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger delete-category-btn"
+                        data-id="${category.categoryId}"
+                        data-name="${category.categoryName}">
+                    <i class="fas fa-trash me-1"></i>Delete
+                </button>
             </td>
         </tr>
     `).join('');
+    
+    // Re-setup delete handlers for new buttons
+    setupDeleteHandlers();
+}
+
+function setupDeleteHandlers() {
+    // Handle Delete Category Button
+    document.querySelectorAll('.delete-category-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const categoryId = this.dataset.id;
+            const categoryName = this.dataset.name;
+
+            const nameEl = document.getElementById('deleteCategoryName');
+            const idEl = document.getElementById('deleteCategoryId');
+            const errorEl = document.getElementById('deleteCategoryError');
+            const formEl = document.getElementById('deleteCategoryForm');
+
+            if (nameEl) nameEl.textContent = categoryName;
+            if (idEl) idEl.value = categoryId;
+            if (errorEl) errorEl.classList.add('d-none');
+            if (formEl) formEl.style.display = '';
+
+            // Check if category can be deleted
+            fetch(`${routes.canDeleteCategory}/${categoryId}`)
+                .then(response => response.json())
+                .then(result => {
+                    if (result.canDelete) {
+                        new bootstrap.Modal(document.getElementById('deleteCategoryModal')).show();
+                    } else {
+                        if (errorEl) {
+                            errorEl.textContent = result.message;
+                            errorEl.classList.remove('d-none');
+                        }
+                        if (formEl) formEl.style.display = 'none';
+                        new bootstrap.Modal(document.getElementById('deleteCategoryModal')).show();
+                    }
+                })
+                .catch(err => {
+                    if (errorEl) {
+                        errorEl.textContent = 'An error occurred while checking if the category can be deleted.';
+                        errorEl.classList.remove('d-none');
+                    }
+                    if (formEl) formEl.style.display = 'none';
+                    new bootstrap.Modal(document.getElementById('deleteCategoryModal')).show();
+                });
+        });
+    });
 }
 
 function filterCategories() {

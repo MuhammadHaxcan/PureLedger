@@ -117,6 +117,7 @@
                                 <th>Account Name</th>
                                 <th>Category</th>
                                 <th>Account Group</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -159,6 +160,27 @@
             </div>
         </div>
     </div>
+
+    <!-- Status Change Confirmation Modal -->
+    <div class="modal fade" id="statusChangeModal" tabindex="-1" aria-labelledby="statusChangeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-sm">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-semibold" id="statusChangeModalLabel">Confirm Status Change</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">
+                        Are you sure you want to <strong id="actionText"></strong> the account "<strong id="itemName"></strong>"?
+                    </p>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn" id="confirmStatusChange">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @section Scripts {
@@ -173,3 +195,40 @@
     </script>
     <script src="~/js/accounts.js" asp-append-version="true"></script>
 }
+
+<style>
+    .status-badge {
+        font-size: 0.85em;
+        padding: 0.5em 0.75em;
+    }
+
+    .toggle-status-btn {
+        transition: all 0.2s ease-in-out;
+    }
+
+    .toggle-status-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .toggle-status-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    tr[data-account-id] {
+        transition: background-color 0.3s ease;
+    }
+
+    .alert {
+        border-left: 4px solid;
+    }
+
+    .alert-success {
+        border-left-color: #28a745;
+    }
+
+    .alert-danger {
+        border-left-color: #dc3545;
+    }
+</style>

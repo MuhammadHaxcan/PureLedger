@@ -62,5 +62,19 @@ namespace PureLedger.Repositories
         {
             return await _context.Categories.ToListAsync();
         }
+
+        public async Task<bool> DeleteAsync(Category category)
+        {
+            try
+            {
+                _context.Categories.Remove(category);
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
     }
 }

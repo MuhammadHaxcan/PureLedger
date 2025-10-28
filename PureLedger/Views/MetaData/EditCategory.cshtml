@@ -1,14 +1,32 @@
 ﻿@model PureLedger.Models.Category
 @{
     ViewData["Title"] = "Edit Category";
+    bool hasAssociations = ViewBag.HasAccountAssociations ?? false;
 }
 
 <div class="container-fluid">
     <h2 class="mb-4">Edit Category</h2>
 
+    @if (hasAssociations)
+    {
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Restricted Edit:</strong> @ViewBag.AssociatedAccountMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Edit Category</h6>
+            <h6 class="m-0 font-weight-bold text-primary">
+                Edit Category
+                @if (hasAssociations)
+                {
+                    <span class="badge bg-warning text-dark ms-2">
+                        <i class="fas fa-link me-1"></i>Has Account Associations
+                    </span>
+                }
+            </h6>
         </div>
         <div class="card-body">
             <form asp-action="EditCategory" method="post">
@@ -22,18 +40,56 @@
                 </div>
 
                 <div class="mb-3">
-                    <label asp-for="ProjectId" class="form-label">Project</label>
-                    <select asp-for="ProjectId" asp-items="ViewBag.Projects" class="form-select">
-                        <option value="">-- Select Project --</option>
-                    </select>
+                    <label asp-for="ProjectId" class="form-label">
+                        Project
+                        @if (hasAssociations)
+                        {
+                            <span class="text-muted small">(Cannot be changed - has account associations)</span>
+                        }
+                    </label>
+                    
+                    @if (hasAssociations)
+                    {
+                        <select asp-for="ProjectId" asp-items="ViewBag.Projects" class="form-select bg-light" disabled>
+                            <option value="">-- Select Project --</option>
+                        </select>
+                        <!-- Hidden field to preserve the value when disabled -->
+                        <input type="hidden" asp-for="ProjectId" />
+                    }
+                    else
+                    {
+                        <select asp-for="ProjectId" asp-items="ViewBag.Projects" class="form-select">
+                            <option value="">-- Select Project --</option>
+                        </select>
+                    }
+                    
                     <span asp-validation-for="ProjectId" class="text-danger"></span>
                 </div>
 
                 <div class="mb-3">
-                    <label asp-for="AccountTypeId" class="form-label">Account Type</label>
-                    <select asp-for="AccountTypeId" asp-items="ViewBag.AccountTypes" class="form-select">
-                        <option value="">-- Select Account Type --</option>
-                    </select>
+                    <label asp-for="AccountTypeId" class="form-label">
+                        Account Type
+                        @if (hasAssociations)
+                        {
+                            <span class="text-muted small">(Cannot be changed - has account associations)</span>
+                        }
+                    </label>
+                    
+                    @if (hasAssociations)
+                    {
+                        <select asp-for="AccountTypeId" asp-items="ViewBag.AccountTypes" class="form-select bg-light" disabled>
+                            <option value="">-- Select Account Type --</option>
+                        </select>
+                        <!-- Hidden field to preserve the value when disabled -->
+                        <input type="hidden" asp-for="AccountTypeId" />
+                    }
+                    else
+                    {
+                        <select asp-for="AccountTypeId" asp-items="ViewBag.AccountTypes" class="form-select">
+                            <option value="">-- Select Account Type --</option>
+                        </select>
+                    }
+                    
                     <span asp-validation-for="AccountTypeId" class="text-danger"></span>
                 </div>
 
@@ -51,3 +107,21 @@
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
 }
+
+<style>
+    .bg-light.form-select:disabled,
+    .bg-light.form-control:disabled {
+        background-color: #f8f9fa !important;
+        border-color: #ffc107 !important;
+        color: #6c757d !important;
+        cursor: not-allowed;
+    }
+
+    .border-warning {
+        border-color: #ffc107 !important;
+    }
+
+    .alert-warning {
+        border-left: 4px solid #ffc107;
+    }
+</style>

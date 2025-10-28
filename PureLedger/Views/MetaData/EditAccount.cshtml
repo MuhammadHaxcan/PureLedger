@@ -1,14 +1,32 @@
 ﻿@model PureLedger.Models.Account
 @{
     ViewData["Title"] = "Edit Account";
+    bool hasAssociations = ViewBag.HasJournalAssociations ?? false;
 }
 
 <div class="container-fluid">
     <h2 class="mb-4">Edit Account</h2>
 
+    @if (hasAssociations)
+    {
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Restricted Edit:</strong> @ViewBag.AssociatedVoucherMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Edit Account</h6>
+            <h6 class="m-0 font-weight-bold text-primary">
+                Edit Account
+                @if (hasAssociations)
+                {
+                    <span class="badge bg-warning text-dark ms-2">
+                        <i class="fas fa-link me-1"></i>Has Journal Associations
+                    </span>
+                }
+            </h6>
         </div>
         <div class="card-body">
             <form asp-action="EditAccount" method="post">
@@ -22,18 +40,56 @@
                 </div>
 
                 <div class="mb-3">
-                    <label asp-for="CategoryId" class="form-label">Category</label>
-                    <select asp-for="CategoryId" asp-items="ViewBag.Categories" class="form-select">
-                        <option value="">-- Select Category --</option>
-                    </select>
+                    <label asp-for="CategoryId" class="form-label">
+                        Category
+                        @if (hasAssociations)
+                        {
+                            <span class="text-muted small">(Cannot be changed - has journal associations)</span>
+                        }
+                    </label>
+                    
+                    @if (hasAssociations)
+                    {
+                        <select asp-for="CategoryId" asp-items="ViewBag.Categories" class="form-select bg-light" disabled>
+                            <option value="">-- Select Category --</option>
+                        </select>
+                        <!-- Hidden field to preserve the value when disabled -->
+                        <input type="hidden" asp-for="CategoryId" />
+                    }
+                    else
+                    {
+                        <select asp-for="CategoryId" asp-items="ViewBag.Categories" class="form-select">
+                            <option value="">-- Select Category --</option>
+                        </select>
+                    }
+                    
                     <span asp-validation-for="CategoryId" class="text-danger"></span>
                 </div>
 
                 <div class="mb-3">
-                    <label asp-for="AccountGroupId" class="form-label">Account Group</label>
-                    <select asp-for="AccountGroupId" asp-items="ViewBag.AccountGroups" class="form-select" id="accountGroupSelect">
-                        <option value="">-- Select Account Group --</option>
-                    </select>
+                    <label asp-for="AccountGroupId" class="form-label">
+                        Account Group
+                        @if (hasAssociations)
+                        {
+                            <span class="text-muted small">(Cannot be changed - has journal associations)</span>
+                        }
+                    </label>
+                    
+                    @if (hasAssociations)
+                    {
+                        <select asp-for="AccountGroupId" asp-items="ViewBag.AccountGroups" class="form-select bg-light" id="accountGroupSelect" disabled>
+                            <option value="">-- Select Account Group --</option>
+                        </select>
+                        <!-- Hidden field to preserve the value when disabled -->
+                        <input type="hidden" asp-for="AccountGroupId" />
+                    }
+                    else
+                    {
+                        <select asp-for="AccountGroupId" asp-items="ViewBag.AccountGroups" class="form-select" id="accountGroupSelect">
+                            <option value="">-- Select Account Group --</option>
+                        </select>
+                    }
+                    
                     <span asp-validation-for="AccountGroupId" class="text-danger"></span>
                 </div>
 
@@ -123,9 +179,19 @@
     }
     <script>
         $(document).ready(function() {
+            var hasAssociations = @Json.Serialize(hasAssociations);
+
             // Handle showing/hiding account type specific fields
             function updateFieldVisibility() {
-                var selectedText = $('#accountGroupSelect').find('option:selected').text().toLowerCase().trim();
+                var selectedText = '';
+                
+                if (hasAssociations) {
+                    // If disabled, get the text from the selected option
+                    selectedText = $('#accountGroupSelect option:selected').text().toLowerCase().trim();
+                } else {
+                    // If enabled, get the text normally
+                    selectedText = $('#accountGroupSelect').find('option:selected').text().toLowerCase().trim();
+                }
 
                 if (selectedText === 'account') {
                     $('#accountDataFields').show();
@@ -139,10 +205,39 @@
                 }
             }
 
-            $('#accountGroupSelect').change(updateFieldVisibility);
+            // Only attach change event if the field is not disabled
+            if (!hasAssociations) {
+                $('#accountGroupSelect').change(updateFieldVisibility);
+            }
 
             // Trigger on page load to set initial visibility
             updateFieldVisibility();
+
+            // Add warning styling for disabled fields
+            if (hasAssociations) {
+                $('#accountGroupSelect, select[asp-for="CategoryId"]').addClass('border-warning');
+                
+                // Show tooltip on hover for disabled fields
+                $('#accountGroupSelect, select[asp-for="CategoryId"]').attr('title', 'This field cannot be changed because the account is associated with journal vouchers.');
+            }
         });
     </script>
 }
+
+<style>
+    .bg-light.form-select:disabled,
+    .bg-light.form-control:disabled {
+        background-color: #f8f9fa !important;
+        border-color: #ffc107 !important;
+        color: #6c757d !important;
+        cursor: not-allowed;
+    }
+
+    .border-warning {
+        border-color: #ffc107 !important;
+    }
+
+    .alert-warning {
+        border-left: 4px solid #ffc107;
+    }
+</style>

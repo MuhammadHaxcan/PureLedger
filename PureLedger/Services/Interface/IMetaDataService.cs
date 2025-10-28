@@ -20,7 +20,9 @@ namespace PureLedger.Services.Interface
         Task<List<string>> CreateCategoryAsync(Category category);
         Task<List<string>> UpdateCategoryAsync(Category category);
         Task<List<object>> GetCategoriesByProjectAsync(int projectId);
-        
+        Task<List<int>> GetAssociatedAccountIdsAsync(int categoryId);
+        Task<(bool Success, List<int> AssociatedAccountIds)> DeleteCategoryAsync(int id);
+
         // Account operations
         Task<List<Account>> GetAllAccountsAsync();
         Task<List<Category>> GetCategoriesForAccountsAsync();
@@ -32,6 +34,7 @@ namespace PureLedger.Services.Interface
         Task<List<string>> UpdateAccountAsync(Account account);
         Task<(bool Success, List<int> AssociatedVoucherIds)> DeleteAccountAsync(int id);
         Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId);
+        Task<List<string>> ToggleAccountStatusAsync(int accountId);
 
         // Location operations
         Task<List<Location>> GetAllLocationsAsync();
@@ -46,6 +49,7 @@ namespace PureLedger.Services.Interface
         Task<List<string>> CreateBookerAsync(Booker booker);
         Task<Booker?> GetBookerByIdAsync(int id);
         Task<List<string>> UpdateBookerAsync(Booker booker);
+        Task<List<string>> ToggleBookerStatusAsync(int bookerId);
 
 
     }
