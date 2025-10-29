@@ -291,8 +291,8 @@ namespace PureLedger.Repositories
                 .Include(je => je.Account)
                 .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted == true &&
-                    je.IsProcessed &&
+                    je.JournalVoucher.IsCompleted &&  
+                    je.IsProcessed &&                 
                     je.Quantity > 0 &&
                     je.Account.AccountGroupId == 2 &&
                     je.JournalVoucher.EntryDate >= startDate &&
@@ -383,7 +383,8 @@ namespace PureLedger.Repositories
                 .Include(je => je.Category)
                 .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
-                    je.IsProcessed &&
+                    je.JournalVoucher.IsCompleted &&  
+                    je.IsProcessed &&                 
                     je.Quantity > 0 &&
                     je.Account.AccountGroupId == 2 &&
                     je.JournalVoucher.EntryDate <= endDate);
@@ -553,7 +554,8 @@ namespace PureLedger.Repositories
         .Include(je => je.Account)
         .Where(je =>
             je.JournalVoucher.ProjectId == projectId &&
-            je.IsProcessed &&
+            je.JournalVoucher.IsCompleted &&  
+            je.IsProcessed &&                 
             je.Quantity > 0 &&
             je.Account.AccountGroupId == 2 &&
             je.JournalVoucher.EntryDate <= endDate);

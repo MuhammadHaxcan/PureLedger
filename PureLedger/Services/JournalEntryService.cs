@@ -139,6 +139,7 @@ namespace PureLedger.Services
 
         public async Task<JournalVoucher> CreateJournalVoucherAsync(JournalEntryViewModel model)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var journalVoucher = new JournalVoucher
@@ -156,10 +157,12 @@ namespace PureLedger.Services
                 await UpdateVoucherCompletionStatusAsync(journalVoucher.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
 
+                await transaction.CommitAsync();
                 return journalVoucher;
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error creating journal voucher");
                 throw;
             }
@@ -216,7 +219,7 @@ namespace PureLedger.Services
                     // Delete orphaned entries
                     foreach (var entryToDelete in existingEntries)
                     {
-                        await DeleteJournalEntryAsync(entryToDelete.JournalEntryId);
+                        await DeleteJournalEntryInternalAsync(entryToDelete.JournalEntryId);
                     }
 
                     // Update completion status
@@ -300,6 +303,7 @@ namespace PureLedger.Services
 
         public async Task<bool> UpdateJournalEntryAsync(JournalEntryUpdateViewModel model)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(model.EntryId);
@@ -316,16 +320,45 @@ namespace PureLedger.Services
                 }
 
                 await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
                 return true;
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
                 return false;
             }
         }
 
         public async Task<bool> DeleteJournalEntryAsync(int entryId)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await DeleteJournalEntryInternalAsync(entryId);
+
+                if (result)
+                {
+                    await _unitOfWork.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                else
+                {
+                    await transaction.RollbackAsync();
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error deleting journal entry {EntryId}", entryId);
+                return false;
+            }
+        }
+
+        private async Task<bool> DeleteJournalEntryInternalAsync(int entryId)
         {
             try
             {
@@ -349,13 +382,12 @@ namespace PureLedger.Services
                     await UpdateVoucherCompletionStatusAsync(voucherId);
                 }
 
-                await _unitOfWork.SaveChangesAsync();
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting journal entry {EntryId}", entryId);
-                return false;
+                _logger.LogError(ex, "Error in internal delete for journal entry {EntryId}", entryId);
+                throw;
             }
         }
 
@@ -546,6 +578,7 @@ namespace PureLedger.Services
 
         public async Task<int> CreateRecipeFromVoucherAsync(JournalEntryViewModel model, int journalVoucherId)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 if (!model.SaveAsRecipe || string.IsNullOrWhiteSpace(model.RecipeName))
@@ -578,12 +611,15 @@ namespace PureLedger.Services
                 }
 
                 await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+
                 _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items", recipe.RecipeId, productEntries.Count);
 
                 return recipe.RecipeId;
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error creating recipe from voucher {VoucherId}", journalVoucherId);
                 throw;
             }
@@ -815,38 +851,65 @@ namespace PureLedger.Services
         private async Task UpdateVoucherCompletionStatusAsync(int journalVoucherId)
         {
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
-            if (voucher == null)
+            if (voucher == null || !voucher.JournalEntries.Any())
                 return;
 
-            var entries = voucher.JournalEntries.ToList();
-            if (!entries.Any())
-                return;
-
-            // Get all unique account IDs and fetch accounts in batch
-            var accountIds = entries.Select(e => e.AccountId).Distinct().ToList();
-            var accountsDict = new Dictionary<int, Account>();
-
-            foreach (var accountId in accountIds)
+            try
             {
-                var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
-                if (account != null)
-                    accountsDict[accountId] = account;
-            }
+                // Get all unique account IDs and fetch accounts in batch
+                var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
+                var accountsDict = new Dictionary<int, Account>();
 
-            // Check if all entries belong to AccountGroup 1 (customer accounts)
-            bool allAccountGroup1 = entries.All(e =>
-                accountsDict.ContainsKey(e.AccountId) && accountsDict[e.AccountId].AccountGroupId == 1);
-
-            voucher.IsCompleted = allAccountGroup1;
-            await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-
-            // Mark all entries as processed if all are from AccountGroup 1
-            if (allAccountGroup1)
-            {
-                foreach (var entry in entries.Where(e => !e.IsProcessed))
+                foreach (var accountId in accountIds)
                 {
-                    entry.IsProcessed = true;
+                    var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
+                    if (account != null)
+                        accountsDict[accountId] = account;
                 }
+
+                var unprocessedEntries = voucher.JournalEntries.Where(e => !e.IsProcessed).ToList();
+
+                // If there are no unprocessed entries, the voucher is completed
+                if (!unprocessedEntries.Any())
+                {
+                    voucher.IsCompleted = true;
+                }
+                else
+                {
+                    bool allUnprocessedAreAccountGroup1 = unprocessedEntries.All(e =>
+                        accountsDict.ContainsKey(e.AccountId) &&
+                        accountsDict[e.AccountId].AccountGroupId == 1);
+
+                    if (allUnprocessedAreAccountGroup1)
+                    {
+                        _logger.LogInformation("All unprocessed entries in voucher {VoucherId} are AccountGroup 1, marking as processed", journalVoucherId);
+
+                        foreach (var entry in unprocessedEntries)
+                        {
+                            entry.IsProcessed = true;
+                            await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                        }
+
+                        voucher.IsCompleted = true;
+                    }
+                    else
+                    {
+                        voucher.IsCompleted = false;
+                    }
+                }
+
+                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                await _unitOfWork.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Voucher {VoucherId} completion status updated. IsCompleted: {IsCompleted}",
+                    journalVoucherId,
+                    voucher.IsCompleted);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating completion status for voucher {VoucherId}", journalVoucherId);
+                throw;
             }
         }
 
