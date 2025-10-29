@@ -134,7 +134,17 @@ function populateDropdownOptions(selectId, dropdown) {
     dropdown.innerHTML = '';
 
     Array.from(select.options).forEach(option => {
-        if (option.value) { // Skip the empty option
+        // Include all options for category dropdown (including "All Categories" with empty value)
+        // For project dropdown, skip the empty "Select Project" option
+        const isCategoryDropdown = selectId === 'categoryId';
+        const isProjectDropdown = selectId === 'projectId';
+        
+        // Include option if:
+        // 1. It has a value, OR
+        // 2. It's the category dropdown (to include "All Categories" with empty value)
+        const shouldInclude = option.value || isCategoryDropdown;
+        
+        if (shouldInclude) {
             const div = document.createElement('div');
             div.className = 'select-option';
             div.dataset.value = option.value;
@@ -284,13 +294,16 @@ function handleProjectChange() {
     const categorySearch = document.querySelector('.category-search');
     const generateBtn = document.getElementById('generateAccountsBtn');
 
-    if (!projectSelect || !categorySelect || !categorySearch || !generateBtn) return;
+    if (!projectSelect || !categorySelect || !categorySearch) return;
 
     const projectId = projectSelect.value;
     const selectedOption = projectSelect.querySelector(`option[value="${projectId}"]`);
 
     // Reset category selection
     resetCategoryDropdown();
+
+    // Hide accounts card
+    hideAccountsCard();
 
     if (projectId && selectedOption) {
         const projectName = selectedOption.textContent;
@@ -301,7 +314,9 @@ function handleProjectChange() {
         categorySearch.disabled = false;
         categorySearch.placeholder = 'Search categories...';
 
+        // Load categories for the selected project
         loadCategoriesForProject(projectId);
+        
         clearAlerts();
     } else {
         // Disable category dropdown and generate button
@@ -324,7 +339,16 @@ function loadCategoriesForProject(projectId) {
         return;
     }
 
-    fetch(`${routes.getCategoriesByProject}?projectId=${projectId}`)
+    // Show loading state in category dropdown
+    const $categoryDropdown = $('.category-dropdown');
+    if ($categoryDropdown.length) {
+        $categoryDropdown.html('<div class="select-option text-muted">Loading categories...</div>');
+    }
+
+    // Use the correct URL format - add projectId as query parameter
+    const url = `${routes.getCategoriesByProject}?projectId=${projectId}`;
+
+    fetch(url)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -332,32 +356,94 @@ function loadCategoriesForProject(projectId) {
             return response.json();
         })
         .then(categories => {
+            console.log('Categories loaded:', categories); // Debug log
             populateCategoryDropdown(categories);
+            
+            // Enable generate button since we now have a project selected
+            const generateBtn = document.getElementById('generateAccountsBtn');
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('btn-secondary');
+                generateBtn.classList.add('btn-success');
+            }
         })
         .catch(error => {
             console.error('Error loading categories:', error);
             showError('Failed to load categories for the selected project.');
-        });
+            
+            // Reset category dropdown on error
+            const categorySelect = document.getElementById('categoryId');
+            if (categorySelect) {
+                categorySelect.innerHTML = '<option value="">All Categories</option>';
+            }
+            
+            const $categoryDropdown = $('.category-dropdown');
+            if ($categoryDropdown.length) {
+                $categoryDropdown.empty();
+            }
+        }); 
 }
 
 function populateCategoryDropdown(categories) {
     const select = document.getElementById('categoryId');
-    if (!select) return;
+    const dropdown = document.querySelector('.category-dropdown');
+    
+    if (!select) {
+        console.error('Category select not found');
+        return;
+    }
 
-    // Clear existing options except the first one
+    // Clear existing options except the "All Categories" option
     select.innerHTML = '<option value="">All Categories</option>';
+
+    // Clear dropdown
+    if (dropdown) {
+        dropdown.innerHTML = '';
+        
+        // Add "All Categories" option to dropdown
+        const allCategoriesDiv = document.createElement('div');
+        allCategoriesDiv.className = 'select-option';
+        allCategoriesDiv.dataset.value = '';
+        allCategoriesDiv.textContent = 'All Categories';
+        dropdown.appendChild(allCategoriesDiv);
+    }
 
     if (categories && Array.isArray(categories) && categories.length > 0) {
         categories.forEach(category => {
+            // Add to select element
             const option = document.createElement('option');
             option.value = category.categoryId;
             option.textContent = category.categoryName;
             select.appendChild(option);
+
+            // Add to dropdown
+            if (dropdown) {
+                const div = document.createElement('div');
+                div.className = 'select-option';
+                div.dataset.value = category.categoryId;
+                div.textContent = category.categoryName;
+                dropdown.appendChild(div);
+            }
         });
+        
+        console.log(`Loaded ${categories.length} categories`); // Debug log
+    } else {
+        console.log('No categories found for this project');
     }
 
-    // Update dropdown options
-    populateDropdownOptions('categoryId', document.querySelector('.category-dropdown'));
+    // Reset the search input
+    const categorySearch = document.querySelector('.category-search');
+    if (categorySearch) {
+        categorySearch.value = 'All Categories';
+    }
+
+    // Update the dropdown to show the "All Categories" as selected
+    if (dropdown) {
+        const allCategoriesOption = dropdown.querySelector('[data-value=""]');
+        if (allCategoriesOption) {
+            allCategoriesOption.classList.add('selected');
+        }
+    }
 }
 
 function resetCategoryDropdown() {
