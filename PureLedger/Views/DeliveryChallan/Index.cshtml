@@ -29,109 +29,108 @@
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-filter me-2"></i>Filter Options
+                <i class="fas fa-filter me-2"></i>Filter Parameters
             </h6>
         </div>
         <div class="card-body">
-            <div class="row align-items-end mb-3">
-                <div class="col-md-2 mb-3 mb-md-0">
-                    <label class="form-label">Since Date</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                        <input type="date" id="sinceDate" class="form-control" value="@(Model?.SinceDate?.ToString("yyyy-MM-dd"))">
+            <form id="deliveryChallanFilterForm">
+                <div class="row mb-3">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Since</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                            <input type="date" id="sinceDate" class="form-control" value="@(Model?.SinceDate?.ToString("yyyy-MM-dd"))">
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-2 mb-3 mb-md-0">
-                    <label class="form-label">To Date</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                        <input type="date" id="toDate" class="form-control" value="@(Model?.ToDate?.ToString("yyyy-MM-dd"))">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">To</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                            <input type="date" id="toDate" class="form-control" value="@(Model?.ToDate?.ToString("yyyy-MM-dd"))">
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-2 mb-3 mb-md-0">
-                    <label class="form-label">Project</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
-                        <select id="projectSelect" class="form-select">
-                            <option value="">Select Project</option>
-                            @if (ViewBag.Projects != null)
-                            {
-                                foreach (var project in ViewBag.Projects)
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Project <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
+                            <select id="projectSelect" class="form-select" required>
+                                <option value="">Select Project</option>
+                                @if (ViewBag.Projects != null)
                                 {
-                                    <option value="@project.ProjectId">@project.ProjectName</option>
+                                    foreach (var project in ViewBag.Projects)
+                                    {
+                                        <option value="@project.ProjectId">@project.ProjectName</option>
+                                    }
                                 }
-                            }
-                        </select>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Category</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-list"></i></span>
+                            <select id="categorySelect" class="form-select" disabled>
+                                <option value="">All Categories</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-2 mb-3 mb-md-0">
-                    <label class="form-label">Category</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-list"></i></span>
-                        <select id="categorySelect" class="form-select" disabled>
-                            <option value="">Select Category</option>
-                        </select>
+                <div class="row mb-3">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Account</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-file-invoice-dollar"></i></span>
+                            <select id="accountSelect" class="form-select" disabled>
+                                <option value="">All Accounts</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button type="submit" id="goButton" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Generate Report
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-2 mb-3 mb-md-0">
-                    <label class="form-label">Account</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-file-invoice-dollar"></i></span>
-                        <select id="accountSelect" class="form-select" disabled>
-                            <option value="">Select Account</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-2 mb-3 mb-md-0">
-                    <button id="goButton" class="btn btn-primary w-100">
-                        <i class="fas fa-search me-1"></i> Search
-                    </button>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-12">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" id="searchInput" class="form-control" placeholder="Filter results...">
-                    </div>
-                </div>
-            </div>
+            </form>
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-list-alt me-2"></i>Available Entries
-            </h6>
-            <div>
-                <button id="transferBtn" class="btn btn-info btn-sm">
-                    <i class="fas fa-exchange-alt me-1"></i> Transfer
-                </button>
+    <div id="reportResults" style="display:none;">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-list-alt me-2"></i>Available Entries
+                </h6>
             </div>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="entriesTable" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Date</th>
-                            <th>Description</th>
-                            <th>Account</th>
-                            <th>Quantity</th>
-                            <th class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultsTable">
-                        <tr id="noProjectMessageRow">
-                            <td colspan="6" class="text-center text-muted">
-                                Please select a project and click Search to view entries.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Search</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input id="searchInput" class="form-control" placeholder="Filter results..." />
+                        </div>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="entriesTable" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Account</th>
+                                <th>Quantity</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTable">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -200,7 +199,6 @@
                         </div>
                     </div>
 
-                    <!-- Add this after the Other Reference field and before the allEntriesView div in the deliveryChallanModal -->
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <div class="form-check mb-2">
@@ -208,7 +206,7 @@
                                 <label class="form-check-label" for="includeForCharges">
                                     <strong>Include FOR Charges</strong>
                                     <small class="text-muted ms-2">(Freight on Road)</small>
-                                    <i class="fas fa-info-circle text-info ms-1" data-bs-toggle="tooltip" 
+                                    <i class="fas fa-info-circle text-info ms-1" data-bs-toggle="tooltip"
                                        title="FOR charges must be configured in project settings to be enabled"></i>
                                 </label>
                             </div>
@@ -222,9 +220,7 @@
                         </div>
                     </div>
 
-                    <!-- All Entries View - This will be populated dynamically -->
                     <div id="allEntriesView" class="d-none">
-                        <!-- Dynamic content will be inserted here -->
                     </div>
                 </form>
             </div>
@@ -307,7 +303,6 @@
 }
 
 <style>
-    /* Remove dropdown arrows from all select elements */
     select.form-select {
         -webkit-appearance: none !important;
         -moz-appearance: none !important;
@@ -316,28 +311,23 @@
         padding-right: 0.75rem !important;
     }
 
-        /* For Firefox */
         select.form-select::-ms-expand {
             display: none;
         }
 
-    /* Ensure table row actions are properly aligned */
     .table .btn-sm {
         padding: 0.25rem 0.5rem;
         font-size: 0.75rem;
     }
 
-    /* Style for processed items */
     tr.table-success {
         background-color: rgba(40, 167, 69, 0.15) !important;
     }
 
-    /* Style for checkbox labels */
     .form-check-label {
         cursor: pointer;
     }
-    
-    /* Style for disabled checkbox */
+
     .form-check-input:disabled + label {
         cursor: not-allowed;
         opacity: 0.6;
