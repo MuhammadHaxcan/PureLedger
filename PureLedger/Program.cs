@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore;
 using PureLedger.Data;
-using PureLedger.Middleware;
 using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
@@ -108,8 +107,7 @@ app.UseSession();
 app.UseAuthentication(); // Must come before UseAuthorization
 app.UseAuthorization();
 
-// Move the custom middleware after the built-in auth middleware
-app.UseMiddleware<PureLedger.Middleware.AuthorizationMiddleware>();
+// REMOVED: Custom authorization middleware - using attribute-based authorization instead
 
 // Simplified route pattern
 app.MapControllerRoute(

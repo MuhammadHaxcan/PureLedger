@@ -15,108 +15,155 @@ namespace PureLedger.Attributes
             {
                 "GetCategoriesByProject",
                 "GetAccountsByCategory",
-                "GetProductDetails"
+                "GetProductDetails",
+                "GetJournalEntry",
+                "GetVoucherSummary",
+                "GetMissedEntries",
+                "GetRecipeItems"
             },
             ["DeliveryChallan"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "GetCategoriesByProject",
                 "GetAccountsByCategory",
-                "GetLocations"
+                "GetLocations",
+                "GetFilteredEntries",
+                "GetVoucherEntries",
+                "CheckExistingChallan",
+                "GetTransporterCategoryId",
+                "CheckForChargesAvailable"
             },
             ["Reporting"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "GetCategoriesByProject",
-                "GetAccountsByCategory"
+                "GetAccountsByCategory",
+                "GetAllBookers",
+                "ValidateVoucher",
+                "GetAgingReportData",
+                "GetAccountReportData",
+                "GetMasterReportData",
+                "GetProductReportData",
+                "GetMissedEntriesData",
+                "GetMissedEntriesSummary",
+                "GetMissedEntriesByCustomer",
+                "GetMissedEntriesByProduct"
+            },
+            ["MetaData"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "GetCategoriesByProject",
+                "GetCategoriesByProjectForView",
+                "GetAllProjectsForCategories",
+                "GetAllProjectsForAccounts",
+                "GetAccountsByCriteria",
+                "CanDeleteCategory",
+                "CanDeleteAccount",
+                "ToggleAccountStatusAjax",
+                "ToggleBookerStatusAjax"
+            },
+            ["Admin"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "GetCategoriesByProject",
+                "GetAccountsByCategory",
+                "GetCategoryForAccount",
+                "GetProjectCartageSettingsByProject"
             }
         };
 
         public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            // Skip check for Account controller and admin users
-            if (context.Controller.GetType().Name == "AccountController" ||
-                context.HttpContext.User.IsInRole("Admin"))
+            // Get controller and action names
+            var controllerName = context.RouteData.Values["controller"]?.ToString();
+            var actionName = context.RouteData.Values["action"]?.ToString();
+
+            // Skip check for Account controller
+            if (string.Equals(controllerName, "Account", StringComparison.OrdinalIgnoreCase))
             {
                 await next();
                 return;
             }
 
-            var userIdClaim = context.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out int userId))
+            // Admin users bypass all checks
+            if (context.HttpContext.User.IsInRole("Admin"))
             {
-                var controllerName = context.RouteData.Values["controller"]?.ToString();
-                var actionName = context.RouteData.Values["action"]?.ToString();
+                await next();
+                return;
+            }
 
-                if (!string.IsNullOrEmpty(controllerName) && !string.IsNullOrEmpty(actionName))
+            // Must be authenticated
+            if (context.HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                var returnUrl = context.HttpContext.Request.Path + context.HttpContext.Request.QueryString;
+                context.Result = new RedirectToActionResult("Login", "Account", new { returnUrl });
+                return;
+            }
+
+            // Get user ID
+            var userIdClaim = context.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            {
+                context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(controllerName) || string.IsNullOrEmpty(actionName))
+            {
+                context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
+                return;
+            }
+
+            // Get the AuthService from DI
+            var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
+
+            // Check if this is a utility API endpoint
+            bool isUtilityEndpoint = ApiUtilityEndpoints.TryGetValue(controllerName, out var utilityActions) &&
+                                    utilityActions != null &&
+                                    utilityActions.Contains(actionName);
+
+            // Check project access if projectId is in route data or action parameters
+            if (context.RouteData.Values.TryGetValue("projectId", out var projectIdObj) ||
+                context.ActionArguments.TryGetValue("projectId", out projectIdObj))
+            {
+                if (projectIdObj != null && int.TryParse(projectIdObj.ToString(), out int projectId) && projectId > 0)
                 {
-                    // Get the AuthService from DI
-                    var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
-
-                    // Check if this is a utility API endpoint - FIX: Added null check for utilityActions
-                    bool isUtilityEndpoint = ApiUtilityEndpoints.TryGetValue(controllerName, out var utilityActions) &&
-                                            utilityActions != null &&
-                                            utilityActions.Contains(actionName);
-
-                    // Check project access if projectId is in route data or action parameters
-                    if (context.RouteData.Values.TryGetValue("projectId", out var projectIdObj) ||
-                        context.ActionArguments.TryGetValue("projectId", out projectIdObj))
+                    bool hasProjectAccess = await authService.HasProjectAccessAsync(userId, projectId);
+                    if (!hasProjectAccess)
                     {
-                        if (projectIdObj != null && int.TryParse(projectIdObj.ToString(), out int projectId))
-                        {
-                            bool hasProjectAccess = await authService.HasProjectAccessAsync(userId, projectId);
-                            if (!hasProjectAccess)
-                            {
-                                context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
-                                return;
-                            }
-                        }
-                    }
-
-                    // Check for controller-level access first
-                    bool hasControllerAccess = await authService.HasControllerAccessAsync(userId, controllerName);
-                    if (hasControllerAccess)
-                    {
-                        await next();
+                        await DenyAccess(context, isUtilityEndpoint);
                         return;
-                    }
-
-                    // If no controller-level access, check action-specific access
-                    bool hasActionAccess = await authService.HasActionAccessAsync(userId, controllerName, actionName);
-                    if (hasActionAccess)
-                    {
-                        await next();
-                        return;
-                    }
-
-                    // Special case for utility endpoints: Check if user has access to ANY action in this controller
-                    // OR if the request is coming from a controller they have access to
-                    if (isUtilityEndpoint)
-                    {
-                        // Check if user has access to any action in current controller
-                        bool hasAnyActionInController = await HasAccessToAnyActionInControllerAsync(authService, userId, controllerName);
-                        
-                        if (hasAnyActionInController)
-                        {
-                            await next();
-                            return;
-                        }
                     }
                 }
             }
 
-            // Check if this is an API request
-            bool isApiRequest = context.HttpContext.Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
-                               context.HttpContext.Request.Path.ToString().Contains("/api/", StringComparison.OrdinalIgnoreCase);
+            // Check for controller-level access first
+            bool hasControllerAccess = await authService.HasControllerAccessAsync(userId, controllerName);
+            if (hasControllerAccess)
+            {
+                await next();
+                return;
+            }
 
-            if (isApiRequest)
+            // If no controller-level access, check action-specific access
+            bool hasActionAccess = await authService.HasActionAccessAsync(userId, controllerName, actionName);
+            if (hasActionAccess)
             {
-                // For API requests, return 403 Forbidden status
-                context.Result = new StatusCodeResult(403);
+                await next();
+                return;
             }
-            else
+
+            // Special case for utility endpoints: Check if user has access to ANY action in this controller
+            if (isUtilityEndpoint)
             {
-                // For regular requests, redirect to access denied
-                context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
+                // Check if user has access to any action in current controller
+                bool hasAnyActionInController = await HasAccessToAnyActionInControllerAsync(authService, userId, controllerName);
+                
+                if (hasAnyActionInController)
+                {
+                    await next();
+                    return;
+                }
             }
+
+            // Access denied
+            await DenyAccess(context, isUtilityEndpoint);
         }
 
         private async Task<bool> HasAccessToAnyActionInControllerAsync(IAuthService authService, int userId, string controllerName)
@@ -139,6 +186,30 @@ namespace PureLedger.Attributes
                 // In case of any exception, fail safely by denying access
                 return false;
             }
+        }
+
+        private static Task DenyAccess(ActionExecutingContext context, bool isApiRequest)
+        {
+            // Check if this is an AJAX/API request
+            bool isAjax = string.Equals(context.HttpContext.Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase) ||
+                         isApiRequest ||
+                         context.HttpContext.Request.Path.ToString().Contains("/api/", StringComparison.OrdinalIgnoreCase);
+
+            if (isAjax)
+            {
+                // For API requests, return 403 Forbidden status with JSON
+                context.Result = new JsonResult(new { error = "Access denied" })
+                {
+                    StatusCode = 403
+                };
+            }
+            else
+            {
+                // For regular requests, redirect to access denied page
+                context.Result = new RedirectToActionResult("AccessDenied", "Account", null);
+            }
+
+            return Task.CompletedTask;
         }
     }
 }

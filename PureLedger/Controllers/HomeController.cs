@@ -580,7 +580,6 @@ namespace PureLedger.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error saving recipe from voucher {VoucherId}", journalVoucher.JournalVoucherId);
-                    // Don't interrupt the main workflow if recipe creation fails
                 }
             }
 

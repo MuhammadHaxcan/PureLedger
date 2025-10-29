@@ -600,6 +600,12 @@ namespace PureLedger.Services
 
                 foreach (var entry in productEntries)
                 {
+                    if (!entry.CategoryId.HasValue || !entry.AccountId.HasValue)
+                    {
+                        _logger.LogWarning("Skipping recipe item creation due to missing CategoryId or AccountId");
+                        continue;
+                    }
+
                     var recipeItem = new RecipeItem
                     {
                         RecipeId = recipe.RecipeId,
@@ -613,7 +619,8 @@ namespace PureLedger.Services
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items", recipe.RecipeId, productEntries.Count);
+                _logger.LogInformation("Successfully created recipe {RecipeId} with {ItemCount} items",
+                    recipe.RecipeId, productEntries.Count);
 
                 return recipe.RecipeId;
             }
@@ -876,13 +883,13 @@ namespace PureLedger.Services
                 }
                 else
                 {
-                    bool allUnprocessedAreAccountGroup1 = unprocessedEntries.All(e =>
+                    bool allUnprocessedAreAccounts = unprocessedEntries.All(e =>
                         accountsDict.ContainsKey(e.AccountId) &&
                         accountsDict[e.AccountId].AccountGroupId == 1);
 
-                    if (allUnprocessedAreAccountGroup1)
+                    if (allUnprocessedAreAccounts)
                     {
-                        _logger.LogInformation("All unprocessed entries in voucher {VoucherId} are AccountGroup 1, marking as processed", journalVoucherId);
+                        _logger.LogInformation("All unprocessed entries in voucher {VoucherId} are Accounts, marking as processed", journalVoucherId);
 
                         foreach (var entry in unprocessedEntries)
                         {
