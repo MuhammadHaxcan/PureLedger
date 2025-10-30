@@ -1,4 +1,5 @@
 using PureLedger.Models;
+using PureLedger.Services;
 using PureLedger.ViewModels;
 
 namespace PureLedger.Services.Interface
@@ -30,7 +31,7 @@ namespace PureLedger.Services.Interface
             int? accountId = null);
         #endregion
 
-        #region DeliveryChallan Operations
+        #region DeliveryChallan Operations - Standalone
         Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate);
         Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate, string? reference);
 
@@ -38,12 +39,42 @@ namespace PureLedger.Services.Interface
         Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate);
         #endregion
 
-        #region DeliveryChallan Update and Processing
-        Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
-        Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
-        Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
+        #region DeliveryChallan Operations - Transactional (Called by Controllers)
+        /// <summary>
+        /// Creates a single delivery challan entry with transaction management.
+        /// This method is called directly by controllers.
+        /// </summary>
+        Task<DeliveryChallanEntry> CreateSingleDeliveryChallanAsync(
+            int journalEntryId,
+            DateOnly dcDate,
+            string? otherReference,
+            int locationId,
+            string? remarks,
+            bool includeForCharges,
+            int forAmount);
 
+        /// <summary>
+        /// Processes batch delivery challan entries with transaction management.
+        /// This method is called directly by controllers.
+        /// </summary>
+        Task<(int deliveryChallanId, List<EntryProcessResult> results)> ProcessBatchDeliveryChallanAsync(
+            int journalVoucherId,
+            DateOnly dcDate,
+            string? otherReference,
+            int locationId,
+            string? remarks,
+            bool includeForCharges,
+            int forAmount);
+
+        /// <summary>
+        /// Processes cartage and delivery with transaction management.
+        /// This method is called directly by controllers.
+        /// </summary>
         Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(CartageViewModel model);
+
+        /// <summary>
+        /// Processes cartage and delivery with transaction management (overload for backward compatibility).
+        /// </summary>
         Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(
             int journalVoucherId,
             int entryId,
@@ -58,15 +89,25 @@ namespace PureLedger.Services.Interface
             int dcLocation);
         #endregion
 
+        #region DeliveryChallan Update and Processing
+        Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
+        Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
+        Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
+        #endregion
+
+        #region Lookup Operations
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
+        Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
+        #endregion
+
+        #region FOR Charges Processing
 
         Task<JournalVoucher> ProcessForChargesAsync(
             int journalVoucherId,
             int? entryId,
             int amount,
             DateOnly dcDate);
-
-        Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
+        #endregion
     }
 }

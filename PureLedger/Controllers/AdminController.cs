@@ -21,7 +21,7 @@ namespace PureLedger.Controllers
             ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "MissedEntries", "BaseVouchers", "Recipes" }, // Added "Recipes"
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations", "Bookers" },
             ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport" },
-            ["DeliveryChallan"] = new() { "Index" }
+            ["DeliveryChallan"] = new() { "ProcessDC" } // Changed from "Index" to "ProcessDC"
         };
 
         public AdminController(

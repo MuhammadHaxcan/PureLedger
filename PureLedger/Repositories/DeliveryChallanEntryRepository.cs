@@ -33,11 +33,10 @@ namespace PureLedger.Repositories
 
         public async Task<DeliveryChallanEntry?> GetByDeliveryChallanIdAndJournalEntryIdAsync(int deliveryChallanId, int journalEntryId)
         {
-           
             var deliveryChallanVoucherId = await _context.DeliveryChallanVouchers
-        .Where(dcv => dcv.JournalVoucherId == deliveryChallanId)
-        .Select(dcv => dcv.DeliveryChallanVoucherId)
-        .FirstOrDefaultAsync();
+                .Where(dcv => dcv.JournalVoucherId == deliveryChallanId)
+                .Select(dcv => dcv.DeliveryChallanVoucherId)
+                .FirstOrDefaultAsync();
 
             if (deliveryChallanVoucherId == 0)
                 return null;
@@ -51,12 +50,14 @@ namespace PureLedger.Repositories
         public async Task<DeliveryChallanEntry> AddAsync(DeliveryChallanEntry deliveryChallanEntry)
         {
             await _context.DeliveryChallanEntries.AddAsync(deliveryChallanEntry);
+            await _context.SaveChangesAsync(); // Pattern A: Save within repository
             return deliveryChallanEntry;
         }
 
         public async Task<DeliveryChallanEntry> UpdateAsync(DeliveryChallanEntry deliveryChallanEntry)
         {
             _context.DeliveryChallanEntries.Update(deliveryChallanEntry);
+            await _context.SaveChangesAsync(); // Pattern A: Save within repository
             return deliveryChallanEntry;
         }
 
@@ -69,7 +70,7 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.DeliveryChallanEntries.Remove(entry);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(); // Pattern A: Already present
             return true;
         }
     }

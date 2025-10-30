@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services.Interface;
@@ -21,8 +20,7 @@ namespace PureLedger.Controllers
         public DeliveryChallanController(
             IDeliveryChallanService deliveryChallanService,
             ICurrentUserService currentUserService,
-            ILogger<DeliveryChallanController> logger
-            )
+            ILogger<DeliveryChallanController> logger)
         {
             _deliveryChallanService = deliveryChallanService ?? throw new ArgumentNullException(nameof(deliveryChallanService));
             _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
@@ -31,7 +29,11 @@ namespace PureLedger.Controllers
 
         #region View Pages
 
-        public async Task<IActionResult> Index()
+        /// <summary>
+        /// Displays the delivery challan processing page.
+        /// </summary>
+        /// <returns>IActionResult representing the asynchronous operation.</returns>
+        public async Task<IActionResult> ProcessDC()
         {
             try
             {
@@ -39,11 +41,11 @@ namespace PureLedger.Controllers
                 ViewBag.Projects = projects;
 
                 var model = CreateDefaultFilterViewModel();
-                return View(model);
+                return View(model); // Now automatically looks for ProcessDC.cshtml
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load delivery challan index page");
+                _logger.LogError(ex, "Failed to load delivery challan page");
                 return View(new DeliveryChallanFilterViewModel());
             }
         }
@@ -234,39 +236,32 @@ namespace PureLedger.Controllers
 
             try
             {
-                var journalEntry = await GetValidatedJournalEntryAsync(model.JournalEntryId);
-                if (journalEntry == null)
-                {
-                    return NotFound(new { success = false, message = $"Journal entry {model.JournalEntryId} not found" });
-                }
+                _logger.LogInformation(
+                    "Processing single delivery challan entry - Entry: {EntryId}, Date: {DCDate}, Location: {LocationId}",
+                    model.JournalEntryId, model.DCDate, model.LocationId);
 
-                var deliveryChallan = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
-                    journalEntry.JournalVoucherId, model.DCDate, model.OtherReference);
-
-                var dcEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
-                    deliveryChallan.DeliveryChallanVoucherId,
+                var dcEntry = await _deliveryChallanService.CreateSingleDeliveryChallanAsync(
                     model.JournalEntryId,
+                    model.DCDate,
+                    model.OtherReference,
                     model.LocationId,
                     model.Remarks,
-                    model.OtherReference,
-                    model.DCDate);
-
-                if (model.IncludeForCharges && model.ForAmount > 0)
-                {
-                    await ProcessForChargesAsync(journalEntry.JournalVoucherId, model.JournalEntryId,
-                        model.ForAmount, model.DCDate);
-                }
-
-                await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(journalEntry.JournalVoucherId);
+                    model.IncludeForCharges,
+                    model.ForAmount);
 
                 _logger.LogInformation("Created delivery challan entry {DCEntryId} for journal entry {EntryId}",
                     dcEntry.DeliveryChallanEntryId, model.JournalEntryId);
 
                 return JsonSuccess("Entry successfully added to delivery challan", new
                 {
-                    deliveryChallanId = deliveryChallan.DeliveryChallanVoucherId,
+                    deliveryChallanId = dcEntry.DeliveryChallanVoucherId,
                     dcEntryId = dcEntry.DeliveryChallanEntryId
                 });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument for journal entry {EntryId}", model.JournalEntryId);
+                return NotFound(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -292,36 +287,43 @@ namespace PureLedger.Controllers
                     "Processing batch for voucher {VoucherId} - Date: {DCDate}, Location: {LocationId}",
                     model.JournalVoucherId, model.DCDate, model.LocationId);
 
-                var unprocessedEntries = await _deliveryChallanService.GetUnprocessedEntriesByVoucherIdAsync(model.JournalVoucherId);
-
-                if (!unprocessedEntries.Any())
-                {
-                    return JsonError("No unprocessed entries found for this voucher");
-                }
-
-                var deliveryChallan = await _deliveryChallanService.CreateDeliveryChallanVoucherAsync(
-                    model.JournalVoucherId, model.DCDate, model.OtherReference);
-
-                var results = await ProcessEntriesBatchAsync(
-                    deliveryChallan.DeliveryChallanVoucherId,
-                    unprocessedEntries,
+                var (deliveryChallanId, results) = await _deliveryChallanService.ProcessBatchDeliveryChallanAsync(
+                    model.JournalVoucherId,
+                    model.DCDate,
+                    model.OtherReference,
                     model.LocationId,
                     model.Remarks,
-                    model.OtherReference,
-                    model.DCDate);
-
-                if (model.IncludeForCharges && model.ForAmount > 0)
-                {
-                    await ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DCDate);
-                }
-
-                await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(model.JournalVoucherId);
+                    model.IncludeForCharges,
+                    model.ForAmount);
 
                 var successCount = results.Count(r => r.Success);
-                _logger.LogInformation("Batch processing completed - {SuccessCount}/{TotalCount} entries processed successfully",
-                    successCount, unprocessedEntries.Count);
+                var failedEntries = results.Where(r => !r.Success).ToList();
 
-                return JsonSuccess($"Processed {successCount} out of {unprocessedEntries.Count} entries", new { results });
+                _logger.LogInformation(
+                    "Batch processing completed - {SuccessCount}/{TotalCount} entries processed successfully",
+                    successCount, results.Count);
+
+                if (failedEntries.Any())
+                {
+                    _logger.LogWarning("Failed entries: {@FailedEntries}",
+                        failedEntries.Select(f => new { f.EntryId, f.Message }));
+                }
+
+                return JsonSuccess($"Processed {successCount} out of {results.Count} entries", new
+                {
+                    deliveryChallanId,
+                    results = results.Select(r => new
+                    {
+                        r.EntryId,
+                        r.Success,
+                        r.Message
+                    })
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid operation for voucher {VoucherId}", model.JournalVoucherId);
+                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -332,7 +334,7 @@ namespace PureLedger.Controllers
 
         [HttpPost]
         public async Task<IActionResult> AddCartage([FromBody] CartageViewModel model)
-        {
+            {
             if (!ModelState.IsValid)
             {
                 _logger.LogWarning("Invalid model state for cartage: {@Errors}",
@@ -342,22 +344,30 @@ namespace PureLedger.Controllers
 
             try
             {
+                _logger.LogInformation(
+                    "Processing cartage - Voucher: {VoucherId}, Entry: {EntryId}, Transporter: {TransporterId}, Amount: {Amount}",
+                    model.JournalVoucherId, model.EntryId, model.TransporterId, model.Amount);
+
                 var deliveryChallan = await _deliveryChallanService.ProcessCartageAndDeliveryAsync(model);
 
-                if (model.IncludeForCharges && model.ForAmount > 0)
-                {
-                    await ProcessForChargesAsync(model.JournalVoucherId, model.EntryId, model.ForAmount, model.DcDate);
-                }
-
-                await _deliveryChallanService.UpdateJournalVoucherProcessedStatusAsync(model.JournalVoucherId);
-
-                _logger.LogInformation("Processed cartage for voucher {VoucherId}, entry {EntryId}",
-                    model.JournalVoucherId, model.EntryId);
+                _logger.LogInformation(
+                    "Processed cartage for voucher {VoucherId}, entry {EntryId} - Delivery Challan: {DeliveryChallanId}",
+                    model.JournalVoucherId, model.EntryId, deliveryChallan.DeliveryChallanVoucherId);
 
                 return JsonSuccess("Cartage and delivery challan processed successfully", new
                 {
                     deliveryChallanId = deliveryChallan.DeliveryChallanVoucherId
                 });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument for cartage processing");
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid operation for cartage processing");
+                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -379,104 +389,10 @@ namespace PureLedger.Controllers
                 : new List<Project>();
         }
 
-        private async Task<JournalEntry?> GetValidatedJournalEntryAsync(int entryId)
-        {
-            return await _deliveryChallanService.GetJournalEntryByIdAsync(entryId);
-        }
-
         private async Task<bool> IsForChargesAvailableAsync(int projectId)
         {
             var settings = await _deliveryChallanService.GetProjectCartageSettingsAsync(projectId);
             return settings?.ForExpenseAccountId > 0;
-        }
-
-        private async Task ProcessForChargesAsync(int journalVoucherId, int? entryId, int amount, DateOnly date)
-        {
-            await _deliveryChallanService.ProcessForChargesAsync(journalVoucherId, entryId, amount, date);
-
-            var entryContext = entryId.HasValue ? $"entry {entryId}" : "voucher";
-            _logger.LogInformation("Processed FOR charges of {Amount} for {Context} in voucher {VoucherId}",
-                amount, entryContext, journalVoucherId);
-        }
-
-        private async Task<List<EntryProcessResult>> ProcessEntriesBatchAsync(
-            int deliveryChallanId,
-            List<JournalEntry> entries,
-            int locationId,
-            string? remarks,
-            string? otherReference,
-            DateOnly entryDate)
-        {
-            var results = new List<EntryProcessResult>();
-
-            _logger.LogInformation("Processing batch of {Count} entries for delivery challan {DeliveryChallanId}",
-                entries.Count, deliveryChallanId);
-
-            foreach (var entry in entries)
-            {
-                var result = await ProcessSingleEntryAsync(
-                    deliveryChallanId, entry, locationId, remarks, otherReference, entryDate);
-                results.Add(result);
-            }
-
-            var successCount = results.Count(r => r.Success);
-            _logger.LogInformation("Batch processing completed for delivery challan {DeliveryChallanId} - {SuccessCount}/{TotalCount} successful",
-                deliveryChallanId, successCount, entries.Count);
-
-            return results;
-        }
-
-        private async Task<EntryProcessResult> ProcessSingleEntryAsync(
-            int deliveryChallanId,
-            JournalEntry entry,
-            int locationId,
-            string? remarks,
-            string? otherReference,
-            DateOnly entryDate)
-        {
-            try
-            {
-                if (entry.IsProcessed)
-                {
-                    _logger.LogWarning("Entry {EntryId} already processed - skipping", entry.JournalEntryId);
-
-                    return new EntryProcessResult
-                    {
-                        EntryId = entry.JournalEntryId,
-                        Success = true,
-                        Message = "Entry was already processed"
-                    };
-                }
-
-                var dcEntry = await _deliveryChallanService.CreateDeliveryChallanEntryAsync(
-                    deliveryChallanId,
-                    entry.JournalEntryId,
-                    locationId,
-                    remarks,
-                    otherReference,
-                    entryDate);
-
-                _logger.LogInformation("Successfully processed entry {EntryId}, created DC entry {DCEntryId}",
-                    entry.JournalEntryId, dcEntry.DeliveryChallanEntryId);
-
-                return new EntryProcessResult
-                {
-                    EntryId = entry.JournalEntryId,
-                    Success = true
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to process entry {EntryId} for delivery challan {DeliveryChallanId}",
-                    entry.JournalEntryId, deliveryChallanId);
-
-                return new EntryProcessResult
-                {
-                    EntryId = entry.JournalEntryId,
-                    Success = false,
-                    Message = ex.Message
-                };
-            }
         }
 
         #endregion
@@ -562,17 +478,6 @@ namespace PureLedger.Controllers
             }
 
             return Json(expando);
-        }
-
-        #endregion
-
-        #region Data Transfer Objects
-
-        private class EntryProcessResult
-        {
-            public int EntryId { get; set; }
-            public bool Success { get; set; }
-            public string? Message { get; set; }
         }
 
         #endregion

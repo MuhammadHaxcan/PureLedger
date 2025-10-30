@@ -342,6 +342,35 @@ function setupModalListeners() {
             }
         });
     }
+
+    // Location select change handler to enable/disable "Add Cartage" button
+    const dcLocationSelect = document.getElementById('dcLocation');
+    if (dcLocationSelect) {
+        dcLocationSelect.addEventListener('change', function () {
+            updateCartageButtonState();
+        });
+    }
+}
+
+// ==================== NEW: UPDATE CARTAGE BUTTON STATE ====================
+
+function updateCartageButtonState() {
+    const openCartageBtn = document.getElementById('openCartageBtn');
+    const dcLocationSelect = document.getElementById('dcLocation');
+
+    if (!openCartageBtn) return;
+
+    const locationSelected = dcLocationSelect && dcLocationSelect.value && dcLocationSelect.value !== '';
+
+    if (locationSelected) {
+        openCartageBtn.disabled = false;
+        openCartageBtn.classList.remove('disabled');
+        openCartageBtn.title = '';
+    } else {
+        openCartageBtn.disabled = true;
+        openCartageBtn.classList.add('disabled');
+        openCartageBtn.title = 'Please select a location first';
+    }
 }
 
 window.openDeliveryChallanModal = function (voucherId, entryId) {
@@ -404,12 +433,19 @@ window.openDeliveryChallanModal = function (voucherId, entryId) {
                 document.getElementById('dcRemarks').value = '';
                 document.getElementById('dcLocation').value = data.challan.locationId || '';
                 document.getElementById('dcOtherRef').value = data.challan.otherRef || '';
+
+                // Update cartage button state after setting location
+                updateCartageButtonState();
             } else {
                 document.getElementById('existingChallanMessage').classList.add('d-none');
                 challanId.value = '';
                 document.getElementById('dcDate').value = new Date().toISOString().split('T')[0];
                 document.getElementById('dcRemarks').value = '';
                 document.getElementById('dcOtherRef').value = '';
+                document.getElementById('dcLocation').value = '';
+
+                // Update cartage button state (should be disabled initially)
+                updateCartageButtonState();
             }
         })
         .fail(function (xhr, status, error) {
@@ -424,13 +460,22 @@ window.openDeliveryChallanModal = function (voucherId, entryId) {
         cartageBtn.id = 'openCartageBtn';
         cartageBtn.className = 'btn btn-info';
         cartageBtn.innerHTML = '<i class="fas fa-shipping-fast me-1"></i> Add Cartage';
+        cartageBtn.disabled = true; // Initially disabled
+        cartageBtn.title = 'Please select a location first';
         cartageBtn.onclick = function () {
-            openCartageModal(currentModalData.voucherId, currentModalData.entryId);
+            if (!this.disabled) {
+                openCartageModal(currentModalData.voucherId, currentModalData.entryId);
+            }
         };
         modalFooter.insertBefore(cartageBtn, modalFooter.firstChild);
     } else {
-        document.getElementById('openCartageBtn').onclick = function () {
-            openCartageModal(currentModalData.voucherId, currentModalData.entryId);
+        const cartageBtn = document.getElementById('openCartageBtn');
+        cartageBtn.disabled = true; // Reset to disabled
+        cartageBtn.title = 'Please select a location first';
+        cartageBtn.onclick = function () {
+            if (!this.disabled) {
+                openCartageModal(currentModalData.voucherId, currentModalData.entryId);
+            }
         };
     }
 
@@ -642,6 +687,27 @@ function addCartage(actionBtns) {
     const dcStation = document.getElementById('dcStation')?.value || '';
     const dcOtherRef = document.getElementById('dcOtherRef').value;
     const dcLocation = document.getElementById('dcLocation').value;
+
+    // Validate location is selected
+    if (!dcLocation) {
+        showAlert('warning', 'Please select a location before adding cartage');
+        resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+        return;
+    }
+
+    // Validate transporter is selected
+    if (!transporterId) {
+        showAlert('warning', 'Please select a transporter');
+        resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+        return;
+    }
+
+    // Validate amount is present and greater than zero
+    if (!amount || parseFloat(amount) <= 0) {
+        showAlert('warning', 'Please enter a valid cartage amount greater than zero');
+        resetButtonLoadingExclusive(addCartageBtn, actionBtns);
+        return;
+    }
 
     const includeForCharges = document.getElementById('includeForCharges').checked && forChargesAvailable;
     const forChargesAmount = includeForCharges ?

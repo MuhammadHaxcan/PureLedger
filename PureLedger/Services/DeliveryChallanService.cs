@@ -29,15 +29,12 @@ namespace PureLedger.Services
         public Task<List<Location>> GetAllLocationsAsync() =>
             _unitOfWork.Locations.GetAllAsync();
 
-        // Return nullable to match repository and actual semantics
         public Task<JournalEntry?> GetJournalEntryByIdAsync(int journalEntryId) =>
             _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(journalEntryId);
 
-        // Return nullable to match repository
         public Task<DeliveryChallanVoucher?> GetDeliveryChallanVoucherByIdAsync(int deliveryChallanId) =>
             _unitOfWork.DeliveryChallanVouchers.GetByIdWithEntriesAsync(deliveryChallanId);
 
-        // Return nullable to match repository
         public async Task<DeliveryChallanVoucher?> GetDeliveryChallanVoucherByJournalVoucherIdAsync(int journalVoucherId)
         {
             try
@@ -173,12 +170,165 @@ namespace PureLedger.Services
 
         #endregion
 
-        #region Create & Update Operations
+        #region Create & Update Operations - WITH TRANSACTIONS
 
-        public Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate) =>
-            CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDate, null);
+        public async Task<DeliveryChallanEntry> CreateSingleDeliveryChallanAsync(
+            int journalEntryId,
+            DateOnly dcDate,
+            string? otherReference,
+            int locationId,
+            string? remarks,
+            bool includeForCharges,
+            int forAmount)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var journalEntry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(journalEntryId);
+                if (journalEntry == null)
+                {
+                    throw new ArgumentException($"Journal entry {journalEntryId} not found");
+                }
 
-        public async Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate, string? reference)
+                var deliveryChallan = await CreateDeliveryChallanVoucherInternalAsync(
+                    journalEntry.JournalVoucherId, dcDate, otherReference);
+
+                var dcEntry = await CreateDeliveryChallanEntryInternalAsync(
+                    deliveryChallan.DeliveryChallanVoucherId,
+                    journalEntryId,
+                    locationId,
+                    remarks,
+                    otherReference,
+                    dcDate);
+
+                if (includeForCharges && forAmount > 0)
+                {
+                    await ProcessForChargesInternalAsync(journalEntry.JournalVoucherId, journalEntryId, forAmount, dcDate);
+                }
+
+                await UpdateJournalVoucherProcessedStatusInternalAsync(journalEntry.JournalVoucherId);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Created delivery challan entry {DCEntryId} for journal entry {EntryId}",
+                    dcEntry.DeliveryChallanEntryId, journalEntryId);
+
+                return dcEntry;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to create single delivery challan for entry {EntryId}", journalEntryId);
+                throw;
+            }
+        }
+
+        public async Task<(int deliveryChallanId, List<EntryProcessResult> results)> ProcessBatchDeliveryChallanAsync(
+            int journalVoucherId,
+            DateOnly dcDate,
+            string? otherReference,
+            int locationId,
+            string? remarks,
+            bool includeForCharges,
+            int forAmount)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var unprocessedEntries = await GetUnprocessedEntriesByVoucherIdAsync(journalVoucherId);
+
+                if (!unprocessedEntries.Any())
+                {
+                    throw new InvalidOperationException("No unprocessed entries found for this voucher");
+                }
+
+                var deliveryChallan = await CreateDeliveryChallanVoucherInternalAsync(
+                    journalVoucherId, dcDate, otherReference);
+
+                var results = new List<EntryProcessResult>();
+
+                foreach (var entry in unprocessedEntries)
+                {
+                    var result = await ProcessSingleEntryInternalAsync(
+                        deliveryChallan.DeliveryChallanVoucherId,
+                        entry,
+                        locationId,
+                        remarks,
+                        otherReference,
+                        dcDate);
+                    results.Add(result);
+                }
+
+                if (includeForCharges && forAmount > 0)
+                {
+                    await ProcessForChargesInternalAsync(journalVoucherId, null, forAmount, dcDate);
+                }
+
+                await UpdateJournalVoucherProcessedStatusInternalAsync(journalVoucherId);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var successCount = results.Count(r => r.Success);
+                _logger.LogInformation("Batch processing completed - {SuccessCount}/{TotalCount} entries processed successfully",
+                    successCount, unprocessedEntries.Count);
+
+                return (deliveryChallan.DeliveryChallanVoucherId, results);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to process batch for voucher {VoucherId}", journalVoucherId);
+                throw;
+            }
+        }
+
+        public async Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(CartageViewModel model)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var deliveryChallan = await ProcessCartageAndDeliveryInternalAsync(
+                    model.JournalVoucherId,
+                    model.EntryId,
+                    model.TransporterId,
+                    model.Amount,
+                    model.PostToCustomer,
+                    model.Reference,
+                    model.DcDate,
+                    model.DcRemarks,
+                    model.DcStation,
+                    model.DcOtherRef,
+                    model.DcLocation);
+
+                if (model.IncludeForCharges && model.ForAmount > 0)
+                {
+                    await ProcessForChargesInternalAsync(model.JournalVoucherId, model.EntryId, model.ForAmount, model.DcDate);
+                }
+
+                await UpdateJournalVoucherProcessedStatusInternalAsync(model.JournalVoucherId);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Processed cartage for voucher {VoucherId}, entry {EntryId}",
+                    model.JournalVoucherId, model.EntryId);
+
+                return deliveryChallan;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to process cartage for voucher {VoucherId}, entry {EntryId}",
+                    model.JournalVoucherId, model.EntryId);
+                throw;
+            }
+        }
+
+        #endregion
+
+        #region Internal Create & Update Operations - NO TRANSACTIONS
+
+        private async Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherInternalAsync(
+            int journalVoucherId, DateOnly dcDate, string? reference)
         {
             try
             {
@@ -196,7 +346,7 @@ namespace PureLedger.Services
                     if (!string.IsNullOrEmpty(reference))
                     {
                         await _unitOfWork.DeliveryChallanVouchers.UpdateAsync(existingDC);
-                        await _unitOfWork.SaveChangesAsync();
+                        // No SaveChanges here - caller manages transaction
                     }
 
                     return existingDC;
@@ -210,18 +360,11 @@ namespace PureLedger.Services
                 };
 
                 await _unitOfWork.DeliveryChallanVouchers.AddAsync(deliveryChallanVoucher);
-                await _unitOfWork.SaveChangesAsync();
+                // No SaveChanges here - caller manages transaction
 
-                var savedVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
-                if (savedVoucher == null)
-                {
-                    throw new InvalidOperationException($"Failed to save delivery challan voucher for journal voucher {journalVoucherId}");
-                }
+                _logger.LogInformation("Created delivery challan for journal voucher {JournalVoucherId}", journalVoucherId);
 
-                _logger.LogInformation("Created delivery challan {DeliveryChallanId} for journal voucher {JournalVoucherId}",
-                    savedVoucher.DeliveryChallanVoucherId, journalVoucherId);
-
-                return savedVoucher;
+                return deliveryChallanVoucher;
             }
             catch (Exception ex)
             {
@@ -230,11 +373,7 @@ namespace PureLedger.Services
             }
         }
 
-        public Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(
-            int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference) =>
-            CreateDeliveryChallanEntryAsync(deliveryChallanId, journalEntryId, locationId, remarks, otherReference, DateOnly.FromDateTime(DateTime.Now));
-
-        public async Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(
+        private async Task<DeliveryChallanEntry> CreateDeliveryChallanEntryInternalAsync(
             int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate)
         {
             try
@@ -250,7 +389,7 @@ namespace PureLedger.Services
                     existingEntry.EntryDate = entryDate;
 
                     await _unitOfWork.DeliveryChallanEntries.UpdateAsync(existingEntry);
-                    await _unitOfWork.SaveChangesAsync();
+                    // No SaveChanges here - caller manages transaction
 
                     _logger.LogInformation("Updated delivery challan entry {DCEntryId}", existingEntry.DeliveryChallanEntryId);
                     return existingEntry;
@@ -270,10 +409,9 @@ namespace PureLedger.Services
 
                 journalEntry.IsProcessed = true;
                 await _unitOfWork.JournalEntries.UpdateAsync(journalEntry);
-                await _unitOfWork.SaveChangesAsync();
+                // No SaveChanges here - caller manages transaction
 
-                _logger.LogInformation("Created delivery challan entry {DCEntryId} for date {EntryDate}",
-                    result.DeliveryChallanEntryId, entryDate);
+                _logger.LogInformation("Created delivery challan entry for journal entry {JournalEntryId}", journalEntryId);
 
                 return result;
             }
@@ -285,15 +423,72 @@ namespace PureLedger.Services
             }
         }
 
+        // Public methods that are called from outside but don't start transactions
+        public Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate) =>
+            CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDate, null);
+
+        public async Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate, string? reference)
+        {
+            // This is a standalone operation with its own transaction
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await CreateDeliveryChallanVoucherInternalAsync(journalVoucherId, dcDate, reference);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(
+            int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference) =>
+            CreateDeliveryChallanEntryAsync(deliveryChallanId, journalEntryId, locationId, remarks, otherReference, DateOnly.FromDateTime(DateTime.Now));
+
+        public async Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(
+            int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate)
+        {
+            // This is a standalone operation with its own transaction
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await CreateDeliveryChallanEntryInternalAsync(
+                    deliveryChallanId, journalEntryId, locationId, remarks, otherReference, entryDate);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
         public async Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher)
         {
-            var result = await _unitOfWork.DeliveryChallanVouchers.UpdateAsync(voucher);
-            await _unitOfWork.SaveChangesAsync();
-            return result;
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var result = await _unitOfWork.DeliveryChallanVouchers.UpdateAsync(voucher);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate)
         {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var deliveryChallan = await _unitOfWork.DeliveryChallanVouchers.GetByIdWithEntriesAsync(deliveryChallanId);
@@ -313,14 +508,16 @@ namespace PureLedger.Services
                 deliveryChallan.FinalDeliveryDate = finalDeliveryDate;
 
                 await _unitOfWork.DeliveryChallanVouchers.UpdateAsync(deliveryChallan);
-                await UpdateJournalVoucherProcessedStatusAsync(deliveryChallan.JournalVoucherId);
+                await UpdateJournalVoucherProcessedStatusInternalAsync(deliveryChallan.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
 
                 _logger.LogInformation("Completed delivery challan {DeliveryChallanId}", deliveryChallanId);
                 return true;
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Failed to complete delivery challan {DeliveryChallanId}", deliveryChallanId);
                 return false;
             }
@@ -328,9 +525,9 @@ namespace PureLedger.Services
 
         #endregion
 
-        #region Journal Voucher Processing
+        #region Journal Voucher Processing - NO TRANSACTIONS
 
-        public async Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId)
+        private async Task UpdateJournalVoucherProcessedStatusInternalAsync(int journalVoucherId)
         {
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher?.JournalEntries == null || !voucher.JournalEntries.Any())
@@ -350,11 +547,28 @@ namespace PureLedger.Services
 
             if (allGroup2Processed)
             {
-                await ProcessCompletedVoucherAsync(voucher, accountGroupMapping);
+                await ProcessCompletedVoucherInternalAsync(voucher, accountGroupMapping);
             }
             else
             {
                 await MarkVoucherAsIncompleteIfNeededAsync(voucher);
+            }
+        }
+
+        public async Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId)
+        {
+            // Public standalone version with transaction
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                await UpdateJournalVoucherProcessedStatusInternalAsync(journalVoucherId);
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
             }
         }
 
@@ -385,7 +599,7 @@ namespace PureLedger.Services
                 .ToList();
         }
 
-        private async Task ProcessCompletedVoucherAsync(JournalVoucher voucher, Dictionary<int, int> accountGroupMapping)
+        private async Task ProcessCompletedVoucherInternalAsync(JournalVoucher voucher, Dictionary<int, int> accountGroupMapping)
         {
             var group1Entries = GetEntriesByAccountGroup(voucher.JournalEntries, accountGroupMapping, 1)
                 .Where(e => !e.IsProcessed);
@@ -404,7 +618,6 @@ namespace PureLedger.Services
             }
 
             await CompleteAssociatedDeliveryChallanAsync(voucher.JournalVoucherId);
-            await _unitOfWork.SaveChangesAsync();
         }
 
         private async Task CompleteAssociatedDeliveryChallanAsync(int journalVoucherId)
@@ -433,7 +646,6 @@ namespace PureLedger.Services
             {
                 voucher.IsCompleted = false;
                 await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-                await _unitOfWork.SaveChangesAsync();
             }
         }
 
@@ -493,23 +705,9 @@ namespace PureLedger.Services
 
         #endregion
 
-        #region Cartage Processing
+        #region Cartage Processing - NO TRANSACTIONS (Internal)
 
-        public Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(CartageViewModel model) =>
-            ProcessCartageAndDeliveryAsync(
-                model.JournalVoucherId,
-                model.EntryId,
-                model.TransporterId,
-                model.Amount,
-                model.PostToCustomer,
-                model.Reference,
-                model.DcDate,
-                model.DcRemarks,
-                model.DcStation,
-                model.DcOtherRef,
-                model.DcLocation);
-
-        public async Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(
+        public Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(
             int journalVoucherId,
             int entryId,
             int transporterId,
@@ -522,8 +720,37 @@ namespace PureLedger.Services
             string? dcOtherRef,
             int dcLocation)
         {
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            // This is for backward compatibility - redirects to the ViewModel-based method
+            var model = new CartageViewModel
+            {
+                JournalVoucherId = journalVoucherId,
+                EntryId = entryId,
+                TransporterId = transporterId,
+                Amount = amount,
+                PostToCustomer = postToCustomer,
+                Reference = reference,
+                DcDate = dcDate,
+                DcRemarks = dcRemarks,
+                DcStation = dcStation,
+                DcOtherRef = dcOtherRef,
+                DcLocation = dcLocation
+            };
+            return ProcessCartageAndDeliveryAsync(model);
+        }
 
+        private async Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryInternalAsync(
+            int journalVoucherId,
+            int entryId,
+            int transporterId,
+            int amount,
+            bool postToCustomer,
+            string? reference,
+            DateOnly dcDate,
+            string? dcRemarks,
+            string? dcStation,
+            string? dcOtherRef,
+            int dcLocation)
+        {
             try
             {
                 var originalJV = await GetValidatedJournalVoucherAsync(journalVoucherId);
@@ -532,8 +759,8 @@ namespace PureLedger.Services
                 entry.IsProcessed = true;
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
 
-                var deliveryChallanVoucher = await CreateDeliveryChallanVoucherAsync(journalVoucherId, dcDate, reference);
-                await CreateDeliveryChallanEntryAsync(deliveryChallanVoucher.DeliveryChallanVoucherId, entry.JournalEntryId,
+                var deliveryChallanVoucher = await CreateDeliveryChallanVoucherInternalAsync(journalVoucherId, dcDate, reference);
+                await CreateDeliveryChallanEntryInternalAsync(deliveryChallanVoucher.DeliveryChallanVoucherId, entry.JournalEntryId,
                     dcLocation, dcRemarks, dcOtherRef, dcDate);
 
                 int debitAccountId = await GetDebitAccountIdAsync(originalJV, entry, postToCustomer);
@@ -542,17 +769,14 @@ namespace PureLedger.Services
 
                 await CreateJournalVoucherReferenceAsync(originalJV.JournalVoucherId, cartageVoucher.JournalVoucherId, "Cartage");
 
-                await transaction.CommitAsync();
-
-                _logger.LogInformation("Processed cartage and delivery for journal voucher {JournalVoucherId}, entry {EntryId}",
+                _logger.LogInformation("Processed cartage and delivery (internal) for journal voucher {JournalVoucherId}, entry {EntryId}",
                     journalVoucherId, entryId);
 
                 return deliveryChallanVoucher;
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Failed to process cartage and delivery for journal voucher {JournalVoucherId}, entry {EntryId}",
+                _logger.LogError(ex, "Failed to process cartage and delivery (internal) for journal voucher {JournalVoucherId}, entry {EntryId}",
                     journalVoucherId, entryId);
                 throw;
             }
@@ -577,7 +801,7 @@ namespace PureLedger.Services
                     await _unitOfWork.JournalEntries.AddAsync(entry);
                 }
 
-                await _unitOfWork.SaveChangesAsync();
+                // No SaveChanges here - caller manages transaction
                 return cartageJV;
             }
             catch (Exception ex)
@@ -598,7 +822,7 @@ namespace PureLedger.Services
             };
 
             cartageJV = await _unitOfWork.JournalVouchers.AddAsync(cartageJV);
-            await _unitOfWork.SaveChangesAsync();
+            // No SaveChanges here - caller manages transaction
             return cartageJV;
         }
 
@@ -628,7 +852,7 @@ namespace PureLedger.Services
                 AccountId = accountId,
                 CategoryId = categoryId,
                 Description = BuildCartageDescription("Debit", originalEntry.JournalVoucherId, otherRef),
-                Quantity = 1,
+                Quantity = 0,
                 Rate = amount,
                 Debit = amount,
                 Credit = 0,
@@ -671,7 +895,36 @@ namespace PureLedger.Services
 
         #endregion
 
-        #region FOR Charges Processing
+        #region FOR Charges Processing - NO TRANSACTIONS (Internal)
+
+        private async Task ProcessForChargesInternalAsync(
+            int journalVoucherId,
+            int? entryId,
+            int amount,
+            DateOnly dcDate)
+        {
+            try
+            {
+                var originalJV = await GetValidatedJournalVoucherAsync(journalVoucherId);
+                var (forAccountId, forCategoryId) = await GetForChargesAccountAsync(originalJV.ProjectId);
+                var (customerAccountId, customerCategoryId) = await GetCustomerAccountFromVoucherAsync(originalJV);
+
+                var forJV = await CreateForChargesVoucherAsync(originalJV.ProjectId, dcDate);
+                await CreateJournalVoucherReferenceAsync(journalVoucherId, forJV.JournalVoucherId, "ForCharges");
+
+                await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountId, forCategoryId,
+                    customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
+
+                // No SaveChanges here - caller manages transaction
+
+                _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount}", forJV.JournalVoucherId, amount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process FOR charges (internal) for journal voucher {JvId}", journalVoucherId);
+                throw;
+            }
+        }
 
         public async Task<JournalVoucher> ProcessForChargesAsync(
             int journalVoucherId,
@@ -679,8 +932,8 @@ namespace PureLedger.Services
             int amount,
             DateOnly dcDate)
         {
+            // Public standalone version with transaction
             using var transaction = await _unitOfWork.BeginTransactionAsync();
-
             try
             {
                 var originalJV = await GetValidatedJournalVoucherAsync(journalVoucherId);
@@ -718,7 +971,7 @@ namespace PureLedger.Services
             };
 
             forJV = await _unitOfWork.JournalVouchers.AddAsync(forJV);
-            await _unitOfWork.SaveChangesAsync();
+            // No SaveChanges here - caller manages transaction
             return forJV;
         }
 
@@ -811,6 +1064,63 @@ namespace PureLedger.Services
 
         #endregion
 
+        #region Helper Methods for Batch Processing
+
+        private async Task<EntryProcessResult> ProcessSingleEntryInternalAsync(
+            int deliveryChallanId,
+            JournalEntry entry,
+            int locationId,
+            string? remarks,
+            string? otherReference,
+            DateOnly entryDate)
+        {
+            try
+            {
+                if (entry.IsProcessed)
+                {
+                    _logger.LogWarning("Entry {EntryId} already processed - skipping", entry.JournalEntryId);
+
+                    return new EntryProcessResult
+                    {
+                        EntryId = entry.JournalEntryId,
+                        Success = true,
+                        Message = "Entry was already processed"
+                    };
+                }
+
+                var dcEntry = await CreateDeliveryChallanEntryInternalAsync(
+                    deliveryChallanId,
+                    entry.JournalEntryId,
+                    locationId,
+                    remarks,
+                    otherReference,
+                    entryDate);
+
+                _logger.LogInformation("Successfully processed entry {EntryId}, created DC entry {DCEntryId}",
+                    entry.JournalEntryId, dcEntry.DeliveryChallanEntryId);
+
+                return new EntryProcessResult
+                {
+                    EntryId = entry.JournalEntryId,
+                    Success = true
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process entry {EntryId} for delivery challan {DeliveryChallanId}",
+                    entry.JournalEntryId, deliveryChallanId);
+
+                return new EntryProcessResult
+                {
+                    EntryId = entry.JournalEntryId,
+                    Success = false,
+                    Message = ex.Message
+                };
+            }
+        }
+
+        #endregion
+
         #region Validation & Mapping Helpers
 
         private async Task<JournalVoucher> GetValidatedJournalVoucherAsync(int journalVoucherId)
@@ -881,7 +1191,7 @@ namespace PureLedger.Services
             };
 
             var result = await _unitOfWork.JournalVoucherReferences.AddAsync(reference);
-            await _unitOfWork.SaveChangesAsync();
+            // No SaveChanges here - caller manages transaction
             return result;
         }
 
@@ -913,5 +1223,13 @@ namespace PureLedger.Services
         }
 
         #endregion
+    }
+
+    // Helper class for batch processing results
+    public class EntryProcessResult
+    {
+        public int EntryId { get; set; }
+        public bool Success { get; set; }
+        public string? Message { get; set; }
     }
 }

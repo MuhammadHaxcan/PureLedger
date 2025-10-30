@@ -23,6 +23,7 @@ namespace PureLedger.Attributes
             },
             ["DeliveryChallan"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
+                // These utility endpoints are accessible when user has access to ProcessDC action
                 "GetCategoriesByProject",
                 "GetAccountsByCategory",
                 "GetLocations",
@@ -30,7 +31,10 @@ namespace PureLedger.Attributes
                 "GetVoucherEntries",
                 "CheckExistingChallan",
                 "GetTransporterCategoryId",
-                "CheckForChargesAvailable"
+                "CheckForChargesAvailable",
+                "PostSingleEntry",
+                "ProcessAll",
+                "AddCartage"
             },
             ["Reporting"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
