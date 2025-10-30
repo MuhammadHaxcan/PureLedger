@@ -9,18 +9,18 @@ namespace PureLedger.Services.Interface
         Task<List<Project>> GetAllProjectsAsync();
         Task<List<Project>> GetAllProjectsForUserAsync(int userId);
         Task<List<Location>> GetAllLocationsAsync();
-        Task<JournalEntry> GetJournalEntryByIdAsync(int journalEntryId);
-        
+        Task<JournalEntry?> GetJournalEntryByIdAsync(int journalEntryId);
+
         // Entry retrieval methods
         Task<List<JournalEntryDetailViewModel>> GetEntriesByVoucherIdAsync(int voucherId);
         Task<List<JournalEntry>> GetUnprocessedEntriesByVoucherIdAsync(int voucherId);
-        
+
         // DeliveryChallan retrieval methods with overloads
-        Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByIdAsync(int deliveryChallanId);
-        Task<DeliveryChallanVoucher> GetDeliveryChallanVoucherByJournalVoucherIdAsync(int journalVoucherId);
+        Task<DeliveryChallanVoucher?> GetDeliveryChallanVoucherByIdAsync(int deliveryChallanId);
+        Task<DeliveryChallanVoucher?> GetDeliveryChallanVoucherByJournalVoucherIdAsync(int journalVoucherId);
         Task<List<DeliveryChallanVoucher>> GetDeliveryChallanVouchersByDateRangeAsync(DateOnly startDate, DateOnly endDate);
         Task<List<DeliveryChallanEntry>> GetDeliveryChallanEntriesByVoucherIdAsync(int deliveryChallanId);
-        
+
         // Filtered entries retrieval
         Task<DeliveryChallanFilterViewModel> GetFilteredEntriesForDeliveryChallanAsync(
             DateOnly? sinceDate,
@@ -31,22 +31,18 @@ namespace PureLedger.Services.Interface
         #endregion
 
         #region DeliveryChallan Operations
-        // Create operations
         Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate);
-        Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate, string reference);
-        
-        // Entry operations with overloads
+        Task<DeliveryChallanVoucher> CreateDeliveryChallanVoucherAsync(int journalVoucherId, DateOnly dcDate, string? reference);
+
         Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference);
         Task<DeliveryChallanEntry> CreateDeliveryChallanEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate);
         #endregion
 
         #region DeliveryChallan Update and Processing
-        // Update operations
         Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
         Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
         Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
-        
-        // Cartage processing
+
         Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(CartageViewModel model);
         Task<DeliveryChallanVoucher> ProcessCartageAndDeliveryAsync(
             int journalVoucherId,
@@ -65,7 +61,6 @@ namespace PureLedger.Services.Interface
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
 
-        // New method for processing FOR charges
         Task<JournalVoucher> ProcessForChargesAsync(
             int journalVoucherId,
             int? entryId,
@@ -73,6 +68,5 @@ namespace PureLedger.Services.Interface
             DateOnly dcDate);
 
         Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
-
     }
 }
