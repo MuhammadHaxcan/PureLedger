@@ -1,6 +1,6 @@
 ﻿using PureLedger.Models;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.Reporting
 {
     public class JournalVoucherEntryReportModel
     {
@@ -13,7 +13,7 @@ namespace PureLedger.ViewModels
         public decimal Discount { get; set; }
 
         // Calculate net rate after discount
-        public decimal NetRate => Rate - (Rate * Discount / 100);
+        public decimal NetRate => Rate - Rate * Discount / 100;
 
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }

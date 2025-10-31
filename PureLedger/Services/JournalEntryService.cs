@@ -1,9 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.ViewModels.Home;
 using PureLedger.ViewModels;
-using PureLedger.ViewModels.PureLedger.ViewModels;
-
 namespace PureLedger.Services
 {
     public class JournalEntryService

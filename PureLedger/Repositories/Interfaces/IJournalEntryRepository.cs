@@ -1,5 +1,5 @@
 using PureLedger.Models;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.Reporting;
 
 namespace PureLedger.Repositories.Interfaces
 {
@@ -61,14 +61,14 @@ namespace PureLedger.Repositories.Interfaces
     int? accountId,
     int? locationId);
 
-        Task<(List<AccountReportViewModel> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+        Task<(List<AccountReportViewModels> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
             int projectId,
             int? categoryId,
             int? accountId,
             int page,
             int pageSize);
 
-        Task<(List<AgingReportViewModel> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
+        Task<(List<AgingReportViewModels> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
             List<int> accountIds,
             int categoryId,
             int? projectId,

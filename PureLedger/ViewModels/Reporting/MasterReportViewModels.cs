@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.Reporting
 {
     public class MasterReportPageViewModel
     {
@@ -21,7 +21,7 @@ namespace PureLedger.ViewModels
         public int PageSize { get; set; } = 100;
     }
 
-    public class MasterReportViewModel
+    public class MasterReportViewModels
     {
         public List<MasterReportEntryViewModel> Entries { get; set; } = new();
         public decimal TotalDebit { get; set; }

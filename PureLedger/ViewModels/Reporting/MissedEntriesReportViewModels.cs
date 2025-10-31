@@ -1,8 +1,9 @@
+using PureLedger.Models;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.Reporting
 {
     // Base view model for the Missed Entries Report page
     public class MissedEntriesReportViewModel
@@ -12,13 +13,13 @@ namespace PureLedger.ViewModels
     }
 
     // Request models
-    public class MissedEntriesReportRequest
+    public class MissedEntriesReportViewModels
     {
         public DateOnly? StartDate { get; set; }
         public DateOnly? EndDate { get; set; }
         public string? ProjectId { get; set; }
         public int Page { get; set; } = 0;
-        public int PageSize { get; set; } = 25;
+        public int PageSize { get; set; } = 100;
         public int? CustomerAccountId { get; set; } // Added to filter by customer
     }
 
@@ -86,7 +87,6 @@ namespace PureLedger.ViewModels
         public int UniqueProductCount { get; set; }
         public decimal AverageQuantityPerEntry { get; set; }
         public decimal PercentOfTotal { get; set; }
-        // List of entries for this customer - for the drill-down functionality
         public List<MissedEntryDetailViewModel> CustomerEntries { get; set; } = new();
     }
 
@@ -94,6 +94,63 @@ namespace PureLedger.ViewModels
     {
         public int ProductAccountId { get; set; }
         public string ProductName { get; set; } = "";
+        public int EntryCount { get; set; }
+        public int TotalQuantity { get; set; }
+        public decimal TotalValue { get; set; }
+        public int UniqueCustomerCount { get; set; }
+        public decimal AverageRate { get; set; }
+        public decimal AverageDiscount { get; set; }
+    }
+
+    public class MissedEntryViewModel
+    {
+        public int MissedEntryId { get; set; }
+        public string CustomerName { get; set; } = "Unknown Customer";
+        public string ProductName { get; set; } = "Unknown Product";
+        public string ProjectName { get; set; } = "Unknown Project";
+        public DateOnly MissedDate { get; set; }
+        public int Quantity { get; set; }
+        public decimal Rate { get; set; }
+        public decimal Discount { get; set; }
+        public string? Description { get; set; }
+        public decimal TotalValue { get; set; }
+        public int CustomerAccountId { get; set; }
+        public int ProductAccountId { get; set; }
+        public int ProjectId { get; set; }
+    }
+
+    public class MissedEntriesPagedResultViewModel
+    {
+        public List<MissedEntryViewModel> Entries { get; set; } = new();
+        public int TotalRecords { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public bool HasMoreData { get; set; }
+    }
+
+    public class MissedEntriesListViewModel
+    {
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? EndDate { get; set; }
+        public int? ProjectId { get; set; }
+        public List<Project> Projects { get; set; } = new();
+        public List<MissedEntryViewModel> Entries { get; set; } = new();
+    }
+    public class MissedCustomerGroupDto
+    {
+        public int CustomerAccountId { get; set; }
+        public string CustomerName { get; set; } = string.Empty;
+        public int EntryCount { get; set; }
+        public int TotalQuantity { get; set; }
+        public decimal TotalValue { get; set; }
+        public int UniqueProductCount { get; set; }
+        public decimal AverageQuantityPerEntry { get; set; }
+    }
+
+    public class MissedProductGroupDto
+    {
+        public int ProductAccountId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
         public int EntryCount { get; set; }
         public int TotalQuantity { get; set; }
         public decimal TotalValue { get; set; }

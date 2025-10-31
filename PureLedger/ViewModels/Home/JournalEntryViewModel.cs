@@ -1,6 +1,6 @@
 ﻿using PureLedger.Models;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.Home
 {
     public class JournalEntryViewModel
     {

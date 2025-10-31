@@ -5,7 +5,7 @@ using PureLedger.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.Home;
 
 namespace PureLedger.Services
 {

@@ -1,7 +1,7 @@
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services.Interface;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.DeliveryChallan;
 
 namespace PureLedger.Services
 {

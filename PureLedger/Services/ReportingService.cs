@@ -2,7 +2,7 @@
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services.Interface;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.Reporting;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -409,9 +409,9 @@ namespace PureLedger.Services
             return finalBalance;
         }
 
-        public async Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request)
+        public async Task<MasterReportViewModels> GetMasterReportAsync(MasterReportRequest request)
         {
-            var result = new MasterReportViewModel();
+            var result = new MasterReportViewModels();
 
             DateOnly startDate = request.StartDate ?? DateOnly.MinValue;
             DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
@@ -878,38 +878,26 @@ namespace PureLedger.Services
             DateOnly? endDate,
             int? projectId)
         {
-            var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+            var grouped = await _unitOfWork.MissedEntries.GetMissedEntriesByCustomerGroupedAsync(startDate, endDate, projectId);
 
-            var grouped = entries
-                .GroupBy(e => new { e.CustomerAccountId, CustomerName = e.CustomerAccount?.AccountName ?? "Unknown" })
-                .Select(g =>
-                {
-                    var entryCount = g.Count();
-                    var totalQuantity = g.Sum(x => x.Quantity);
-                    var totalValue = g.Sum(x => (x.Quantity * x.Rate) - x.Discount);
-                    var uniqueProductCount = g.Select(x => x.ProductAccountId).Distinct().Count();
-                    var avgQtyPerEntry = entryCount > 0 ? (decimal)totalQuantity / entryCount : 0m;
+            var result = grouped.Select(g => (object)new
+            {
+                customerAccountId = g.CustomerAccountId,
+                customerName = g.CustomerName,
+                entryCount = g.EntryCount,
+                totalQuantity = g.TotalQuantity,
+                totalValue = g.TotalValue,
+                uniqueProductCount = g.UniqueProductCount,
+                averageQuantityPerEntry = Math.Round(g.AverageQuantityPerEntry, 2)
+            })
+            .OrderByDescending(o =>
+            {
+                dynamic d = o;
+                return (long)d.totalQuantity;
+            })
+            .ToList();
 
-                    return (object)new
-                    {
-                        customerAccountId = g.Key.CustomerAccountId,
-                        customerName = g.Key.CustomerName,
-                        entryCount,
-                        totalQuantity,
-                        totalValue,
-                        uniqueProductCount,
-                        averageQuantityPerEntry = Math.Round(avgQtyPerEntry, 2)
-                    };
-                })
-                .OrderByDescending(o =>
-                {
-                    // order by totalQuantity - need to extract dynamic value
-                    dynamic d = o;
-                    return (long)d.totalQuantity;
-                })
-                .ToList();
-
-            return grouped;
+            return result;
         }
 
         public async Task<List<object>> GetMissedEntriesByProductAsync(
@@ -917,39 +905,27 @@ namespace PureLedger.Services
             DateOnly? endDate,
             int? projectId)
         {
-            var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+            var grouped = await _unitOfWork.MissedEntries.GetMissedEntriesByProductGroupedAsync(startDate, endDate, projectId);
 
-            var grouped = entries
-                .GroupBy(e => new { e.ProductAccountId, ProductName = e.ProductAccount?.AccountName ?? "Unknown" })
-                .Select(g =>
-                {
-                    var entryCount = g.Count();
-                    var totalQuantity = g.Sum(x => x.Quantity);
-                    var totalValue = g.Sum(x => (x.Quantity * x.Rate) - x.Discount);
-                    var uniqueCustomerCount = g.Select(x => x.CustomerAccountId).Distinct().Count();
-                    var averageRate = g.Any() ? g.Average(x => x.Rate) : 0m;
-                    var averageDiscount = g.Any() ? g.Average(x => x.Discount) : 0m;
+            var result = grouped.Select(g => (object)new
+            {
+                productAccountId = g.ProductAccountId,
+                productName = g.ProductName,
+                entryCount = g.EntryCount,
+                totalQuantity = g.TotalQuantity,
+                totalValue = g.TotalValue,
+                uniqueCustomerCount = g.UniqueCustomerCount,
+                averageRate = Math.Round(g.AverageRate, 2),
+                averageDiscount = Math.Round(g.AverageDiscount, 2)
+            })
+            .OrderByDescending(o =>
+            {
+                dynamic d = o;
+                return (long)d.totalQuantity;
+            })
+            .ToList();
 
-                    return (object)new
-                    {
-                        productAccountId = g.Key.ProductAccountId,
-                        productName = g.Key.ProductName,
-                        entryCount,
-                        totalQuantity,
-                        totalValue,
-                        uniqueCustomerCount,
-                        averageRate = Math.Round(averageRate, 2),
-                        averageDiscount = Math.Round(averageDiscount, 2)
-                    };
-                })
-                .OrderByDescending(o =>
-                {
-                    dynamic d = o;
-                    return (long)d.totalQuantity;
-                })
-                .ToList();
-
-            return grouped;
+            return result;
         }
 
         public async Task<object> GetMissedEntriesDataAsync(
@@ -958,10 +934,12 @@ namespace PureLedger.Services
             DateOnly? endDate,
             int? projectId)
         {
-            var filtered = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
+            var entries = await _unitOfWork.MissedEntries.GetByCustomerAccountIdAsync(customerAccountId);
 
-            var entries = filtered
-                .Where(e => e.CustomerAccountId == customerAccountId)
+            var filtered = entries
+                .Where(e => (!startDate.HasValue || e.MissedDate >= startDate.Value)
+                         && (!endDate.HasValue || e.MissedDate <= endDate.Value)
+                         && (!projectId.HasValue || e.ProjectId == projectId.Value))
                 .Select(e => new
                 {
                     missedEntryId = e.MissedEntryId,
@@ -980,7 +958,30 @@ namespace PureLedger.Services
                 .OrderByDescending(x => x.missedDate)
                 .ToList();
 
-            return new { entries };
+            return new { entries = filtered };
+        }
+
+        public async Task<MissedEntriesPagedResultViewModel> GetFilteredMissedEntriesPaginatedAsync(
+            DateOnly? startDate,
+            DateOnly? endDate,
+            int? projectId,
+            int page,
+            int pageSize)
+        {
+            var (entries, totalCount) = await _unitOfWork.MissedEntries.GetFilteredEntriesPaginatedAsync(
+                startDate, endDate, projectId, page, pageSize);
+
+            // Repository already returns lightweight MissedEntryViewModel, so no further projection needed
+            var viewModels = entries ?? new List<MissedEntryViewModel>();
+
+            return new MissedEntriesPagedResultViewModel
+            {
+                Entries = viewModels,
+                TotalRecords = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                HasMoreData = (page + 1) * pageSize < totalCount
+            };
         }
         #endregion
     }

@@ -1,5 +1,5 @@
 ﻿using PureLedger.Models;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.Reporting;
 
 namespace PureLedger.Services.Interface
 {
@@ -12,7 +12,7 @@ namespace PureLedger.Services.Interface
         Task<List<Category>> GetAllCategoriesAsync();
         Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId);
         Task<decimal> GetAccountBalanceBeforeVoucherAsync(int journalVoucherId);
-        Task<MasterReportViewModel> GetMasterReportAsync(MasterReportRequest request);
+        Task<MasterReportViewModels> GetMasterReportAsync(MasterReportRequest request);
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
         Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type);
@@ -22,8 +22,9 @@ namespace PureLedger.Services.Interface
         Task<JournalVoucher?> GetJournalVoucherAsync(int journalVoucherId);
         Task<List<Booker>> GetAllBookersAsync();
 
-        // Missed entries helpers
+        // Missed entries helpers - updated to return paged result VM
         Task<List<MissedEntryViewModel>> GetFilteredMissedEntriesAsync(DateOnly? startDate, DateOnly? endDate, int? projectId);
+        Task<MissedEntriesPagedResultViewModel> GetFilteredMissedEntriesPaginatedAsync(DateOnly? startDate, DateOnly? endDate, int? projectId, int page, int pageSize);
         Task<object> GetMissedEntriesSummaryAsync(DateOnly? startDate, DateOnly? endDate, int? projectId);
         Task<List<object>> GetMissedEntriesByCustomerAsync(DateOnly? startDate, DateOnly? endDate, int? projectId);
         Task<List<object>> GetMissedEntriesByProductAsync(DateOnly? startDate, DateOnly? endDate, int? projectId);

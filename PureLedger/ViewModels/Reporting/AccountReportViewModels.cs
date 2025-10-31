@@ -1,6 +1,8 @@
-namespace PureLedger.ViewModels
+using System.ComponentModel.DataAnnotations;
+
+namespace PureLedger.ViewModels.Reporting
 {
-    public class AccountReportViewModel
+    public class AccountReportViewModels
     {
         public string AccountId { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
@@ -12,10 +14,19 @@ namespace PureLedger.ViewModels
 
     public class AccountReportResponseViewModel
     {
-        public List<AccountReportViewModel> Entries { get; set; } = new();
+        public List<AccountReportViewModels> Entries { get; set; } = new();
         public int TotalRecords { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
         public bool HasMoreData { get; set; }
+    }
+    public class AccountReportRequestViewModel
+    {
+        [Required(ErrorMessage = "Project selection is required")]
+        public string ProjectId { get; set; } = string.Empty;
+        public string? CategoryId { get; set; }
+        public string? AccountId { get; set; }
+        public int Page { get; set; } = 0;
+        public int PageSize { get; set; } = 25;
     }
 }

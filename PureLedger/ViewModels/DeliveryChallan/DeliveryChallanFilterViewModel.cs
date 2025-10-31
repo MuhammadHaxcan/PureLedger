@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.DeliveryChallan
 {
     public class DeliveryChallanFilterViewModel
     {

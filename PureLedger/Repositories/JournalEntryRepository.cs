@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.Reporting;
 
 namespace PureLedger.Repositories
 {
@@ -430,7 +430,7 @@ namespace PureLedger.Repositories
             return results;
         }
 
-        public async Task<(List<AccountReportViewModel> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
+        public async Task<(List<AccountReportViewModels> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
             int projectId,
             int? categoryId,
             int? accountId,
@@ -463,7 +463,7 @@ namespace PureLedger.Repositories
                     AccountName = je.Account.AccountName,
                     CategoryName = je.Account.Category.CategoryName
                 })
-                .Select(g => new AccountReportViewModel
+                .Select(g => new AccountReportViewModels
                 {
                     AccountId = g.Key.AccountId.ToString(),
                     AccountName = g.Key.AccountName ?? "Unknown Account",
@@ -484,7 +484,7 @@ namespace PureLedger.Repositories
             return (pagedResults, totalCount);
         }
 
-        public async Task<(List<AgingReportViewModel> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
+        public async Task<(List<AgingReportViewModels> Entries, int TotalCount)> GetEntriesForAgingReportAsync(
             List<int> accountIds,
             int categoryId,
             int? projectId,
@@ -526,7 +526,7 @@ namespace PureLedger.Repositories
                 .Take(pageSize)
                 .ToListAsync();
 
-            var agingReportEntries = pagedResults.Select(result => new AgingReportViewModel
+            var agingReportEntries = pagedResults.Select(result => new AgingReportViewModels
             {
                 AccountId = result.AccountId.ToString(),
                 AccountName = result.AccountName ?? "Unknown Account",

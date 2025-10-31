@@ -1,14 +1,14 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.DeliveryChallan
 {
-    public class CreateDeliveryChallanEntryViewModel
+    public class DeliveryChallanBatchViewModel
     {
         [Required]
-        public int JournalEntryId { get; set; }
-        
-        [Required]
+        public int JournalVoucherId { get; set; }
+
+        [Required] 
         public int LocationId { get; set; }
         
         [StringLength(500)]

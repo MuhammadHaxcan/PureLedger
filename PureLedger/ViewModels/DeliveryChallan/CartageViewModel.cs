@@ -1,4 +1,4 @@
-namespace PureLedger.ViewModels;
+namespace PureLedger.ViewModels.DeliveryChallan;
 using System.ComponentModel.DataAnnotations;
 
 public class CartageViewModel

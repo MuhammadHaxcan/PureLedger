@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.Home
 {
     public class RecipesViewModel
     {

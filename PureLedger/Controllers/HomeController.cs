@@ -4,7 +4,7 @@ using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
-using PureLedger.ViewModels.PureLedger.ViewModels;
+using PureLedger.ViewModels.Home;
 
 namespace PureLedger.Controllers
 {

@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace PureLedger.ViewModels
+namespace PureLedger.ViewModels.Home
 {
     public class BaseVoucherProcessingViewModel
     {

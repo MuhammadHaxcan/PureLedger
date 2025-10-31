@@ -4,6 +4,7 @@ using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
+using PureLedger.ViewModels.Reporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -288,12 +289,12 @@ namespace PureLedger.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetMissedEntries(DateOnly? startDate, DateOnly? endDate, int? projectId)
+        public async Task<IActionResult> GetMissedEntries(DateOnly? startDate, DateOnly? endDate, int? projectId, int page = 0, int pageSize = 25)
         {
             try
             {
-                var entries = await _reportingService.GetFilteredMissedEntriesAsync(startDate, endDate, projectId);
-                return Json(entries);
+                var report = await _reportingService.GetFilteredMissedEntriesPaginatedAsync(startDate, endDate, projectId, page, pageSize);
+                return Json(report);
             }
             catch (Exception ex)
             {

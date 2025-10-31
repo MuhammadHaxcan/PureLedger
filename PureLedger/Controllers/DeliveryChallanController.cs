@@ -2,7 +2,7 @@
 using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services.Interface;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.DeliveryChallan;
 
 namespace PureLedger.Controllers
 {

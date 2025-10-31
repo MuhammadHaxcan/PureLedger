@@ -1,6 +1,6 @@
 using PureLedger.Models;
 using PureLedger.Services;
-using PureLedger.ViewModels;
+using PureLedger.ViewModels.DeliveryChallan;
 
 namespace PureLedger.Services.Interface
 {
