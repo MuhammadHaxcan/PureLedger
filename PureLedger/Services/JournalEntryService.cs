@@ -551,27 +551,6 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task<List<MissedEntryViewModel>> GetFilteredMissedEntriesAsync(
-            DateOnly? startDate,
-            DateOnly? endDate,
-            int? projectId)
-        {
-            var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
-
-            return entries.Select(e => new MissedEntryViewModel
-            {
-                MissedEntryId = e.MissedEntryId,
-                CustomerName = e.CustomerAccount?.AccountName ?? "Unknown Customer",
-                ProductName = e.ProductAccount?.AccountName ?? "Unknown Product",
-                ProjectName = e.Project?.ProjectName ?? "Unknown Project",
-                MissedDate = e.MissedDate,
-                Quantity = e.Quantity,
-                Rate = e.Rate,
-                Discount = e.Discount,
-                Description = e.Description
-            }).ToList();
-        }
-
         #endregion
 
         #region Recipe Management

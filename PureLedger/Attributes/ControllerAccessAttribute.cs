@@ -18,7 +18,6 @@ namespace PureLedger.Attributes
                 "GetProductDetails",
                 "GetJournalEntry",
                 "GetVoucherSummary",
-                "GetMissedEntries",
                 "GetRecipeItems"
             },
             ["DeliveryChallan"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -46,6 +45,7 @@ namespace PureLedger.Attributes
                 "GetAccountReportData",
                 "GetMasterReportData",
                 "GetProductReportData",
+                "GetMissedEntries",
                 "GetMissedEntriesData",
                 "GetMissedEntriesSummary",
                 "GetMissedEntriesByCustomer",

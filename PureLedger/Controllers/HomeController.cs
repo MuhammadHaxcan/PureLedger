@@ -364,32 +364,6 @@ namespace PureLedger.Controllers
 
         #endregion
 
-        #region Missed Entries
-
-        [HttpGet]
-        public async Task<IActionResult> MissedEntries()
-        {
-            await LoadProjectsDataAsync();
-            return View(new MissedEntriesListViewModel());
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetMissedEntries(DateOnly? startDate, DateOnly? endDate, int? projectId)
-        {
-            try
-            {
-                var entries = await _journalService.GetFilteredMissedEntriesAsync(startDate, endDate, projectId);
-                return Json(entries);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting missed entries");
-                return Json(new { error = "Failed to load entries" });
-            }
-        }
-
-        #endregion
-
         #region Recipe Management
 
         [HttpGet]

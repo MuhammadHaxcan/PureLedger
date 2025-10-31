@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Models;
+using PureLedger.Services;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
 using System;
@@ -211,45 +212,6 @@ namespace PureLedger.Controllers
 
         #endregion
 
-        #region Missed Entries Report
-
-        [HttpGet]
-        public async Task<IActionResult> MissedEntriesReport()
-        {
-            var viewModel = await CreateReportBaseViewModel<MissedEntriesReportViewModel>();
-            return View(viewModel);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetMissedEntriesData([FromQuery] MissedEntriesReportRequest request)
-        {
-            var report = await _reportingService.GetMissedEntriesDetailAsync(request);
-            return Json(report);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetMissedEntriesSummary([FromQuery] MissedEntriesSummaryRequest request)
-        {
-            var summary = await _reportingService.GetMissedEntriesSummaryAsync(request);
-            return Json(summary);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetMissedEntriesByCustomer([FromQuery] MissedEntriesReportRequest request)
-        {
-            var report = await _reportingService.GetMissedEntriesByCustomerAsync(request);
-            return Json(report);
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetMissedEntriesByProduct([FromQuery] MissedEntriesReportRequest request)
-        {
-            var report = await _reportingService.GetMissedEntriesByProductAsync(request);
-            return Json(report);
-        }
-
-        #endregion
-
         #region Lookup APIs
 
         [HttpGet]
@@ -306,6 +268,93 @@ namespace PureLedger.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { error = $"Error loading bookers: {ex.Message}" });
+            }
+        }
+
+        #endregion
+
+        #region Missed Entries
+
+        [HttpGet]
+        public async Task<IActionResult> MissedEntriesReport()
+        {
+            var userId = _currentUserService.GetCurrentUserId();
+            var projects = userId.HasValue
+                ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
+                : new List<Project>();
+
+            ViewBag.Projects = projects;
+            return View(new MissedEntriesListViewModel());
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntries(DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            try
+            {
+                var entries = await _reportingService.GetFilteredMissedEntriesAsync(startDate, endDate, projectId);
+                return Json(entries);
+            }
+            catch (Exception ex)
+            {
+                return Json(new { error = "Failed to load entries" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesSummary(DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            try
+            {
+                var summary = await _reportingService.GetMissedEntriesSummaryAsync(startDate, endDate, projectId);
+                return Json(summary);
+            }
+            catch (Exception ex)
+            {
+                // log if you have logger, but return safe shape expected by client
+                return Json(new { error = "Failed to load summary" });
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesByCustomer(DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            try
+            {
+                var result = await _reportingService.GetMissedEntriesByCustomerAsync(startDate, endDate, projectId);
+                return Json(result);
+            }
+            catch (Exception)
+            {
+                return Json(Array.Empty<object>());
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesByProduct(DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            try
+            {
+                var result = await _reportingService.GetMissedEntriesByProductAsync(startDate, endDate, projectId);
+                return Json(result);
+            }
+            catch (Exception)
+            {
+                return Json(Array.Empty<object>());
+            }
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMissedEntriesData(int customerAccountId, DateOnly? startDate, DateOnly? endDate, int? projectId)
+        {
+            try
+            {
+                var result = await _reportingService.GetMissedEntriesDataAsync(customerAccountId, startDate, endDate, projectId);
+                return Json(result);
+            }
+            catch (Exception)
+            {
+                return Json(new { entries = new object[] { } });
             }
         }
 

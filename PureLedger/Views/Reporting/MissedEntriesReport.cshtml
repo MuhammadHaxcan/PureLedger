@@ -1,6 +1,8 @@
-﻿@* @model MissedEntriesReportViewModel
+﻿@using PureLedger.ViewModels
+@model MissedEntriesListViewModel
 @{
-    ViewData["Title"] = "Missed Entries Report";
+    ViewData["Title"] = "Missed Entries";
+    var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
     var today = DateTime.Now;
     var defaultStartDate = today.AddMonths(-1).ToString("yyyy-MM-dd");
     var defaultEndDate = today.ToString("yyyy-MM-dd");
@@ -8,15 +10,15 @@
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2><i class="fas fa-exclamation-circle me-2"></i>Missed Entries Analytics</h2>
+        <h2><i class="fas fa-exclamation-circle me-2"></i>Missed Entries</h2>
     </div>
 
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Filter Parameters</h6>
+            <h6 class="m-0 font-weight-bold text-primary">Filter Missed Entries</h6>
         </div>
         <div class="card-body">
-            <form id="reportFilterForm" class="row g-3 align-items-end">
+            <form id="filterForm" class="row g-3 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label">Start Date</label>
                     <input type="date" class="form-control" id="startDate" value="@defaultStartDate">
@@ -27,227 +29,222 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Project</label>
-                    <select class="form-select" id="projectId">
-                        <option value="">All Projects</option>
-                        @foreach (var project in Model.Projects)
+                    <select class="form-select" id="projectId" required>
+                        <option value="">Select Project</option>
+                        @if (projects != null)
                         {
-                            <option value="@project.Id">@project.Name</option>
+                            foreach (var project in projects)
+                            {
+                                <option value="@project.ProjectId">@project.ProjectName</option>
+                            }
                         }
                     </select>
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-search me-1"></i> Generate Report
+                        <i class="fas fa-search me-1"></i> Search
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Detailed Reports -->
-    <div class="row">
-        <div class="col-xl-12">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">Detailed Analytics</h6>
-                    <div>
-                        <button id="exportCsvBtn" class="btn btn-sm btn-outline-secondary">
-                            <i class="fas fa-file-csv me-1"></i> Export CSV
-                        </button>
-                        <button id="printReportBtn" class="btn btn-sm btn-outline-primary ms-2">
-                            <i class="fas fa-print me-1"></i> Print Report
-                        </button>
+    <!-- Summary Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Summary Statistics</h6>
+        </div>
+        <div class="card-body">
+            <div class="row" id="summaryStats">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white mb-4">
+                        <div class="card-body">
+                            <h5 class="mb-0" id="totalEntries">0</h5>
+                            <div>Total Missed Entries</div>
+                        </div>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white mb-4">
+                        <div class="card-body">
+                            <h5 class="mb-0" id="totalQuantity">0</h5>
+                            <div>Total Missed Quantity</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white mb-4">
+                        <div class="card-body">
+                            <h5 class="mb-0" id="uniqueCustomers">0</h5>
+                            <div>Unique Customers</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white mb-4">
+                        <div class="card-body">
+                            <h5 class="mb-0" id="uniqueProducts">0</h5>
+                            <div>Unique Products</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="additionalStats">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="fas fa-user mr-1"></i> Top Customer
+                        </div>
+                        <div class="card-body">
+                            <div id="topCustomer">No data available</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="fas fa-box mr-1"></i> Top Missed Product
+                        </div>
+                        <div class="card-body">
+                            <div id="topProduct">No data available</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs for different views -->
+    <ul class="nav nav-tabs mb-3" id="missedEntriesTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#details"
+                    type="button" role="tab" aria-controls="details" aria-selected="true">
+                <i class="fas fa-list"></i> Details
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="by-customer-tab" data-bs-toggle="tab" data-bs-target="#by-customer"
+                    type="button" role="tab" aria-controls="by-customer" aria-selected="false">
+                <i class="fas fa-users"></i> By Customer
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="by-product-tab" data-bs-toggle="tab" data-bs-target="#by-product"
+                    type="button" role="tab" aria-controls="by-product" aria-selected="false">
+                <i class="fas fa-boxes"></i> By Product
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="missedEntriesTabContent">
+        <!-- Details Tab -->
+        <div class="tab-pane fade show active" id="details" role="tabpanel" aria-labelledby="details-tab">
+            <div class="card shadow">
                 <div class="card-body">
-                    <!-- Nav tabs -->
-                    <ul class="nav nav-tabs" id="reportTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button">Summary</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="by-customer-tab" data-bs-toggle="tab" data-bs-target="#by-customer" type="button">By Customer</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="by-product-tab" data-bs-toggle="tab" data-bs-target="#by-product" type="button">By Product</button>
-                        </li>
-                    </ul>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="missedEntriesTable">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Project</th>
+                                    <th>Customer</th>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Rate</th>
+                                    <th>Discount</th>
+                                    <th>Total Value</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody id="entriesTableBody">
+                                <!-- Data will be loaded via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                    <!-- Tab content -->
-                    <div class="tab-content pt-4" id="reportTabsContent">
-                        <div class="tab-pane fade show active" id="summary" role="tabpanel">
-                            <div class="summary-stats">
-                                <div class="row">
-                                    <div class="col-md-3 mb-4">
-                                        <div class="card border-left-primary shadow h-100 py-2">
-                                            <div class="card-body">
-                                                <div class="row no-gutters align-items-center">
-                                                    <div class="col mr-2">
-                                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                                            Total Missed Entries
-                                                        </div>
-                                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="summaryTotalEntries">0</div>
-                                                    </div>
-                                                    <div class="col-auto">
-                                                        <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 mb-4">
-                                        <div class="card border-left-success shadow h-100 py-2">
-                                            <div class="card-body">
-                                                <div class="row no-gutters align-items-center">
-                                                    <div class="col mr-2">
-                                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                                            Total Missed Quantity
-                                                        </div>
-                                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="summaryTotalQuantity">0</div>
-                                                    </div>
-                                                    <div class="col-auto">
-                                                        <i class="fas fa-box fa-2x text-gray-300"></i>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 mb-4">
-                                        <div class="card border-left-info shadow h-100 py-2">
-                                            <div class="card-body">
-                                                <div class="row no-gutters align-items-center">
-                                                    <div class="col mr-2">
-                                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                                            Total Value
-                                                        </div>
-                                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="summaryTotalValue">0</div>
-                                                    </div>
-                                                    <div class="col-auto">
-                                                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 mb-4">
-                                        <div class="card border-left-warning shadow h-100 py-2">
-                                            <div class="card-body">
-                                                <div class="row no-gutters align-items-center">
-                                                    <div class="col mr-2">
-                                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                                            Avg. Value/Entry
-                                                        </div>
-                                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="summaryAvgValue">0</div>
-                                                    </div>
-                                                    <div class="col-auto">
-                                                        <i class="fas fa-calculator fa-2x text-gray-300"></i>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="row mt-4">
-                                    <div class="col-md-6">
-                                        <div class="card shadow mb-4">
-                                            <div class="card-header py-3">
-                                                <h6 class="m-0 font-weight-bold text-primary">Top 3 Missed Products</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="topProductsList" class="list-group">
-                                                    <!-- Will be populated via JavaScript -->
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="card shadow mb-4">
-                                            <div class="card-header py-3">
-                                                <h6 class="m-0 font-weight-bold text-primary">Top 3 Customers with Missed Items</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="topCustomersList" class="list-group">
-                                                    <!-- Will be populated via JavaScript -->
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="tab-pane fade" id="by-customer" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-bordered" id="customerTable" width="100%" cellspacing="0">
-                                    <thead>
-                                        <tr>
-                                            <th>Customer</th>
-                                            <th>Entry Count</th>
-                                            <th>Total Quantity</th>
-                                            <th>Total Value</th>
-                                            <th>Unique Products</th>
-                                            <th>Avg. Qty/Entry</th>
-                                            <th>% of Total</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <!-- Will be populated via JavaScript -->
-                                    </tbody>
-                                </table>
-                            </div>
+        <!-- By Customer Tab -->
+        <div class="tab-pane fade" id="by-customer" role="tabpanel" aria-labelledby="by-customer-tab">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="byCustomerTable">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Customer</th>
+                                    <th>Entry Count</th>
+                                    <th>Total Quantity</th>
+                                    <th>Total Value</th>
+                                    <th>Unique Products</th>
+                                    <th>Avg Qty/Entry</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="byCustomerTableBody">
+                                <!-- Data will be loaded via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
 
-                            <!-- Customer Details Section - Initially hidden -->
-                            <div id="customerDetailSection" class="mt-4 d-none">
-                                <div class="card shadow">
-                                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                                        <h6 class="m-0 font-weight-bold text-primary" id="selectedCustomerName">Customer Details</h6>
-                                        <button id="closeCustomerDetails" class="btn btn-sm btn-outline-secondary">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="table-responsive">
-                                            <table class="table table-bordered" id="customerDetailsTable" width="100%" cellspacing="0">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Date</th>
-                                                        <th>Product</th>
-                                                        <th>Quantity</th>
-                                                        <th>Rate</th>
-                                                        <th>Discount</th>
-                                                        <th>Total Value</th>
-                                                        <th>Description</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <!-- Will be populated via JavaScript -->
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+            <!-- Customer Details Section - Initially hidden -->
+            <div id="customerDetailSection" class="mt-4 d-none">
+                <div class="card shadow">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary" id="selectedCustomerName">Customer Details</h6>
+                        <button id="closeCustomerDetails" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="customerDetailsTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Product</th>
+                                        <th>Quantity</th>
+                                        <th>Rate</th>
+                                        <th>Discount</th>
+                                        <th>Total Value</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Will be populated via JavaScript -->
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="tab-pane fade" id="by-product" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-bordered" id="productTable" width="100%" cellspacing="0">
-                                    <thead>
-                                        <tr>
-                                            <th>Product</th>
-                                            <th>Entry Count</th>
-                                            <th>Total Quantity</th>
-                                            <th>Total Value</th>
-                                            <th>Unique Customers</th>
-                                            <th>Avg. Rate</th>
-                                            <th>Avg. Discount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <!-- Will be populated via JavaScript -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- By Product Tab -->
+        <div class="tab-pane fade" id="by-product" role="tabpanel" aria-labelledby="by-product-tab">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="byProductTable">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Entry Count</th>
+                                    <th>Total Quantity</th>
+                                    <th>Total Value</th>
+                                    <th>Unique Customers</th>
+                                    <th>Avg Rate</th>
+                                    <th>Avg Discount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="byProductTableBody">
+                                <!-- Data will be loaded via JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -257,4 +254,4 @@
 
 @section Scripts {
     <script src="~/js/missed-entries-report.js" asp-append-version="true"></script>
-} *@
+}
