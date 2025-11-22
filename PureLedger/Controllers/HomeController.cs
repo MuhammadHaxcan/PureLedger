@@ -493,7 +493,7 @@ namespace PureLedger.Controllers
         {
             try
             {
-                var accounts = await _journalService.GetAccountsByCategoryAsync(categoryId);
+                var accounts = await _journalService.GetEnabledAccountsByCategoryAsync(categoryId);
                 var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
                 return Json(result);
             }
@@ -522,7 +522,7 @@ namespace PureLedger.Controllers
             if (userId.HasValue)
             {
                 var projects = await _journalService.GetAllProjectsForUserAsync(userId.Value);
-                var bookers = await _journalService.GetAllBookersAsync();
+                var bookers = await _journalService.GetAllEnabledBookersAsync();
 
                 ViewBag.Projects = projects;
                 ViewBag.Bookers = bookers;

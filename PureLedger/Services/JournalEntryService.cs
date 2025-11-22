@@ -22,8 +22,8 @@ namespace PureLedger.Services
         public Task<List<Project>> GetAllProjectsForUserAsync(int userId)
             => _unitOfWork.Projects.GetAllForUserAsync(userId);
 
-        public Task<List<Booker>> GetAllBookersAsync()
-            => _unitOfWork.Bookers.GetAllAsync();
+        public Task<List<Booker>> GetAllEnabledBookersAsync()
+            => _unitOfWork.Bookers.GetAllEnabledAsync();
 
         #endregion
 
@@ -407,11 +407,11 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId)
+        public async Task<IEnumerable<Account>> GetEnabledAccountsByCategoryAsync(int categoryId)
         {
             try
             {
-                return await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+                return await _unitOfWork.Accounts.GetEnabledByCategoryIdAsync(categoryId);
             }
             catch (Exception ex)
             {
@@ -739,20 +739,21 @@ namespace PureLedger.Services
                 {
                     _logger.LogInformation("Creating journal entry with AccountId={AccountId}", entryModel.AccountId);
 
+                    int quantity = entryModel.Qty ?? 0;
                     var journalEntry = new JournalEntry
                     {
                         JournalVoucherId = journalVoucherId,
                         AccountId = entryModel.AccountId ?? 0,
                         CategoryId = entryModel.CategoryId ?? 0,
                         Description = entryModel.Des,
-                        Quantity = entryModel.Qty ?? 0,
+                        Quantity = quantity,
                         Rate = entryModel.Rate ?? 0,
                         DiscountPercent = entryModel.Percent,
                         Discount = entryModel.Disc ?? 0,
                         Debit = entryModel.Debit ?? 0,
                         Credit = entryModel.Credit ?? 0,
                         Rbp = entryModel.Rbp ?? "Y",
-                        IsProcessed = false
+                        IsProcessed = quantity == 0 // <-- Set processed if quantity is 0
                     };
 
                     await _unitOfWork.JournalEntries.AddAsync(journalEntry);
@@ -768,20 +769,21 @@ namespace PureLedger.Services
 
         private async Task CreateNewEntry(int voucherId, JournalEntryRowModel entryModel)
         {
+            int quantity = entryModel.Qty ?? 0;
             var newEntry = new JournalEntry
             {
                 JournalVoucherId = voucherId,
                 AccountId = entryModel.AccountId ?? 0,
                 CategoryId = entryModel.CategoryId ?? 0,
                 Description = entryModel.Des,
-                Quantity = entryModel.Qty ?? 0,
+                Quantity = quantity,
                 Rate = entryModel.Rate ?? 0,
                 DiscountPercent = entryModel.Percent,
                 Discount = entryModel.Disc ?? 0,
                 Debit = entryModel.Debit ?? 0,
                 Credit = entryModel.Credit ?? 0,
                 Rbp = entryModel.Rbp ?? "Y",
-                IsProcessed = false,
+                IsProcessed = quantity == 0, // <-- Set processed if quantity is 0
                 IsEdited = true,
                 ModifiedDateTime = DateOnly.FromDateTime(DateTime.Now)
             };

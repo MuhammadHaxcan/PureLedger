@@ -9,7 +9,6 @@ namespace PureLedger.ViewModels.Home
 
         public string? Description { get; set; }
 
-        [Range(0, int.MaxValue)]
         public int Quantity { get; set; }
 
         [Range(typeof(decimal), "0", "9999999999.9999")]

@@ -2,10 +2,11 @@
     constructor() {
         this.rowCounter = 0;
         this.isSubmitting = false;
-        this.rowTemplate = null; // Store row template
-        this.dataService = window.journalDataService; // Reference to the data service
+        this.rowTemplate = null;
+        this.dataService = window.journalDataService;
+        this.requireQuantity = true;
 
-        this.captureRowTemplate(); // Capture the template on initialization
+        this.captureRowTemplate();
         this.init();
         this.setupSelectSearch();
         console.log("JournalEntryManager initialized");
@@ -37,6 +38,7 @@
         }
 
         this.loadInitialData();
+        this.updateSubmitButtonsState();
     }
 
     isEditMode() {
@@ -179,6 +181,25 @@
         $('#SaveAsRecipe').on('change', (e) => {
             this.toggleRecipeNameInput(e.target.checked);
         });
+
+        // Handle Require Quantity checkbox
+        $('#RequireQuantity').on('change', (e) => {
+            this.requireQuantity = e.target.checked;
+            this.updateProductRequiredIndicator();
+
+            // Re-validate existing quantity fields
+            $('#entryRows tr').each((index, row) => {
+                const $row = $(row);
+                if ($row.attr('data-account-group') === 'product') {
+                    this.validateQuantityForProduct($row.find('.qty-input')[0]);
+                }
+            });
+        });
+
+        // Handle BookerId change to update submit buttons
+        $('#BookerId').on('change', () => {
+            this.updateSubmitButtonsState();
+        });
     }
 
     loadInitialData() {
@@ -193,6 +214,9 @@
         if (!this.isEditMode()) {
             this.processRecipeEntries();
         }
+
+        // Set initial state of requireQuantity based on checkbox
+        this.requireQuantity = $('#RequireQuantity').is(':checked');
 
         this.updateDueDate();
         this.updateProductRequiredIndicator();
@@ -346,53 +370,52 @@
     }
 
     setupCalculationHandlers() {
-        $(document).off('input', '.qty-input');
+        // Qty blur
         $(document).on('blur', '.qty-input', (e) => {
             const row = $(e.target).closest('tr')[0];
-            this.updateRowCalculations(row);
+            this.calculateJournalDebit(row, 'debit');
+            this.updateTotals();
             this.validateQuantityForProduct(e.target);
         });
 
+        // Rate blur
         $(document).on('blur', '.rate-input', (e) => {
             const $input = $(e.target);
-            const value = $input.val();
-            if (value) {
-                $input.val(this.formatDecimalValue(value));
+            if ($input.val()) {
+                $input.val(this.formatDecimalValue($input.val()));
             }
             const row = $input.closest('tr')[0];
-            this.updateRowCalculations(row);
-            const $row = $(row);
-            this.validateQuantityForProduct($row.find('.qty-input')[0]);
+            this.calculateJournalDebit(row, 'debit');
+            this.updateTotals();
+            this.validateQuantityForProduct($input.closest('tr').find('.qty-input')[0]);
         });
 
-        $(document).on('input', '.rate-input', (e) => {
+        // Percent blur
+        $(document).on('blur', '.percent-input', (e) => {
             const row = $(e.target).closest('tr')[0];
-            this.updateRowCalculations(row);
+            this.calculateJournalDebit(row, 'debit');
+            this.updateTotals();
         });
 
-        $(document).on('input blur', '.pkg-input', (e) => {
-            const row = $(e.target).closest('tr')[0];
-            const pkgValue = this.parseIntOrZero($(e.target).val());
-            row.setAttribute('data-pkg', pkgValue);
-            this.updateRowCalculations(row);
-        });
-
-        $(document).on('input blur', '.percent-input', (e) => {
-            this.updateRowCalculations($(e.target).closest('tr')[0]);
-        });
-
+        // Debit focus
         $(document).on('focus', '.debit-input', (e) => {
+            const $row = $(e.target).closest('tr');
             if (!$(e.target).val()) {
-                this.updateRowCalculations($(e.target).closest('tr')[0], 'debit');
+                this.calculateJournalDebit($row[0], 'debit');
+                this.updateTotals();
             }
         });
 
+        // Credit focus
         $(document).on('focus', '.credit-input', (e) => {
+            const $row = $(e.target).closest('tr');
             if (!$(e.target).val()) {
-                this.updateRowCalculations($(e.target).closest('tr')[0], 'credit');
+                this.calculateJournalDebit($row[0], 'credit');
+                this.updateTotals();
             }
         });
 
+        // Manual input in debit/credit updates totals
         $(document).on('input', '.debit-input, .credit-input', () => this.updateTotals());
     }
 
@@ -429,17 +452,41 @@
 
     updateDiscount(row) {
         const $row = $(row);
-        const percent = this.parseFloatOrZero($row.find('.percent-input').val());
+        const $percentInput = $row.find('.percent-input');
+        if ($percentInput.data('manual-percent')) {
+            // Do not overwrite manual percent
+            return;
+        }
+        const percent = this.parseFloatOrZero($percentInput.val());
         const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
-
-        // Calculate discount based on percentage
         const discount = (totalAmount * percent) / 100;
+        $row.find('.disc-input').val(discount.toFixed(4));
+    }
 
-        // Set the discount value and ensure it's readonly, 4 decimal places
-        $row.find('.disc-input')
-            .val(discount.toFixed(4))
-            .prop('readonly', true)
-            .attr('tabindex', '-1');
+    calculateDebitWithManualPercent(row) {
+        const $row = $(row);
+        const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
+        const percent = this.parseFloatOrZero($row.find('.percent-input').val());
+        const discount = (totalAmount * percent) / 100;
+        $row.find('.disc-input').val(discount.toFixed(4));
+        const $debit = $row.find('.debit-input');
+        const $credit = $row.find('.credit-input');
+        if (!$credit.val() || this.parseFloatOrZero($credit.val()) === 0) {
+            $debit.val((totalAmount - discount).toFixed(4));
+        }
+        this.updateTotals();
+    }
+
+    calculateDebitWithManualDiscount(row) {
+        const $row = $(row);
+        const totalAmount = this.parseFloatOrZero(row.getAttribute('data-total-amount') || '0');
+        const discount = this.parseFloatOrZero($row.find('.disc-input').val());
+        const $debit = $row.find('.debit-input');
+        const $credit = $row.find('.credit-input');
+        if (!$credit.val() || this.parseFloatOrZero($credit.val()) === 0) {
+            $debit.val((totalAmount - discount).toFixed(4));
+        }
+        this.updateTotals();
     }
 
     calculateDebitCredit(row, focusField) {
@@ -721,6 +768,48 @@
                 $('.select-dropdown').removeClass('show');
             }
         });
+
+        $(document).on('input', '.category-search', function () {
+            const $input = $(this);
+            const $container = $input.closest('.select-container');
+            const $dropdown = $container.find('.select-dropdown');
+            const $select = $container.find('select');
+            const searchTerm = $input.val().toLowerCase();
+
+            // Filter options based on search term
+            let visibleCount = 0;
+            $dropdown.find('.select-option').each(function () {
+                const text = $(this).text().toLowerCase();
+                const shouldShow = text.includes(searchTerm) && visibleCount < 5;
+                $(this).toggleClass('filtered-out', !shouldShow);
+                if (shouldShow) visibleCount++;
+            });
+
+            // Show dropdown
+            $dropdown.addClass('show');
+
+            // --- NEW LOGIC: If input is cleared, clear selection and account ---
+            if ($input.hasClass('category-search') && $input.val().trim() === '') {
+                // Remove selection from category select
+                $select.val('');
+                // Find the account select in the same row and clear/disable it
+                const $row = $input.closest('tr');
+                const $accountSelect = $row.find('.account-select');
+                const $accountSearch = $row.find('.account-search');
+                $accountSelect.val('');
+                $accountSelect.prop('disabled', true);
+                $accountSearch.val('');
+                // Optionally, clear the dropdown options as well
+                $accountSelect.empty().append('<option value="">Select Account</option>');
+                $row.removeAttr('data-account-id');
+                $row.removeAttr('data-account-group');
+                $row.removeAttr('data-account-type');
+            } else {
+                // Re-enable account select if category is not empty
+                const $row = $input.closest('tr');
+                $row.find('.account-select').prop('disabled', false);
+            }
+        });
     }
 
     selectOption($option, $container) {
@@ -796,6 +885,12 @@
     validateJournalEntry() {
         const errors = [];
 
+        // Check if booker is available
+        const bookerId = this.parseIntOrZero($('#BookerId').val());
+        if (bookerId <= 0) {
+            errors.push('A valid Booker must be selected.');
+        }
+
         const projectId = this.parseIntOrZero($('#ProjectId').val());
         if (projectId <= 0) {
             errors.push('Project is required.');
@@ -838,10 +933,11 @@
             totalCredit += credit;
 
             if (accountGroup === 'product') {
-                if (rate <= 0) {
-                    errors.push(`${entryPrefix}Rate must be greater than zero for product accounts.`);
+                if (rate < 0) {
+                    errors.push(`${entryPrefix}Rate must be greater than or Equal to zero for product accounts.`);
                 }
-                if (qty <= 0) {
+                // Only validate quantity if requireQuantity is enabled
+                if (this.requireQuantity && qty <= 0) {
                     errors.push(`${entryPrefix}Quantity must be greater than zero for product accounts.`);
                 }
                 if (!rbp || (rbp !== 'Y' && rbp !== 'N')) {
@@ -872,6 +968,15 @@
     }
 
     validateQuantityForProduct(qtyInput) {
+        // Only validate if requireQuantity is enabled
+        if (!this.requireQuantity) {
+            // Remove any validation styling if requirement is disabled
+            const $input = $(qtyInput);
+            $input.removeClass('is-invalid');
+            $input.next('.invalid-feedback').remove();
+            return true;
+        }
+
         const $input = $(qtyInput);
         const $row = $input.closest('tr');
         const accountGroup = $row.attr('data-account-group') || '';
@@ -891,27 +996,47 @@
     }
 
     setupProductRequirements($row) {
-        $row.find('.qty-input, .rate-input').addClass('required-field');
-        $row.find('.qty-input').attr('required', 'required');
+        // Only add required styling if requireQuantity is enabled
+        if (this.requireQuantity) {
+            $row.find('.qty-input').addClass('required-field');
+        }
+        $row.find('.rate-input').addClass('required-field');
         this.validateQuantityForProduct($row.find('.qty-input')[0]);
     }
 
     updateProductRequiredIndicator() {
         const hasProductAccount = $('#entryRows tr').toArray()
             .some(row => $(row).attr('data-account-group') === 'product');
-        $('.product-required-indicator').toggleClass('d-none', !hasProductAccount);
+
+        // Show the asterisk only if there are product accounts AND requireQuantity is enabled
+        const shouldShowIndicator = hasProductAccount && this.requireQuantity;
+        $('.product-required-indicator').toggleClass('d-none', !shouldShowIndicator);
     }
 
     setupValidationClearance() {
         const fieldsToWatch = [
             '#ProjectId', '.category-select', '.account-select',
             '.debit-input', '.credit-input', '.rate-input',
-            '.qty-input', '.rbp-select'
+            '.qty-input', '.rbp-select', '#BookerId'
         ];
 
         $(document).on('change input', fieldsToWatch.join(', '), () => {
             this.hideValidationAlert();
         });
+    }
+
+    updateSubmitButtonsState() {
+        const hasBookers = window.hasBookers || false;
+        const bookerId = this.parseIntOrZero($('#BookerId').val());
+        const isValid = hasBookers && bookerId > 0;
+
+        $('#submitBtn, #submitPrintBtn').prop('disabled', !isValid);
+
+        if (!isValid) {
+            $('#submitBtn, #submitPrintBtn').attr('title', 'Please select a valid booker to submit');
+        } else {
+            $('#submitBtn, #submitPrintBtn').removeAttr('title');
+        }
     }
 
     clearAllDropdowns() {
@@ -959,10 +1084,15 @@
     }
 
     resetSubmitButtons() {
-        $('#submitBtn').prop('disabled', false)
-            .html('<i class="fas fa-save me-1"></i> Submit Journal Entry');
-        $('#submitPrintBtn').prop('disabled', false)
-            .html('<i class="fas fa-print me-1"></i> Submit and Print');
+        const isEditMode = this.isEditMode();
+        const hasBookers = window.hasBookers || false;
+        const bookerId = this.parseIntOrZero($('#BookerId').val());
+        const shouldEnable = hasBookers && bookerId > 0;
+
+        $('#submitBtn').prop('disabled', !shouldEnable)
+            .html(`<i class="fas fa-save me-1"></i> ${isEditMode ? 'Update Journal Voucher' : 'Submit Journal Entry'}`);
+        $('#submitPrintBtn').prop('disabled', !shouldEnable)
+            .html(`<i class="fas fa-print me-1"></i> ${isEditMode ? 'Update and Print' : 'Submit and Print'}`);
     }
 
     showValidationErrors(errors) {
@@ -1144,6 +1274,46 @@
 
         if (hasPreloadedData) {
             console.log("Processing recipe-based journal entry");
+        }
+    }
+
+    calculateJournalDebit(row, targetField = 'debit') {
+        const $row = $(row);
+        const qty = this.parseFloatOrZero($row.find('.qty-input').val());
+        const rate = this.parseFloatOrZero($row.find('.rate-input').val());
+        const percent = this.parseFloatOrZero($row.find('.percent-input').val());
+        const rbp = $row.find('.rbp-select').val();
+        const pkg = this.parseIntOrZero($row.find('.pkg-input').val());
+        let totalAmount = 0;
+
+        if (rbp === 'Y' && pkg > 0) {
+            totalAmount = pkg * qty * rate;
+        } else {
+            totalAmount = qty * rate;
+        }
+
+        const discount = (totalAmount * percent) / 100;
+        const netAmount = totalAmount - discount;
+
+        // Set discount field
+        $row.find('.disc-input').val(discount.toFixed(4));
+
+        // Only update if both debit and credit are empty, or if the user is focusing a specific field
+        const $debit = $row.find('.debit-input');
+        const $credit = $row.find('.credit-input');
+        const debitVal = this.parseFloatOrZero($debit.val());
+        const creditVal = this.parseFloatOrZero($credit.val());
+
+        if (targetField === 'debit') {
+            if (!creditVal) {
+                $debit.val(netAmount > 0 ? netAmount.toFixed(4) : '');
+                $credit.val('');
+            }
+        } else if (targetField === 'credit') {
+            if (!debitVal) {
+                $credit.val(netAmount > 0 ? netAmount.toFixed(4) : '');
+                $debit.val('');
+            }
         }
     }
 }

@@ -32,6 +32,12 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<Account>> GetEnabledByCategoryIdAsync(int categoryId) {
+            return await _context.Accounts
+                .Where(a => a.CategoryId == categoryId && a.IsEnabled)
+                .ToListAsync();
+        }
+
         public async Task<Account?> GetByIdAsync(int id)
         {
             return await _context.Accounts

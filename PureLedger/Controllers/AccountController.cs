@@ -55,6 +55,8 @@ namespace PureLedger.Controllers
             {
                 return View(model);
             }
+            var normalizedUsername = model.Username?.Trim().ToLowerInvariant();
+            model.Username = normalizedUsername;
 
             var isValid = await _authService.ValidateUserAsync(model);
             if (!isValid)

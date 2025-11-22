@@ -8,6 +8,7 @@
     var projects = ViewBag.Projects as List<PureLedger.Models.Project>;
     var editingVoucherId = ViewBag.EditingVoucherId;
     var isEditMode = editingVoucherId != null;
+    var hasBookers = ViewBag.Bookers != null && ((List<PureLedger.Models.Booker>)ViewBag.Bookers).Any();
 }
 
 <style>
@@ -16,7 +17,7 @@
         position: relative;
         width: 100%;
     }
-    
+
     .select-dropdown {
         position: absolute;
         top: 100%;
@@ -31,42 +32,42 @@
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         display: none;
     }
-    
-    .select-dropdown.show {
-        display: block;
-    }
-    
+
+        .select-dropdown.show {
+            display: block;
+        }
+
     .select-option {
         padding: 8px 12px;
         cursor: pointer;
     }
-    
-    /* Update these styles for hover and selected states */
-    .select-option:hover {
-        background-color: #f0f7ff;
-    }
-    
-    .select-option.selected {
-        background-color: #0d6efd;
-        color: white;
-        font-weight: 500;
-    }
-    
-    .select-option.filtered-out {
-        display: none;
-    }
-    
+
+        /* Update these styles for hover and selected states */
+        .select-option:hover {
+            background-color: #f0f7ff;
+        }
+
+        .select-option.selected {
+            background-color: #0d6efd;
+            color: white;
+            font-weight: 500;
+        }
+
+        .select-option.filtered-out {
+            display: none;
+        }
+
     /* Hide original select */
     .select-container select {
         display: none;
     }
-    
+
     /* Make discount input look disabled */
     .disc-input {
         background-color: #e9ecef;
         cursor: not-allowed;
     }
-    
+
     /* Fix table overflow */
     .table-responsive {
         overflow: visible;
@@ -74,8 +75,7 @@
 </style>
 
 <form id="entryForm" method="post" autocomplete="off" asp-action="Entry" asp-controller="Home">
-    @if (isEditMode)
-    {
+    @if (isEditMode) {
         <input type="hidden" id="editingVoucherId" name="editingVoucherId" value="@editingVoucherId" />
     }
 
@@ -89,18 +89,24 @@
 
     <!-- Alert Area -->
     <div id="alertArea">
-        @if (ViewBag.Error != null)
-        {
+        @if (ViewBag.Error != null) {
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <i class="fas fa-exclamation-circle me-2"></i>@Html.Raw(ViewBag.Error)
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         }
 
-        @if (TempData["Success"] != null)
-        {
+        @if (TempData["Success"] != null) {
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 <i class="fas fa-check-circle me-2"></i>@TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (!hasBookers) {
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>No Bookers Available:</strong> Please add at least one booker before creating journal entries.
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         }
@@ -141,18 +147,13 @@
                         <span class="input-group-text"><i class="fas fa-project-diagram"></i></span>
                         <select class="form-select" id="ProjectId" name="ProjectId" required>
                             <option value="">Select Project</option>
-                            @if (projects != null)
-                            {
-                                foreach (var project in projects)
-                                {
+                            @if (projects != null) {
+                                foreach (var project in projects) {
                                     // compute selection inline
                                     var isSelected = false;
-                                    if (Model != null && Model.ProjectId == project.ProjectId)
-                                    {
+                                    if (Model != null && Model.ProjectId == project.ProjectId) {
                                         isSelected = true;
-                                    }
-                                    else if (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == project.ProjectId)
-                                    {
+                                    } else if (ViewBag.SelectedProjectId != null && (int)ViewBag.SelectedProjectId == project.ProjectId) {
                                         isSelected = true;
                                     }
                                     <option value="@project.ProjectId" selected="@(isSelected ? "selected" : null)">@project.ProjectName</option>
@@ -196,10 +197,8 @@
                         </tr>
                     </thead>
                     <tbody id="entryRows">
-                        @if (Model?.Entries != null && Model.Entries.Any())
-                        {
-                            for (int i = 0; i < Model.Entries.Count; i++)
-                            {
+                        @if (Model?.Entries != null && Model.Entries.Any()) {
+                            for (int i = 0; i < Model.Entries.Count; i++) {
                                 var entry = Model.Entries[i];
                                 <tr id="entryRow-@i" class="entry-row" data-category-id="@entry.CategoryId" data-account-id="@entry.AccountId">
                                     <td>
@@ -262,7 +261,6 @@
                                                id="Entries_@(i)_Qty"
                                                name="Entries[@(i)].Qty"
                                                type="number"
-                                               min="0"
                                                step="1"
                                                value="@(entry.Qty)" />
                                     </td>
@@ -321,9 +319,7 @@
                                     </td>
                                 </tr>
                             }
-                        }
-                        else
-                        {
+                        } else {
                             <!-- Empty template row when there are no entries -->
                             <tr id="entryRow-0" class="entry-row">
                                 <td>
@@ -384,7 +380,6 @@
                                            id="Entries_0_Qty"
                                            name="Entries[0].Qty"
                                            type="number"
-                                           min="0"
                                            step="1"
                                            placeholder="0" />
                                 </td>
@@ -402,7 +397,7 @@
                                            id="Entries_0_Percent"
                                            name="Entries[0].Percent"
                                            type="number"
-                                           min="0"  
+                                           min="0"
                                            max="100"
                                            step="0.01"
                                            placeholder="0.00" />
@@ -499,33 +494,48 @@
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-user"></i></span>
                         <select class="form-select" id="BookerId" name="BookerId">
-                            @if (ViewBag.Bookers != null && ((List<PureLedger.Models.Booker>)ViewBag.Bookers).Any())
-                            {
-                                foreach (var booker in ViewBag.Bookers)
-                                {
+                            @if (hasBookers) {
+                                foreach (var booker in ViewBag.Bookers) {
                                     bool isSelected = false;
-                                    
-                                    if (Model?.BookerId.HasValue == true)
-                                    {
+
+                                    if (Model?.BookerId.HasValue == true) {
                                         // For edit mode - use the model's BookerId
                                         isSelected = Model.BookerId == booker.BookerID;
-                                    }
-                                    else if (booker == ViewBag.Bookers[0])
-                                    {
+                                    } else if (booker == ViewBag.Bookers[0]) {
                                         // For create mode - select first booker by default
                                         isSelected = true;
                                     }
-                                    
+
                                     <option value="@booker.BookerID" selected="@isSelected">
                                         @booker.BookerName
                                     </option>
                                 }
-                            }
-                            else
-                            {
+                            } else {
                                 <option value="">No bookers available</option>
                             }
                         </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quantity Required Checkbox - Always visible -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               id="RequireQuantity"
+                               name="RequireQuantity"
+                               value="true"
+                               @(Model?.RequireQuantity != false ? "checked" : "") />
+                        <label class="form-check-label" for="RequireQuantity">
+                            <span class="fw-bold text-info">
+                                <i class="fas fa-hashtag me-1"></i>Require Quantity for Product Accounts
+                            </span>
+                            <small class="text-muted ms-2">
+                                (When checked, quantity field will be mandatory for product entries)
+                            </small>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -579,10 +589,10 @@
                     <label class="form-label" for="RecipeName">Recipe Name <span class="text-danger">*</span></label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-tag"></i></span>
-                        <input type="text" 
-                               class="form-control" 
-                               id="RecipeName" 
-                               name="RecipeName" 
+                        <input type="text"
+                               class="form-control"
+                               id="RecipeName"
+                               name="RecipeName"
                                placeholder="Enter a name for this recipe" />
                     </div>
                     <div class="invalid-feedback">Please provide a name for your recipe</div>
@@ -598,10 +608,10 @@
         </button>
         <div>
             <input type="hidden" id="formAction" name="action" value="submit" />
-            <button type="submit" class="btn btn-primary px-4 me-2" id="submitBtn">
+            <button type="submit" class="btn btn-primary px-4 me-2" id="submitBtn" @(!hasBookers ? "disabled" : "")>
                 <i class="fas fa-save me-1"></i> @(isEditMode ? "Update Journal Voucher" : "Submit Journal Entry")
             </button>
-            <button type="submit" class="btn btn-success px-4" id="submitPrintBtn" name="action" value="submit_print">
+            <button type="submit" class="btn btn-success px-4" id="submitPrintBtn" name="action" value="submit_print" @(!hasBookers ? "disabled" : "")>
                 <i class="fas fa-print me-1"></i> @(isEditMode ? "Update and Print" : "Submit and Print")
             </button>
         </div>
@@ -611,4 +621,7 @@
 @section Scripts {
     <script src="~/js/load-data-journal-entry.js" asp-append-version="true"></script>
     <script src="~/js/journal-entry.js" asp-append-version="true"></script>
+    <script>
+        window.hasBookers = @hasBookers.ToString().ToLower();
+    </script>
 }

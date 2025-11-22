@@ -27,7 +27,7 @@ namespace PureLedger.Repositories
         public async Task<User?> GetByUsernameAsync(string username)
         {
             return await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == username);
+                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
         }
 
         public async Task<User?> GetByUsernameWithAccessAsync(string username)
@@ -35,7 +35,7 @@ namespace PureLedger.Repositories
             return await _context.Users
                 .Include(u => u.UserProjects)
                 .Include(u => u.ControllerAccess)
-                .FirstOrDefaultAsync(u => u.Username == username);
+                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
         }
 
         public async Task<User?> GetByIdWithAccessAsync(int id)
@@ -80,7 +80,7 @@ namespace PureLedger.Repositories
 
         public async Task<bool> UsernameExistsAsync(string username)
         {
-            return await _context.Users.AnyAsync(u => u.Username == username);
+            return await _context.Users.AnyAsync(u => u.Username.ToLower() == username.ToLower());
         }
 
         public async Task<int> GetAdminCountAsync()

@@ -19,6 +19,11 @@ namespace PureLedger.Repositories
             return await _context.Bookers.ToListAsync();
         }
 
+        public async Task<List<Booker>> GetAllEnabledAsync(){
+            return await _context.Bookers.Where(b => b.IsEnabled).ToListAsync();
+        }
+
+
         public async Task<Booker?> GetByIdAsync(int id)
         {
             return await _context.Bookers.FindAsync(id);
