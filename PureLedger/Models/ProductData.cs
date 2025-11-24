@@ -13,13 +13,13 @@ namespace PureLedger.Models
         [ForeignKey("Account")]
         public int AccountId { get; set; }
 
-        [StringLength(10, ErrorMessage = "Package form cannot exceed 10 characters")]
+        [StringLength(15, ErrorMessage = "Package form cannot exceed 15 characters")]
         public string? PkgForm { get; set; }
 
         [Range(0, int.MaxValue, ErrorMessage = "Package must be a positive number")]
         public int? Pkg { get; set; }
 
-        [StringLength(10, ErrorMessage = "Type cannot exceed 10 characters")]
+        [StringLength(15, ErrorMessage = "Type cannot exceed 15 characters")]
         public string? Type { get; set; }
 
         [Range(0, int.MaxValue, ErrorMessage = "Sale rate must be a positive number")]

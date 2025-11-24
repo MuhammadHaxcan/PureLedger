@@ -19,7 +19,7 @@ namespace PureLedger.Models
         public int AccountGroupId { get; set; }
 
         [Required(ErrorMessage = "Account name is required")]
-        [StringLength(30, MinimumLength = 2, ErrorMessage = "Account name must be between 2-30 characters")]
+        [StringLength(50, MinimumLength = 2, ErrorMessage = "Account name must be between 2-50 characters")]
         public string AccountName { get; set; }
 
         [Required]

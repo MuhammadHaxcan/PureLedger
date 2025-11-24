@@ -653,6 +653,29 @@
     setupSelectSearch() {
         const self = this;
 
+        // Ensure all visible options are scrollable to selection
+        this.ensureOptionVisible = function ($option) {
+            if (!$option || !$option.length) return;
+            const optEl = $option[0];
+            // Prefer scrollIntoView for nearest behavior within the dropdown container
+            try {
+                optEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            } catch (err) {
+                // fallback: compute container scroll manually
+                const $dropdown = $option.closest('.select-dropdown');
+                if ($dropdown.length) {
+                    const dropdown = $dropdown[0];
+                    const optRect = optEl.getBoundingClientRect();
+                    const ddRect = dropdown.getBoundingClientRect();
+                    if (optRect.top < ddRect.top) {
+                        dropdown.scrollTop -= (ddRect.top - optRect.top);
+                    } else if (optRect.bottom > ddRect.bottom) {
+                        dropdown.scrollTop += (optRect.bottom - ddRect.bottom);
+                    }
+                }
+            }
+        };
+
         $(document).on('input', '.select-search', function () {
             const $input = $(this);
             const $container = $input.closest('.select-container');
@@ -660,13 +683,11 @@
             const $select = $container.find('select');
             const searchTerm = $input.val().toLowerCase();
 
-            // Filter options based on search term
-            let visibleCount = 0;
+            // Filter options based on search term (no artificial cap)
             $dropdown.find('.select-option').each(function () {
                 const text = $(this).text().toLowerCase();
-                const shouldShow = text.includes(searchTerm) && visibleCount < 5;
+                const shouldShow = text.includes(searchTerm);
                 $(this).toggleClass('filtered-out', !shouldShow);
-                if (shouldShow) visibleCount++;
             });
 
             // Show dropdown
@@ -690,6 +711,8 @@
                 const $selectedOption = $dropdown.find(`.select-option[data-value="${currentValue}"]`);
                 if ($selectedOption.length) {
                     $selectedOption.addClass('selected');
+                    // ensure highlighted option is visible
+                    self.ensureOptionVisible($selectedOption);
                 }
             }
 
@@ -699,8 +722,16 @@
         // Navigation with keyboard
         $(document).on('keydown', '.select-search', function (e) {
             const $dropdown = $(this).closest('.select-container').find('.select-dropdown');
-            const $options = $dropdown.find('.select-option:not(.filtered-out)');
+            let $options = $dropdown.find('.select-option:not(.filtered-out)');
             let $selected = $dropdown.find('.select-option.selected');
+
+            // If there are no visible options, do nothing
+            if ($options.length === 0) return;
+
+            // Ensure dropdown is visible when navigating via keyboard
+            if (!$dropdown.hasClass('show')) {
+                $dropdown.addClass('show');
+            }
 
             // If Tab key and dropdown is showing, just close the dropdown without changing selection
             if (e.key === 'Tab' && $dropdown.hasClass('show')) {
@@ -712,12 +743,15 @@
                 case 'ArrowDown':
                     e.preventDefault();
                     if (!$selected.length) {
-                        $options.first().addClass('selected');
+                        const $first = $options.first();
+                        $first.addClass('selected');
+                        self.ensureOptionVisible($first);
                     } else {
                         const $next = $selected.nextAll('.select-option:not(.filtered-out)').first();
                         if ($next.length) {
                             $selected.removeClass('selected');
                             $next.addClass('selected');
+                            self.ensureOptionVisible($next);
                         }
                     }
                     break;
@@ -725,12 +759,15 @@
                 case 'ArrowUp':
                     e.preventDefault();
                     if (!$selected.length) {
-                        $options.last().addClass('selected');
+                        const $last = $options.last();
+                        $last.addClass('selected');
+                        self.ensureOptionVisible($last);
                     } else {
                         const $prev = $selected.prevAll('.select-option:not(.filtered-out)').first();
                         if ($prev.length) {
                             $selected.removeClass('selected');
                             $prev.addClass('selected');
+                            self.ensureOptionVisible($prev);
                         }
                     }
                     break;
@@ -776,13 +813,11 @@
             const $select = $container.find('select');
             const searchTerm = $input.val().toLowerCase();
 
-            // Filter options based on search term
-            let visibleCount = 0;
+            // Filter options based on search term (no artificial cap)
             $dropdown.find('.select-option').each(function () {
                 const text = $(this).text().toLowerCase();
-                const shouldShow = text.includes(searchTerm) && visibleCount < 5;
+                const shouldShow = text.includes(searchTerm);
                 $(this).toggleClass('filtered-out', !shouldShow);
-                if (shouldShow) visibleCount++;
             });
 
             // Show dropdown
