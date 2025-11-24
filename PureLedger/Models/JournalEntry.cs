@@ -57,8 +57,8 @@ namespace PureLedger.Models
         public DateOnly? ModifiedDateTime { get; set; }
 
         // Navigation properties
-        public virtual Account Account { get; set; }
-        public virtual Category Category { get; set; }
-        public virtual JournalVoucher JournalVoucher { get; set; }
+        public virtual Account? Account { get; set; }
+        public virtual Category? Category { get; set; }
+        public virtual JournalVoucher? JournalVoucher { get; set; }
     }
 }

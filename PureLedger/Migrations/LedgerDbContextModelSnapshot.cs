@@ -79,8 +79,8 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("AccountName")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer");
@@ -251,8 +251,8 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("CategoryName")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<int>("ProjectId")
                         .HasColumnType("integer");
@@ -471,8 +471,8 @@ namespace PureLedger.Migrations
 
                     b.Property<string>("LocationName")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
@@ -505,15 +505,15 @@ namespace PureLedger.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("PkgForm")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)");
 
                     b.Property<int?>("SaleRate")
                         .HasColumnType("integer");
 
                     b.Property<string>("Type")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)");
 
                     b.HasKey("ProductDataId");
 

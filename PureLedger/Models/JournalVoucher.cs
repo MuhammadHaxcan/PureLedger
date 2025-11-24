@@ -45,7 +45,7 @@ namespace PureLedger.Models
         public virtual Booker? Booker { get; set; }
 
         // Navigation properties
-        public virtual Project Project { get; set; }
+        public virtual Project? Project { get; set; }
         public virtual ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
         
         // Reference collections

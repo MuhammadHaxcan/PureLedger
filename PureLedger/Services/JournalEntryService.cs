@@ -119,7 +119,8 @@ namespace PureLedger.Services
             var entries = voucher.JournalEntries.Select(e => new
             {
                 entryId = e.JournalEntryId,
-                accountName = e.Account?.AccountName,
+                categoryName = e.Category?.CategoryName ?? "N/A",
+                accountName = e.Account?.AccountName ?? "N/A",
                 description = e.Description,
                 quantity = e.Quantity,
                 rate = e.Rate,
@@ -128,6 +129,8 @@ namespace PureLedger.Services
                 debit = e.Debit,
                 credit = e.Credit
             }).ToList();
+
+            return new { entries, jvId = voucher.JournalVoucherId, projectName = voucher.Project?.ProjectName ?? "Unknown Project" };
 
             return new { entries, jvId = voucher.JournalVoucherId };
         }

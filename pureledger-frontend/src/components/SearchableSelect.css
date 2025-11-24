@@ -1,0 +1,135 @@
+/* SearchableSelect Component Styles - Matching original Entry.cshtml styles */
+
+.searchable-select-container {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  /* Ensure dropdown is not cropped */
+  overflow: visible;
+  display: flex;
+  align-items: stretch;
+}
+
+.searchable-select-container input {
+  width: 100%;
+  border-radius: 0.375rem;
+  flex: 1;
+}
+
+/* When inside InputGroup, remove border radius on left side and ensure proper alignment */
+.input-group .searchable-select-container {
+  flex: 1;
+  min-width: 0; /* Allow flex item to shrink */
+}
+
+.input-group .searchable-select-container input {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+}
+
+/* Ensure parent containers don't clip the dropdown */
+.table-responsive,
+.card-body,
+.container-fluid,
+.table {
+  overflow: visible !important;
+}
+
+.select-container {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+}
+
+.searchable-select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  z-index: 9999;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: none;
+  margin-top: 2px;
+}
+
+.select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ced4da;
+  border-radius: 0.25rem;
+  z-index: 9999;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: none;
+  margin-top: 2px;
+}
+
+.searchable-select-dropdown.show,
+.select-dropdown.show {
+  display: block;
+}
+
+.searchable-select-option,
+.select-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.searchable-select-option:hover,
+.select-option:hover {
+  background-color: #f0f7ff;
+}
+
+.searchable-select-option.selected,
+.searchable-select-option.highlighted,
+.select-option.selected {
+  background-color: #0d6efd;
+  color: white;
+  font-weight: 500;
+}
+
+.searchable-select-option.filtered-out,
+.select-option.filtered-out {
+  display: none;
+}
+
+/* Hide original select */
+.select-container select {
+  display: none;
+}
+
+/* Ensure search input looks like a normal form control */
+.select-search {
+  width: 100%;
+}
+
+/* Scrollbar styling for dropdown */
+.select-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.select-dropdown::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+

@@ -45,6 +45,7 @@ namespace PureLedger.Repositories
         {
             IQueryable<JournalEntry> query = _context.JournalEntries
                 .Include(je => je.Account)
+                .Include(je => je.Category)
                 .Where(je => je.JournalVoucherId == voucherId);
 
             if (categoryId.HasValue)

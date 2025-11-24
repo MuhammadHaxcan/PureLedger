@@ -28,8 +28,8 @@ namespace PureLedger.Models
 
         public virtual AccountData? AccountData { get; set; }
         public virtual ProductData? ProductData { get; set; }
-        public virtual Category Category { get; set; }
-        public virtual AccountGroup AccountGroup { get; set; }
+        public virtual Category? Category { get; set; }
+        public virtual AccountGroup? AccountGroup { get; set; }
     }
 
 }

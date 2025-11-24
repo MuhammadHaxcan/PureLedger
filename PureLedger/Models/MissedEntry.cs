@@ -39,10 +39,10 @@ public class MissedEntry
 
     // Navigation properties
     [ForeignKey("CustomerAccountId")]
-    public virtual Account CustomerAccount { get; set; }
+    public virtual Account? CustomerAccount { get; set; }
     
     [ForeignKey("ProductAccountId")]
-    public virtual Account ProductAccount { get; set; }
+    public virtual Account? ProductAccount { get; set; }
     
-    public virtual Project Project { get; set; }
+    public virtual Project? Project { get; set; }
 }

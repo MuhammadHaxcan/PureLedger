@@ -7,6 +7,10 @@ namespace PureLedger.ViewModels.Home
     {
         public int BaseVoucherId { get; set; }
         public int ProjectId { get; set; }
+        public string? ProjectName { get; set; }
+        public DateOnly EntryDate { get; set; }
+        public decimal TotalDebit { get; set; }
+        public decimal TotalCredit { get; set; }
         public List<BaseVoucherEntryViewModel> Entries { get; set; } = new();
         
         // New properties for account entry
@@ -22,6 +26,7 @@ namespace PureLedger.ViewModels.Home
         public int EntryId { get; set; }
         public string? Description { get; set; }
         public string? AccountName { get; set; }
+        public string? CategoryName { get; set; }
         public int AccountId { get; set; }
         public int CategoryId { get; set; } // Added to match JournalEntryRowModel
         public int AvailableQuantity { get; set; }
@@ -35,9 +40,7 @@ namespace PureLedger.ViewModels.Home
         public string? Rbp { get; set; } // Added to match JournalEntryRowModel
         public string? Type { get; set; } // Added to match JournalEntryRowModel
         public List<int>? Tags { get; set; } // Added to match JournalEntryRowModel
-
-        [NotMapped]
-        public bool IsProcessed => AvailableQuantity <= 0;
+        public bool IsProcessed { get; set; }
 
         [NotMapped]
         public bool IsFullQuantity => ProcessQuantity == AvailableQuantity;

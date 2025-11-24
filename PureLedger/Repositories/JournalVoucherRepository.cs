@@ -123,8 +123,11 @@ namespace PureLedger.Repositories
         {
             return await _context.JournalVouchers
                 .Where(v => v.IsBaseVoucher && v.JournalVoucherId == id)
+                .Include(v => v.Project)
                 .Include(v => v.JournalEntries)
                     .ThenInclude(e => e.Account)
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Category)
                 .FirstOrDefaultAsync();
         }
     }
