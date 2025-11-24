@@ -220,13 +220,19 @@
                 </h6>
             </div>
             <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-12">
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-9">
                         <label class="form-label">Search</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-search"></i></span>
                             <input id="searchBox" class="form-control" placeholder="Filter results..." />
                         </div>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <button id="exportProductCsvBtn" class="btn btn-outline-success" disabled title="Export CSV">
+                            <i class="fas fa-file-csv me-1"></i> Export CSV
+                        </button>
                     </div>
                 </div>
                 <div class="table-responsive">

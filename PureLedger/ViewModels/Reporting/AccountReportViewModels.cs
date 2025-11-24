@@ -10,6 +10,8 @@ namespace PureLedger.ViewModels.Reporting
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public decimal NetBalance { get; set; }
+        public string ProjectId { get; set; } = string.Empty;
+        public string CategoryId { get; set; } = string.Empty;
     }
 
     public class AccountReportResponseViewModel

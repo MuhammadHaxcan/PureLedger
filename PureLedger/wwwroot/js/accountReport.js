@@ -5,6 +5,7 @@
  * - Data fetching and rendering with auto-loading
  * - Project requirement validation
  * - Total row calculations
+ * - CSV export (added)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -18,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 3,
+        pageSize: 500,
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
@@ -323,6 +324,7 @@ function setupEventListeners() {
 
     setupSelectSearch();
     initSearchFunctionality();
+    initializeExportButton();
 
     $(document).on('change', '#projectId', handleProjectChange);
     $(document).on('change', '#categoryId', handleCategoryChange);
@@ -722,6 +724,7 @@ function renderAllEntries() {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">No accounts found</td></tr>';
         updateReportSummary(0);
         updateTotalRow(0, 0, 0);
+        updateExportButtonState();
         return;
     }
 
@@ -739,9 +742,14 @@ function renderAllEntries() {
         totalCredit += credit;
         totalBalance += balance;
 
+        const projectId = entry.projectId || entry.ProjectId || '';
+        const categoryId = entry.categoryId || entry.CategoryId || '';
+        const accountId = entry.accountId || entry.AccountId || entry.AccountIdString || entry.AccountId || '';
+        const compositeId = (projectId || categoryId) ? `${projectId}-${categoryId}-${accountId}` : (accountId || '');
+
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${entry.accountId}</td>
+            <td>${compositeId}</td>
             <td>${entry.categoryName || '-'}</td>
             <td>${entry.accountName}</td>
             <td class="text-end">${formatCurrency(debit)}</td>
@@ -760,8 +768,97 @@ function renderAllEntries() {
         totalBalance: totalBalance
     };
 
-    updateReportSummary(window.reportState.allEntries.length, totalDebit, totalCredit, totalBalance);
+    updateReportSummary(window.reportState.allEntries.length);
     updateTotalRow(totalDebit, totalCredit, totalBalance);
+
+    // Update export button state after entries rendered
+    updateExportButtonState();
+}
+
+// ==================== CSV EXPORT (NEW) ====================
+
+function initializeExportButton() {
+    // use delegated handler so button can be created dynamically inside reportSummary
+    $(document).off('click', '#exportAccountCsvBtn').on('click', '#exportAccountCsvBtn', function (e) {
+        e.preventDefault();
+        const btn = this;
+        if (btn.disabled) return;
+        exportAccountReportToCsv();
+    });
+
+    // ensure button state updated on load
+    updateExportButtonState();
+}
+
+function updateExportButtonState() {
+    const btn = document.getElementById('exportAccountCsvBtn');
+    if (!btn) return;
+
+    const ready = !window.reportState.isLoading && !window.reportState.hasMoreData
+        && Array.isArray(window.reportState.allEntries) && window.reportState.allEntries.length > 0;
+
+    btn.disabled = !ready;
+}
+
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
+function formatNumericForCsv(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = Number(value);
+    if (isNaN(n)) return String(value);
+    return n.toFixed(2);
+}
+
+function exportAccountReportToCsv() {
+    const entries = window.reportState?.allEntries || [];
+    if (!entries.length) {
+        alert('No account data to export.');
+        return;
+    }
+
+    const headers = ['ID', 'Category', 'Account Name', 'Debit', 'Credit', 'Balance'];
+    const rows = [headers.map(csvEscape).join(',')];
+
+    entries.forEach(e => {
+        // Build composite ID same as UI
+        const projectId = e.projectId || e.ProjectId || '';
+        const categoryId = e.categoryId || e.CategoryId || '';
+        const accountId = e.accountId || e.AccountId || e.AccountIdString || e.AccountId || '';
+        const compositeId = (projectId || categoryId) ? `${projectId}-${categoryId}-${accountId}` : (accountId || '');
+
+        const id = compositeId ?? '';
+        const category = e.categoryName ?? '';
+        const name = e.accountName ?? '';
+        const debit = formatNumericForCsv(e.totalDebit);
+        const credit = formatNumericForCsv(e.totalCredit);
+        const balance = formatNumericForCsv(e.netBalance);
+
+        rows.push([csvEscape(id), csvEscape(category), csvEscape(name), csvEscape(debit), csvEscape(credit), csvEscape(balance)].join(','));
+    });
+
+    const csvContent = rows.join('\r\n');
+    downloadCsvBlob(csvContent, `AccountReport_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+}
+
+function downloadCsvBlob(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) {
+        navigator.msSaveBlob(blob, filename);
+    } else {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
 }
 
 // ==================== TOTAL ROW MANAGEMENT ====================
@@ -850,6 +947,7 @@ function updateLoadMoreButton() {
     }
 
     updateLoadingStatus();
+    updateExportButtonState();
 }
 
 function updateReportSummary(count, totalDebit = 0, totalCredit = 0, totalBalance = 0) {
@@ -857,14 +955,17 @@ function updateReportSummary(count, totalDebit = 0, totalCredit = 0, totalBalanc
     if (!summaryElement) return;
 
     if (count > 0) {
-        const balanceClass = totalBalance < 0 ? 'text-danger' : 'text-success';
+        // show count and export button (export button is managed by JS for enable/disable)
         summaryElement.innerHTML = `
             <span class="badge bg-primary">${count} accounts</span>
-            <span class="badge bg-secondary ms-2">Total Balance: <span class="${balanceClass}">${formatCurrency(totalBalance)}</span></span>
+            <button id="exportAccountCsvBtn" class="btn btn-outline-success btn-sm ms-2" disabled title="Export CSV">
+                <i class="fas fa-file-csv me-1"></i>Export CSV
+            </button>
         `;
     } else {
         summaryElement.innerHTML = `<span class="badge bg-secondary">No data</span>`;
     }
+    updateExportButtonState();
 }
 
 // ==================== UTILITY FUNCTIONS ====================

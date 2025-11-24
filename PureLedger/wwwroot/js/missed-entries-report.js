@@ -3,7 +3,7 @@
         this.tables = {};
         this.reportState = {
             currentPage: 0,
-            pageSize: 100, // Increased batch size to reduce round-trips
+            pageSize: 500, // Increased batch size to reduce round-trips
             isLoading: false,
             hasMoreData: true,
             totalRecords: 0,

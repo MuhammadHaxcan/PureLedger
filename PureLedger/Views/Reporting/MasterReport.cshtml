@@ -189,13 +189,19 @@
                 </h6>
             </div>
             <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-12">
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-9">
                         <label class="form-label">Search</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fas fa-search"></i></span>
                             <input id="searchBox" class="form-control" placeholder="Filter results..." />
                         </div>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <button id="exportCsvBtn" class="btn btn-outline-success" disabled title="Export CSV">
+                            <i class="fas fa-file-csv me-1"></i> Export CSV
+                        </button>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -231,10 +237,13 @@
 
         <!-- Account Summary -->
         <div class="card shadow mb-4">
-            <div class="card-header py-3">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">
                     <i class="fas fa-users me-2"></i>Account Summary
                 </h6>
+                <button id="exportAccountSummaryCsvBtn" class="btn btn-outline-success btn-sm" type="button" title="Export Account Summary CSV">
+                    <i class="fas fa-file-csv me-1"></i> Export CSV
+                </button>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -257,10 +266,13 @@
 
         <!-- Category Summary -->
         <div class="card shadow mb-4">
-            <div class="card-header py-3">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">
                     <i class="fas fa-tags me-2"></i>Category Summary
                 </h6>
+                <button id="exportCategorySummaryCsvBtn" class="btn btn-outline-success btn-sm" type="button" title="Export Category Summary CSV">
+                    <i class="fas fa-file-csv me-1"></i> Export CSV
+                </button>
             </div>
             <div class="card-body">
                 <div class="table-responsive">

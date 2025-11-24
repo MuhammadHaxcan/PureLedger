@@ -4,6 +4,7 @@
  * - Searchable dropdown filters
  * - Column visibility toggles
  * - Data fetching and rendering with auto-loading
+ * - CSV exports for main report, account summary and category summary (rewritten)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -298,7 +299,7 @@ function handleCategoryChange() {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 5,
+        pageSize: 500,
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
@@ -337,6 +338,14 @@ function setupEventListeners() {
     initColumnToggles();
     initSearchFunctionality();
     setupSelectSearch();
+    initializeExportButton();
+
+    // Summary export buttons are attached here too
+    const accountBtn = document.getElementById('exportAccountSummaryCsvBtn');
+    if (accountBtn) accountBtn.addEventListener('click', exportAccountSummaryToCsv);
+
+    const categoryBtn = document.getElementById('exportCategorySummaryCsvBtn');
+    if (categoryBtn) categoryBtn.addEventListener('click', exportCategorySummaryToCsv);
 
     $(document).on('change', '#projectId', handleProjectChange);
     $(document).on('change', '#categoryId', handleCategoryChange);
@@ -434,6 +443,225 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
+}
+
+// ==================== CSV EXPORT (REWRITTEN) ====================
+// All CSV export functions now use the underlying reportState data (not DOM scraping).
+// Group IDs formatting adjusted per requirement: keep dashes for both account and category (no slashes).
+
+function initializeExportButton() {
+    const btn = document.getElementById('exportCsvBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        exportReportToCsv();
+    });
+
+    // Ensure button initial state
+    updateExportButtonState();
+
+    // Ensure summary export buttons initial disabled state
+    updateSummaryExportButtons();
+}
+
+function updateExportButtonState() {
+    const btn = document.getElementById('exportCsvBtn');
+    if (!btn) return;
+
+    const allLoaded = !window.reportState.isLoading
+        && !window.reportState.hasMoreData
+        && window.reportState.allEntries
+        && window.reportState.allEntries.length > 0;
+
+    btn.disabled = !allLoaded;
+}
+
+// CSV helpers
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    const escaped = str.replace(/"/g, '""');
+    return `"${escaped}"`;
+}
+
+function formatNumericForCsv(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = Number(value);
+    if (isNaN(n)) return String(value);
+    // Dot decimal, no thousands separators
+    return n.toFixed(2);
+}
+
+// Format group id: preserve dashes for account and category (no slash conversion)
+function formatGroupIdForCsv(rawId) {
+    if (!rawId) return '';
+    // Preserve original dash-separated id like "1-1" or "1-1-1"
+    return String(rawId);
+}
+
+// Export main master report (uses visible column toggles)
+function exportReportToCsv() {
+    if (!window.reportState.allEntries || window.reportState.allEntries.length === 0) {
+        showError('No data available to export.');
+        return;
+    }
+
+    const cols = [
+        { key: 'id', label: 'ID' },
+        { key: 'transactionDate', label: 'Entry Date' },
+        { key: 'creditableDate', label: 'Creditable Date' },
+        { key: 'description', label: 'Description' },
+        { key: 'accountName', label: 'Account' },
+        { key: 'bookerName', label: 'Booker' },
+        { key: 'quantity', label: 'Quantity' },
+        { key: 'debit', label: 'Debit' },
+        { key: 'credit', label: 'Credit' },
+        { key: 'balance', label: 'Balance' }
+    ];
+
+    const visibleCols = cols.filter(col => {
+        switch (col.key) {
+            case 'transactionDate': return window.reportState.visibleColumns.date;
+            case 'creditableDate': return window.reportState.visibleColumns.creditableDate;
+            case 'description': return window.reportState.visibleColumns.description;
+            case 'accountName': return window.reportState.visibleColumns.account;
+            case 'bookerName': return window.reportState.visibleColumns.booker;
+            case 'quantity': return window.reportState.visibleColumns.quantity;
+            case 'debit': return window.reportState.visibleColumns.debit;
+            case 'credit': return window.reportState.visibleColumns.credit;
+            case 'balance': return window.reportState.visibleColumns.balance;
+            default: return true; // ID always visible
+        }
+    });
+
+    const header = visibleCols.map(c => csvEscape(c.label)).join(',');
+
+    const rows = window.reportState.allEntries.map(entry => {
+        const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
+        let idVal = '';
+        if (isOpening) {
+            idVal = 'OPENING';
+        } else {
+            const parts = [];
+            if (entry.journalVoucherId !== null && entry.journalVoucherId !== undefined && entry.journalVoucherId !== '') {
+                parts.push(`JV-${entry.journalVoucherId}`);
+            }
+            if (entry.id !== null && entry.id !== undefined && entry.id !== '') {
+                parts.push(`Entry: ${entry.id}`);
+            }
+            idVal = parts.join(', ');
+        }
+
+        const record = {
+            id: idVal,
+            transactionDate: formatDate(entry.transactionDate),
+            creditableDate: formatDate(entry.creditableDate),
+            description: entry.description ?? '',
+            accountName: entry.accountName ?? '',
+            bookerName: entry.bookerName ?? '',
+            quantity: (entry.quantity === null || entry.quantity === undefined || entry.quantity === '') ? '' : String(entry.quantity),
+            debit: formatNumericForCsv(entry.debit),
+            credit: formatNumericForCsv(entry.credit),
+            balance: formatNumericForCsv(entry.balance)
+        };
+
+        return visibleCols.map(c => csvEscape(record[c.key])).join(',');
+    });
+
+    const csvContent = [header].concat(rows).join('\r\n');
+    downloadCsvBlob(csvContent, `MasterReport_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+}
+
+// Export account summary using reportState.accountGroupsMap (not DOM)
+function exportAccountSummaryToCsv() {
+    const map = window.reportState?.accountGroupsMap || {};
+    const keys = Object.keys(map);
+    if (keys.length === 0) {
+        alert('No account summary data to export.');
+        return;
+    }
+
+    const header = ['ID', 'Account', 'Debit', 'Credit', 'Balance'];
+    const rows = [header.map(csvEscape).join(',')];
+
+    keys.forEach(k => {
+        const d = map[k];
+        const balance = (d.debit || 0) - (d.credit || 0);
+        // Keep dash-separated id "projectId-categoryId-accountId" like "1-1-1"
+        const id = formatGroupIdForCsv(d.id);
+        rows.push([
+            csvEscape(id),
+            csvEscape(d.name || ''),
+            csvEscape(formatNumericForCsv(d.debit)),
+            csvEscape(formatNumericForCsv(d.credit)),
+            csvEscape(formatNumericForCsv(balance))
+        ].join(','));
+    });
+
+    const csvContent = rows.join('\r\n');
+    downloadCsvBlob(csvContent, `AccountSummary_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+}
+
+// Export category summary using reportState.categoryGroupsMap (not DOM)
+function exportCategorySummaryToCsv() {
+    const map = window.reportState?.categoryGroupsMap || {};
+    const keys = Object.keys(map);
+    if (keys.length === 0) {
+        alert('No category summary data to export.');
+        return;
+    }
+
+    const header = ['ID', 'Category', 'Debit', 'Credit', 'Balance'];
+    const rows = [header.map(csvEscape).join(',')];
+
+    keys.forEach(k => {
+        const d = map[k];
+        const balance = (d.debit || 0) - (d.credit || 0);
+        // Keep dash-separated id "projectId-categoryId" like "1-1"
+        const id = formatGroupIdForCsv(d.id);
+        rows.push([
+            csvEscape(id),
+            csvEscape(d.name || ''),
+            csvEscape(formatNumericForCsv(d.debit)),
+            csvEscape(formatNumericForCsv(d.credit)),
+            csvEscape(formatNumericForCsv(balance))
+        ].join(','));
+    });
+
+    const csvContent = rows.join('\r\n');
+    downloadCsvBlob(csvContent, `CategorySummary_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+}
+
+// Generic blob download
+function downloadCsvBlob(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) {
+        navigator.msSaveBlob(blob, filename);
+    } else {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+}
+
+// Update summary export buttons state (called from renderSummaryTable)
+function updateSummaryExportButtons() {
+    const accountBtn = document.getElementById('exportAccountSummaryCsvBtn');
+    const categoryBtn = document.getElementById('exportCategorySummaryCsvBtn');
+
+    const hasAccountData = window.reportState.accountGroupsMap && Object.keys(window.reportState.accountGroupsMap).length > 0;
+    const hasCategoryData = window.reportState.categoryGroupsMap && Object.keys(window.reportState.categoryGroupsMap).length > 0;
+
+    // Buttons enabled only when all data has finished loading AND the respective summary maps have entries.
+    const ready = !window.reportState.isLoading && !window.reportState.hasMoreData;
+
+    if (accountBtn) accountBtn.disabled = !(ready && hasAccountData);
+    if (categoryBtn) categoryBtn.disabled = !(ready && hasCategoryData);
 }
 
 // ==================== SEARCH FUNCTIONALITY ====================
@@ -810,6 +1038,13 @@ function clearReportData() {
     updateElement('netBalance', '0.00');
 
     removeElements(['loadMoreContainer', 'loadingStatus', 'autoLoadIndicator']);
+
+    // Disable master export while data is being loaded
+    const exportBtn = document.getElementById('exportCsvBtn');
+    if (exportBtn) exportBtn.disabled = true;
+
+    // Disable summary exports until data arrives
+    updateSummaryExportButtons();
 }
 
 function updateElement(id, content) {
@@ -892,6 +1127,9 @@ function fetchReportChunk(autoLoad) {
             if (autoLoad && window.reportState.hasMoreData && !isSearching) {
                 fetchReportChunk(true);
             }
+
+            updateExportButtonState();
+            updateSummaryExportButtons();
         });
 }
 
@@ -940,6 +1178,7 @@ function processAndDisplayEntries(entries) {
     updateTotals();
 }
 
+// ==================== TABLE RENDERING ====================
 function appendRows(entries) {
     const tbody = document.getElementById('reportData');
     if (!tbody) return;
@@ -954,13 +1193,21 @@ function appendRows(entries) {
             <td>
                 ${isOpening ? '<span class="fw-bold text-primary">OPENING</span>' : `
                 <div class="id-container">
-                    <a href="/Reporting/PrintVoucher?journalVoucherId=${entry.journalVoucherId}&type=JV" 
-                       class="voucher-link" 
-                       target="_blank" 
-                       title="Open voucher in new window">
-                        JV-${entry.journalVoucherId}
-                    </a>
-                    <span class="entry-id">Entry: ${entry.id}</span>
+                    <div>
+                        <a href="/Reporting/PrintVoucher?journalVoucherId=${entry.journalVoucherId}&type=JV" 
+                           class="voucher-link" 
+                           target="_blank" 
+                           title="Open voucher in new window">
+                            JV-${entry.journalVoucherId}
+                        </a>
+                        <a href="/Reporting/PrintVoucher?journalVoucherId=${entry.journalVoucherId}&type=INV" 
+                           class="voucher-link ms-1" 
+                           target="_blank" 
+                           title="Open invoice in new window">
+                            INV-${entry.journalVoucherId}
+                        </a>
+                    </div>
+                    <div class="entry-id mt-1">Entry: ${entry.id}</div>
                 </div>
                 `}
             </td>
@@ -993,6 +1240,7 @@ function renderSummaryTable(tableId, groupedData) {
     const keys = Object.keys(groupedData);
     if (keys.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">No data available</td></tr>';
+        updateSummaryExportButtons();
         return;
     }
 
@@ -1002,7 +1250,7 @@ function renderSummaryTable(tableId, groupedData) {
         const balance = data.debit - data.credit;
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${data.id}</td>
+            <td>${formatGroupIdForCsv(data.id)}</td>
             <td>${data.name}</td>
             <td class="text-end">${formatCurrency(data.debit)}</td>
             <td class="text-end">${formatCurrency(data.credit)}</td>
@@ -1012,6 +1260,7 @@ function renderSummaryTable(tableId, groupedData) {
     });
 
     tbody.appendChild(fragment);
+    updateSummaryExportButtons();
 }
 
 // ==================== UI UPDATES ====================
@@ -1085,6 +1334,7 @@ function updateLoadMoreButton() {
     }
 
     updateLoadingStatus();
+    updateExportButtonState();
 }
 
 function updateTotals() {

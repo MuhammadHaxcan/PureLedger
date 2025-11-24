@@ -5,6 +5,7 @@
  * - AJAX category loading based on project selection
  * - Data fetching and rendering with auto-loading
  * - Total row calculations
+ * - CSV export (added)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 1,
+        pageSize: 500,
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
@@ -373,6 +374,9 @@ function initializeForm() {
             }
         });
     }
+
+    // export button wiring for dynamic button inside reportSummary
+    initializeExportButton();
 }
 
 function initSearchFunctionality() {
@@ -610,6 +614,7 @@ function renderAllEntries() {
         tbody.innerHTML = '<tr><td colspan="4" class="text-center">No accounts found</td></tr>';
         updateReportSummary(0);
         updateTotalRow(0, 0, 0);
+        updateExportButtonState();
         return;
     }
 
@@ -646,8 +651,88 @@ function renderAllEntries() {
         totalBalance: totalBalance
     };
 
-    updateReportSummary(window.reportState.allEntries.length, totalDebit, totalCredit, totalBalance);
+    updateReportSummary(window.reportState.allEntries.length);
     updateTotalRow(totalDebit, totalCredit, totalBalance);
+
+    // keep export state in sync
+    updateExportButtonState();
+}
+
+// ==================== CSV EXPORT (NEW) ====================
+
+function initializeExportButton() {
+    $(document).off('click', '#exportAgingCsvBtn').on('click', '#exportAgingCsvBtn', function (e) {
+        e.preventDefault();
+        const btn = this;
+        if (btn.disabled) return;
+        exportAgingReportToCsv();
+    });
+
+    updateExportButtonState();
+}
+
+function updateExportButtonState() {
+    const btn = document.getElementById('exportAgingCsvBtn');
+    if (!btn) return;
+
+    const ready = !window.reportState.isLoading && !window.reportState.hasMoreData
+        && Array.isArray(window.reportState.allEntries) && window.reportState.allEntries.length > 0;
+
+    btn.disabled = !ready;
+}
+
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
+function formatNumericForCsv(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = Number(value);
+    if (isNaN(n)) return String(value);
+    return n.toFixed(2);
+}
+
+function exportAgingReportToCsv() {
+    const entries = window.reportState?.allEntries || [];
+    if (!entries.length) {
+        alert('No aging data to export.');
+        return;
+    }
+
+    const headers = ['Account', 'Total Debit', 'Total Credit', 'Net Balance'];
+    const rows = [headers.map(csvEscape).join(',')];
+
+    entries.forEach(e => {
+        const account = e.accountName ?? '';
+        const debit = formatNumericForCsv(e.totalDebit);
+        const credit = formatNumericForCsv(e.totalCredit);
+        const balance = formatNumericForCsv(e.netBalance);
+
+        rows.push([csvEscape(account), csvEscape(debit), csvEscape(credit), csvEscape(balance)].join(','));
+    });
+
+    const csvContent = rows.join('\r\n');
+    downloadCsvBlob(csvContent, `AgingReport_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+}
+
+// Reuse generic download helper used elsewhere for consistency
+function downloadCsvBlob(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) {
+        navigator.msSaveBlob(blob, filename);
+    } else {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
 }
 
 // ==================== TOTAL ROW MANAGEMENT ====================
@@ -723,6 +808,9 @@ function updateLoadingStatus() {
     loadingStatus.className = 'text-center mt-3 text-muted';
     loadingStatus.textContent = `Loaded ${window.reportState.allEntries.length} of ${window.reportState.totalRecords} accounts`;
     tableContainer.parentNode.insertBefore(loadingStatus, tableContainer.nextSibling);
+
+    // keep export state in sync
+    updateExportButtonState();
 }
 
 function updateLoadMoreButton() {
@@ -743,14 +831,18 @@ function updateReportSummary(count, totalDebit = 0, totalCredit = 0, totalBalanc
     if (!summaryElement) return;
 
     if (count > 0) {
-        const balanceClass = totalBalance < 0 ? 'text-danger' : 'text-success';
         summaryElement.innerHTML = `
             <span class="badge bg-primary">${count} accounts</span>
-            <span class="badge bg-warning ms-2">Total Balance: <span class="${balanceClass}">${formatCurrency(totalBalance)}</span></span>
+            <button id="exportAgingCsvBtn" class="btn btn-outline-success btn-sm ms-2" disabled title="Export CSV">
+                <i class="fas fa-file-csv me-1"></i>Export CSV
+            </button>
         `;
     } else {
         summaryElement.innerHTML = `<span class="badge bg-secondary">No data</span>`;
     }
+
+    // After updating DOM, set proper export button enabled/disabled state
+    updateExportButtonState();
 }
 
 // ==================== UTILITY FUNCTIONS ====================

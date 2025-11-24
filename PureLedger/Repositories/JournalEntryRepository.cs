@@ -457,17 +457,22 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
+            // Group by account + project + category id so repository returns IDs directly
             var groupedQuery = query
                 .GroupBy(je => new {
                     je.AccountId,
                     AccountName = je.Account.AccountName,
-                    CategoryName = je.Account.Category.CategoryName
+                    CategoryName = je.Account.Category.CategoryName,
+                    ProjectId = je.JournalVoucher.ProjectId,
+                    CategoryId = je.CategoryId
                 })
                 .Select(g => new AccountReportViewModels
                 {
                     AccountId = g.Key.AccountId.ToString(),
                     AccountName = g.Key.AccountName ?? "Unknown Account",
                     CategoryName = g.Key.CategoryName ?? "Unknown Category",
+                    ProjectId = g.Key.ProjectId.ToString(),
+                    CategoryId = g.Key.CategoryId.ToString(),
                     TotalDebit = g.Sum(je => je.Debit),
                     TotalCredit = g.Sum(je => je.Credit),
                     NetBalance = g.Sum(je => je.Debit) - g.Sum(je => je.Credit)

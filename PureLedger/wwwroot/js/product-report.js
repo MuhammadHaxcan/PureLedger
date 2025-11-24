@@ -4,6 +4,7 @@
  * - Searchable dropdown filters
  * - Column visibility toggles
  * - Data fetching and rendering with auto-loading
+ * - CSV export for product report (added)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,12 +12,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSelectDropdowns();
     setupEventListeners();
     setDefaultDates();
+    loadAllBookers();
 });
 
 function initializeReportState() {
     window.reportState = {
         currentPage: 0,
-        pageSize: 1,
+        pageSize: 500,
         isLoading: false,
         hasMoreData: true,
         totalRecords: 0,
@@ -135,6 +137,9 @@ function setupEventListeners() {
     initColumnToggles();
     initSearchFunctionality();
     setupSelectSearch();
+
+    // initialize export button for product report
+    initializeExportButton();
 
     $(document).on('change', '#projectId', loadCategoriesForProject);
     $(document).on('change', '#categoryId', loadAccountsForCategory);
@@ -991,6 +996,125 @@ function updateLoadMoreButton() {
     }
 
     updateLoadingStatus();
+
+    // Update export button state in case loading status changed
+    updateExportButtonState();
+}
+
+// ==================== CSV EXPORT (NEW) ====================
+// Added CSV export for Product Report. Export button is enabled only when
+// all data finished loading (not isLoading and hasMoreData === false) and
+// there is at least one product in window.reportState.allProducts.
+
+function initializeExportButton() {
+    const btn = document.getElementById('exportProductCsvBtn');
+    if (!btn) return;
+
+    // Attach click handler
+    btn.addEventListener('click', function (e) {
+        // Prevent accidental form submission if button is inside a form
+        e.preventDefault && e.preventDefault();
+        // Debug - confirm handler attached
+        console.debug('exportProductCsvBtn clicked (handler invoked). disabled=', btn.disabled);
+        if (btn.disabled) return;
+        exportProductReportToCsv();
+    });
+
+    // initial state
+    updateExportButtonState();
+}
+
+function updateExportButtonState() {
+    const btn = document.getElementById('exportProductCsvBtn');
+    if (!btn) return;
+
+    const ready = !window.reportState.isLoading && !window.reportState.hasMoreData
+        && Array.isArray(window.reportState.allProducts) && window.reportState.allProducts.length > 0;
+
+    btn.disabled = !ready;
+}
+
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
+function formatNumericForCsv(value) {
+    if (value === null || value === undefined || value === '') return '';
+    const n = Number(value);
+    if (isNaN(n)) return String(value);
+    return n.toFixed(2);
+}
+
+function exportProductReportToCsv() {
+    const products = window.reportState?.allProducts || [];
+    if (!products.length) {
+        alert('No product data to export.');
+        return;
+    }
+
+    // Define columns and respect visible column toggles
+    const cols = [
+        { key: 'product', label: 'Product', visible: window.reportState.visibleColumns.product },
+        { key: 'lastVoucher', label: 'Last Voucher', visible: window.reportState.visibleColumns.voucher },
+        { key: 'entryDate', label: 'Entry Date', visible: window.reportState.visibleColumns.entryDate },
+        { key: 'dueDate', label: 'Due Date', visible: window.reportState.visibleColumns.dueDate },
+        { key: 'debitQty', label: 'Debit Qty', visible: window.reportState.visibleColumns.debitQty },
+        { key: 'creditQty', label: 'Credit Qty', visible: window.reportState.visibleColumns.creditQty },
+        { key: 'balanceQty', label: 'Balance Qty', visible: window.reportState.visibleColumns.balanceQty },
+        { key: 'avgRate', label: 'Avg Rate', visible: window.reportState.visibleColumns.avgRate },
+        { key: 'totalDebit', label: 'Total Debit', visible: window.reportState.visibleColumns.totalDebit },
+        { key: 'totalCredit', label: 'Total Credit', visible: window.reportState.visibleColumns.totalCredit },
+        { key: 'cogs', label: 'COGS', visible: window.reportState.visibleColumns.cogs },
+        { key: 'margin', label: 'Margin', visible: window.reportState.visibleColumns.margin },
+        { key: 'marginPercent', label: 'Margin %', visible: window.reportState.visibleColumns.marginPercent }
+    ];
+
+    const visibleCols = cols.filter(c => c.visible);
+
+    const header = visibleCols.map(c => csvEscape(c.label)).join(',');
+
+    const rows = products.map(p => {
+        // Use values as rendered in table (entryDate and creditableDate are already strings)
+        const record = {
+            product: p.productName ?? '',
+            lastVoucher: (p.lastVoucherId ? `JV-${p.lastVoucherId}` : ''),
+            entryDate: p.entryDate ?? '',
+            dueDate: p.creditableDate ?? '',
+            debitQty: (p.totalDebitQty === null || p.totalDebitQty === undefined) ? '' : String(p.totalDebitQty),
+            creditQty: (p.totalCreditQty === null || p.totalCreditQty === undefined) ? '' : String(p.totalCreditQty),
+            balanceQty: (p.qtyBalance === null || p.qtyBalance === undefined) ? '' : String(p.qtyBalance),
+            avgRate: (p.averageRate === null || p.averageRate === undefined) ? '' : formatNumericForCsv(p.averageRate),
+            totalDebit: formatNumericForCsv(p.totalDebit),
+            totalCredit: formatNumericForCsv(p.totalCredit),
+            cogs: formatNumericForCsv(p.cogs),
+            margin: (p.margin === null || p.margin === undefined) ? '' : formatNumericForCsv(p.margin),
+            marginPercent: (p.marginPercentage === null || p.marginPercentage === undefined) ? '' : formatNumericForCsv(p.marginPercentage)
+        };
+
+        return visibleCols.map(c => csvEscape(record[c.key])).join(',');
+    });
+
+    const csvContent = [header].concat(rows).join('\r\n');
+    downloadCsvBlob(csvContent, `ProductReport_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+}
+
+function downloadCsvBlob(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) {
+        navigator.msSaveBlob(blob, filename);
+    } else {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
 }
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -1013,4 +1137,16 @@ function formatDecimalWithSign(value) {
 
 function formatPercent(value) {
     return value?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%' || '0.00%';
+}
+
+// Added formatDate helper in case future exports use raw date values
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString; // return original if not a valid date
+    return d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
 }
