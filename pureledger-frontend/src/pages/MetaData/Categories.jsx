@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, Table, Button, Alert, Form, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -15,12 +15,16 @@ const Categories = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-  const [formData, setFormData] = useState({ categoryName: '', projectId: '', accountTypeId: '' });
+  const initialFormState = { categoryName: '', projectId: null, accountTypeId: null };
+  const [formData, setFormData] = useState(initialFormState);
   const [filterProjectId, setFilterProjectId] = useState(null); // Filter for displaying categories
 
   useEffect(() => {
     loadProjects();
     loadAccountTypes();
+  }, []);
+
+  useEffect(() => {
     loadCategories();
   }, [filterProjectId]);
 
@@ -65,27 +69,49 @@ const Categories = () => {
     await loadCategories();
   };
 
+  const projectMap = useMemo(() => {
+    const map = new Map();
+    projects.forEach(project => map.set(project.projectId, project.projectName));
+    return map;
+  }, [projects]);
+
+  const accountTypeMap = useMemo(() => {
+    const map = new Map();
+    accountTypes.forEach(type => map.set(type.id, type.name));
+    return map;
+  }, [accountTypes]);
+
   const handleCreate = () => {
     setEditingCategory(null);
-    setFormData({ categoryName: '', projectId: '', accountTypeId: '' });
+    setFormData({ ...initialFormState });
     setShowModal(true);
   };
 
   const handleEdit = async (category) => {
     try {
+      setLoading(true);
       const response = await apiClient.get(`/MetaDataApi/categories/${category.categoryId}`);
       if (response.data.success) {
         const cat = response.data.data;
-        setEditingCategory(cat);
+        setEditingCategory({ ...cat, hasAccountAssociations: response.data.hasAccountAssociations });
         setFormData({
           categoryName: cat.categoryName,
-          projectId: cat.projectId?.toString() || '',
-          accountTypeId: cat.accountTypeId?.toString() || ''
+          projectId: cat.projectId ?? null,
+          accountTypeId: cat.accountTypeId ?? null
         });
+        // Ensure projects and account types are loaded
+        if (projects.length === 0) {
+          await loadProjects();
+        }
+        if (accountTypes.length === 0) {
+          await loadAccountTypes();
+        }
         setShowModal(true);
       }
     } catch (error) {
       setError('Failed to load category details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,26 +125,108 @@ const Categories = () => {
     setError('');
     setSuccess('');
 
-    try {
-      const categoryData = {
-        categoryId: editingCategory?.categoryId || 0,
-        categoryName: formData.categoryName,
-        projectId: parseInt(formData.projectId),
-        accountTypeId: parseInt(formData.accountTypeId)
-      };
+    const trimmedName = formData.categoryName.trim();
+    if (!trimmedName) {
+      setError('Category name is required');
+      return;
+    }
 
+    // Convert and validate projectId
+    let projId = null;
+    if (formData.projectId) {
+      if (typeof formData.projectId === 'string') {
+        projId = parseInt(formData.projectId, 10);
+      } else {
+        projId = Number(formData.projectId);
+      }
+    }
+
+    // Convert and validate accountTypeId
+    let accTypeId = null;
+    if (formData.accountTypeId) {
+      if (typeof formData.accountTypeId === 'string') {
+        accTypeId = parseInt(formData.accountTypeId, 10);
+      } else {
+        accTypeId = Number(formData.accountTypeId);
+      }
+    }
+
+    // Validate before sending
+    if (!trimmedName || trimmedName.length === 0) {
+      setError('Category name is required');
+      return;
+    }
+    if (!projId || projId <= 0 || isNaN(projId)) {
+      setError('Please select a valid project');
+      return;
+    }
+    if (!accTypeId || accTypeId <= 0 || isNaN(accTypeId)) {
+      setError('Please select a valid account type');
+      return;
+    }
+
+    // Ensure values are properly formatted
+    const categoryId = editingCategory?.categoryId ? parseInt(editingCategory.categoryId, 10) : 0;
+
+    // Send data with camelCase - ASP.NET Core model binding handles both camelCase and PascalCase
+    const categoryData = {
+      categoryId: categoryId,
+      categoryName: trimmedName,
+      projectId: projId,
+      accountTypeId: accTypeId
+    };
+
+    try {
       const response = editingCategory
-        ? await apiClient.put(`/MetaDataApi/categories/${editingCategory.categoryId}`, categoryData)
+        ? await apiClient.put(`/MetaDataApi/categories/${categoryId}`, categoryData)
         : await apiClient.post('/MetaDataApi/categories', categoryData);
 
       if (response.data.success) {
         setSuccess(response.data.message);
         setShowModal(false);
+        setFormData({ ...initialFormState });
         loadData();
+      } else {
+        setError(response.data.message || 'Failed to save category');
       }
     } catch (error) {
-      const errors = error.response?.data?.errors || [];
-      setError(errors.length > 0 ? errors.join(', ') : 'Failed to save category');
+      console.error('Category save error:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Request data sent:', categoryData);
+      console.error('Full error details:', JSON.stringify(error.response?.data, null, 2));
+      
+      // Handle ASP.NET Core validation errors
+      const validationErrors = error.response?.data?.errors;
+      let errorMessage = '';
+      
+      if (validationErrors && typeof validationErrors === 'object' && !Array.isArray(validationErrors)) {
+        // ASP.NET Core returns errors as an object with property names as keys
+        // Each key maps to an array of error messages
+        const errorMessages = [];
+        for (const key in validationErrors) {
+          if (Array.isArray(validationErrors[key])) {
+            errorMessages.push(...validationErrors[key]);
+          } else if (typeof validationErrors[key] === 'string') {
+            errorMessages.push(validationErrors[key]);
+          } else {
+            // Handle nested objects
+            errorMessages.push(`${key}: ${JSON.stringify(validationErrors[key])}`);
+          }
+        }
+        errorMessage = errorMessages.length > 0 
+          ? errorMessages.join(', ') 
+          : (error.response?.data?.title || 'Validation failed');
+      } else if (Array.isArray(error.response?.data?.errors)) {
+        errorMessage = error.response.data.errors.join(', ');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.title) {
+        errorMessage = error.response.data.title;
+      } else {
+        errorMessage = error.message || 'Failed to save category';
+      }
+      
+      setError(errorMessage);
     }
   };
 
@@ -180,9 +288,9 @@ const Categories = () => {
                 <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
                 <SearchableSelect
                   value={filterProjectId}
-                  onChange={(value) => setFilterProjectId(value ? parseInt(value) : null)}
-                  options={[{ id: null, name: 'All Projects' }, ...projects.map(p => ({ id: p.projectId, name: p.projectName }))]}
-                  placeholder="All Projects"
+                  onChange={(value) => setFilterProjectId(value ?? null)}
+                  options={projects.map(p => ({ id: p.projectId, name: p.projectName }))}
+                  placeholder="Select Project"
                 />
               </InputGroup>
             </div>
@@ -221,8 +329,8 @@ const Categories = () => {
                     <tr key={category.categoryId}>
                       <td>{category.categoryId}</td>
                       <td>{category.categoryName}</td>
-                      <td>{category.projectId}</td>
-                      <td>{category.accountTypeId}</td>
+                      <td>{projectMap.get(category.projectId) || category.projectId}</td>
+                      <td>{accountTypeMap.get(category.accountTypeId) || category.accountTypeId}</td>
                       <td>
                         <Button
                           variant="outline-primary"
@@ -264,7 +372,7 @@ const Categories = () => {
           </>
         }
       >
-        <Form onSubmit={handleSubmit}>
+        <Form id="categoryForm" onSubmit={handleSubmit}>
           <Form.Group className="mb-3">
             <Form.Label>Category Name</Form.Label>
             <Form.Control
@@ -277,19 +385,17 @@ const Categories = () => {
           </Form.Group>
           <Form.Group className="mb-3">
             <Form.Label>Project</Form.Label>
-            <Form.Select
-              value={formData.projectId}
-              onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-              required
-              disabled={editingCategory?.hasAccountAssociations}
-            >
-              <option value="">Select Project</option>
-              {projects.map((p) => (
-                <option key={p.projectId} value={p.projectId}>
-                  {p.projectName}
-                </option>
-              ))}
-            </Form.Select>
+            <InputGroup>
+              <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
+              <SearchableSelect
+                value={formData.projectId}
+                onChange={(value) => setFormData({ ...formData, projectId: value ?? null })}
+                options={projects.map(p => ({ id: p.projectId, name: p.projectName }))}
+                placeholder="Select Project"
+                required
+                disabled={editingCategory?.hasAccountAssociations || loading}
+              />
+            </InputGroup>
             {editingCategory?.hasAccountAssociations && (
               <Form.Text className="text-muted">
                 Project cannot be changed because this category is associated with accounts.
@@ -298,19 +404,17 @@ const Categories = () => {
           </Form.Group>
           <Form.Group className="mb-3">
             <Form.Label>Account Type</Form.Label>
-            <Form.Select
-              value={formData.accountTypeId}
-              onChange={(e) => setFormData({ ...formData, accountTypeId: e.target.value })}
-              required
-              disabled={editingCategory?.hasAccountAssociations}
-            >
-              <option value="">Select Account Type</option>
-              {accountTypes.map((at) => (
-                <option key={at.id} value={at.id}>
-                  {at.name}
-                </option>
-              ))}
-            </Form.Select>
+            <InputGroup>
+              <InputGroup.Text><i className="fas fa-list"></i></InputGroup.Text>
+              <SearchableSelect
+                value={formData.accountTypeId}
+                onChange={(value) => setFormData({ ...formData, accountTypeId: value ?? null })}
+                options={accountTypes.map(at => ({ id: at.id, name: at.name }))}
+                placeholder="Select Account Type"
+                required
+                disabled={editingCategory?.hasAccountAssociations || loading}
+              />
+            </InputGroup>
             {editingCategory?.hasAccountAssociations && (
               <Form.Text className="text-muted">
                 Account Type cannot be changed because this category is associated with accounts.

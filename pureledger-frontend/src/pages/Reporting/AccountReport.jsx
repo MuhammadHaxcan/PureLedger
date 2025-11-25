@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -24,7 +24,21 @@ const AccountReport = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [totalRecords, setTotalRecords] = useState(0);
     const pageSize = 100;
+
+    const observer = useRef();
+    const lastEntryElementRef = useCallback(node => {
+        if (isLoadingMore || generating) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMoreData) {
+                const nextPage = Math.floor(allEntries.length / pageSize);
+                generateReport(nextPage, true);
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [isLoadingMore, generating, hasMoreData, allEntries.length, pageSize]);
 
     useEffect(() => {
         loadInitData();
@@ -129,7 +143,15 @@ const AccountReport = () => {
                 }
 
                 setHasMoreData(data.hasMoreData || false);
+                setTotalRecords(data.totalRecords || entries.length);
                 setCurrentPage(page + 1);
+
+                // Auto-load next page if there's more data and not searching
+                if (data.hasMoreData && !searchTerm.trim() && !isLoadingMore) {
+                    setTimeout(() => {
+                        generateReport(page + 1, true);
+                    }, 100);
+                }
             } else {
                 setError('Failed to generate report');
             }
@@ -146,11 +168,6 @@ const AccountReport = () => {
         generateReport(0, false);
     };
 
-    const handleLoadMore = () => {
-        if (!isLoadingMore && hasMoreData) {
-            generateReport(currentPage, true);
-        }
-    };
 
     const filteredEntries = allEntries.filter(entry => {
         if (!searchTerm) return true;
@@ -171,8 +188,6 @@ const AccountReport = () => {
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
-            style: 'currency',
-            currency: 'PKR',
             minimumFractionDigits: 2,
             maximumFractionDigits: 4
         }).format(value || 0);
@@ -313,8 +328,9 @@ const AccountReport = () => {
                                     {filteredEntries.map((entry, index) => {
                                         const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
                                         const formattedId = entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-';
+                                        const isLastEntry = index === filteredEntries.length - 1;
                                         return (
-                                            <tr key={index}>
+                                            <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
                                                 <td>{formattedId}</td>
                                                 <td>{entry.categoryName || '-'}</td>
                                                 <td>{entry.accountName || '-'}</td>
@@ -339,24 +355,21 @@ const AccountReport = () => {
                                 </tfoot>
                             </Table>
                         </div>
-                        {hasMoreData && (
-                            <div className="text-center mt-3">
-                                <Button
-                                    variant="outline-primary"
-                                    onClick={handleLoadMore}
-                                    disabled={isLoadingMore}
-                                >
-                                    {isLoadingMore ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                            Loading...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="fas fa-arrow-down me-1"></i> Load More
-                                        </>
-                                    )}
-                                </Button>
+                        {isLoadingMore && (
+                            <div className="text-center my-3">
+                                <LoadingSpinner />
+                            </div>
+                        )}
+                        {!hasMoreData && allEntries.length > 0 && (
+                            <div className="text-center my-3 text-muted">
+                                End of report. Total records: {totalRecords}
+                            </div>
+                        )}
+                        {allEntries.length > 0 && totalRecords > 0 && (
+                            <div className="text-center my-2">
+                                <small className="text-muted">
+                                    Showing {allEntries.length} of {totalRecords} records
+                                </small>
                             </div>
                         )}
                     </Card.Body>

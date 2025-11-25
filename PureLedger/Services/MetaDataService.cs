@@ -252,6 +252,11 @@ namespace PureLedger.Services
             return await _unitOfWork.Accounts.GetAllWithDetailsAsync();
         }
 
+        public async Task<List<Account>> GetAccountsByProjectAndCategoryAsync(int projectId, int? categoryId)
+        {
+            return await _unitOfWork.Accounts.GetByProjectAsync(projectId, categoryId);
+        }
+
         public async Task<List<Category>> GetCategoriesForAccountsAsync()
         {
             return await _unitOfWork.Categories.GetAllWithDetailsAsync();

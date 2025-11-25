@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import PrintVoucher from './PrintVoucher';
@@ -9,6 +9,66 @@ const SingleDoc = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [voucherData, setVoucherData] = useState(null);
+
+  const loadVoucherFromUrl = async (id, type) => {
+    try {
+      const response = await apiClient.get(`/ReportingApi/print-voucher/${id}`, {
+        params: { type: type, filter: 'all' }
+      });
+
+      if (response.data.success) {
+        // Merge balance data into voucher data
+        const voucherDataWithBalance = {
+          ...response.data.data,
+          customerBalance: response.data.customerBalance,
+          previousBalance: response.data.previousBalance
+        };
+        setVoucherData(voucherDataWithBalance);
+      }
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to load voucher');
+    }
+  };
+
+  const handleValidateFromUrl = async (id, type) => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await apiClient.get('/ReportingApi/validate-voucher', {
+        params: { journalVoucherId: id, type: type }
+      });
+
+      if (response.data.success && response.data.exists) {
+        await loadVoucherFromUrl(id, type);
+      } else {
+        setError('Voucher not found or invalid');
+      }
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to validate voucher');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Read URL parameters on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlVoucherId = params.get('voucherId');
+    const urlType = params.get('type');
+    
+    if (urlVoucherId) {
+      setVoucherId(urlVoucherId);
+      if (urlType && ['JV', 'INV', 'DC'].includes(urlType.toUpperCase())) {
+        setVoucherType(urlType.toUpperCase());
+      }
+      // Auto-load if parameters are present
+      const idNum = parseInt(urlVoucherId, 10);
+      if (idNum > 0) {
+        handleValidateFromUrl(idNum, urlType?.toUpperCase() || 'JV');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleValidate = async () => {
     if (!voucherId || voucherId <= 0) {
@@ -43,7 +103,13 @@ const SingleDoc = () => {
       });
 
       if (response.data.success) {
-        setVoucherData(response.data.data);
+        // Merge balance data into voucher data
+        const voucherDataWithBalance = {
+          ...response.data.data,
+          customerBalance: response.data.customerBalance,
+          previousBalance: response.data.previousBalance
+        };
+        setVoucherData(voucherDataWithBalance);
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to load voucher');

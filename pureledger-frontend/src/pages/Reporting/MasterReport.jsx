@@ -1,8 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
-import apiClient from '../../services/api';
+import axios from 'axios';
+import apiClient, { API_BASE_URL } from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import './MasterReport.css';
+
+const buildVoucherUrl = (voucherId, type) => {
+    if (!voucherId) {
+        return '#';
+    }
+    return `/reporting/single-doc?voucherId=${voucherId}&type=${type}`;
+};
 
 const MasterReport = () => {
     const [projects, setProjects] = useState([]);
@@ -12,11 +21,11 @@ const MasterReport = () => {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
-    const [reportData, setReportData] = useState(null);
     const [allEntries, setAllEntries] = useState([]);
     const [accountSummary, setAccountSummary] = useState([]);
     const [categorySummary, setCategorySummary] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [loadedRecords, setLoadedRecords] = useState(0);
     const [visibleColumns, setVisibleColumns] = useState({
         date: true,
         creditableDate: true,
@@ -39,7 +48,14 @@ const MasterReport = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const pageSize = 100;
+    const [isAutoLoading, setIsAutoLoading] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
+    const [previousBalance, setPreviousBalance] = useState(0);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const pageSize = 500;
+    const searchTermRef = useRef('');
+    const abortControllerRef = useRef(null);
+    const activeFiltersRef = useRef(null);
 
     useEffect(() => {
         loadInitData();
@@ -64,6 +80,18 @@ const MasterReport = () => {
             setFormData(prev => ({ ...prev, accountId: null }));
         }
     }, [formData.categoryId]);
+
+    useEffect(() => {
+        searchTermRef.current = searchTerm.trim();
+    }, [searchTerm]);
+
+    useEffect(() => {
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, []);
 
     const loadInitData = async () => {
         setLoading(true);
@@ -115,6 +143,27 @@ const MasterReport = () => {
         }
     };
 
+    const resetReportState = () => {
+        setAllEntries([]);
+        setAccountSummary([]);
+        setCategorySummary([]);
+        setLoadedRecords(0);
+        setTotalRecords(0);
+        setStatusMessage('');
+        setCurrentPage(0);
+        setHasMoreData(false);
+        setPreviousBalance(0);
+        setIsLoadingMore(false);
+        setIsAutoLoading(false);
+    };
+
+    const ensureAbortController = () => {
+        if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
+            abortControllerRef.current = new AbortController();
+        }
+        return abortControllerRef.current;
+    };
+
     const generateReport = async (page = 0, append = false) => {
         if (!formData.projectId) {
             setError('Please select a project');
@@ -156,26 +205,43 @@ const MasterReport = () => {
                     setAllEntries(prev => [...prev, ...entries]);
                 } else {
                     setAllEntries(entries);
+                    setAccountSummary([]);
+                    setCategorySummary([]);
                 }
 
                 setHasMoreData(data.hasMoreData || false);
+                setTotalRecords(data.totalRecords || 0);
+                setPreviousBalance(data.previousBalance || 0);
                 setCurrentPage(page + 1);
 
                 // Calculate summaries
                 const allEntriesForSummary = append ? [...allEntries, ...entries] : entries;
                 calculateSummaries(allEntriesForSummary);
+
+                // Auto-load next page if there's more data and not searching
+                // Remove the append check so it auto-loads after first page too
+                if (data.hasMoreData && !searchTerm.trim() && !isLoadingMore && !isAutoLoading) {
+                    setIsAutoLoading(true);
+                    setTimeout(() => {
+                        generateReport(page + 1, true);
+                    }, 100);
+                } else {
+                    setIsAutoLoading(false);
+                }
             } else {
                 setError('Failed to generate report');
+                setIsAutoLoading(false);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to generate report');
+            setIsAutoLoading(false);
         } finally {
             setGenerating(false);
             setIsLoadingMore(false);
         }
     };
 
-    const calculateSummaries = (entries) => {
+    const calculateSummaries = useCallback((entries) => {
         const accountMap = {};
         const categoryMap = {};
 
@@ -213,7 +279,7 @@ const MasterReport = () => {
 
         setAccountSummary(Object.values(accountMap));
         setCategorySummary(Object.values(categoryMap));
-    };
+    }, []);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -247,8 +313,6 @@ const MasterReport = () => {
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
-            style: 'currency',
-            currency: 'PKR',
             minimumFractionDigits: 2,
             maximumFractionDigits: 4
         }).format(value || 0);
@@ -258,10 +322,10 @@ const MasterReport = () => {
         if (!dateStr) return '';
         try {
             const date = new Date(dateStr);
-            const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
             const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
+            return `${month}/${day}/${year}`;
         } catch {
             return dateStr;
         }
@@ -495,43 +559,44 @@ const MasterReport = () => {
                             </h6>
                         </Card.Header>
                         <Card.Body>
-                            <div className="row mb-3 align-items-center">
-                                <div className="col-md-9">
-                                    <Form.Label>Search</Form.Label>
-                                    <InputGroup>
-                                        <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
-                                        <Form.Control
-                                            placeholder="Filter results..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
-                                    </InputGroup>
+                            <div className="master-report-container">
+                                <div className="row mb-3 align-items-center">
+                                    <div className="col-md-9">
+                                        <Form.Label>Search</Form.Label>
+                                        <InputGroup>
+                                            <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
+                                            <Form.Control
+                                                placeholder="Filter results..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </InputGroup>
+                                    </div>
+                                    <div className="col-md-3 text-end">
+                                        <Form.Label className="d-block">&nbsp;</Form.Label>
+                                        <Button
+                                            variant="outline-success"
+                                            onClick={handleExportMainReport}
+                                            disabled={filteredEntries.length === 0}
+                                        >
+                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="col-md-3 text-end">
-                                    <Form.Label className="d-block">&nbsp;</Form.Label>
-                                    <Button
-                                        variant="outline-success"
-                                        onClick={handleExportMainReport}
-                                        disabled={filteredEntries.length === 0}
-                                    >
-                                        <i className="fas fa-file-csv me-1"></i> Export CSV
-                                    </Button>
-                                </div>
-                            </div>
-                            <div className="table-responsive" style={{ overflow: 'visible' }}>
-                                <Table bordered style={{ width: '100%', marginBottom: 0 }} id="masterReportTable">
+                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="masterReportTable" style={{ width: '100%', tableLayout: 'auto' }}>
                                     <thead className="table-light">
                                         <tr>
-                                            <th>ID</th>
-                                            {visibleColumns.date && <th className="date-column">Entry Date</th>}
-                                            {visibleColumns.creditableDate && <th className="creditable-date-column">Creditable Date</th>}
-                                            {visibleColumns.description && <th className="description-column">Description</th>}
-                                            {visibleColumns.account && <th className="account-column">Account</th>}
-                                            {visibleColumns.booker && <th className="booker-column">Booker</th>}
-                                            {visibleColumns.quantity && <th className="quantity-column text-end">Quantity</th>}
-                                            {visibleColumns.debit && <th className="debit-column text-end">Debit</th>}
-                                            {visibleColumns.credit && <th className="credit-column text-end">Credit</th>}
-                                            {visibleColumns.balance && <th className="balance-column text-end">Balance</th>}
+                                            <th className="id-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>
+                                            {visibleColumns.date && <th className="date-column" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Entry Date</th>}
+                                            {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Creditable Date</th>}
+                                            {visibleColumns.description && <th className="description-column" style={{ minWidth: '200px' }}>Description</th>}
+                                            {visibleColumns.account && <th className="account-column" style={{ minWidth: '150px' }}>Account</th>}
+                                            {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '120px' }}>Booker</th>}
+                                            {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '80px', whiteSpace: 'nowrap' }}>Quantity</th>}
+                                            {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Debit</th>}
+                                            {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Credit</th>}
+                                            {visibleColumns.balance && <th className="balance-column text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Balance</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -539,36 +604,38 @@ const MasterReport = () => {
                                             const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
                                             return (
                                                 <tr key={index} className={isOpening ? 'table-info' : ''}>
-                                                    <td>
+                                                    <td className="id-column" style={{ whiteSpace: 'nowrap' }}>
                                                         {isOpening ? (
                                                             <span className="fw-bold text-primary">OPENING</span>
                                                         ) : (
                                                             <div>
-                                                                <div>
+                                                                <div className="d-flex flex-wrap gap-1 align-items-center">
                                                                     <a
-                                                                        href={`/api/ReportingApi/print-voucher/${entry.journalVoucherId}?type=JV`}
+                                                                        href={buildVoucherUrl(entry.journalVoucherId, 'JV')}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        className="voucher-link"
+                                                                        className="voucher-link text-decoration-none badge bg-primary me-1"
+                                                                        style={{ fontSize: '0.75rem', cursor: 'pointer' }}
                                                                     >
                                                                         JV-{entry.journalVoucherId}
                                                                     </a>
                                                                     <a
-                                                                        href={`/api/ReportingApi/print-voucher/${entry.journalVoucherId}?type=INV`}
+                                                                        href={buildVoucherUrl(entry.journalVoucherId, 'INV')}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        className="voucher-link ms-1"
+                                                                        className="voucher-link text-decoration-none badge bg-success"
+                                                                        style={{ fontSize: '0.75rem', cursor: 'pointer' }}
                                                                     >
                                                                         INV-{entry.journalVoucherId}
                                                                     </a>
                                                                 </div>
-                                                                <div className="entry-id mt-1">Entry: {entry.id}</div>
+                                                                <div className="entry-id mt-1 small text-muted">Entry: {entry.id}</div>
                                                             </div>
                                                         )}
                                                     </td>
                                                     {visibleColumns.date && <td className="date-column">{formatDate(entry.transactionDate)}</td>}
                                                     {visibleColumns.creditableDate && <td className="creditable-date-column">{formatDate(entry.creditableDate)}</td>}
-                                                    {visibleColumns.description && <td className="description-column">{entry.description || ''}</td>}
+                                                    {visibleColumns.description && <td className="description-column" style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
                                                     {visibleColumns.account && <td className="account-column">{entry.accountName || ''}</td>}
                                                     {visibleColumns.booker && <td className="booker-column">{entry.bookerName || ''}</td>}
                                                     {visibleColumns.quantity && <td className="quantity-column text-end">{entry.quantity ?? ''}</td>}
@@ -581,7 +648,12 @@ const MasterReport = () => {
                                     </tbody>
                                     <tfoot className="table-secondary">
                                         <tr>
-                                            <td colSpan={1 + Object.values(visibleColumns).filter(v => v).length - 1} className="text-end fw-bold">TOTAL</td>
+                                            <td className="id-column text-end fw-bold">TOTAL</td>
+                                            {visibleColumns.date && <td></td>}
+                                            {visibleColumns.creditableDate && <td></td>}
+                                            {visibleColumns.description && <td></td>}
+                                            {visibleColumns.account && <td></td>}
+                                            {visibleColumns.booker && <td></td>}
                                             {visibleColumns.quantity && <td className="quantity-column text-end fw-bold">{totals.quantity}</td>}
                                             {visibleColumns.debit && <td className="debit-column text-end fw-bold">{formatCurrency(totals.debit)}</td>}
                                             {visibleColumns.credit && <td className="credit-column text-end fw-bold">{formatCurrency(totals.credit)}</td>}
@@ -589,25 +661,23 @@ const MasterReport = () => {
                                         </tr>
                                     </tfoot>
                                 </Table>
+                                </div>
                             </div>
                             {hasMoreData && (
                                 <div className="text-center mt-3">
-                                    <Button
-                                        variant="outline-primary"
-                                        onClick={handleLoadMore}
-                                        disabled={isLoadingMore}
-                                    >
-                                        {isLoadingMore ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                                Loading...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="fas fa-arrow-down me-1"></i> Load More
-                                            </>
-                                        )}
-                                    </Button>
+                                    <div className="text-muted mb-2">
+                                        Loaded {allEntries.length} of {totalRecords} records
+                                    </div>
+                                    {isLoadingMore && (
+                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span className="visually-hidden">Loading more records...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {!hasMoreData && allEntries.length > 0 && (
+                                <div className="text-center mt-3 text-muted">
+                                    All {allEntries.length} records loaded
                                 </div>
                             )}
                         </Card.Body>

@@ -150,5 +150,23 @@ namespace PureLedger.Repositories
             var accounts = await GetByCategoryIdAsync(categoryId);
             return accounts.Where(a => a.Category?.ProjectId == projectId);
         }
+
+        public async Task<List<Account>> GetByProjectAsync(int projectId, int? categoryId = null)
+        {
+            var query = _context.Accounts
+                .Include(a => a.Category)
+                    .ThenInclude(c => c.Project)
+                .Include(a => a.AccountGroup)
+                .AsQueryable();
+
+            query = query.Where(a => a.Category != null && a.Category.ProjectId == projectId);
+
+            if (categoryId.HasValue)
+            {
+                query = query.Where(a => a.CategoryId == categoryId.Value);
+            }
+
+            return await query.ToListAsync();
+        }
     }
 }

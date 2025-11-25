@@ -63,6 +63,51 @@ body {
   border-collapse: collapse;
 }
 
+.invoice-table {
+  table-layout: auto;
+  width: 100% !important;
+}
+
+.invoice-table thead th {
+  background-color: #f8f9fa;
+  padding: 8px 4px;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid #dee2e6;
+}
+
+.invoice-table thead th:first-child,
+.invoice-table thead th:nth-child(2) {
+  text-align: left;
+}
+
+.invoice-table tbody td {
+  padding: 10px 4px;
+  vertical-align: middle;
+  border: 1px solid #dee2e6;
+}
+
+.invoice-table tbody td:first-child,
+.invoice-table tbody td:nth-child(2) {
+  text-align: left;
+}
+
+.invoice-table tbody td:nth-child(2) {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.invoice-table tfoot th,
+.invoice-table tfoot td {
+  padding: 10px 4px;
+  vertical-align: middle;
+  border: 1px solid #dee2e6;
+  background-color: #e9ecef;
+  font-weight: 600;
+}
+
 .table th {
   background-color: #f8f9fa;
   padding: 8px 4px;

@@ -772,16 +772,10 @@ const HomeEntry = () => {
                             min="0"
                             step="1"
                             value={entry.pkg || ''}
-                            onChange={(e) => {
-                              setEntries(prev => {
-                                const updated = [...prev];
-                                updated[index].pkg = e.target.value ? parseInt(e.target.value) : null;
-                                return updated;
-                              });
-                              calculateRowAmounts(index);
-                            }}
-                            disabled={!isProductAccount}
                             readOnly
+                            disabled
+                            className="bg-light"
+                            tabIndex="-1"
                           />
                         </td>
                         <td>
@@ -821,6 +815,7 @@ const HomeEntry = () => {
                           <Form.Control
                             size="sm"
                             type="number"
+                            className="no-arrow"
                             step="1"
                             value={entry.qty || ''}
                             onChange={(e) => {
@@ -839,6 +834,7 @@ const HomeEntry = () => {
                           <Form.Control
                             size="sm"
                             type="number"
+                            className="no-arrow"
                             min="0"
                             step="0.0001"
                             value={entry.rate || ''}
@@ -867,6 +863,7 @@ const HomeEntry = () => {
                           <Form.Control
                             size="sm"
                             type="number"
+                            className="no-arrow"
                             min="0"
                             max="100"
                             step="0.01"
@@ -886,11 +883,11 @@ const HomeEntry = () => {
                           <Form.Control
                             size="sm"
                             type="number"
+                            className="no-arrow bg-light"
                             min="0"
                             step="0.0001"
                             value={entry.disc ? entry.disc.toFixed(4) : '0.0000'}
                             readOnly
-                            className="bg-light"
                             tabIndex="-1"
                           />
                         </td>
@@ -898,14 +895,18 @@ const HomeEntry = () => {
                           <Form.Control
                             size="sm"
                             type="number"
+                            className="no-arrow"
                             min="0"
                             step="0.0001"
                             value={entry.debit || ''}
                             onChange={(e) => {
+                              const newValue = e.target.value ? parseFloat(e.target.value) : null;
                               setEntries(prev => {
                                 const updated = [...prev];
-                                updated[index].debit = e.target.value ? parseFloat(e.target.value) : null;
-                                updated[index].credit = null; // Clear credit when debit is set
+                                updated[index].debit = newValue;
+                                if (newValue) {
+                                  updated[index].credit = null; // Clear credit when debit is set
+                                }
                                 return updated;
                               });
                               updateTotals();
@@ -915,20 +916,75 @@ const HomeEntry = () => {
                                 calculateRowAmounts(index);
                               }
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Tab' && !e.shiftKey) {
+                                // Get current input value (may be cleared)
+                                const inputValue = e.target.value;
+                                const isEmpty = !inputValue || inputValue.trim() === '' || parseFloat(inputValue) === 0;
+                                
+                                // If debit field is empty/cleared and credit is also empty, calculate and place in credit
+                                if (isEmpty && (!entry.credit || entry.credit === 0)) {
+                                  // Calculate net amount
+                                  const qty = parseFloat(entry.qty) || 0;
+                                  const rate = parseFloat(entry.rate) || 0;
+                                  const rbp = entry.rbp === 'Y';
+                                  const pkg = parseFloat(entry.pkg || entry.dataPkg) || 0;
+                                  const percent = parseFloat(entry.percent) || 0;
+                                  
+                                  let totalAmount = 0;
+                                  if (rbp && pkg > 0) {
+                                    totalAmount = pkg * qty * rate;
+                                  } else {
+                                    totalAmount = qty * rate;
+                                  }
+                                  
+                                  const discount = (totalAmount * percent) / 100;
+                                  const netAmount = totalAmount - discount;
+                                  
+                                  if (netAmount > 0) {
+                                    e.preventDefault();
+                                    setEntries(prev => {
+                                      const updated = [...prev];
+                                      updated[index].credit = parseFloat(netAmount.toFixed(4));
+                                      updated[index].debit = null;
+                                      return updated;
+                                    });
+                                    updateTotals();
+                                    // Focus on credit field after state update
+                                    setTimeout(() => {
+                                      const row = e.target.closest('tr');
+                                      if (row) {
+                                        const inputs = row.querySelectorAll('input[type="number"]');
+                                        // Credit input is typically the last numeric input before the delete button
+                                        const creditInput = inputs[inputs.length - 1];
+                                        if (creditInput) {
+                                          creditInput.focus();
+                                          creditInput.select();
+                                        }
+                                      }
+                                    }, 10);
+                                  }
+                                }
+                              }
+                            }}
                           />
                         </td>
                         <td>
                           <Form.Control
                             size="sm"
                             type="number"
+                            className="no-arrow"
                             min="0"
                             step="0.0001"
                             value={entry.credit || ''}
                             onChange={(e) => {
+                              const newValue = e.target.value ? parseFloat(e.target.value) : null;
                               setEntries(prev => {
                                 const updated = [...prev];
-                                updated[index].credit = e.target.value ? parseFloat(e.target.value) : null;
-                                updated[index].debit = null; // Clear debit when credit is set
+                                updated[index].credit = newValue;
+                                if (newValue) {
+                                  updated[index].debit = null; // Clear debit when credit is set
+                                }
                                 return updated;
                               });
                               updateTotals();
@@ -936,6 +992,45 @@ const HomeEntry = () => {
                             onFocus={() => {
                               if (!entry.debit && !entry.credit) {
                                 calculateRowAmounts(index);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Tab' && !e.shiftKey) {
+                                // Get current input value (may be cleared)
+                                const inputValue = e.target.value;
+                                const isEmpty = !inputValue || inputValue.trim() === '' || parseFloat(inputValue) === 0;
+                                
+                                // If credit field is empty/cleared and debit is also empty, calculate and place in debit
+                                if (isEmpty && (!entry.debit || entry.debit === 0)) {
+                                  // Calculate net amount
+                                  const qty = parseFloat(entry.qty) || 0;
+                                  const rate = parseFloat(entry.rate) || 0;
+                                  const rbp = entry.rbp === 'Y';
+                                  const pkg = parseFloat(entry.pkg || entry.dataPkg) || 0;
+                                  const percent = parseFloat(entry.percent) || 0;
+                                  
+                                  let totalAmount = 0;
+                                  if (rbp && pkg > 0) {
+                                    totalAmount = pkg * qty * rate;
+                                  } else {
+                                    totalAmount = qty * rate;
+                                  }
+                                  
+                                  const discount = (totalAmount * percent) / 100;
+                                  const netAmount = totalAmount - discount;
+                                  
+                                  if (netAmount > 0) {
+                                    e.preventDefault();
+                                    setEntries(prev => {
+                                      const updated = [...prev];
+                                      updated[index].debit = parseFloat(netAmount.toFixed(4));
+                                      updated[index].credit = null;
+                                      return updated;
+                                    });
+                                    updateTotals();
+                                    // Focus will move to next field naturally after state update
+                                  }
+                                }
                               }
                             }}
                           />
@@ -983,6 +1078,7 @@ const HomeEntry = () => {
                   <span className="input-group-text"><i className="fas fa-calendar-day"></i></span>
                   <Form.Control
                     type="number"
+                    className="no-arrow"
                     min="0"
                     value={creditDays}
                     onChange={(e) => setCreditDays(parseInt(e.target.value) || 0)}

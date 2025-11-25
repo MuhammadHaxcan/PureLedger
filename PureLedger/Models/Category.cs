@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -22,11 +23,16 @@ namespace PureLedger.Models
 
         [Required(ErrorMessage = "Category name is required")]
         [StringLength(30, ErrorMessage = "Category name must be under 30 characters")]
-        public string CategoryName { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
 
-        public Project Project { get; set; }
+        [ValidateNever]
+        public Project? Project { get; set; }
+        
+        [ValidateNever]
         public ICollection<Account> Accounts { get; set; } = new List<Account>();
-        public AccountType AccountType { get; set; }
+        
+        [ValidateNever]
+        public AccountType? AccountType { get; set; }
     }
 
 

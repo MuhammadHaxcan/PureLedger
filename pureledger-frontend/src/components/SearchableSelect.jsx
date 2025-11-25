@@ -36,10 +36,21 @@ const SearchableSelect = ({
   useEffect(() => {
     if (selectedOption) {
       setSearchTerm(displayValue);
-    } else if (!isOpen) {
+    } else if (!isOpen && value === null) {
       setSearchTerm('');
+    } else if (!isOpen && value !== null && value !== undefined) {
+      // If value exists but option not found, try to find it again
+      const found = options.find(opt => {
+        const optValue = opt.id !== undefined ? opt.id : opt.value;
+        return optValue === value;
+      });
+      if (found) {
+        setSearchTerm(found.name || found.label || found.text || '');
+      } else {
+        setSearchTerm('');
+      }
     }
-  }, [value, selectedOption, displayValue, isOpen]);
+  }, [value, selectedOption, displayValue, isOpen, options]);
 
   // Handle click outside
   useEffect(() => {

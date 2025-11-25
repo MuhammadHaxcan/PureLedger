@@ -35,6 +35,7 @@ namespace PureLedger.Services.Interface
         Task<(bool Success, List<int> AssociatedVoucherIds)> DeleteAccountAsync(int id);
         Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId);
         Task<List<string>> ToggleAccountStatusAsync(int accountId);
+        Task<List<Account>> GetAccountsByProjectAndCategoryAsync(int projectId, int? categoryId);
 
         // Location operations
         Task<List<Location>> GetAllLocationsAsync();

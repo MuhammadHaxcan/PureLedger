@@ -97,8 +97,12 @@ const VoucherEntry = () => {
     };
 
     const handleEditEntry = async (entry) => {
+        console.log('handleEditEntry called with entry:', entry);
         const entryId = entry.entryId || entry.journalEntryId;
+        console.log('Extracted entryId:', entryId);
+        
         if (!entryId) {
+            console.error('Entry ID is missing:', entry);
             setError('Entry ID is missing. Cannot edit this entry.');
             return;
         }
@@ -106,9 +110,13 @@ const VoucherEntry = () => {
         try {
             setLoading(true);
             setError('');
+            console.log('Fetching entry details for ID:', entryId);
             const response = await apiClient.get(`/HomeApi/journal-entry/${entryId}`);
+            console.log('API response:', response.data);
+            
             if (response.data.success && response.data.data) {
                 const data = response.data.data;
+                console.log('Entry data loaded:', data);
                 setEditingEntry(entry);
                 setEditFormData({
                     entryId: data.entryId,
@@ -136,8 +144,10 @@ const VoucherEntry = () => {
                 if (data.categoryId) {
                     await loadEditAccounts(data.categoryId);
                 }
+                console.log('Opening edit modal');
                 setShowEditModal(true);
             } else {
+                console.error('Failed to load entry details:', response.data);
                 setError('Failed to load entry details');
             }
         } catch (err) {
@@ -260,7 +270,7 @@ const VoucherEntry = () => {
                                     <input
                                         type="number"
                                         id="voucherIdInput"
-                                        className="form-control"
+                                        className="form-control no-arrow"
                                         min="1"
                                         placeholder="Enter voucher ID to search"
                                         value={voucherId}
@@ -433,67 +443,73 @@ const VoucherEntry = () => {
                         <div className="row mb-3">
                             <div className="col-md-3">
                                 <Form.Label>Quantity</Form.Label>
-                                <Form.Control
-                                    type="number"
-                                    value={editFormData.quantity}
-                                    onChange={(e) => setEditFormData({ ...editFormData, quantity: parseFloat(e.target.value) || 0 })}
-                                    min="0"
-                                    step="0.01"
-                                />
+                                    <Form.Control
+                                        type="number"
+                                        className="no-arrow"
+                                        value={editFormData.quantity}
+                                        onChange={(e) => setEditFormData({ ...editFormData, quantity: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        step="0.01"
+                                    />
                             </div>
                             <div className="col-md-3">
                                 <Form.Label>Rate</Form.Label>
-                                <Form.Control
-                                    type="number"
-                                    value={editFormData.rate}
-                                    onChange={(e) => setEditFormData({ ...editFormData, rate: parseFloat(e.target.value) || 0 })}
-                                    min="0"
-                                    step="0.01"
-                                />
+                                    <Form.Control
+                                        type="number"
+                                        className="no-arrow"
+                                        value={editFormData.rate}
+                                        onChange={(e) => setEditFormData({ ...editFormData, rate: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        step="0.01"
+                                    />
                             </div>
                             <div className="col-md-3">
                                 <Form.Label>Discount</Form.Label>
-                                <Form.Control
-                                    type="number"
-                                    value={editFormData.discount}
-                                    onChange={(e) => setEditFormData({ ...editFormData, discount: parseFloat(e.target.value) || 0 })}
-                                    min="0"
-                                    step="0.01"
-                                />
+                                    <Form.Control
+                                        type="number"
+                                        className="no-arrow"
+                                        value={editFormData.discount}
+                                        onChange={(e) => setEditFormData({ ...editFormData, discount: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        step="0.01"
+                                    />
                             </div>
                             <div className="col-md-3">
                                 <Form.Label>Discount %</Form.Label>
-                                <Form.Control
-                                    type="number"
-                                    value={editFormData.discountPercent}
-                                    onChange={(e) => setEditFormData({ ...editFormData, discountPercent: parseFloat(e.target.value) || 0 })}
-                                    min="0"
-                                    max="100"
-                                    step="0.01"
-                                />
+                                    <Form.Control
+                                        type="number"
+                                        className="no-arrow"
+                                        value={editFormData.discountPercent}
+                                        onChange={(e) => setEditFormData({ ...editFormData, discountPercent: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                    />
                             </div>
                         </div>
 
                         <div className="row mb-3">
                             <div className="col-md-6">
                                 <Form.Label>Debit</Form.Label>
-                                <Form.Control
-                                    type="number"
-                                    value={editFormData.debit}
-                                    onChange={(e) => setEditFormData({ ...editFormData, debit: parseFloat(e.target.value) || 0 })}
-                                    min="0"
-                                    step="0.01"
-                                />
+                                    <Form.Control
+                                        type="number"
+                                        className="no-arrow"
+                                        value={editFormData.debit}
+                                        onChange={(e) => setEditFormData({ ...editFormData, debit: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        step="0.01"
+                                    />
                             </div>
                             <div className="col-md-6">
                                 <Form.Label>Credit</Form.Label>
-                                <Form.Control
-                                    type="number"
-                                    value={editFormData.credit}
-                                    onChange={(e) => setEditFormData({ ...editFormData, credit: parseFloat(e.target.value) || 0 })}
-                                    min="0"
-                                    step="0.01"
-                                />
+                                    <Form.Control
+                                        type="number"
+                                        className="no-arrow"
+                                        value={editFormData.credit}
+                                        onChange={(e) => setEditFormData({ ...editFormData, credit: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        step="0.01"
+                                    />
                             </div>
                         </div>
 

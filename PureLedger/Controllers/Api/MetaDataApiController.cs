@@ -4,6 +4,8 @@ using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
+using PureLedger.ViewModels.MetaData;
+using System.Linq;
 
 namespace PureLedger.Controllers.Api
 {
@@ -189,10 +191,17 @@ namespace PureLedger.Controllers.Api
                 var associatedAccountIds = await _metaDataService.GetAssociatedAccountIdsAsync(id);
                 var hasAssociations = associatedAccountIds.Any();
 
+                // Return DTO to avoid circular reference issues
                 return Ok(new
                 {
                     success = true,
-                    data = category,
+                    data = new
+                    {
+                        categoryId = category.CategoryId,
+                        categoryName = category.CategoryName,
+                        projectId = category.ProjectId,
+                        accountTypeId = category.AccountTypeId
+                    },
                     hasAccountAssociations = hasAssociations,
                     associatedAccountCount = associatedAccountIds.Count
                 });
@@ -231,6 +240,30 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                if (category == null)
+                {
+                    return BadRequest(new { success = false, message = "Category data is required" });
+                }
+
+                // Clear ModelState errors for navigation properties (they're not sent in JSON)
+                ModelState.Remove(nameof(Category.Project));
+                ModelState.Remove(nameof(Category.AccountType));
+                ModelState.Remove(nameof(Category.Accounts));
+
+                // Log the received data for debugging
+                _logger.LogInformation("Received category: CategoryId={CategoryId}, CategoryName={CategoryName}, ProjectId={ProjectId}, AccountTypeId={AccountTypeId}",
+                    category.CategoryId, category.CategoryName, category.ProjectId, category.AccountTypeId);
+
+                if (!ModelState.IsValid)
+                {
+                    var modelErrors = ModelState
+                        .Where(x => x.Value?.Errors.Count > 0)
+                        .SelectMany(x => x.Value.Errors.Select(e => e.ErrorMessage))
+                        .ToList();
+                    _logger.LogWarning("ModelState validation failed: {Errors}", string.Join(", ", modelErrors));
+                    return BadRequest(new { success = false, errors = modelErrors });
+                }
+
                 var errors = await _validationService.ValidateCategoryAsync(category);
                 if (errors.Count > 0)
                 {
@@ -243,7 +276,18 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = creationErrors });
                 }
 
-                return Ok(new { success = true, message = "Category created successfully", data = category });
+                // Return only the necessary fields to avoid circular reference issues
+                // Don't reload - use the category object we already have (it will have the ID after save)
+                return Ok(new { 
+                    success = true, 
+                    message = "Category created successfully", 
+                    data = new {
+                        categoryId = category.CategoryId,
+                        categoryName = category.CategoryName,
+                        projectId = category.ProjectId,
+                        accountTypeId = category.AccountTypeId
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -257,6 +301,30 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                if (category == null)
+                {
+                    return BadRequest(new { success = false, message = "Category data is required" });
+                }
+
+                // Clear ModelState errors for navigation properties (they're not sent in JSON)
+                ModelState.Remove(nameof(Category.Project));
+                ModelState.Remove(nameof(Category.AccountType));
+                ModelState.Remove(nameof(Category.Accounts));
+
+                // Log the received data for debugging
+                _logger.LogInformation("Received category update: Id={Id}, CategoryId={CategoryId}, CategoryName={CategoryName}, ProjectId={ProjectId}, AccountTypeId={AccountTypeId}",
+                    id, category.CategoryId, category.CategoryName, category.ProjectId, category.AccountTypeId);
+
+                if (!ModelState.IsValid)
+                {
+                    var modelErrors = ModelState
+                        .Where(x => x.Value?.Errors.Count > 0)
+                        .SelectMany(x => x.Value.Errors.Select(e => e.ErrorMessage))
+                        .ToList();
+                    _logger.LogWarning("ModelState validation failed: {Errors}", string.Join(", ", modelErrors));
+                    return BadRequest(new { success = false, errors = modelErrors });
+                }
+
                 if (id != category.CategoryId)
                 {
                     return BadRequest(new { success = false, message = "Category ID mismatch" });
@@ -287,7 +355,18 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = updateErrors });
                 }
 
-                return Ok(new { success = true, message = "Category updated successfully", data = category });
+                // Return only the necessary fields to avoid circular reference issues
+                // Use the category object we already have (it's been updated in the service)
+                return Ok(new { 
+                    success = true, 
+                    message = "Category updated successfully", 
+                    data = new {
+                        categoryId = category.CategoryId,
+                        categoryName = category.CategoryName,
+                        projectId = category.ProjectId,
+                        accountTypeId = category.AccountTypeId
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -354,22 +433,18 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var accounts = await _metaDataService.GetAllAccountsAsync();
-                
-                // Filter by project if provided
-                if (projectId.HasValue)
+                if (!projectId.HasValue)
                 {
-                    var categories = await _metaDataService.GetAllCategoriesAsync();
-                    var projectCategoryIds = categories.Where(c => c.ProjectId == projectId.Value).Select(c => c.CategoryId).ToList();
-                    accounts = accounts.Where(a => projectCategoryIds.Contains(a.CategoryId)).ToList();
+                    return Ok(new
+                    {
+                        success = true,
+                        data = Array.Empty<object>(),
+                        message = "Project filter is required to load accounts."
+                    });
                 }
-                
-                // Filter by category if provided
-                if (categoryId.HasValue)
-                {
-                    accounts = accounts.Where(a => a.CategoryId == categoryId.Value).ToList();
-                }
-                
+
+                var accounts = await _metaDataService.GetAccountsByProjectAndCategoryAsync(projectId.Value, categoryId);
+
                 return Ok(new
                 {
                     success = true,
@@ -378,7 +453,11 @@ namespace PureLedger.Controllers.Api
                         a.AccountId,
                         a.AccountName,
                         a.CategoryId,
+                        categoryName = a.Category?.CategoryName,
+                        projectId = a.Category?.ProjectId,
+                        projectName = a.Category?.Project?.ProjectName,
                         a.AccountGroupId,
+                        accountGroupName = a.AccountGroup?.AccountGroupName,
                         a.IsEnabled
                     })
                 });
@@ -404,10 +483,37 @@ namespace PureLedger.Controllers.Api
                 var associatedVoucherIds = await _metaDataService.GetAssociatedVoucherIdsAsync(id);
                 var hasAssociations = associatedVoucherIds.Any();
 
+                // Return DTO to avoid circular reference issues
                 return Ok(new
                 {
                     success = true,
-                    data = account,
+                    data = new
+                    {
+                        accountId = account.AccountId,
+                        accountName = account.AccountName,
+                        categoryId = account.CategoryId,
+                        accountGroupId = account.AccountGroupId,
+                        isEnabled = account.IsEnabled,
+                        accountData = account.AccountData == null ? null : new
+                        {
+                            accountDataId = account.AccountData.AccountDataId,
+                            accountId = account.AccountData.AccountId,
+                            phoneNumber = account.AccountData.PhoneNumber,
+                            email = account.AccountData.Email,
+                            address = account.AccountData.Address,
+                            area = account.AccountData.Area,
+                            city = account.AccountData.City
+                        },
+                        productData = account.ProductData == null ? null : new
+                        {
+                            productDataId = account.ProductData.ProductDataId,
+                            accountId = account.ProductData.AccountId,
+                            pkgForm = account.ProductData.PkgForm,
+                            pkg = account.ProductData.Pkg,
+                            type = account.ProductData.Type,
+                            saleRate = account.ProductData.SaleRate
+                        }
+                    },
                     hasJournalAssociations = hasAssociations,
                     associatedVoucherCount = associatedVoucherIds.Count
                 });
@@ -441,10 +547,44 @@ namespace PureLedger.Controllers.Api
         }
 
         [HttpPost("accounts")]
-        public async Task<IActionResult> CreateAccount([FromBody] Account account)
+        public async Task<IActionResult> CreateAccount([FromBody] AccountRequestDto accountDto)
         {
             try
             {
+                // Map DTO to Account model
+                var account = new Account
+                {
+                    AccountName = accountDto.AccountName,
+                    CategoryId = accountDto.CategoryId,
+                    AccountGroupId = accountDto.AccountGroupId,
+                    IsEnabled = true
+                };
+
+                // Handle AccountData if provided
+                if (accountDto.AccountData != null)
+                {
+                    account.AccountData = new AccountData
+                    {
+                        PhoneNumber = accountDto.AccountData.PhoneNumber,
+                        Email = accountDto.AccountData.Email,
+                        Address = accountDto.AccountData.Address,
+                        Area = accountDto.AccountData.Area,
+                        City = accountDto.AccountData.City
+                    };
+                }
+
+                // Handle ProductData if provided
+                if (accountDto.ProductData != null)
+                {
+                    account.ProductData = new ProductData
+                    {
+                        PkgForm = accountDto.ProductData.PkgForm,
+                        Pkg = accountDto.ProductData.Pkg,
+                        Type = accountDto.ProductData.Type,
+                        SaleRate = accountDto.ProductData.SaleRate
+                    };
+                }
+
                 var errors = await _validationService.ValidateAccountAsync(account);
                 if (errors.Count > 0)
                 {
@@ -457,7 +597,7 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = creationErrors });
                 }
 
-                return Ok(new { success = true, message = "Account created successfully", data = account });
+                return Ok(new { success = true, message = "Account created successfully" });
             }
             catch (Exception ex)
             {
@@ -467,26 +607,63 @@ namespace PureLedger.Controllers.Api
         }
 
         [HttpPut("accounts/{id}")]
-        public async Task<IActionResult> UpdateAccount(int id, [FromBody] Account account)
+        public async Task<IActionResult> UpdateAccount(int id, [FromBody] AccountRequestDto accountDto)
         {
             try
             {
-                if (id != account.AccountId)
+                if (id != accountDto.AccountId)
                 {
                     return BadRequest(new { success = false, message = "Account ID mismatch" });
                 }
 
+                // Get existing account
+                var existingAccount = await _metaDataService.GetAccountByIdAsync(id);
+                if (existingAccount == null)
+                {
+                    return NotFound(new { success = false, message = "Account not found" });
+                }
+
                 // Check for associations
                 var associatedVoucherIds = await _metaDataService.GetAssociatedVoucherIdsAsync(id);
-                if (associatedVoucherIds.Any())
+                bool hasAssociations = associatedVoucherIds.Any();
+
+                // Create account object for update
+                var account = new Account
                 {
-                    // Preserve original CategoryId and AccountGroupId
-                    var originalAccount = await _metaDataService.GetAccountByIdAsync(id);
-                    if (originalAccount != null)
+                    AccountId = accountDto.AccountId,
+                    AccountName = accountDto.AccountName,
+                    CategoryId = hasAssociations ? existingAccount.CategoryId : accountDto.CategoryId,
+                    AccountGroupId = hasAssociations ? existingAccount.AccountGroupId : accountDto.AccountGroupId,
+                    IsEnabled = existingAccount.IsEnabled
+                };
+
+                // Handle AccountData if provided
+                if (accountDto.AccountData != null)
+                {
+                    account.AccountData = new AccountData
                     {
-                        account.CategoryId = originalAccount.CategoryId;
-                        account.AccountGroupId = originalAccount.AccountGroupId;
-                    }
+                        AccountDataId = accountDto.AccountData.AccountDataId ?? 0,
+                        AccountId = accountDto.AccountId,
+                        PhoneNumber = accountDto.AccountData.PhoneNumber,
+                        Email = accountDto.AccountData.Email,
+                        Address = accountDto.AccountData.Address,
+                        Area = accountDto.AccountData.Area,
+                        City = accountDto.AccountData.City
+                    };
+                }
+
+                // Handle ProductData if provided
+                if (accountDto.ProductData != null)
+                {
+                    account.ProductData = new ProductData
+                    {
+                        ProductDataId = accountDto.ProductData.ProductDataId ?? 0,
+                        AccountId = accountDto.AccountId,
+                        PkgForm = accountDto.ProductData.PkgForm,
+                        Pkg = accountDto.ProductData.Pkg,
+                        Type = accountDto.ProductData.Type,
+                        SaleRate = accountDto.ProductData.SaleRate
+                    };
                 }
 
                 var errors = await _validationService.ValidateAccountAsync(account);
@@ -501,7 +678,7 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = updateErrors });
                 }
 
-                return Ok(new { success = true, message = "Account updated successfully", data = account });
+                return Ok(new { success = true, message = "Account updated successfully" });
             }
             catch (Exception ex)
             {

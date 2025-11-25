@@ -31,6 +31,29 @@
   --transition-slow: 0.3s ease;
 }
 
+/* Remove numeric input arrows globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type="number"].no-arrow::-webkit-inner-spin-button,
+input[type="number"].no-arrow::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"].no-arrow {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* Base Styles */
 html {
   font-size: 14px;

@@ -12,13 +12,53 @@ using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
+using System.Linq;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews();
-builder.Services.AddControllers(); // For API controllers
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options =>
+    {
+        // Configure JSON serialization to handle both camelCase and PascalCase
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Configure JSON serialization to handle both camelCase and PascalCase
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        // Handle circular references
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Customize the response for invalid model state
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            // Remove navigation property errors (they're not sent in JSON, only IDs are)
+            var keysToRemove = context.ModelState.Keys
+                .Where(k => k == "Project" || k == "AccountType" || k == "Accounts" || 
+                           k == "Category.Project" || k == "Category.AccountType" || k == "Category.Accounts")
+                .ToList();
+            
+            foreach (var key in keysToRemove)
+            {
+                context.ModelState.Remove(key);
+            }
+
+            // Get remaining errors
+            var errors = context.ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .SelectMany(x => x.Value.Errors.Select(e => e.ErrorMessage))
+                .ToList();
+            
+            return new BadRequestObjectResult(new { success = false, errors = errors });
+        };
+    }); // For API controllers
 builder.Services.AddHttpContextAccessor();
 
 // Configure CORS

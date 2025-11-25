@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -6,18 +6,33 @@ import SearchableSelect from '../../components/SearchableSelect';
 
 const MissedEntriesReport = () => {
     const [projects, setProjects] = useState([]);
-    const [entries, setEntries] = useState([]);
+    const [allEntries, setAllEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
     const [error, setError] = useState('');
     const [formData, setFormData] = useState({
-        projectId: '',
+        projectId: null,
         startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         endDate: new Date().toISOString().split('T')[0]
     });
-    const [page, setPage] = useState(0);
-    const [pageSize] = useState(25);
-    const [totalPages, setTotalPages] = useState(0);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [hasMoreData, setHasMoreData] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const pageSize = 25;
+
+    const observer = useRef();
+    const lastEntryElementRef = useCallback(node => {
+        if (isLoadingMore || searching) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMoreData) {
+                const nextPage = Math.floor(allEntries.length / pageSize);
+                loadEntries(nextPage, true);
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [isLoadingMore, searching, hasMoreData, allEntries.length, pageSize]);
 
     useEffect(() => {
         loadInitData();
@@ -42,26 +57,51 @@ const MissedEntriesReport = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSearching(true);
         setError('');
-        setPage(0);
-        await loadEntries(0);
+        setCurrentPage(0);
+        await loadEntries(0, false);
     };
 
-    const loadEntries = async (currentPage) => {
-        try {
-            const params = new URLSearchParams({
-                page: currentPage.toString(),
-                pageSize: pageSize.toString(),
-                projectId: formData.projectId || '',
-                startDate: formData.startDate || '',
-                endDate: formData.endDate || ''
-            });
+    const loadEntries = async (page, append = false) => {
+        if (page === 0) {
+            setSearching(true);
+            setAllEntries([]);
+        } else {
+            setIsLoadingMore(true);
+        }
 
-            const response = await apiClient.get(`/ReportingApi/missed-entries?${params}`);
+        try {
+            const params = {
+                page: page,
+                pageSize: pageSize,
+                projectId: formData.projectId || null,
+                startDate: formData.startDate || null,
+                endDate: formData.endDate || null
+            };
+
+            const response = await apiClient.get('/ReportingApi/missed-entries', { params });
             if (response.data.success && response.data.data) {
-                setEntries(response.data.data.entries || []);
-                setTotalPages(response.data.data.totalPages || 0);
+                const data = response.data.data;
+                // API returns MissedEntriesPagedResultViewModel with Entries (capital E)
+                const entries = data.entries || data.Entries || [];
+                
+                if (append) {
+                    setAllEntries(prev => [...prev, ...entries]);
+                } else {
+                    setAllEntries(entries);
+                }
+                
+                setHasMoreData(data.hasMoreData || data.HasMoreData || false);
+                setTotalRecords(data.totalRecords || data.TotalRecords || entries.length);
+                setCurrentPage(page + 1);
+
+                // Auto-load next page if there's more data
+                const hasMore = data.hasMoreData || data.HasMoreData || false;
+                if (hasMore && !isLoadingMore) {
+                    setTimeout(() => {
+                        loadEntries(page + 1, true);
+                    }, 100);
+                }
             } else {
                 setError('Failed to load missed entries');
             }
@@ -69,15 +109,14 @@ const MissedEntriesReport = () => {
             setError(err.response?.data?.error || 'Failed to load missed entries');
         } finally {
             setSearching(false);
+            setIsLoadingMore(false);
         }
     };
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
-            style: 'currency',
-            currency: 'PKR',
             minimumFractionDigits: 2
-        }).format(value);
+        }).format(value || 0);
     };
 
     if (loading) {
@@ -124,8 +163,8 @@ const MissedEntriesReport = () => {
                                     <SearchableSelect
                                         value={formData.projectId}
                                         onChange={(value) => setFormData({ ...formData, projectId: value ? parseInt(value) : null })}
-                                        options={projects.map(p => ({ id: p.id, name: p.name }))}
-                                        placeholder="Search project..."
+                                        options={[{ id: null, name: 'All Projects' }, ...projects.map(p => ({ id: p.id, name: p.name }))]}
+                                        placeholder="All Projects"
                                         disabled={searching}
                                     />
                                 </InputGroup>
@@ -147,10 +186,13 @@ const MissedEntriesReport = () => {
                 </div>
             )}
 
-            {entries.length > 0 && (
+            {allEntries.length > 0 && (
                 <div className="card shadow">
-                    <div className="card-header py-3">
+                    <div className="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 className="m-0 font-weight-bold text-primary">Missed Entries</h6>
+                        {totalRecords > 0 && (
+                            <span className="badge bg-primary">{allEntries.length} of {totalRecords}</span>
+                        )}
                     </div>
                     <div className="card-body">
                         <div className="table-responsive">
@@ -167,45 +209,39 @@ const MissedEntriesReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {entries.map((entry, index) => (
-                                        <tr key={index}>
-                                            <td>{entry.missedDate}</td>
-                                            <td>{entry.customerAccountName || 'N/A'}</td>
-                                            <td>{entry.productAccountName || 'N/A'}</td>
-                                            <td>{entry.quantity || 0}</td>
-                                            <td>{formatCurrency(entry.rate || 0)}</td>
-                                            <td>{formatCurrency(entry.discount || 0)}</td>
-                                            <td>{entry.description || '-'}</td>
-                                        </tr>
-                                    ))}
+                                    {allEntries.map((entry, index) => {
+                                        const isLastEntry = index === allEntries.length - 1;
+                                        // Handle both camelCase and PascalCase property names
+                                        const missedDate = entry.missedDate || entry.MissedDate || '-';
+                                        const customerName = entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A';
+                                        const productName = entry.productName || entry.productAccountName || entry.ProductName || 'N/A';
+                                        const quantity = entry.quantity || entry.Quantity || 0;
+                                        const rate = entry.rate || entry.Rate || 0;
+                                        const discount = entry.discount || entry.Discount || 0;
+                                        const description = entry.description || entry.Description || '-';
+                                        return (
+                                            <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                <td>{missedDate}</td>
+                                                <td>{customerName}</td>
+                                                <td>{productName}</td>
+                                                <td>{quantity}</td>
+                                                <td>{formatCurrency(rate)}</td>
+                                                <td>{formatCurrency(discount)}</td>
+                                                <td>{description}</td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
-                        {totalPages > 1 && (
-                            <div className="d-flex justify-content-between align-items-center mt-3">
-                                <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    disabled={page === 0}
-                                    onClick={() => {
-                                        const newPage = page - 1;
-                                        setPage(newPage);
-                                        loadEntries(newPage);
-                                    }}
-                                >
-                                    Previous
-                                </button>
-                                <span>Page {page + 1} of {totalPages}</span>
-                                <button
-                                    className="btn btn-sm btn-outline-primary"
-                                    disabled={page >= totalPages - 1}
-                                    onClick={() => {
-                                        const newPage = page + 1;
-                                        setPage(newPage);
-                                        loadEntries(newPage);
-                                    }}
-                                >
-                                    Next
-                                </button>
+                        {isLoadingMore && (
+                            <div className="text-center my-3">
+                                <LoadingSpinner />
+                            </div>
+                        )}
+                        {!hasMoreData && allEntries.length > 0 && (
+                            <div className="text-center my-3 text-muted">
+                                End of report. Total records: {totalRecords}
                             </div>
                         )}
                     </div>

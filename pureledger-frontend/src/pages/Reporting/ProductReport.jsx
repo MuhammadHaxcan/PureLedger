@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -8,7 +8,8 @@ const ProductReport = () => {
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [locations, setLocations] = useState([]);
-    const [reportData, setReportData] = useState(null);
+    const [allProducts, setAllProducts] = useState([]);
+    const [totals, setTotals] = useState(null);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
@@ -19,6 +20,24 @@ const ProductReport = () => {
         startDate: '',
         endDate: ''
     });
+    const [currentPage, setCurrentPage] = useState(0);
+    const [hasMoreData, setHasMoreData] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const pageSize = 50;
+
+    const observer = useRef();
+    const lastEntryElementRef = useCallback(node => {
+        if (isLoadingMore || generating) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMoreData) {
+                const nextPage = Math.floor(allProducts.length / pageSize);
+                generateReport(nextPage, true);
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [isLoadingMore, generating, hasMoreData, allProducts.length, pageSize]);
 
     useEffect(() => {
         loadInitData();
@@ -64,16 +83,21 @@ const ProductReport = () => {
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setGenerating(true);
-        setError('');
-        setReportData(null);
-
+    const generateReport = async (page = 0, append = false) => {
         if (!formData.projectId) {
             setError('Please select a project');
             return;
         }
+
+        if (page === 0) {
+            setGenerating(true);
+            setAllProducts([]);
+            setTotals(null);
+        } else {
+            setIsLoadingMore(true);
+        }
+
+        setError('');
 
         try {
             const params = {
@@ -81,17 +105,33 @@ const ProductReport = () => {
                 startDate: formData.startDate || null,
                 endDate: formData.endDate || null,
                 categoryId: formData.categoryId ? formData.categoryId.toString() : '',
-                locationId: formData.locationId ? formData.locationId.toString() : ''
+                locationId: formData.locationId ? formData.locationId.toString() : '',
+                page: page,
+                pageSize: pageSize
             };
 
             const response = await apiClient.get('/ReportingApi/product-report', { params });
             if (response.data.success && response.data.data) {
                 const data = response.data.data;
-                // API returns ProductSummaries, not products
-                setReportData({
-                    products: data.productSummaries || [],
-                    totals: data.totals || {}
-                });
+                const products = data.productSummaries || [];
+                
+                if (append) {
+                    setAllProducts(prev => [...prev, ...products]);
+                } else {
+                    setAllProducts(products);
+                }
+                
+                setTotals(data.totals || {});
+                setHasMoreData(data.hasMoreData || false);
+                setTotalRecords(data.totalRecords || products.length);
+                setCurrentPage(page + 1);
+
+                // Auto-load next page if there's more data
+                if (data.hasMoreData && !isLoadingMore) {
+                    setTimeout(() => {
+                        generateReport(page + 1, true);
+                    }, 100);
+                }
             } else {
                 setError('Failed to generate report');
             }
@@ -99,15 +139,19 @@ const ProductReport = () => {
             setError(err.response?.data?.error || 'Failed to generate report');
         } finally {
             setGenerating(false);
+            setIsLoadingMore(false);
         }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        generateReport(0, false);
     };
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
-            style: 'currency',
-            currency: 'PKR',
             minimumFractionDigits: 2
-        }).format(value);
+        }).format(value || 0);
     };
 
     if (loading) {
@@ -208,10 +252,13 @@ const ProductReport = () => {
                 </div>
             </div>
 
-            {reportData && (
+            {allProducts.length > 0 && (
                 <div className="card shadow">
-                    <div className="card-header py-3">
+                    <div className="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 className="m-0 font-weight-bold text-primary">Report Results</h6>
+                        {totalRecords > 0 && (
+                            <span className="badge bg-primary">{allProducts.length} of {totalRecords}</span>
+                        )}
                     </div>
                     <div className="card-body">
                         <div className="table-responsive" style={{ overflow: 'visible' }}>
@@ -234,9 +281,10 @@ const ProductReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {reportData.products && reportData.products.length > 0 ? (
-                                        reportData.products.map((product, index) => (
-                                            <tr key={index}>
+                                    {allProducts.map((product, index) => {
+                                        const isLastEntry = index === allProducts.length - 1;
+                                        return (
+                                            <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
                                                 <td>{product.productName}</td>
                                                 <td>JV-{product.lastVoucherId}</td>
                                                 <td>{product.entryDate || '-'}</td>
@@ -251,31 +299,37 @@ const ProductReport = () => {
                                                 <td className="text-end">{formatCurrency(product.margin || 0)}</td>
                                                 <td className="text-end">{product.marginPercentage?.toFixed(2) || '0.00'}%</td>
                                             </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="13" className="text-center">No data found</td>
-                                        </tr>
-                                    )}
+                                        );
+                                    })}
                                 </tbody>
-                                {reportData.totals && (
+                                {totals && (
                                     <tfoot className="table-secondary">
                                         <tr className="fw-bold">
                                             <td colSpan="4" className="text-end">TOTAL</td>
-                                            <td className="text-end">{reportData.totals.totalDebitQty || 0}</td>
-                                            <td className="text-end">{reportData.totals.totalCreditQty || 0}</td>
-                                            <td className="text-end">{reportData.totals.netQuantity || 0}</td>
+                                            <td className="text-end">{totals.totalDebitQty || 0}</td>
+                                            <td className="text-end">{totals.totalCreditQty || 0}</td>
+                                            <td className="text-end">{totals.netQuantity || 0}</td>
                                             <td className="text-end">-</td>
-                                            <td className="text-end">{formatCurrency(reportData.totals.totalDebit || 0)}</td>
-                                            <td className="text-end">{formatCurrency(reportData.totals.totalCredit || 0)}</td>
-                                            <td className="text-end">{formatCurrency(reportData.totals.totalCOGS || 0)}</td>
-                                            <td className="text-end">{formatCurrency(reportData.totals.totalMargin || 0)}</td>
-                                            <td className="text-end">{reportData.totals.marginPercentage?.toFixed(2) || '0.00'}%</td>
+                                            <td className="text-end">{formatCurrency(totals.totalDebit || 0)}</td>
+                                            <td className="text-end">{formatCurrency(totals.totalCredit || 0)}</td>
+                                            <td className="text-end">{formatCurrency(totals.totalCOGS || 0)}</td>
+                                            <td className="text-end">{formatCurrency(totals.totalMargin || 0)}</td>
+                                            <td className="text-end">{totals.marginPercentage?.toFixed(2) || '0.00'}%</td>
                                         </tr>
                                     </tfoot>
                                 )}
                             </table>
                         </div>
+                        {isLoadingMore && (
+                            <div className="text-center my-3">
+                                <LoadingSpinner />
+                            </div>
+                        )}
+                        {!hasMoreData && allProducts.length > 0 && (
+                            <div className="text-center my-3 text-muted">
+                                End of report. Total records: {totalRecords}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
