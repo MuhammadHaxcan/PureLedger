@@ -84,8 +84,10 @@ const SingleDoc = () => {
       });
 
       if (response.data.success && response.data.exists) {
-        // Load the voucher data
-        await loadVoucher();
+        // Open voucher in new tab (print-only page without header)
+        const url = `/reporting/print-voucher?voucherId=${voucherId}&type=${voucherType}`;
+        window.open(url, '_blank');
+        setError('');
       } else {
         setError('Voucher not found or invalid');
       }
@@ -174,7 +176,7 @@ const SingleDoc = () => {
                         </>
                       ) : (
                         <>
-                          <i className="fas fa-search me-2"></i>Load Voucher
+                          <i className="fas fa-file-alt me-2"></i>Generate
                         </>
                       )}
                     </Button>

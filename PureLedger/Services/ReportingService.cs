@@ -49,6 +49,14 @@ namespace PureLedger.Services
                 .GetCartageEntriesByJournalVoucherIdAsync(journalVoucherId);
             var cartageEntry = cartageEntryList.FirstOrDefault();
 
+            // Get project image from cartage settings
+            string? projectImage = null;
+            var projectCartageSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(project.ProjectId);
+            if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
+            {
+                projectImage = projectCartageSettings.ProjectImage;
+            }
+
             var viewModel = new JournalVoucherReportViewModel
             {
                 JvId = journalVoucherId,
@@ -68,7 +76,8 @@ namespace PureLedger.Services
                 CartageAmount = cartageAmount,
                 CartageEntries = cartageEntries,
 
-                Builty = cartageEntry?.Credit != null ? (int)cartageEntry.Credit : 0
+                Builty = cartageEntry?.Credit != null ? (int)cartageEntry.Credit : 0,
+                ProjectImage = projectImage
             };
             return viewModel;
         }
@@ -89,6 +98,15 @@ namespace PureLedger.Services
             var cartageEntry = cartageEntries.FirstOrDefault();
 
             var customerDetails = ParseCustomerInfo(customerInfo);
+            
+            // Get project image from cartage settings
+            string? projectImage = null;
+            var projectCartageSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(project.ProjectId);
+            if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
+            {
+                projectImage = projectCartageSettings.ProjectImage;
+            }
+
             var viewModel = new JournalVoucherReportViewModel
             {
                 JvId = journalVoucherId,
@@ -103,7 +121,8 @@ namespace PureLedger.Services
                 CustomerCity = customerDetails.City,
 
                 CartageEntry = cartageEntry,
-                Builty = cartageEntry?.Credit ?? 0
+                Builty = cartageEntry?.Credit ?? 0,
+                ProjectImage = projectImage
             };
 
             return viewModel;

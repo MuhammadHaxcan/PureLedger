@@ -21,6 +21,7 @@ import AccountReport from './pages/Reporting/AccountReport';
 import MasterReport from './pages/Reporting/MasterReport';
 import ProductReport from './pages/Reporting/ProductReport';
 import MissedEntriesReport from './pages/Reporting/MissedEntriesReport';
+import PrintOnlyVoucher from './pages/Reporting/PrintOnlyVoucher';
 import ProcessDC from './pages/DeliveryChallan/ProcessDC';
 import Users from './pages/Admin/Users';
 import EditProfile from './pages/Admin/EditProfile';
@@ -35,6 +36,8 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Print-only route without layout */}
+          <Route path="/reporting/print-voucher" element={<ProtectedRoute><PrintOnlyVoucher /></ProtectedRoute>} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Navigate to="/home/entry" replace />} />
             {/* Home Routes */}

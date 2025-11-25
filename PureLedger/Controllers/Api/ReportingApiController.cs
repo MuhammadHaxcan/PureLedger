@@ -84,19 +84,8 @@ namespace PureLedger.Controllers.Api
                     previousBalance = await _reportingService.GetAccountBalanceBeforeVoucherAsync(journalVoucherId);
                 }
 
-                // Add project image for non-JV vouchers
-                if (voucherType != VoucherType.JV)
-                {
-                    var voucher = await _reportingService.GetJournalVoucherAsync(journalVoucherId);
-                    if (voucher != null)
-                    {
-                        var projectCartageSettings = await _reportingService.GetProjectCartageSettingsAsync(voucher.ProjectId);
-                        if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
-                        {
-                            report.ProjectImage = projectCartageSettings.ProjectImage;
-                        }
-                    }
-                }
+                // Project image is now set in the service methods, but ensure it's included for all types
+                // The service already handles ProjectImage for all voucher types
 
                 return Ok(new
                 {

@@ -10,7 +10,7 @@ const buildVoucherUrl = (voucherId, type) => {
     if (!voucherId) {
         return '#';
     }
-    return `/reporting/single-doc?voucherId=${voucherId}&type=${type}`;
+    return `/reporting/print-voucher?voucherId=${voucherId}&type=${type}`;
 };
 
 const MasterReport = () => {

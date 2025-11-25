@@ -1,8 +1,19 @@
 import { useEffect, useMemo } from 'react';
+import { API_BASE_URL } from '../../services/api';
 import '../../App.css';
 import './PrintVoucher.css';
 
 const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
+  // Get base URL for static files (remove /api from API_BASE_URL)
+  const getBaseUrl = () => {
+    const baseUrl = API_BASE_URL || 'https://localhost:7062/api';
+    // Remove /api from the end if present
+    if (baseUrl.endsWith('/api')) {
+      return baseUrl.slice(0, -4);
+    }
+    // If no /api, assume it's already the base URL or use default
+    return baseUrl.replace('/api', '') || 'https://localhost:7062';
+  };
   useEffect(() => {
     // Add print styles
     const style = document.createElement('style');
@@ -68,7 +79,12 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
   };
 
   const handleClose = () => {
-    window.history.back();
+    // If opened in a new tab/window, close it; otherwise go back
+    if (window.opener) {
+      window.close();
+    } else {
+      window.history.back();
+    }
   };
 
   return (
@@ -96,15 +112,27 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
               </div>
             </div>
             <div className="logo-container">
-              {voucherData.projectImage ? (
-                <img 
-                  src={`/uploads/projects/${voucherData.projectImage}`} 
-                  className="logo" 
-                  alt="Project Logo" 
-                />
-              ) : (
-                <img src="/images/logo.png" className="logo" alt="Company Logo" />
-              )}
+              {(() => {
+                const projectImage = voucherData.projectImage || voucherData.ProjectImage;
+                console.log('Checking image for voucher:', voucherData.jvId || voucherData.JvId, 'Image:', projectImage);
+                if (projectImage) {
+                  const imageUrl = `${getBaseUrl()}/uploads/projects/${projectImage}`;
+                  console.log('Image URL:', imageUrl);
+                  return (
+                    <img 
+                      src={imageUrl} 
+                      className="logo" 
+                      alt="Project Logo"
+                      onError={(e) => {
+                        console.error('Image load error:', e.target.src);
+                        e.target.src = '/images/logo.png';
+                      }}
+                      onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                    />
+                  );
+                }
+                return <img src="/images/logo.png" className="logo" alt="Company Logo" />;
+              })()}
             </div>
           </div>
 
@@ -112,8 +140,9 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
           {isInv && (
             <div className="invoice-header mb-3">
               <table className="header-table" width="100%">
-                <tr>
-                  <td width="40%" style={{ verticalAlign: 'top', paddingRight: '15px' }}>
+                <tbody>
+                  <tr>
+                    <td width="40%" style={{ verticalAlign: 'top', paddingRight: '15px' }}>
                     <div className="customer-info" style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
                       <h6 className="info-heading" style={{ marginTop: 0, marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '5px', fontSize: '14px' }}>
                         Customer Information
@@ -167,6 +196,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
                     </div>
                   </td>
                 </tr>
+                </tbody>
               </table>
             </div>
           )}
@@ -174,7 +204,8 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
           {isDC && (
             <div className="invoice-header mb-3">
               <table className="header-table" width="100%">
-                <tr>
+                <tbody>
+                  <tr>
                   <td width="50%" style={{ verticalAlign: 'top', paddingRight: '15px' }}>
                     <div className="customer-info" style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
                       <h6 className="info-heading" style={{ marginTop: 0, marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '5px', fontSize: '14px' }}>
@@ -218,6 +249,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
                     </div>
                   </td>
                 </tr>
+                </tbody>
               </table>
             </div>
           )}
@@ -225,8 +257,9 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
           {isJV && (
             <div className="invoice-header mb-3">
               <table className="header-table" width="100%">
-                <tr>
-                  <td width="50%" style={{ verticalAlign: 'top', paddingRight: '15px' }}>
+                <tbody>
+                  <tr>
+                    <td width="50%" style={{ verticalAlign: 'top', paddingRight: '15px' }}>
                     <div className="voucher-info" style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
                       <h6 className="info-heading" style={{ marginTop: 0, marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '5px', fontSize: '14px' }}>
                         Project Information
@@ -257,6 +290,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
                     </div>
                   </td>
                 </tr>
+                </tbody>
               </table>
             </div>
           )}
@@ -389,50 +423,54 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
           {/* Customer Running Balance Display - Only for Invoice */}
           {isInv && (
             <table width="100%" style={{ fontSize: '12px' }}>
-              <tr>
-                <td width="65%"></td>
-                <td width="35%" style={{ paddingTop: '5px' }}>
-                  <div style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', padding: '5px', textAlign: 'right', marginBottom: '5px' }}>
-                    <strong>Previous Balance:</strong>
-                    <span id="previousBalance">{Math.round(voucherData.previousBalance || 0)}</span>
-                  </div>
-                  <div style={{ backgroundColor: '#e9ecef', border: '1px solid #dee2e6', padding: '5px', textAlign: 'right' }}>
-                    <strong>Customer Running Balance:</strong>
-                    <span id="customerRunningBalance">{Math.round(voucherData.customerBalance || 0)}</span>
-                  </div>
-                </td>
-              </tr>
+              <tbody>
+                <tr>
+                  <td width="65%"></td>
+                  <td width="35%" style={{ paddingTop: '5px' }}>
+                    <div style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', padding: '5px', textAlign: 'right', marginBottom: '5px' }}>
+                      <strong>Previous Balance:</strong>
+                      <span id="previousBalance">{Math.round(voucherData.previousBalance || 0)}</span>
+                    </div>
+                    <div style={{ backgroundColor: '#e9ecef', border: '1px solid #dee2e6', padding: '5px', textAlign: 'right' }}>
+                      <strong>Customer Running Balance:</strong>
+                      <span id="customerRunningBalance">{Math.round(voucherData.customerBalance || 0)}</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
             </table>
           )}
 
           {/* Signature Section */}
           <table width="100%" style={{ marginTop: '50px' }}>
-            <tr>
-              <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
-                <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
-                  &nbsp;
-                </div>
-                <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                  Accountant
-                </div>
-              </td>
-              <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
-                <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
-                  {voucherData.authorizedBy || ''}
-                </div>
-                <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                  Authorized By
-                </div>
-              </td>
-              <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
-                <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
-                  {voucherData.receivedBy || ''}
-                </div>
-                <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                  Received/Paid By
-                </div>
-              </td>
-            </tr>
+            <tbody>
+              <tr>
+                <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
+                  <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
+                    &nbsp;
+                  </div>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
+                    Accountant
+                  </div>
+                </td>
+                <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
+                  <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
+                    {voucherData.authorizedBy || ''}
+                  </div>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
+                    Authorized By
+                  </div>
+                </td>
+                <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
+                  <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
+                    {voucherData.receivedBy || ''}
+                  </div>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
+                    Received/Paid By
+                  </div>
+                </td>
+              </tr>
+            </tbody>
           </table>
         </div>
       </div>

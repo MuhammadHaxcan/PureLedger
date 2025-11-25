@@ -552,8 +552,10 @@ const HomeEntry = () => {
       
       if (response.data.success) {
         setSuccess(response.data.message);
-        if (response.data.shouldPrint && response.data.printUrl) {
-          window.open(response.data.printUrl, '_blank');
+        if (response.data.shouldPrint && response.data.voucherId) {
+          // Use the new print voucher route
+          const printUrl = `/reporting/print-voucher?voucherId=${response.data.voucherId}&type=JV`;
+          window.open(printUrl, '_blank');
         }
         // Reset form or navigate
         if (!isEditMode) {
