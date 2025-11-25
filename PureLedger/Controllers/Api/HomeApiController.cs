@@ -324,13 +324,52 @@ namespace PureLedger.Controllers.Api
             }
         }
 
-        [HttpGet("modified-entries")]
-        public async Task<IActionResult> GetModifiedEntries()
+        [HttpGet("modified-entries-init")]
+        public async Task<IActionResult> GetModifiedEntriesInit()
         {
             try
             {
-                var vouchersWithModifiedEntries = await _journalService.GetVouchersWithModifiedEntriesAsync();
-                var modifiedEntriesSummary = vouchersWithModifiedEntries.Select(v => new ModifiedEntriesSummaryViewModel
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _journalService.GetAllProjectsForUserAsync(userId.Value)
+                    : new List<Project>();
+
+                return Ok(new
+                {
+                    success = true,
+                    projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }).ToList()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading modified entries init data");
+                return StatusCode(500, new { success = false, message = "Error loading data" });
+            }
+        }
+
+        [HttpGet("modified-entries")]
+        public async Task<IActionResult> GetModifiedEntries(int? projectId = null, int page = 0, int pageSize = 250)
+        {
+            try
+            {
+                if (projectId == null)
+                {
+                    return Ok(new 
+                    { 
+                        success = true, 
+                        data = new List<ModifiedEntriesSummaryViewModel>(),
+                        totalRecords = 0,
+                        page = 0,
+                        pageSize = pageSize,
+                        hasMoreData = false
+                    });
+                }
+
+                page = Math.Max(0, page);
+                pageSize = Math.Clamp(pageSize, 1, 500);
+
+                var (vouchers, totalCount) = await _journalService.GetVouchersWithModifiedEntriesPaginatedAsync(projectId, page, pageSize);
+                var modifiedEntriesSummary = vouchers.Select(v => new ModifiedEntriesSummaryViewModel
                 {
                     JvId = v.JournalVoucherId,
                     TotalDebit = v.TotalDebit,
@@ -338,7 +377,15 @@ namespace PureLedger.Controllers.Api
                     HasModifiedEntries = v.JournalEntries.Any(e => e.IsEdited)
                 }).ToList();
 
-                return Ok(new { success = true, data = modifiedEntriesSummary });
+                return Ok(new 
+                { 
+                    success = true, 
+                    data = modifiedEntriesSummary,
+                    totalRecords = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    hasMoreData = (page + 1) * pageSize < totalCount
+                });
             }
             catch (Exception ex)
             {
@@ -388,12 +435,52 @@ namespace PureLedger.Controllers.Api
 
         #region Base Voucher Processing
 
-        [HttpGet("base-vouchers")]
-        public async Task<IActionResult> GetBaseVouchers()
+        [HttpGet("base-vouchers-init")]
+        public async Task<IActionResult> GetBaseVouchersInit()
         {
             try
             {
-                var baseVouchers = await _journalService.GetAllBaseVouchersAsync();
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _journalService.GetAllProjectsForUserAsync(userId.Value)
+                    : new List<Project>();
+
+                return Ok(new
+                {
+                    success = true,
+                    projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }).ToList()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading base vouchers init data");
+                return StatusCode(500, new { success = false, message = "Error loading data" });
+            }
+        }
+
+        [HttpGet("base-vouchers")]
+        public async Task<IActionResult> GetBaseVouchers(int? projectId = null, int page = 0, int pageSize = 250)
+        {
+            try
+            {
+                if (projectId == null)
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        vouchers = new List<object>(),
+                        totalRecords = 0,
+                        page = 0,
+                        pageSize = pageSize,
+                        hasMoreData = false
+                    });
+                }
+
+                page = Math.Max(0, page);
+                pageSize = Math.Clamp(pageSize, 1, 500);
+
+                var (baseVouchers, totalCount) = await _journalService.GetAllBaseVouchersPaginatedAsync(projectId, page, pageSize);
+                
                 return Ok(new
                 {
                     success = true,
@@ -405,7 +492,11 @@ namespace PureLedger.Controllers.Api
                         entryDate = v.EntryDate,
                         unprocessedEntries = v.JournalEntries?.Count(e => !e.IsProcessed && e.Quantity > 0) ?? 0,
                         totalEntries = v.JournalEntries?.Count ?? 0
-                    })
+                    }).ToList(),
+                    totalRecords = totalCount,
+                    page = page,
+                    pageSize = pageSize,
+                    hasMoreData = (page + 1) * pageSize < totalCount
                 });
             }
             catch (Exception ex)

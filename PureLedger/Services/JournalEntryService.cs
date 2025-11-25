@@ -36,7 +36,13 @@ namespace PureLedger.Services
             => _unitOfWork.JournalVouchers.GetWithEntriesAsync(jvId);
 
         public Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
-            => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync();
+            => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync(null);
+
+        public Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync(int? projectId)
+            => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesAsync(projectId);
+
+        public Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetVouchersWithModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize)
+            => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesPaginatedAsync(projectId, page, pageSize);
 
         public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
         {
@@ -67,6 +73,9 @@ namespace PureLedger.Services
                 throw;
             }
         }
+
+        public Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, int page, int pageSize)
+            => _unitOfWork.JournalVouchers.GetAllBaseVouchersPaginatedAsync(projectId, page, pageSize);
 
         public Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
             => _unitOfWork.JournalVouchers.GetBaseVoucherWithUnprocessedEntriesAsync(id);

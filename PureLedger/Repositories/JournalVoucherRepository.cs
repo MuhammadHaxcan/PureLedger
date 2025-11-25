@@ -80,15 +80,40 @@ namespace PureLedger.Repositories
             return await query.OrderByDescending(jv => jv.EntryDate).ToListAsync();
         }
 
-        public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync()
+        public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync(int? projectId)
         {
-            return await _context.Set<JournalVoucher>()
+            var (vouchers, _) = await GetVouchersWithModifiedEntriesPaginatedAsync(projectId, 0, int.MaxValue);
+            return vouchers;
+        }
+
+        public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetVouchersWithModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize)
+        {
+            page = Math.Max(0, page);
+            pageSize = Math.Clamp(pageSize, 1, 500);
+
+            var query = _context.Set<JournalVoucher>()
+                .AsNoTracking()
                 .Include(v => v.JournalEntries)
                     .ThenInclude(e => e.Category)
                 .Include(v => v.JournalEntries)
                     .ThenInclude(e => e.Account)
-                .Where(v => v.JournalEntries.Any(e => e.IsEdited))
+                .Where(v => v.JournalEntries.Any(e => e.IsEdited));
+
+            if (projectId.HasValue)
+            {
+                query = query.Where(v => v.ProjectId == projectId.Value);
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var vouchers = await query
+                .OrderByDescending(v => v.EntryDate)
+                .ThenByDescending(v => v.JournalVoucherId)
+                .Skip(page * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
+
+            return (vouchers, totalCount);
         }
 
         public async Task<bool> DeleteAsync(int journalVoucherId)
@@ -111,12 +136,39 @@ namespace PureLedger.Repositories
 
         public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
         {
-            return await _context.JournalVouchers
-                .Where(v => v.IsBaseVoucher)
+            var (vouchers, _) = await GetAllBaseVouchersPaginatedAsync(null, 0, int.MaxValue);
+            return vouchers;
+        }
+
+        public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, int page, int pageSize)
+        {
+            page = Math.Max(0, page);
+            pageSize = Math.Clamp(pageSize, 1, 500);
+
+            var baseQuery = _context.JournalVouchers
+                .AsNoTracking()
+                .Where(v => v.IsBaseVoucher);
+
+            if (projectId.HasValue)
+            {
+                baseQuery = baseQuery.Where(v => v.ProjectId == projectId.Value);
+            }
+
+            var query = baseQuery
                 .Include(v => v.Project)
                 .Include(v => v.JournalEntries)
-                    .ThenInclude(e => e.Account)
+                    .ThenInclude(e => e.Account);
+
+            var totalCount = await baseQuery.CountAsync();
+
+            var vouchers = await query
+                .OrderByDescending(v => v.EntryDate)
+                .ThenByDescending(v => v.JournalVoucherId)
+                .Skip(page * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
+
+            return (vouchers, totalCount);
         }
 
         public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
