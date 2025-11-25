@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Modal from '../../components/Modal';
+import SearchableSelect from '../../components/SearchableSelect';
 
 const Recipes = () => {
     const [projects, setProjects] = useState([]);
@@ -20,7 +22,7 @@ const Recipes = () => {
 
     useEffect(() => {
         if (selectedProjectId) {
-            loadRecipes(selectedProjectId);
+            loadRecipes(Number(selectedProjectId));
         } else {
             setRecipes([]);
         }
@@ -45,7 +47,7 @@ const Recipes = () => {
         try {
             const response = await apiClient.get(`/HomeApi/recipes?projectId=${projectId}`);
             if (response.data.success) {
-                setRecipes(response.data.data?.recipes || []);
+                setRecipes(response.data.data?.recipes || response.data.data?.Recipes || []);
             } else {
                 setError('Failed to load recipes');
             }
@@ -90,19 +92,18 @@ const Recipes = () => {
                     <div className="row mb-4">
                         <div className="col-md-6">
                             <label htmlFor="projectSelect" className="form-label">Select Project:</label>
-                            <select
-                                id="projectSelect"
-                                className="form-select"
-                                value={selectedProjectId}
-                                onChange={(e) => setSelectedProjectId(e.target.value)}
-                            >
-                                <option value="">-- Select Project --</option>
-                                {projects.map((project) => (
-                                    <option key={project.projectId} value={project.projectId}>
-                                        {project.projectName}
-                                    </option>
-                                ))}
-                            </select>
+                            <InputGroup>
+                                <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
+                                <SearchableSelect
+                                    value={selectedProjectId ? Number(selectedProjectId) : null}
+                                    onChange={(value) => setSelectedProjectId(value ? String(value) : '')}
+                                    options={projects.map(p => ({ 
+                                        id: p.id || p.projectId, 
+                                        name: p.name || p.projectName 
+                                    }))}
+                                    placeholder="Search project..."
+                                />
+                            </InputGroup>
                         </div>
                     </div>
 

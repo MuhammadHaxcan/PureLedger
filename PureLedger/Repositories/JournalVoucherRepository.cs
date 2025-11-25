@@ -26,6 +26,7 @@ namespace PureLedger.Repositories
         public async Task<JournalVoucher?> GetWithEntriesAsync(int id)
         {
             return await _context.JournalVouchers
+                .Include(jv => jv.Project)
                 .Include(jv => jv.JournalEntries)
                     .ThenInclude(e => e.Account)
                 .Include(jv => jv.JournalEntries)

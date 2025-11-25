@@ -105,13 +105,29 @@ namespace PureLedger.Controllers.Api
                 }
 
                 var model = await _journalService.MapVoucherToViewModelAsync(voucher);
-                
+
+                // Get project name - try from navigation property first, then fetch if needed
+                string projectName = "Unknown Project";
+                if (voucher.Project != null)
+                {
+                    projectName = voucher.Project.ProjectName;
+                }
+                else if (voucher.ProjectId > 0)
+                {
+                    // Fallback: fetch project if not loaded
+                    var project = await _journalService.GetProjectByIdAsync(voucher.ProjectId);
+                    if (project != null)
+                    {
+                        projectName = project.ProjectName;
+                    }
+                }
+
                 // Enhance the response with category and account names
                 var voucherResponse = new
                 {
                     journalVoucherId = voucher.JournalVoucherId,
                     projectId = voucher.ProjectId,
-                    projectName = voucher.Project?.ProjectName ?? "Unknown Project",
+                    projectName = projectName,
                     entryDate = voucher.EntryDate.ToString("yyyy-MM-dd"),
                     creditableDate = voucher.CreditableDate.ToString("yyyy-MM-dd"),
                     totalDebit = voucher.TotalDebit,

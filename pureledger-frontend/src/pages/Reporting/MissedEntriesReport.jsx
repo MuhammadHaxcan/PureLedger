@@ -13,8 +13,8 @@ const MissedEntriesReport = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [formData, setFormData] = useState({
         projectId: null,
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0]
+        startDate: '',
+        endDate: ''
     });
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);

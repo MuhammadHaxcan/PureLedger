@@ -35,6 +35,7 @@ const VoucherEntry = () => {
     const [editAccounts, setEditAccounts] = useState([]);
     const [editLocations, setEditLocations] = useState([]);
     const [showLocationGroup, setShowLocationGroup] = useState(false);
+    const [locationId, setLocationId] = useState(null);
 
     useEffect(() => {
         const urlVoucherId = searchParams.get('jvId');
@@ -279,8 +280,15 @@ const VoucherEntry = () => {
                                 </div>
                             </div>
                             <div className="col-md-3 mt-md-0 mt-2">
-                                <button type="submit" className="btn btn-primary" disabled={loading}>
-                                    {loading ? <LoadingSpinner /> : <><i className="fas fa-search me-1"></i> Fetch Voucher</>}
+                                <button type="submit" className="btn btn-primary" disabled={loading} style={{ minWidth: '140px' }}>
+                                    {loading ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                            Loading...
+                                        </>
+                                    ) : (
+                                        <><i className="fas fa-search me-1"></i> Fetch Voucher</>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -305,7 +313,7 @@ const VoucherEntry = () => {
                         </Button>
                     </div>
                     <div className="card-body">
-                        <div className="row mb-3">
+                        <div className="row mb-2">
                             <div className="col-md-3">
                                 <strong>Project:</strong> {voucher.projectName || 'N/A'}
                             </div>
@@ -315,11 +323,10 @@ const VoucherEntry = () => {
                             <div className="col-md-3">
                                 <strong>Creditable Date:</strong> {voucher.creditableDate}
                             </div>
-                            <div className="col-md-3">
-                                <strong>Total Debit:</strong> {formatCurrency(voucher.totalDebit || 0)}
-                            </div>
-                            <div className="col-md-3">
-                                <strong>Total Credit:</strong> {formatCurrency(voucher.totalCredit || 0)}
+                        </div>
+                        <div className="row mb-3">
+                            <div className="col-md-12">
+                                <strong>Total Debit:</strong> {formatCurrency(voucher.totalDebit || 0)} <span className="ms-2 me-2">|</span> <strong>Total Credit:</strong> {formatCurrency(voucher.totalCredit || 0)}
                             </div>
                         </div>
 
@@ -346,7 +353,7 @@ const VoucherEntry = () => {
                                                 <tr key={entryId || index}>
                                                     <td>{entry.categoryName || 'N/A'}</td>
                                                     <td>{entry.accountName || 'N/A'}</td>
-                                                    <td>{entry.description || '-'}</td>
+                                                    <td style={{ wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '200px' }}>{entry.description || '-'}</td>
                                                     <td>{entry.quantity || 0}</td>
                                                     <td>{formatCurrency(entry.rate || 0)}</td>
                                                     <td>{formatCurrency(entry.discount || 0)}</td>

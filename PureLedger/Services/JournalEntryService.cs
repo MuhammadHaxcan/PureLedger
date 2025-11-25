@@ -25,6 +25,9 @@ namespace PureLedger.Services
         public Task<List<Booker>> GetAllEnabledBookersAsync()
             => _unitOfWork.Bookers.GetAllEnabledAsync();
 
+        public Task<Project?> GetProjectByIdAsync(int projectId)
+             => _unitOfWork.Projects.GetByIdAsync(projectId);
+
         #endregion
 
         #region Voucher Retrieval

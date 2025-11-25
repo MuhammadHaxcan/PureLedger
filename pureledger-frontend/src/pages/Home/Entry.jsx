@@ -16,7 +16,7 @@ const HomeEntry = () => {
   const [bookers, setBookers] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
-  const [creditDays, setCreditDays] = useState(0);
+  const [creditDays, setCreditDays] = useState('');
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [bookerId, setBookerId] = useState(null);
   const [requireQuantity, setRequireQuantity] = useState(true);
@@ -50,6 +50,7 @@ const HomeEntry = () => {
   const [success, setSuccess] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
   const [hasBookers, setHasBookers] = useState(false);
+  const [bookersLoaded, setBookersLoaded] = useState(false);
 
   // Refs for select dropdowns
   const selectDropdownsRef = useRef({});
@@ -79,9 +80,10 @@ const HomeEntry = () => {
 
   // Update due date when entry date or credit days change
   useEffect(() => {
-    if (entryDate && creditDays !== null) {
+    if (entryDate) {
+      const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
       const date = new Date(entryDate);
-      date.setDate(date.getDate() + creditDays);
+      date.setDate(date.getDate() + days);
       setDueDate(date.toISOString().split('T')[0]);
     }
   }, [entryDate, creditDays]);
@@ -92,7 +94,9 @@ const HomeEntry = () => {
       if (response.data.success) {
         setProjects(response.data.projects || []);
         setBookers(response.data.bookers || []);
-        setHasBookers((response.data.bookers || []).length > 0);
+        const bookersAvailable = (response.data.bookers || []).length > 0;
+        setHasBookers(bookersAvailable);
+        setBookersLoaded(true);
         if (response.data.selectedProjectId) {
           setSelectedProjectId(response.data.selectedProjectId);
         }
@@ -104,6 +108,7 @@ const HomeEntry = () => {
     } catch (error) {
       console.error('Error loading entry data:', error);
       setError('Failed to load entry data');
+      setBookersLoaded(true); // Mark as loaded even on error to show the warning
     }
   };
 
@@ -115,10 +120,12 @@ const HomeEntry = () => {
         const { model, projects: projData, bookers: bookData, selectedProjectId: projId } = response.data;
         setProjects(projData || []);
         setBookers(bookData || []);
-        setHasBookers((bookData || []).length > 0);
+        const bookersAvailable = (bookData || []).length > 0;
+        setHasBookers(bookersAvailable);
+        setBookersLoaded(true);
         setSelectedProjectId(projId);
         setEntryDate(model.entryDate || new Date().toISOString().split('T')[0]);
-        setCreditDays(model.creditDays || 0);
+        setCreditDays(model.creditDays !== undefined && model.creditDays !== null ? model.creditDays : '');
         setDueDate(model.dueDate || new Date().toISOString().split('T')[0]);
         setBookerId(model.bookerId);
         setRequireQuantity(model.requireQuantity !== false);
@@ -512,7 +519,7 @@ const HomeEntry = () => {
         projectId: selectedProjectId,
         entryDate: entryDate,
         dueDate: dueDate,
-        creditDays: creditDays,
+        creditDays: creditDays !== '' && creditDays !== null ? (parseInt(creditDays) || 0) : 0,
         bookerId: bookerId,
         requireQuantity: requireQuantity,
         isBaseVoucher: isBaseVoucher,
@@ -618,7 +625,7 @@ const HomeEntry = () => {
         </Alert>
       )}
 
-      {!hasBookers && (
+      {bookersLoaded && !hasBookers && (
         <Alert variant="warning" dismissible>
           <i className="fas fa-exclamation-triangle me-2"></i>
           <strong>No Bookers Available:</strong> Please add at least one booker before creating journal entries.
@@ -1081,7 +1088,7 @@ const HomeEntry = () => {
                     className="no-arrow"
                     min="0"
                     value={creditDays}
-                    onChange={(e) => setCreditDays(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setCreditDays(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
                   />
                 </div>
               </div>
