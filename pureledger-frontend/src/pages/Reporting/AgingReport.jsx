@@ -10,6 +10,7 @@ const AgingReport = () => {
   const [allEntries, setAllEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     referenceDate: new Date().toISOString().split('T')[0],
     projectId: null,
@@ -20,7 +21,7 @@ const AgingReport = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
   const [isAutoLoading, setIsAutoLoading] = useState(false);
-  const pageSize = 100;
+  const pageSize = 250;
   const observerRef = useRef(null);
   const loadingRef = useRef(null);
 
@@ -195,9 +196,50 @@ const AgingReport = () => {
     }).format(value || 0);
   };
 
-  const totalDebit = allEntries.reduce((sum, row) => sum + (parseFloat(row.totalDebit) || 0), 0);
-  const totalCredit = allEntries.reduce((sum, row) => sum + (parseFloat(row.totalCredit) || 0), 0);
-  const totalBalance = allEntries.reduce((sum, row) => sum + (parseFloat(row.netBalance) || 0), 0);
+  const filteredEntries = allEntries.filter(entry => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      (entry.accountName || '').toLowerCase().includes(search) ||
+      entry.accountId?.toString().includes(search)
+    );
+  });
+
+  const totalDebit = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalDebit) || 0), 0);
+  const totalCredit = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalCredit) || 0), 0);
+  const totalBalance = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.netBalance) || 0), 0);
+
+  const exportToCsv = (data, filename) => {
+    if (!data || data.length === 0) {
+      alert('No data to export');
+      return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => {
+        const value = row[header];
+        return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
+      }).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+  };
+
+  const handleExportCsv = () => {
+    const csvData = filteredEntries.map(entry => ({
+      Account: entry.accountName || entry.accountId || 'N/A',
+      'Total Debit': entry.totalDebit || 0,
+      'Total Credit': entry.totalCredit || 0,
+      'Net Balance': entry.netBalance || 0
+    }));
+    exportToCsv(csvData, `AgingReport_${formData.referenceDate || 'report'}.csv`);
+  };
 
   return (
     <div className="container-fluid">
@@ -269,8 +311,9 @@ const AgingReport = () => {
                   <Button
                     variant="primary"
                     type="submit"
-                    disabled={loading || isLoadingMore}
+                    disabled={loading || isLoadingMore || !formData.referenceDate || !formData.categoryId}
                     className="w-100"
+                    title={!formData.referenceDate ? 'Please select a reference date' : !formData.categoryId ? 'Please select a category' : ''}
                   >
                     {loading ? (
                       <>
@@ -302,12 +345,28 @@ const AgingReport = () => {
                   {allEntries.length} of {totalRecords} accounts
                 </span>
               )}
-              <Button variant="success" size="sm" onClick={() => window.print()}>
+              <Button variant="success" size="sm" onClick={() => window.print()} className="me-2">
                 <i className="fas fa-print me-1"></i>Print
+              </Button>
+              <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
+                <i className="fas fa-file-csv me-1"></i>Export CSV
               </Button>
             </div>
           </Card.Header>
           <Card.Body>
+            <div className="row mb-3">
+              <div className="col-12">
+                <Form.Label>Search</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
+                  <Form.Control
+                    placeholder="Filter results..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </InputGroup>
+              </div>
+            </div>
             <div className="table-responsive" style={{ overflow: 'visible' }}>
               <Table responsive striped bordered hover style={{ width: '100%', marginBottom: 0 }}>
                 <thead className="table-light">
@@ -319,16 +378,24 @@ const AgingReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {allEntries.map((row, index) => (
-                    <tr key={index}>
-                      <td>{row.accountName || row.accountId || 'N/A'}</td>
-                      <td className="text-end">{formatCurrency(row.totalDebit)}</td>
-                      <td className="text-end">{formatCurrency(row.totalCredit)}</td>
-                      <td className={`text-end ${(row.netBalance || 0) < 0 ? 'text-danger' : ''}`}>
-                        {formatCurrency(row.netBalance)}
+                  {filteredEntries.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="text-center text-muted py-4">
+                        {searchTerm ? 'No results found for your search' : 'No data available'}
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredEntries.map((row, index) => (
+                      <tr key={index}>
+                        <td>{row.accountName || row.accountId || 'N/A'}</td>
+                        <td className="text-end">{formatCurrency(row.totalDebit)}</td>
+                        <td className="text-end">{formatCurrency(row.totalCredit)}</td>
+                        <td className={`text-end ${(row.netBalance || 0) < 0 ? 'text-danger' : ''}`}>
+                          {formatCurrency(row.netBalance)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
                 <tfoot className="table-secondary">
                   <tr className="fw-bold">

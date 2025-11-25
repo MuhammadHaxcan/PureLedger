@@ -163,8 +163,9 @@ const SingleDoc = () => {
                     <Button
                       variant="primary"
                       onClick={handleValidate}
-                      disabled={loading}
+                      disabled={loading || !voucherId || parseInt(voucherId) <= 0}
                       className="w-100"
+                      title={!voucherId || parseInt(voucherId) <= 0 ? 'Please enter a valid voucher ID' : ''}
                     >
                       {loading ? (
                         <>

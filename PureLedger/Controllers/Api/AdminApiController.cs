@@ -148,6 +148,18 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                // Ensure AccessPermissions is properly set (even if empty array)
+                if (model.AccessPermissions == null)
+                {
+                    model.AccessPermissions = new List<string>();
+                }
+
+                // Ensure ProjectIds is properly set (even if empty array)
+                if (model.ProjectIds == null)
+                {
+                    model.ProjectIds = new List<int>();
+                }
+
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(new
@@ -161,7 +173,9 @@ namespace PureLedger.Controllers.Api
                 }
 
                 var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
-                var allProjects = await _authService.GetUserProjectsAsync(currentUserId);
+
+                _logger.LogInformation("Creating user with {PermissionCount} permissions and {ProjectCount} projects", 
+                    model.AccessPermissions?.Count ?? 0, model.ProjectIds?.Count ?? 0);
 
                 var result = await _authService.CreateUserAsync(model);
                 if (result)
@@ -201,11 +215,33 @@ namespace PureLedger.Controllers.Api
                     model.IsAdmin = User.IsInRole("Admin"); // Preserve current admin status
                 }
 
-                // Clear password validation if empty
+                // Clear password validation if empty (matching MVC controller behavior)
                 if (string.IsNullOrWhiteSpace(model.Password))
                 {
+                    // Clear validation errors for Password and ConfirmPassword
+                    ModelState.Remove("Password");
+                    ModelState.Remove("ConfirmPassword");
+                    
+                    // Make sure these are empty strings to avoid any issues
                     model.Password = string.Empty;
                     model.ConfirmPassword = string.Empty;
+                }
+                // If password is provided but doesn't match confirmation
+                else if (!string.IsNullOrWhiteSpace(model.Password) && model.Password != model.ConfirmPassword)
+                {
+                    ModelState.AddModelError("ConfirmPassword", "Passwords do not match");
+                }
+
+                // Ensure AccessPermissions is properly set (even if empty array)
+                if (model.AccessPermissions == null)
+                {
+                    model.AccessPermissions = new List<string>();
+                }
+
+                // Ensure ProjectIds is properly set (even if empty array)
+                if (model.ProjectIds == null)
+                {
+                    model.ProjectIds = new List<int>();
                 }
 
                 if (!ModelState.IsValid)
@@ -219,6 +255,9 @@ namespace PureLedger.Controllers.Api
                             .ToList()
                     });
                 }
+
+                _logger.LogInformation("Updating user {UserId} with {PermissionCount} permissions and {ProjectCount} projects", 
+                    id, model.AccessPermissions?.Count ?? 0, model.ProjectIds?.Count ?? 0);
 
                 var result = await _authService.UpdateUserAsync(model);
                 if (result)
@@ -548,6 +587,26 @@ namespace PureLedger.Controllers.Api
         public IActionResult GetControllerActions()
         {
             return Ok(new { success = true, data = _controllerActions });
+        }
+
+        [HttpGet("projects")]
+        public async Task<IActionResult> GetProjects()
+        {
+            try
+            {
+                var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+                var projects = await _authService.GetUserProjectsAsync(currentUserId);
+                return Ok(new
+                {
+                    success = true,
+                    data = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName })
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading projects");
+                return StatusCode(500, new { success = false, message = "Error loading projects" });
+            }
         }
     }
 }

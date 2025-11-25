@@ -25,7 +25,7 @@ const AccountReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 100;
+    const pageSize = 250;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -186,6 +186,43 @@ const AccountReport = () => {
         credit: acc.credit + (entry.totalCredit || 0)
     }), { debit: 0, credit: 0 });
 
+    const exportToCsv = (data, filename) => {
+        if (!data || data.length === 0) {
+            alert('No data to export');
+            return;
+        }
+
+        const headers = Object.keys(data[0]);
+        const csvContent = [
+            headers.join(','),
+            ...data.map(row => headers.map(header => {
+                const value = row[header];
+                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
+            }).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    };
+
+    const handleExportCsv = () => {
+        const csvData = filteredEntries.map(entry => ({
+            ID: entry.formattedId || entry.id || '',
+            Category: entry.categoryName || '',
+            'Account Name': entry.accountName || '',
+            Debit: entry.totalDebit || 0,
+            Credit: entry.totalCredit || 0,
+            Balance: (entry.totalDebit || 0) - (entry.totalCredit || 0)
+        }));
+        const dateRange = formData.startDate && formData.endDate 
+            ? `${formData.startDate}_to_${formData.endDate}` 
+            : 'report';
+        exportToCsv(csvData, `AccountReport_${dateRange}.csv`);
+    };
+
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
             minimumFractionDigits: 2,
@@ -272,7 +309,12 @@ const AccountReport = () => {
                             <div className="col-md-3 mb-3">
                                 <Form.Label>&nbsp;</Form.Label>
                                 <div className="d-grid">
-                                    <Button type="submit" variant="primary" disabled={generating}>
+                                    <Button 
+                                        type="submit" 
+                                        variant="primary" 
+                                        disabled={generating || !formData.projectId}
+                                        title={!formData.projectId ? 'Please select a project' : ''}
+                                    >
                                         {generating ? (
                                             <>
                                                 <span className="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -297,6 +339,9 @@ const AccountReport = () => {
                         <h6 className="m-0 font-weight-bold text-primary">
                             <i className="fas fa-table me-2"></i>Account Report Results
                         </h6>
+                        <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
+                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                        </Button>
                     </Card.Header>
                     <Card.Body>
                         <div className="row mb-3">

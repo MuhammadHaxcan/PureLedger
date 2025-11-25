@@ -13,6 +13,7 @@ const ProductReport = () => {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [formData, setFormData] = useState({
         projectId: null,
         categoryId: null,
@@ -24,7 +25,7 @@ const ProductReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 50;
+    const pageSize = 250;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -154,6 +155,61 @@ const ProductReport = () => {
         }).format(value || 0);
     };
 
+    const filteredProducts = allProducts.filter(product => {
+        if (!searchTerm) return true;
+        const search = searchTerm.toLowerCase();
+        return (
+            (product.productName || '').toLowerCase().includes(search) ||
+            product.lastVoucherId?.toString().includes(search) ||
+            (product.entryDate || '').toLowerCase().includes(search) ||
+            (product.creditableDate || '').toLowerCase().includes(search)
+        );
+    });
+
+    const exportToCsv = (data, filename) => {
+        if (!data || data.length === 0) {
+            alert('No data to export');
+            return;
+        }
+
+        const headers = Object.keys(data[0]);
+        const csvContent = [
+            headers.join(','),
+            ...data.map(row => headers.map(header => {
+                const value = row[header];
+                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
+            }).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    };
+
+    const handleExportCsv = () => {
+        const csvData = filteredProducts.map(product => ({
+            Product: product.productName || '',
+            Voucher: `JV-${product.lastVoucherId || ''}`,
+            'Entry Date': product.entryDate || '-',
+            'Due Date': product.creditableDate || '-',
+            'Debit Qty': product.totalDebitQty || 0,
+            'Credit Qty': product.totalCreditQty || 0,
+            'Balance Qty': product.qtyBalance || 0,
+            'Avg Rate': product.averageRate || 0,
+            'Total Debit': product.totalDebit || 0,
+            'Total Credit': product.totalCredit || 0,
+            COGS: product.cogs || 0,
+            Margin: product.margin || 0,
+            'Margin %': `${product.marginPercentage?.toFixed(2) || '0.00'}%`
+        }));
+        const dateRange = formData.startDate && formData.endDate 
+            ? `${formData.startDate}_to_${formData.endDate}` 
+            : 'report';
+        exportToCsv(csvData, `ProductReport_${dateRange}.csv`);
+    };
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -243,7 +299,12 @@ const ProductReport = () => {
                         </div>
                         <div className="row">
                             <div className="col-12">
-                                <button type="submit" className="btn btn-primary" disabled={generating}>
+                                <button 
+                                    type="submit" 
+                                    className="btn btn-primary" 
+                                    disabled={generating || !formData.projectId}
+                                    title={!formData.projectId ? 'Please select a project' : ''}
+                                >
                                     {generating ? <LoadingSpinner /> : <><i className="fas fa-search me-1"></i> Generate Report</>}
                                 </button>
                             </div>
@@ -256,11 +317,29 @@ const ProductReport = () => {
                 <div className="card shadow">
                     <div className="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 className="m-0 font-weight-bold text-primary">Report Results</h6>
-                        {totalRecords > 0 && (
-                            <span className="badge bg-primary">{allProducts.length} of {totalRecords}</span>
-                        )}
+                        <div>
+                            {totalRecords > 0 && (
+                                <span className="badge bg-primary me-2">{allProducts.length} of {totalRecords}</span>
+                            )}
+                            <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredProducts.length === 0}>
+                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                            </Button>
+                        </div>
                     </div>
                     <div className="card-body">
+                        <div className="row mb-3">
+                            <div className="col-12">
+                                <Form.Label>Search</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
+                                    <Form.Control
+                                        placeholder="Filter results..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </InputGroup>
+                            </div>
+                        </div>
                         <div className="table-responsive" style={{ overflow: 'visible' }}>
                             <table className="table table-bordered" style={{ width: '100%', marginBottom: 0 }}>
                                 <thead className="table-light">
@@ -281,26 +360,34 @@ const ProductReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {allProducts.map((product, index) => {
-                                        const isLastEntry = index === allProducts.length - 1;
-                                        return (
-                                            <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
-                                                <td>{product.productName}</td>
-                                                <td>JV-{product.lastVoucherId}</td>
-                                                <td>{product.entryDate || '-'}</td>
-                                                <td>{product.creditableDate || '-'}</td>
-                                                <td className="text-end">{product.totalDebitQty || 0}</td>
-                                                <td className="text-end">{product.totalCreditQty || 0}</td>
-                                                <td className="text-end">{product.qtyBalance || 0}</td>
-                                                <td className="text-end">{formatCurrency(product.averageRate || 0)}</td>
-                                                <td className="text-end">{formatCurrency(product.totalDebit || 0)}</td>
-                                                <td className="text-end">{formatCurrency(product.totalCredit || 0)}</td>
-                                                <td className="text-end">{formatCurrency(product.cogs || 0)}</td>
-                                                <td className="text-end">{formatCurrency(product.margin || 0)}</td>
-                                                <td className="text-end">{product.marginPercentage?.toFixed(2) || '0.00'}%</td>
-                                            </tr>
-                                        );
-                                    })}
+                                    {filteredProducts.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="13" className="text-center text-muted py-4">
+                                                {searchTerm ? 'No results found for your search' : 'No data available'}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredProducts.map((product, index) => {
+                                            const isLastEntry = index === filteredProducts.length - 1;
+                                            return (
+                                                <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                    <td>{product.productName}</td>
+                                                    <td>JV-{product.lastVoucherId}</td>
+                                                    <td>{product.entryDate || '-'}</td>
+                                                    <td>{product.creditableDate || '-'}</td>
+                                                    <td className="text-end">{product.totalDebitQty || 0}</td>
+                                                    <td className="text-end">{product.totalCreditQty || 0}</td>
+                                                    <td className="text-end">{product.qtyBalance || 0}</td>
+                                                    <td className="text-end">{formatCurrency(product.averageRate || 0)}</td>
+                                                    <td className="text-end">{formatCurrency(product.totalDebit || 0)}</td>
+                                                    <td className="text-end">{formatCurrency(product.totalCredit || 0)}</td>
+                                                    <td className="text-end">{formatCurrency(product.cogs || 0)}</td>
+                                                    <td className="text-end">{formatCurrency(product.margin || 0)}</td>
+                                                    <td className="text-end">{product.marginPercentage?.toFixed(2) || '0.00'}%</td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
                                 </tbody>
                                 {totals && (
                                     <tfoot className="table-secondary">

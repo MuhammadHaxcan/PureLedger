@@ -10,6 +10,7 @@ const MissedEntriesReport = () => {
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
     const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [formData, setFormData] = useState({
         projectId: null,
         startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -19,7 +20,7 @@ const MissedEntriesReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 25;
+    const pageSize = 250;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -119,6 +120,72 @@ const MissedEntriesReport = () => {
         }).format(value || 0);
     };
 
+    const filteredEntries = allEntries.filter(entry => {
+        if (!searchTerm) return true;
+        const search = searchTerm.toLowerCase();
+        const missedDate = entry.missedDate || entry.MissedDate || '';
+        const customerName = entry.customerName || entry.customerAccountName || entry.CustomerName || '';
+        const productName = entry.productName || entry.productAccountName || entry.ProductName || '';
+        const description = entry.description || entry.Description || '';
+        return (
+            missedDate.toLowerCase().includes(search) ||
+            customerName.toLowerCase().includes(search) ||
+            productName.toLowerCase().includes(search) ||
+            description.toLowerCase().includes(search) ||
+            entry.quantity?.toString().includes(search) ||
+            entry.Quantity?.toString().includes(search) ||
+            entry.rate?.toString().includes(search) ||
+            entry.Rate?.toString().includes(search)
+        );
+    });
+
+    const exportToCsv = (data, filename) => {
+        if (!data || data.length === 0) {
+            alert('No data to export');
+            return;
+        }
+
+        const headers = Object.keys(data[0]);
+        const csvContent = [
+            headers.join(','),
+            ...data.map(row => headers.map(header => {
+                const value = row[header];
+                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
+            }).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    };
+
+    const handleExportCsv = () => {
+        const csvData = filteredEntries.map(entry => {
+            const missedDate = entry.missedDate || entry.MissedDate || '-';
+            const customerName = entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A';
+            const productName = entry.productName || entry.productAccountName || entry.ProductName || 'N/A';
+            const quantity = entry.quantity || entry.Quantity || 0;
+            const rate = entry.rate || entry.Rate || 0;
+            const discount = entry.discount || entry.Discount || 0;
+            const description = entry.description || entry.Description || '-';
+            return {
+                Date: missedDate,
+                Customer: customerName,
+                Product: productName,
+                Quantity: quantity,
+                Rate: rate,
+                Discount: discount,
+                Description: description
+            };
+        });
+        const dateRange = formData.startDate && formData.endDate 
+            ? `${formData.startDate}_to_${formData.endDate}` 
+            : 'report';
+        exportToCsv(csvData, `MissedEntriesReport_${dateRange}.csv`);
+    };
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -170,7 +237,12 @@ const MissedEntriesReport = () => {
                                 </InputGroup>
                             </div>
                             <div className="col-md-2">
-                                <button type="submit" className="btn btn-primary w-100" disabled={searching}>
+                                <button 
+                                    type="submit" 
+                                    className="btn btn-primary w-100" 
+                                    disabled={searching || isLoadingMore}
+                                    title={searching ? 'Searching...' : ''}
+                                >
                                     {searching ? <LoadingSpinner /> : <><i className="fas fa-search me-1"></i> Search</>}
                                 </button>
                             </div>
@@ -190,11 +262,29 @@ const MissedEntriesReport = () => {
                 <div className="card shadow">
                     <div className="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 className="m-0 font-weight-bold text-primary">Missed Entries</h6>
-                        {totalRecords > 0 && (
-                            <span className="badge bg-primary">{allEntries.length} of {totalRecords}</span>
-                        )}
+                        <div>
+                            {totalRecords > 0 && (
+                                <span className="badge bg-primary me-2">{allEntries.length} of {totalRecords}</span>
+                            )}
+                            <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
+                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                            </Button>
+                        </div>
                     </div>
                     <div className="card-body">
+                        <div className="row mb-3">
+                            <div className="col-12">
+                                <Form.Label>Search</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
+                                    <Form.Control
+                                        placeholder="Filter results..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </InputGroup>
+                            </div>
+                        </div>
                         <div className="table-responsive">
                             <table className="table table-bordered table-striped">
                                 <thead className="table-primary">
@@ -209,28 +299,36 @@ const MissedEntriesReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {allEntries.map((entry, index) => {
-                                        const isLastEntry = index === allEntries.length - 1;
-                                        // Handle both camelCase and PascalCase property names
-                                        const missedDate = entry.missedDate || entry.MissedDate || '-';
-                                        const customerName = entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A';
-                                        const productName = entry.productName || entry.productAccountName || entry.ProductName || 'N/A';
-                                        const quantity = entry.quantity || entry.Quantity || 0;
-                                        const rate = entry.rate || entry.Rate || 0;
-                                        const discount = entry.discount || entry.Discount || 0;
-                                        const description = entry.description || entry.Description || '-';
-                                        return (
-                                            <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
-                                                <td>{missedDate}</td>
-                                                <td>{customerName}</td>
-                                                <td>{productName}</td>
-                                                <td>{quantity}</td>
-                                                <td>{formatCurrency(rate)}</td>
-                                                <td>{formatCurrency(discount)}</td>
-                                                <td>{description}</td>
-                                            </tr>
-                                        );
-                                    })}
+                                    {filteredEntries.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="7" className="text-center text-muted py-4">
+                                                {searchTerm ? 'No results found for your search' : 'No data available'}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredEntries.map((entry, index) => {
+                                            const isLastEntry = index === filteredEntries.length - 1;
+                                            // Handle both camelCase and PascalCase property names
+                                            const missedDate = entry.missedDate || entry.MissedDate || '-';
+                                            const customerName = entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A';
+                                            const productName = entry.productName || entry.productAccountName || entry.ProductName || 'N/A';
+                                            const quantity = entry.quantity || entry.Quantity || 0;
+                                            const rate = entry.rate || entry.Rate || 0;
+                                            const discount = entry.discount || entry.Discount || 0;
+                                            const description = entry.description || entry.Description || '-';
+                                            return (
+                                                <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                    <td>{missedDate}</td>
+                                                    <td>{customerName}</td>
+                                                    <td>{productName}</td>
+                                                    <td>{quantity}</td>
+                                                    <td>{formatCurrency(rate)}</td>
+                                                    <td>{formatCurrency(discount)}</td>
+                                                    <td>{description}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
                                 </tbody>
                             </table>
                         </div>

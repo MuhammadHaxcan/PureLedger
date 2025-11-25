@@ -1,0 +1,15 @@
+/* Modal styles to ensure dropdowns work properly */
+.custom-modal .modal-content {
+  overflow: visible !important;
+}
+
+.custom-modal-body {
+  overflow: visible !important;
+  position: relative;
+}
+
+/* Ensure modal dialog doesn't clip content */
+.custom-modal .modal-dialog {
+  overflow: visible !important;
+}
+

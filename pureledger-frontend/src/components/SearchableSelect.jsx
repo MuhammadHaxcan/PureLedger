@@ -20,9 +20,20 @@ const SearchableSelect = ({
   const dropdownRef = useRef(null);
 
   // Find selected option (handle null values for "All" options)
+  // Use loose equality to handle type coercion (number vs string)
   const selectedOption = options.find(opt => {
     const optValue = opt.id !== undefined ? opt.id : opt.value;
-    return (optValue === value) || (optValue === null && value === null) || (optValue === '' && (value === null || value === ''));
+    // Handle strict equality first
+    if (optValue === value) return true;
+    // Handle null/empty cases
+    if ((optValue === null || optValue === '') && (value === null || value === '')) return true;
+    // Handle type coercion for numbers (e.g., 5 === "5" should match)
+    if (optValue != null && value != null) {
+      const optNum = Number(optValue);
+      const valNum = Number(value);
+      if (!isNaN(optNum) && !isNaN(valNum) && optNum === valNum) return true;
+    }
+    return false;
   });
   const displayValue = selectedOption ? (selectedOption.name || selectedOption.label || selectedOption.text) : '';
 

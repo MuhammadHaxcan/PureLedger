@@ -116,10 +116,13 @@ const Categories = () => {
           ...cat,
           hasAccountAssociations: response.data.hasAccountAssociations
         });
+        // Ensure projectId and accountTypeId are numbers, not strings
+        const projectId = cat.projectId ? Number(cat.projectId) : null;
+        const accountTypeId = cat.accountTypeId ? Number(cat.accountTypeId) : null;
         setFormData({
           categoryName: cat.categoryName || '',
-          projectId: cat.projectId || null,
-          accountTypeId: cat.accountTypeId || null
+          projectId: projectId,
+          accountTypeId: accountTypeId
         });
         setShowModal(true);
       } else {
@@ -460,7 +463,10 @@ const Categories = () => {
               <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
               <SearchableSelect
                 value={formData.projectId}
-                onChange={(value) => setFormData({ ...formData, projectId: value ?? null })}
+                onChange={(value) => {
+                  const numValue = value !== null && value !== undefined ? Number(value) : null;
+                  setFormData({ ...formData, projectId: numValue });
+                }}
                 options={projects.map(p => ({ id: p.projectId, name: p.projectName }))}
                 placeholder="Select Project"
                 required
@@ -486,7 +492,10 @@ const Categories = () => {
               <InputGroup.Text><i className="fas fa-list"></i></InputGroup.Text>
               <SearchableSelect
                 value={formData.accountTypeId}
-                onChange={(value) => setFormData({ ...formData, accountTypeId: value ?? null })}
+                onChange={(value) => {
+                  const numValue = value !== null && value !== undefined ? Number(value) : null;
+                  setFormData({ ...formData, accountTypeId: numValue });
+                }}
                 options={accountTypes.map(at => ({ id: at.id, name: at.name }))}
                 placeholder="Select Account Type"
                 required

@@ -38,8 +38,8 @@ const MasterReport = () => {
         balance: true
     });
     const [formData, setFormData] = useState({
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
+        startDate: '',
+        endDate: '',
         projectId: null,
         categoryId: null,
         accountId: null,
@@ -52,7 +52,7 @@ const MasterReport = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [previousBalance, setPreviousBalance] = useState(0);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 500;
+    const pageSize = 250;
     const searchTermRef = useRef('');
     const abortControllerRef = useRef(null);
     const activeFiltersRef = useRef(null);
@@ -497,7 +497,12 @@ const MasterReport = () => {
                             <div className="col-md-3 mb-3">
                                 <Form.Label>&nbsp;</Form.Label>
                                 <div className="d-grid">
-                                    <Button type="submit" variant="primary" disabled={generating}>
+                                    <Button 
+                                        type="submit" 
+                                        variant="primary" 
+                                        disabled={generating || !formData.projectId}
+                                        title={!formData.projectId ? 'Please select a project' : ''}
+                                    >
                                         {generating ? (
                                             <>
                                                 <span className="spinner-border spinner-border-sm me-2" role="status"></span>

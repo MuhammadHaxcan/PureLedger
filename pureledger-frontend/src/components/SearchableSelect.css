@@ -36,6 +36,15 @@
   overflow: visible !important;
 }
 
+/* Ensure modal body allows dropdown to overflow */
+.modal-body {
+  overflow: visible !important;
+}
+
+.modal-content {
+  overflow: visible !important;
+}
+
 .select-container {
   position: relative;
   width: 100%;
@@ -52,7 +61,7 @@
   background: white;
   border: 1px solid #ced4da;
   border-radius: 0.25rem;
-  z-index: 9999;
+  z-index: 1060; /* Higher than Bootstrap modal z-index (1055) */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   display: none;
   margin-top: 2px;
@@ -68,7 +77,7 @@
   background: white;
   border: 1px solid #ced4da;
   border-radius: 0.25rem;
-  z-index: 9999;
+  z-index: 1060; /* Higher than Bootstrap modal z-index (1055) */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   display: none;
   margin-top: 2px;
