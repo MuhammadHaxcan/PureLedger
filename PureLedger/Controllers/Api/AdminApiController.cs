@@ -462,79 +462,23 @@ namespace PureLedger.Controllers.Api
         }
 
         [HttpPost("project-cartage-settings")]
-        [Consumes("multipart/form-data", "application/json")]
-        public async Task<IActionResult> SaveProjectCartageSettings()
+        public async Task<IActionResult> SaveProjectCartageSettings([FromBody] ViewModels.ProjectCartageSettingsViewModel viewModel)
         {
             try
             {
-                ProjectCartageSettings? model = null;
-                IFormFile? projectImage = null;
-                
-                if (Request.ContentType?.Contains("application/json") == true)
+                if (viewModel == null)
                 {
-                    Request.EnableBuffering();
-                    if (Request.Body.CanSeek)
-                    {
-                        Request.Body.Position = 0;
-                    }
-                    
-                    using var reader = new StreamReader(Request.Body, leaveOpen: true);
-                    var body = await reader.ReadToEndAsync();
-                    
-                    if (!string.IsNullOrEmpty(body))
-                    {
-                        var jsonOptions = new System.Text.Json.JsonSerializerOptions
-                        {
-                            PropertyNameCaseInsensitive = true
-                        };
-                        
-                        var viewModel = System.Text.Json.JsonSerializer.Deserialize<ViewModels.ProjectCartageSettingsViewModel>(body, jsonOptions);
-                        
-                        if (viewModel != null)
-                        {
-                            model = new ProjectCartageSettings
-                            {
-                                Id = viewModel.Id,
-                                ProjectId = viewModel.ProjectId,
-                                ForExpenseAccountId = viewModel.ForExpenseAccountId,
-                                CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId,
-                                ProjectImage = viewModel.ProjectImageBase64
-                            };
-                        }
-                    }
-                }
-                else if (Request.HasFormContentType)
-                {
-                    var formModel = await Request.ReadFormAsync();
-                    
-                    if (formModel != null && int.TryParse(formModel["Id"].ToString(), out var id) &&
-                        int.TryParse(formModel["ProjectId"].ToString(), out var projectId))
-                    {
-                        model = new ProjectCartageSettings
-                        {
-                            Id = id,
-                            ProjectId = projectId,
-                            ForExpenseAccountId = int.TryParse(formModel["ForExpenseAccountId"].ToString(), out var forExpenseId) ? forExpenseId : null,
-                            CartageTransporterCategoryId = int.TryParse(formModel["CartageTransporterCategoryId"].ToString(), out var cartageId) ? cartageId : null
-                        };
-                    }
-                    
-                    projectImage = Request.Form.Files.GetFile("projectImage");
+                    return BadRequest(new { success = false, message = "Invalid request data." });
                 }
 
-                if (model == null)
+                var model = new ProjectCartageSettings
                 {
-                    return BadRequest(new { success = false, message = "Invalid request data - model could not be deserialized." });
-                }
-
-                if (projectImage != null)
-                {
-                    using var memoryStream = new MemoryStream();
-                    await projectImage.CopyToAsync(memoryStream);
-                    var imageBytes = memoryStream.ToArray();
-                    var base64String = Convert.ToBase64String(imageBytes);
-                    model.ProjectImage = $"data:{projectImage.ContentType};base64,{base64String}";
-                }
+                    Id = viewModel.Id,
+                    ProjectId = viewModel.ProjectId,
+                    ForExpenseAccountId = viewModel.ForExpenseAccountId,
+                    CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId,
+                    ProjectImage = viewModel.ProjectImageBase64
+                };
 
                 var validationResults = new List<ValidationResult>();
                 var validationContext = new ValidationContext(model);

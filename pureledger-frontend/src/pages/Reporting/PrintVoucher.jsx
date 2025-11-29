@@ -114,20 +114,20 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
             <div className="logo-container">
               {(() => {
                 const projectImage = voucherData.projectImage || voucherData.ProjectImage;
-                console.log('Checking image for voucher:', voucherData.jvId || voucherData.JvId, 'Image:', projectImage);
                 if (projectImage) {
-                  const imageUrl = `${getBaseUrl()}/uploads/projects/${projectImage}`;
-                  console.log('Image URL:', imageUrl);
+                  // Check if it's a base64 string (starts with "data:") or a file path
+                  const imageSrc = projectImage.startsWith('data:') 
+                    ? projectImage 
+                    : `${getBaseUrl()}/uploads/projects/${projectImage}`;
+                  
                   return (
                     <img 
-                      src={imageUrl} 
+                      src={imageSrc} 
                       className="logo" 
                       alt="Project Logo"
                       onError={(e) => {
-                        console.error('Image load error:', e.target.src);
                         e.target.src = '/images/logo.png';
                       }}
-                      onLoad={() => console.log('Image loaded successfully:', imageUrl)}
                     />
                   );
                 }
