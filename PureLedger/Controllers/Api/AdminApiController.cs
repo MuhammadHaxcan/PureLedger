@@ -148,6 +148,11 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                if (model == null)
+                {
+                    return BadRequest(new { success = false, message = "Invalid request data" });
+                }
+
                 // Ensure AccessPermissions is properly set (even if empty array)
                 if (model.AccessPermissions == null)
                 {
@@ -158,6 +163,18 @@ namespace PureLedger.Controllers.Api
                 if (model.ProjectIds == null)
                 {
                     model.ProjectIds = new List<int>();
+                }
+
+                // For new users, password is required
+                if (model.UserId == 0 && string.IsNullOrWhiteSpace(model.Password))
+                {
+                    ModelState.AddModelError("Password", "Password is required for new users");
+                }
+
+                // Validate password confirmation if password is provided
+                if (!string.IsNullOrWhiteSpace(model.Password) && model.Password != model.ConfirmPassword)
+                {
+                    ModelState.AddModelError("ConfirmPassword", "Passwords do not match");
                 }
 
                 if (!ModelState.IsValid)
@@ -409,10 +426,42 @@ namespace PureLedger.Controllers.Api
                     settings = await _authService.GetProjectCartageSettingsAsync(projectId.Value);
                 }
 
+                // Convert image byte array to base64 for frontend if settings exist
+                string? projectImageBase64 = null;
+                string? projectImageContentType = null;
+                if (settings != null && settings.ProjectImage != null && settings.ProjectImage.Length > 0)
+                {
+                    projectImageBase64 = Convert.ToBase64String(settings.ProjectImage);
+                    projectImageContentType = settings.ProjectImageContentType;
+                    // Add data URL prefix for easy display
+                    var contentType = !string.IsNullOrEmpty(settings.ProjectImageContentType) 
+                        ? settings.ProjectImageContentType 
+                        : "image/png";
+                    projectImageBase64 = $"data:{contentType};base64,{projectImageBase64}";
+                }
+
+                object settingsData;
+                if (settings != null)
+                {
+                    settingsData = new
+                    {
+                        id = settings.Id,
+                        projectId = settings.ProjectId,
+                        forExpenseAccountId = settings.ForExpenseAccountId ?? (int?)null,
+                        cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
+                        projectImage = projectImageBase64,
+                        projectImageContentType = projectImageContentType
+                    };
+                }
+                else
+                {
+                    settingsData = new { projectId = projectId ?? 0 };
+                }
+
                 return Ok(new
                 {
                     success = true,
-                    data = settings ?? new ProjectCartageSettings { ProjectId = projectId ?? 0 },
+                    data = settingsData,
                     projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }),
                     accounts = accounts.Select(a => new { id = a.AccountId, name = a.AccountName }),
                     categories = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName })
@@ -431,18 +480,62 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                // Handle JSON body if model is null (from JSON request)
-                if (model == null)
+                // Handle JSON body if model is null (from JSON request with base64 image)
+                if (model == null && Request.ContentType?.Contains("application/json") == true)
                 {
-                    // Try to read from body as JSON
-                    using var reader = new StreamReader(Request.Body);
+                    Request.EnableBuffering();
+                    Request.Body.Position = 0;
+                    using var reader = new StreamReader(Request.Body, leaveOpen: true);
                     var body = await reader.ReadToEndAsync();
+                    Request.Body.Position = 0;
+                    
                     if (!string.IsNullOrEmpty(body))
                     {
-                        model = System.Text.Json.JsonSerializer.Deserialize<ProjectCartageSettings>(body, new System.Text.Json.JsonSerializerOptions
+                        // Try to deserialize as ViewModel first (for base64 image)
+                        var viewModel = System.Text.Json.JsonSerializer.Deserialize<ViewModels.ProjectCartageSettingsViewModel>(body, new System.Text.Json.JsonSerializerOptions
                         {
                             PropertyNameCaseInsensitive = true
                         });
+                        
+                        if (viewModel != null)
+                        {
+                            // Convert ViewModel to Model
+                            model = new ProjectCartageSettings
+                            {
+                                Id = viewModel.Id,
+                                ProjectId = viewModel.ProjectId,
+                                ForExpenseAccountId = viewModel.ForExpenseAccountId,
+                                CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId
+                            };
+                            
+                            // Handle base64 image
+                            if (!string.IsNullOrEmpty(viewModel.ProjectImageBase64))
+                            {
+                                try
+                                {
+                                    // Remove data URL prefix if present
+                                    var base64Data = viewModel.ProjectImageBase64.Contains(",") 
+                                        ? viewModel.ProjectImageBase64.Split(',')[1] 
+                                        : viewModel.ProjectImageBase64;
+                                    
+                                    model.ProjectImage = Convert.FromBase64String(base64Data);
+                                    model.ProjectImageContentType = viewModel.ProjectImageContentType ?? "image/png";
+                                }
+                                catch (FormatException ex)
+                                {
+                                    _logger.LogWarning(ex, "Invalid base64 image data provided");
+                                    return BadRequest(new { success = false, message = "Invalid image data format" });
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Fallback: try to deserialize as ProjectCartageSettings directly
+                            model = System.Text.Json.JsonSerializer.Deserialize<ProjectCartageSettings>(body, new System.Text.Json.JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+                        }
                     }
                 }
 
@@ -451,38 +544,16 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, message = "Invalid request data" });
                 }
 
+                // Handle image upload from FormData (IFormFile)
                 if (projectImage != null)
                 {
-                    // Generate unique filename
-                    string uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileName(projectImage.FileName)}";
-                    string uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects");
-                    
-                    // Create directory if it doesn't exist
-                    if (!Directory.Exists(uploadsFolder))
+                    // Save image as byte array in database
+                    using (var memoryStream = new MemoryStream())
                     {
-                        Directory.CreateDirectory(uploadsFolder);
+                        await projectImage.CopyToAsync(memoryStream);
+                        model.ProjectImage = memoryStream.ToArray();
+                        model.ProjectImageContentType = projectImage.ContentType;
                     }
-
-                    string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                    // Save file
-                    using (var fileStream = new FileStream(filePath, FileMode.Create))
-                    {
-                        await projectImage.CopyToAsync(fileStream);
-                    }
-
-                    // Delete old image if exists
-                    if (!string.IsNullOrEmpty(model.ProjectImage))
-                    {
-                        string oldFilePath = Path.Combine(uploadsFolder, model.ProjectImage);
-                        if (System.IO.File.Exists(oldFilePath))
-                        {
-                            System.IO.File.Delete(oldFilePath);
-                        }
-                    }
-
-                    // Update model with new image path
-                    model.ProjectImage = uniqueFileName;
                 }
 
                 await _authService.SaveProjectCartageSettingsAsync(model);
@@ -563,6 +634,18 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, data = (object?)null });
                 }
 
+                // Convert image byte array to base64 for frontend
+                string? projectImageBase64 = null;
+                if (settings.ProjectImage != null && settings.ProjectImage.Length > 0)
+                {
+                    projectImageBase64 = Convert.ToBase64String(settings.ProjectImage);
+                    // Add data URL prefix for easy display
+                    var contentType = !string.IsNullOrEmpty(settings.ProjectImageContentType) 
+                        ? settings.ProjectImageContentType 
+                        : "image/png";
+                    projectImageBase64 = $"data:{contentType};base64,{projectImageBase64}";
+                }
+
                 return Ok(new
                 {
                     success = true,
@@ -572,7 +655,8 @@ namespace PureLedger.Controllers.Api
                         projectId = settings.ProjectId,
                         forExpenseAccountId = settings.ForExpenseAccountId ?? (int?)null,
                         cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
-                        projectImage = settings.ProjectImage ?? (string?)null
+                        projectImage = projectImageBase64,
+                        projectImageContentType = settings.ProjectImageContentType
                     }
                 });
             }

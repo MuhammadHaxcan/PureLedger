@@ -78,9 +78,21 @@
   background: #555;
 }
 
-/* Ensure modal body allows overflow */
+/* Ensure modal body allows overflow for dropdowns but scrolls content */
 .modal-body {
-  overflow: visible !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(90vh - 200px);
+}
+
+/* Ensure cards within modal scroll properly */
+.modal-body .card {
+  overflow: visible;
+}
+
+.modal-body .card-body {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Ensure controller header wraps properly on small screens */

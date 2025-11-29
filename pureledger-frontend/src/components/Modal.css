@@ -1,15 +1,32 @@
 /* Modal styles to ensure dropdowns work properly */
 .custom-modal .modal-content {
   overflow: visible !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .custom-modal-body {
-  overflow: visible !important;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
+  max-height: calc(90vh - 120px);
+  padding: 1rem;
 }
 
 /* Ensure modal dialog doesn't clip content */
 .custom-modal .modal-dialog {
   overflow: visible !important;
+  max-width: 90vw;
+}
+
+/* Ensure scrollable sections within modal body work correctly */
+.custom-modal-body .card {
+  overflow: visible;
+}
+
+.custom-modal-body .card-body {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 

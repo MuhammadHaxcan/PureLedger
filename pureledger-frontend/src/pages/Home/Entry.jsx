@@ -107,7 +107,10 @@ const HomeEntry = () => {
       }
     } catch (error) {
       console.error('Error loading entry data:', error);
-      setError('Failed to load entry data');
+      const errorMessage = error.message || 
+                          error.response?.data?.message || 
+                          'Failed to load entry data. Please try again.';
+      setError(errorMessage);
       setBookersLoaded(true); // Mark as loaded even on error to show the warning
     }
   };

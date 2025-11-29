@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
-import apiClient from '../../services/api';
+import apiClient, { fileToBase64, validateImageFile, base64ToBlobUrl } from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 
 const CartageSettings = () => {
@@ -48,9 +48,9 @@ const CartageSettings = () => {
             projectImage: response.data.data.projectImage || null
           });
           
-          // Load image preview if exists
+          // Load image preview if exists (now as base64)
           if (response.data.data.projectImage) {
-            setImagePreview(`https://localhost:7062/uploads/projects/${response.data.data.projectImage}`);
+            setImagePreview(response.data.data.projectImage);
           }
           
           // Load accounts if FOR expense account is set
@@ -100,12 +100,12 @@ const CartageSettings = () => {
           projectId: settings.projectId,
           forExpenseAccountId: settings.forExpenseAccountId || null,
           cartageTransporterCategoryId: settings.cartageTransporterCategoryId || null,
-          projectImage: settings.projectImage || null
+          projectImage: settings.projectImage || null // Now stores base64 string
         }));
         
-        // Load image preview
+        // Load image preview (now as base64)
         if (settings.projectImage) {
-          setImagePreview(`https://localhost:7062/uploads/projects/${settings.projectImage}`);
+          setImagePreview(settings.projectImage);
         } else {
           setImagePreview(null);
         }
@@ -180,16 +180,27 @@ const CartageSettings = () => {
     loadAccountsByCategory(categoryId);
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate image file
+      const validation = validateImageFile(file, 5); // 5MB max
+      if (!validation.valid) {
+        setError(validation.error);
+        e.target.value = ''; // Clear file input
+        return;
+      }
+
       setProjectImageFile(file);
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+      // Create preview using base64
+      try {
+        const base64 = await fileToBase64(file);
+        setImagePreview(base64);
+      } catch (error) {
+        console.error('Error reading image file:', error);
+        setError('Failed to read image file');
+        e.target.value = '';
+      }
     }
   };
 
@@ -212,23 +223,36 @@ const CartageSettings = () => {
     setLoading(true);
 
     try {
-      // Create FormData for file upload
-      const submitData = new FormData();
-      submitData.append('Id', formData.id || '0');
-      submitData.append('ProjectId', formData.projectId.toString());
-      submitData.append('ForExpenseAccountId', formData.forExpenseAccountId ? formData.forExpenseAccountId.toString() : '');
-      submitData.append('CartageTransporterCategoryId', formData.cartageTransporterCategoryId ? formData.cartageTransporterCategoryId.toString() : '');
-      submitData.append('ProjectImage', formData.projectImage || '');
+      // Convert image to base64 if a new file was selected
+      let projectImageBase64 = null;
+      let projectImageContentType = null;
       
       if (projectImageFile) {
-        submitData.append('projectImage', projectImageFile);
+        projectImageBase64 = await fileToBase64(projectImageFile);
+        projectImageContentType = projectImageFile.type;
+        // Remove data URL prefix if present (backend will handle it)
+        if (projectImageBase64.includes(',')) {
+          projectImageBase64 = projectImageBase64.split(',')[1];
+        }
+      } else if (formData.projectImage && formData.projectImage.startsWith('data:')) {
+        // If existing image is base64, extract just the base64 part
+        projectImageBase64 = formData.projectImage.split(',')[1];
+        // Extract content type from data URL
+        const match = formData.projectImage.match(/data:([^;]+);base64/);
+        projectImageContentType = match ? match[1] : 'image/png';
       }
 
-      const response = await apiClient.post('/AdminApi/project-cartage-settings', submitData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // Send as JSON with base64 image
+      const submitData = {
+        Id: formData.id || 0,
+        ProjectId: formData.projectId,
+        ForExpenseAccountId: formData.forExpenseAccountId || null,
+        CartageTransporterCategoryId: formData.cartageTransporterCategoryId || null,
+        ProjectImageBase64: projectImageBase64,
+        ProjectImageContentType: projectImageContentType
+      };
+
+      const response = await apiClient.post('/AdminApi/project-cartage-settings', submitData);
       
       if (response.data.success) {
         setSuccess(response.data.message || 'Project cartage settings saved successfully');

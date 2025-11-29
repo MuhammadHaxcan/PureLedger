@@ -27,8 +27,13 @@ namespace PureLedger.Models
         // Mark as nullable
         public virtual Category? CartageTransporterCategory { get; set; }
 
-        [StringLength(255)]
-        public string? ProjectImage { get; set; }
+        // Store image as byte array in database
+        [Column(TypeName = "bytea")]
+        public byte[]? ProjectImage { get; set; }
+        
+        // Store image content type (e.g., "image/png", "image/jpeg")
+        [StringLength(50)]
+        public string? ProjectImageContentType { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

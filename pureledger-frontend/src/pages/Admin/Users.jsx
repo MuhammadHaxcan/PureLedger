@@ -214,15 +214,15 @@ const Users = () => {
       
       const userData = {
         userId: editingUser?.userId || 0,
-        username: formData.username,
-        fullName: formData.fullName,
-        email: formData.email || '',
+        username: formData.username.trim(),
+        fullName: formData.fullName.trim(),
+        email: (formData.email || '').trim() || null,
         password: formData.password || '',
         confirmPassword: formData.confirmPassword || '',
         isAdmin: formData.isAdmin || false,
         isActive: formData.isActive !== undefined ? formData.isActive : true,
-        ProjectIds: projectIds,
-        AccessPermissions: accessPermissions
+        projectIds: projectIds,
+        accessPermissions: accessPermissions
       };
 
       const response = editingUser

@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,19 +11,13 @@ using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
+using PureLedger.Middleware;
 using System.Linq;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllersWithViews()
-    .AddJsonOptions(options =>
-    {
-        // Configure JSON serialization to handle both camelCase and PascalCase
-        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-    });
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -63,7 +56,7 @@ builder.Services.AddHttpContextAccessor();
 
 // Configure CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:5173", "http://localhost:3000" };
+    ?? new[] { "http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "https://localhost:5173", "https://localhost:5174" };
 
 builder.Services.AddCors(options =>
 {
@@ -72,8 +65,21 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials()
+              .SetPreflightMaxAge(TimeSpan.FromSeconds(3600));
     });
+    
+    // Also add a default policy for development
+    if (builder.Environment.IsDevelopment())
+    {
+        options.AddDefaultPolicy(policy =>
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+    }
 });
 
 // Configure JWT Authentication
@@ -99,28 +105,6 @@ builder.Services.AddAuthentication(options =>
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
-})
-.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-{
-    options.Cookie.HttpOnly = true;
-    options.ExpireTimeSpan = TimeSpan.FromHours(24);
-    options.LoginPath = "/Account/Login";
-    options.AccessDeniedPath = "/Account/AccessDenied";
-    options.SlidingExpiration = true;
-    options.Cookie.Name = "PureLedgerAuth";
-    options.Events = new CookieAuthenticationEvents
-    {
-        OnRedirectToLogin = context =>
-        {
-            if (context.Request.Path.StartsWithSegments("/Account/Login"))
-            {
-                context.Response.StatusCode = 200;
-                return Task.CompletedTask;
-            }
-            context.Response.Redirect(context.RedirectUri);
-            return Task.CompletedTask;
-        }
-    };
 });
 
 // Register LedgerDbContext directly with connection string from configuration
@@ -145,24 +129,16 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile));
 
-// Add session support
-builder.Services.AddDistributedMemoryCache();
-builder.Services.AddSession(options =>
-{   
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
 
-// Configure MVC options for global authorization filter
+// Configure API options for global authorization filter
 builder.Services.Configure<MvcOptions>(options =>
 {
-    // Create a policy that allows anonymous access
+    // Create a policy that requires authenticated user
     var policy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
         
-    // Global authorization filter applied to all controllers
+    // Global authorization filter applied to all API controllers
     // Individual controllers/actions can override with [AllowAnonymous]
     options.Filters.Add(new AuthorizeFilter(policy));
 });
@@ -172,23 +148,24 @@ builder.Services.AddScoped<IProjectCartageSettingsRepository, ProjectCartageSett
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// Add global exception handling middleware - must be early in the pipeline
+app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
 
 app.UseRouting();
 
 // Add CORS - must be before UseAuthentication
 app.UseCors("AllowReactApp");
 
-// Add session and authentication - IMPORTANT: order matters here
-app.UseSession();
+// Add authentication - IMPORTANT: order matters here
 app.UseAuthentication(); // Must come before UseAuthorization
 app.UseAuthorization();
 
@@ -196,24 +173,5 @@ app.UseAuthorization();
 
 // API routes
 app.MapControllers();
-
-// MVC routes (for backward compatibility if needed)
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Entry}/{id?}");
-    
-// Add redirect for root URL to provide a better landing experience
-app.MapGet("/", context => {
-    // Don't redirect if already authenticated
-    if (context.User.Identity?.IsAuthenticated == true)
-    {
-        context.Response.Redirect("/Home/Entry");
-        return Task.CompletedTask;
-    }
-    
-    // Simple redirect without ReturnUrl to prevent loops
-    context.Response.Redirect("/Account/Login");
-    return Task.CompletedTask;
-}).AllowAnonymous();
 
 app.Run();

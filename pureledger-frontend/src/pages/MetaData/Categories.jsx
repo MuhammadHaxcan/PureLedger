@@ -42,7 +42,7 @@ const Categories = () => {
       }
     } catch (error) {
       console.error('Error loading projects:', error);
-      setError('Failed to load projects. Please refresh the page.');
+      setError(error.message || error.response?.data?.message || 'Failed to load projects. Please refresh the page.');
     }
   };
 
@@ -55,7 +55,7 @@ const Categories = () => {
       }
     } catch (error) {
       console.error('Error loading account types:', error);
-      setError('Failed to load account types. Please refresh the page.');
+      setError(error.message || error.response?.data?.message || 'Failed to load account types. Please refresh the page.');
     }
   };
 
@@ -71,7 +71,7 @@ const Categories = () => {
       }
     } catch (error) {
       console.error('Error loading categories:', error);
-      setError('Failed to load categories. Please try again.');
+      setError(error.message || error.response?.data?.message || 'Failed to load categories. Please try again.');
     } finally {
       setLoading(false);
     }

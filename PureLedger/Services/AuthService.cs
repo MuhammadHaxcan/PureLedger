@@ -108,13 +108,13 @@ namespace PureLedger.Services
             
             var newUser = new User
             {
-                Username = model.Username,
+                Username = model.Username.Trim(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password),
-                FullName = model.FullName,
-                Email = model.Email,
+                FullName = model.FullName.Trim(),
+                Email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim(),
                 IsAdmin = model.IsAdmin,
                 Subroute = subroute,
-                IsActive = true,
+                IsActive = model.IsActive,
                 CreatedDate = DateTime.UtcNow
             };
 

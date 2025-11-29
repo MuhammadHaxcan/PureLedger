@@ -21,7 +21,9 @@ const Login = () => {
     setLoading(false);
 
     if (result.success) {
-      navigate('/');
+      // Redirect to the first accessible route or default
+      const redirectTo = result.redirectTo || '/';
+      navigate(redirectTo);
     } else {
       setError(result.message || 'Invalid username or password');
     }

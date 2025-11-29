@@ -49,12 +49,16 @@ namespace PureLedger.Services
                 .GetCartageEntriesByJournalVoucherIdAsync(journalVoucherId);
             var cartageEntry = cartageEntryList.FirstOrDefault();
 
-            // Get project image from cartage settings
+            // Get project image from cartage settings (convert byte[] to base64)
             string? projectImage = null;
             var projectCartageSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(project.ProjectId);
-            if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
+            if (projectCartageSettings?.ProjectImage != null && projectCartageSettings.ProjectImage.Length > 0)
             {
-                projectImage = projectCartageSettings.ProjectImage;
+                var base64String = Convert.ToBase64String(projectCartageSettings.ProjectImage);
+                var contentType = !string.IsNullOrEmpty(projectCartageSettings.ProjectImageContentType) 
+                    ? projectCartageSettings.ProjectImageContentType 
+                    : "image/png";
+                projectImage = $"data:{contentType};base64,{base64String}";
             }
 
             var viewModel = new JournalVoucherReportViewModel
@@ -99,12 +103,16 @@ namespace PureLedger.Services
 
             var customerDetails = ParseCustomerInfo(customerInfo);
             
-            // Get project image from cartage settings
+            // Get project image from cartage settings (convert byte[] to base64)
             string? projectImage = null;
             var projectCartageSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(project.ProjectId);
-            if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
+            if (projectCartageSettings?.ProjectImage != null && projectCartageSettings.ProjectImage.Length > 0)
             {
-                projectImage = projectCartageSettings.ProjectImage;
+                var base64String = Convert.ToBase64String(projectCartageSettings.ProjectImage);
+                var contentType = !string.IsNullOrEmpty(projectCartageSettings.ProjectImageContentType) 
+                    ? projectCartageSettings.ProjectImageContentType 
+                    : "image/png";
+                projectImage = $"data:{contentType};base64,{base64String}";
             }
 
             var viewModel = new JournalVoucherReportViewModel

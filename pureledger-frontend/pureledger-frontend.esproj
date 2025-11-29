@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.2752196">
+  <PropertyGroup>
+    <StartupCommand>npm</StartupCommand>
+    <StartupArguments>run dev</StartupArguments>
+    <WorkingDirectory>$(MSBuildProjectDirectory)</WorkingDirectory>
+    <JavaScriptTestRoot>src\</JavaScriptTestRoot>
+    <JavaScriptTestFramework>Vitest</JavaScriptTestFramework>
+    <!-- Allows the build (or compile) script located on package.json to run on Build -->
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+    <!-- Folder where production build objects will be placed -->
+    <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
+    <!-- Prevent NuGet restore for JavaScript projects -->
+    <EnableDefaultItems>true</EnableDefaultItems>
+    <!-- Launch browser when starting -->
+    <LaunchBrowser>true</LaunchBrowser>
+    <LaunchUrl>http://localhost:5173</LaunchUrl>
+  </PropertyGroup>
+  <Target Name="Restore" />
+  <Target Name="Build" />
+  <Target Name="RestorePackages" BeforeTargets="Restore">
+    <!-- Skip NuGet restore for JavaScript projects -->
+  </Target>
+</Project>
