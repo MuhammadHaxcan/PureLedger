@@ -90,8 +90,8 @@
                     <div class="logo-container">
                         @if (!string.IsNullOrEmpty(Model.ProjectImage))
                         {
-                            <!-- Use project specific image if available -->
-                            <img src="@Url.Content($"~/uploads/projects/{Model.ProjectImage}")" class="logo" alt="Project Logo" />
+                            <!-- Use project specific image if available - ProjectImage is now a base64 data URL -->
+                            <img src="@Model.ProjectImage" class="logo" alt="Project Logo" />
                         }
                         else
                         {

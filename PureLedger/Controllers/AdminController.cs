@@ -292,36 +292,23 @@ namespace PureLedger.Controllers
         {
             if (projectImage != null)
             {
-                // Generate unique filename
-                string uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileName(projectImage.FileName)}";
-                string uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "projects");
-                
-                // Create directory if it doesn't exist
-                if (!Directory.Exists(uploadsFolder))
+                // Convert IFormFile to byte array
+                using (var memoryStream = new MemoryStream())
                 {
-                    Directory.CreateDirectory(uploadsFolder);
+                    await projectImage.CopyToAsync(memoryStream);
+                    model.ProjectImage = memoryStream.ToArray();
+                    model.ProjectImageContentType = projectImage.ContentType;
                 }
-
-                string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                // Save file
-                using (var fileStream = new FileStream(filePath, FileMode.Create))
+            }
+            else
+            {
+                // If no new image provided, preserve existing image from database
+                var existingSettings = await _authService.GetProjectCartageSettingsAsync(model.ProjectId);
+                if (existingSettings != null)
                 {
-                    await projectImage.CopyToAsync(fileStream);
+                    model.ProjectImage = existingSettings.ProjectImage;
+                    model.ProjectImageContentType = existingSettings.ProjectImageContentType;
                 }
-
-                // Delete old image if exists
-                if (!string.IsNullOrEmpty(model.ProjectImage))
-                {
-                    string oldFilePath = Path.Combine(uploadsFolder, model.ProjectImage);
-                    if (System.IO.File.Exists(oldFilePath))
-                    {
-                        System.IO.File.Delete(oldFilePath);
-                    }
-                }
-
-                // Update model with new image path
-                model.ProjectImage = uniqueFileName;
             }
 
             await _authService.SaveProjectCartageSettingsAsync(model);
@@ -367,6 +354,13 @@ namespace PureLedger.Controllers
                     return Json(null);
                 }
 
+                // Convert byte[] to base64 string for JSON response
+                string? projectImageBase64 = null;
+                if (settings.ProjectImage != null && settings.ProjectImage.Length > 0)
+                {
+                    projectImageBase64 = Convert.ToBase64String(settings.ProjectImage);
+                }
+
                 // Create a simplified anonymous object without navigation properties to avoid circular references
                 var result = new
                 {
@@ -374,7 +368,8 @@ namespace PureLedger.Controllers
                     projectId = settings.ProjectId,
                     forExpenseAccountId = settings.ForExpenseAccountId,
                     cartageTransporterCategoryId = settings.CartageTransporterCategoryId,
-                    projectImage = settings.ProjectImage // Added project image
+                    projectImage = projectImageBase64, // Base64 string
+                    projectImageContentType = settings.ProjectImageContentType
                 };
 
                 return Json(result);

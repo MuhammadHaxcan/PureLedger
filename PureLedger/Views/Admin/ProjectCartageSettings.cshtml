@@ -29,7 +29,7 @@
             <form asp-action="ProjectCartageSettings" method="post" id="cartage-settings-form" enctype="multipart/form-data">
                 <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                 <input type="hidden" asp-for="Id" />
-                <input type="hidden" asp-for="ProjectImage" />
+                @* ProjectImage is now byte[] and handled via IFormFile, no hidden field needed *@
 
                 <div class="mb-3">
                     <label class="form-label">Project <span class="text-danger">*</span></label>
@@ -81,9 +81,12 @@
                         <input type="file" class="form-control" id="projectImage" name="projectImage" accept="image/*">
                     </div>
                     <div id="imagePreviewContainer" class="mt-2">
-                        @if (!string.IsNullOrEmpty(Model?.ProjectImage))
+                        @if (Model?.ProjectImage != null && Model.ProjectImage.Length > 0)
                         {
-                            <img src="@Url.Content($"~/uploads/projects/{Model.ProjectImage}")"
+                            var base64Image = Convert.ToBase64String(Model.ProjectImage);
+                            var contentType = Model.ProjectImageContentType ?? "image/png";
+                            var imageSrc = $"data:{contentType};base64,{base64Image}";
+                            <img src="@imageSrc"
                                  class="img-thumbnail" style="max-height: 200px;"
                                  alt="Project image">
                         }
