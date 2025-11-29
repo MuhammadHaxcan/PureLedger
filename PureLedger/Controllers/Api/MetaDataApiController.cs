@@ -1075,6 +1075,103 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        [HttpGet("accounts-by-criteria")]
+        public async Task<IActionResult> GetAccountsByCriteria([FromQuery] int projectId, [FromQuery] int? categoryId = null)
+        {
+            try
+            {
+                _logger.LogInformation("GetAccountsByCriteria called with projectId: {ProjectId}, categoryId: {CategoryId}", projectId, categoryId);
+                
+                // Get all accounts with details
+                var allAccounts = await _metaDataService.GetAllAccountsAsync();
+                
+                // Filter by project (through category relationship)
+                var filteredAccounts = allAccounts.Where(a => 
+                    a.Category != null && 
+                    a.Category.ProjectId == projectId &&
+                    (!categoryId.HasValue || a.CategoryId == categoryId.Value)
+                ).Select(a => new {
+                    accountId = a.AccountId,
+                    accountName = a.AccountName,
+                    categoryId = a.CategoryId,
+                    categoryName = a.Category?.CategoryName,
+                    accountGroupId = a.AccountGroupId,
+                    accountGroupName = a.AccountGroup?.AccountGroupName,
+                    projectId = a.Category?.ProjectId,
+                    projectName = a.Category?.Project?.ProjectName,
+                    isEnabled = a.IsEnabled
+                }).ToList();
+
+                _logger.LogInformation("Returning {AccountCount} accounts for project {ProjectId}", filteredAccounts.Count, projectId);
+                
+                return Ok(new
+                {
+                    success = true,
+                    data = filteredAccounts
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading accounts for project {ProjectId}, category {CategoryId}", projectId, categoryId);
+                return StatusCode(500, new { success = false, message = $"Error loading accounts: {ex.Message}" });
+            }
+        }
+
+        [HttpGet("categories-by-project-for-view/{projectId}")]
+        public async Task<IActionResult> GetCategoriesByProjectForView(int projectId)
+        {
+            try
+            {
+                _logger.LogInformation("GetCategoriesByProjectForView called with projectId: {ProjectId}", projectId);
+                
+                var categories = await _metaDataService.GetCategoriesByProjectAsync(projectId);
+                _logger.LogInformation("Found {CategoryCount} categories for project {ProjectId}", categories.Count, projectId);
+                
+                // Get full category details with navigation properties
+                var fullCategories = new List<object>();
+                foreach (var category in categories)
+                {
+                    dynamic categoryData = category;
+                    int categoryId = categoryData.categoryId;
+
+                    var fullCategory = await _metaDataService.GetCategoryByIdAsync(categoryId);
+                    if (fullCategory != null)
+                    {
+                        fullCategories.Add(new
+                        {
+                            categoryId = fullCategory.CategoryId,
+                            categoryName = fullCategory.CategoryName,
+                            projectId = fullCategory.ProjectId,
+                            accountTypeId = fullCategory.AccountTypeId,
+                            project = new
+                            {
+                                projectId = fullCategory.Project?.ProjectId,
+                                projectName = fullCategory.Project?.ProjectName
+                            },
+                            accountType = new
+                            {
+                                accountTypeId = fullCategory.AccountType?.AccountTypeId,
+                                accountTypeName = fullCategory.AccountType?.AccountTypeName
+                            }
+                        });
+                    }
+                }
+
+                _logger.LogInformation("Returning {CategoryCount} full category details for project {ProjectId}", fullCategories.Count, projectId);
+                
+                return Ok(new
+                {
+                    success = true,
+                    data = fullCategories
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading categories for project {ProjectId}", projectId);
+                return StatusCode(500, new { success = false, message = $"Error loading categories: {ex.Message}" });
+            }
+        }
+
         #endregion
     }
 }

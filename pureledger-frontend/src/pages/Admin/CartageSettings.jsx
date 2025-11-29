@@ -209,12 +209,6 @@ const CartageSettings = () => {
     setError('');
     setSuccess('');
 
-    // Validation: At least one of FOR account or Cartage category must be selected
-    if (!formData.forExpenseAccountId && !formData.cartageTransporterCategoryId) {
-      setError('At least one of FOR Expense Account or Cartage Transporter Category must be selected.');
-      return;
-    }
-
     if (!formData.projectId) {
       setError('Project is required.');
       return;
@@ -225,39 +219,49 @@ const CartageSettings = () => {
     try {
       // Convert image to base64 if a new file was selected
       let projectImageBase64 = null;
-      let projectImageContentType = null;
       
       if (projectImageFile) {
+        // Convert file to base64 data URL (includes data: prefix)
         projectImageBase64 = await fileToBase64(projectImageFile);
-        projectImageContentType = projectImageFile.type;
-        // Remove data URL prefix if present (backend will handle it)
-        if (projectImageBase64.includes(',')) {
-          projectImageBase64 = projectImageBase64.split(',')[1];
+      } else if (formData.projectImage) {
+        // Use existing image (already in base64 format, may or may not have data: prefix)
+        projectImageBase64 = formData.projectImage;
+        // Ensure it has data URL prefix if it doesn't
+        if (!projectImageBase64.startsWith('data:')) {
+          projectImageBase64 = `data:image/png;base64,${projectImageBase64}`;
         }
-      } else if (formData.projectImage && formData.projectImage.startsWith('data:')) {
-        // If existing image is base64, extract just the base64 part
-        projectImageBase64 = formData.projectImage.split(',')[1];
-        // Extract content type from data URL
-        const match = formData.projectImage.match(/data:([^;]+);base64/);
-        projectImageContentType = match ? match[1] : 'image/png';
       }
 
-      // Send as JSON with base64 image
+      // Send as JSON with base64 image (full data URL)
+      const toNumberOrNull = (value) => {
+        if (value === null || value === undefined || value === '') {
+          return null;
+        }
+        const num = Number(value);
+        return isNaN(num) ? null : num;
+      };
+      
+      const forExpenseAccountId = toNumberOrNull(formData.forExpenseAccountId);
+      const cartageTransporterCategoryId = toNumberOrNull(formData.cartageTransporterCategoryId);
+      
+      if (forExpenseAccountId === null && cartageTransporterCategoryId === null) {
+        setError('At least one of FOR Expense Account or Cartage Transporter Category must be selected.');
+        setLoading(false);
+        return;
+      }
+      
       const submitData = {
-        Id: formData.id || 0,
-        ProjectId: formData.projectId,
-        ForExpenseAccountId: formData.forExpenseAccountId || null,
-        CartageTransporterCategoryId: formData.cartageTransporterCategoryId || null,
-        ProjectImageBase64: projectImageBase64,
-        ProjectImageContentType: projectImageContentType
+        id: formData.id ?? 0,
+        projectId: Number(formData.projectId),
+        forExpenseAccountId: forExpenseAccountId,
+        cartageTransporterCategoryId: cartageTransporterCategoryId,
+        projectImageBase64: projectImageBase64 ?? null
       };
 
       const response = await apiClient.post('/AdminApi/project-cartage-settings', submitData);
       
       if (response.data.success) {
         setSuccess(response.data.message || 'Project cartage settings saved successfully');
-        // If file was selected, we might need a separate upload endpoint
-        // For now, the API might need to be updated to handle file uploads
         setTimeout(() => {
           setSuccess('');
         }, 3000);
@@ -265,8 +269,22 @@ const CartageSettings = () => {
         setError(response.data.message || 'Failed to save settings');
       }
     } catch (error) {
-      console.error('Error saving settings:', error);
-      setError(error.response?.data?.message || 'Failed to save cartage settings');
+      // Extract error message from response
+      let errorMessage = 'Failed to save cartage settings';
+      if (error.response?.data) {
+        if (error.response.data.errors && Array.isArray(error.response.data.errors) && error.response.data.errors.length > 0) {
+          // Join all error messages
+          errorMessage = error.response.data.errors.join('. ');
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -280,7 +298,12 @@ const CartageSettings = () => {
 
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
-          <i className="fas fa-exclamation-circle me-2"></i>{error}
+          <i className="fas fa-exclamation-circle me-2"></i>
+          <div>
+            {error.split('. ').map((err, idx) => (
+              <div key={idx}>{err}</div>
+            ))}
+          </div>
         </Alert>
       )}
 

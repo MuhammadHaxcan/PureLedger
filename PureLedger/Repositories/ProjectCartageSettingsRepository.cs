@@ -32,11 +32,10 @@ public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepositor
             existing.ForExpenseAccountId = settings.ForExpenseAccountId;
             existing.CartageTransporterCategoryId = settings.CartageTransporterCategoryId;
 
-            // Only update the image if a new one is provided (byte[] instead of string)
-            if (settings.ProjectImage != null && settings.ProjectImage.Length > 0)
+            // Update the image if a new one is provided (base64 string)
+            if (!string.IsNullOrEmpty(settings.ProjectImage))
             {
                 existing.ProjectImage = settings.ProjectImage;
-                existing.ProjectImageContentType = settings.ProjectImageContentType;
             }
 
             _dbContext.ProjectCartageSettings.Update(existing);

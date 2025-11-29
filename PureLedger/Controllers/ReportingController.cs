@@ -63,12 +63,10 @@ namespace PureLedger.Controllers
                 if (voucher != null)
                 {
                     var projectCartageSettings = await _reportingService.GetProjectCartageSettingsAsync(voucher.ProjectId);
-                    if (projectCartageSettings?.ProjectImage != null && projectCartageSettings.ProjectImage.Length > 0)
+                    if (!string.IsNullOrEmpty(projectCartageSettings?.ProjectImage))
                     {
-                        // Convert byte[] to base64 string for the report
-                        var base64Image = Convert.ToBase64String(projectCartageSettings.ProjectImage);
-                        var contentType = projectCartageSettings.ProjectImageContentType ?? "image/png";
-                        report.ProjectImage = $"data:{contentType};base64,{base64Image}";
+                        // ProjectImage is already stored as base64 string
+                        report.ProjectImage = projectCartageSettings.ProjectImage;
                     }
                 }
             }

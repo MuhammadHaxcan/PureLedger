@@ -81,12 +81,9 @@
                         <input type="file" class="form-control" id="projectImage" name="projectImage" accept="image/*">
                     </div>
                     <div id="imagePreviewContainer" class="mt-2">
-                        @if (Model?.ProjectImage != null && Model.ProjectImage.Length > 0)
+                        @if (!string.IsNullOrEmpty(Model?.ProjectImage))
                         {
-                            var base64Image = Convert.ToBase64String(Model.ProjectImage);
-                            var contentType = Model.ProjectImageContentType ?? "image/png";
-                            var imageSrc = $"data:{contentType};base64,{base64Image}";
-                            <img src="@imageSrc"
+                            <img src="@Model.ProjectImage"
                                  class="img-thumbnail" style="max-height: 200px;"
                                  alt="Project image">
                         }

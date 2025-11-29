@@ -292,22 +292,14 @@ namespace PureLedger.Controllers
         {
             if (projectImage != null)
             {
-                // Convert IFormFile to byte array
+                // Convert IFormFile to base64 string
                 using (var memoryStream = new MemoryStream())
                 {
                     await projectImage.CopyToAsync(memoryStream);
-                    model.ProjectImage = memoryStream.ToArray();
-                    model.ProjectImageContentType = projectImage.ContentType;
-                }
-            }
-            else
-            {
-                // If no new image provided, preserve existing image from database
-                var existingSettings = await _authService.GetProjectCartageSettingsAsync(model.ProjectId);
-                if (existingSettings != null)
-                {
-                    model.ProjectImage = existingSettings.ProjectImage;
-                    model.ProjectImageContentType = existingSettings.ProjectImageContentType;
+                    var imageBytes = memoryStream.ToArray();
+                    // Convert to base64 string and add data URL prefix
+                    var base64String = Convert.ToBase64String(imageBytes);
+                    model.ProjectImage = $"data:{projectImage.ContentType};base64,{base64String}";
                 }
             }
 
@@ -355,12 +347,7 @@ namespace PureLedger.Controllers
                 }
 
                 // Convert byte[] to base64 string for JSON response
-                string? projectImageBase64 = null;
-                if (settings.ProjectImage != null && settings.ProjectImage.Length > 0)
-                {
-                    projectImageBase64 = Convert.ToBase64String(settings.ProjectImage);
-                }
-
+                // ProjectImage is already stored as base64 string, return directly
                 // Create a simplified anonymous object without navigation properties to avoid circular references
                 var result = new
                 {
@@ -368,8 +355,7 @@ namespace PureLedger.Controllers
                     projectId = settings.ProjectId,
                     forExpenseAccountId = settings.ForExpenseAccountId,
                     cartageTransporterCategoryId = settings.CartageTransporterCategoryId,
-                    projectImage = projectImageBase64, // Base64 string
-                    projectImageContentType = settings.ProjectImageContentType
+                    projectImage = settings.ProjectImage // Already base64 string
                 };
 
                 return Json(result);

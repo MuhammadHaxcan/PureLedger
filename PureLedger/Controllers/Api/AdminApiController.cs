@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Models;
@@ -426,20 +427,7 @@ namespace PureLedger.Controllers.Api
                     settings = await _authService.GetProjectCartageSettingsAsync(projectId.Value);
                 }
 
-                // Convert image byte array to base64 for frontend if settings exist
-                string? projectImageBase64 = null;
-                string? projectImageContentType = null;
-                if (settings != null && settings.ProjectImage != null && settings.ProjectImage.Length > 0)
-                {
-                    projectImageBase64 = Convert.ToBase64String(settings.ProjectImage);
-                    projectImageContentType = settings.ProjectImageContentType;
-                    // Add data URL prefix for easy display
-                    var contentType = !string.IsNullOrEmpty(settings.ProjectImageContentType) 
-                        ? settings.ProjectImageContentType 
-                        : "image/png";
-                    projectImageBase64 = $"data:{contentType};base64,{projectImageBase64}";
-                }
-
+                // ProjectImage is already stored as base64 string, return directly
                 object settingsData;
                 if (settings != null)
                 {
@@ -449,8 +437,7 @@ namespace PureLedger.Controllers.Api
                         projectId = settings.ProjectId,
                         forExpenseAccountId = settings.ForExpenseAccountId ?? (int?)null,
                         cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
-                        projectImage = projectImageBase64,
-                        projectImageContentType = projectImageContentType
+                        projectImage = settings.ProjectImage // Already base64 string
                     };
                 }
                 else
@@ -476,84 +463,87 @@ namespace PureLedger.Controllers.Api
 
         [HttpPost("project-cartage-settings")]
         [Consumes("multipart/form-data", "application/json")]
-        public async Task<IActionResult> SaveProjectCartageSettings([FromForm] ProjectCartageSettings? model, IFormFile? projectImage)
+        public async Task<IActionResult> SaveProjectCartageSettings()
         {
             try
             {
-                // Handle JSON body if model is null (from JSON request with base64 image)
-                if (model == null && Request.ContentType?.Contains("application/json") == true)
+                ProjectCartageSettings? model = null;
+                IFormFile? projectImage = null;
+                
+                if (Request.ContentType?.Contains("application/json") == true)
                 {
                     Request.EnableBuffering();
-                    Request.Body.Position = 0;
+                    if (Request.Body.CanSeek)
+                    {
+                        Request.Body.Position = 0;
+                    }
+                    
                     using var reader = new StreamReader(Request.Body, leaveOpen: true);
                     var body = await reader.ReadToEndAsync();
-                    Request.Body.Position = 0;
                     
                     if (!string.IsNullOrEmpty(body))
                     {
-                        // Try to deserialize as ViewModel first (for base64 image)
-                        var viewModel = System.Text.Json.JsonSerializer.Deserialize<ViewModels.ProjectCartageSettingsViewModel>(body, new System.Text.Json.JsonSerializerOptions
+                        var jsonOptions = new System.Text.Json.JsonSerializerOptions
                         {
                             PropertyNameCaseInsensitive = true
-                        });
+                        };
+                        
+                        var viewModel = System.Text.Json.JsonSerializer.Deserialize<ViewModels.ProjectCartageSettingsViewModel>(body, jsonOptions);
                         
                         if (viewModel != null)
                         {
-                            // Convert ViewModel to Model
                             model = new ProjectCartageSettings
                             {
                                 Id = viewModel.Id,
                                 ProjectId = viewModel.ProjectId,
                                 ForExpenseAccountId = viewModel.ForExpenseAccountId,
-                                CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId
+                                CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId,
+                                ProjectImage = viewModel.ProjectImageBase64
                             };
-                            
-                            // Handle base64 image
-                            if (!string.IsNullOrEmpty(viewModel.ProjectImageBase64))
-                            {
-                                try
-                                {
-                                    // Remove data URL prefix if present
-                                    var base64Data = viewModel.ProjectImageBase64.Contains(",") 
-                                        ? viewModel.ProjectImageBase64.Split(',')[1] 
-                                        : viewModel.ProjectImageBase64;
-                                    
-                                    model.ProjectImage = Convert.FromBase64String(base64Data);
-                                    model.ProjectImageContentType = viewModel.ProjectImageContentType ?? "image/png";
-                                }
-                                catch (FormatException ex)
-                                {
-                                    _logger.LogWarning(ex, "Invalid base64 image data provided");
-                                    return BadRequest(new { success = false, message = "Invalid image data format" });
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // Fallback: try to deserialize as ProjectCartageSettings directly
-                            model = System.Text.Json.JsonSerializer.Deserialize<ProjectCartageSettings>(body, new System.Text.Json.JsonSerializerOptions
-                            {
-                                PropertyNameCaseInsensitive = true
-                            });
                         }
                     }
+                }
+                else if (Request.HasFormContentType)
+                {
+                    var formModel = await Request.ReadFormAsync();
+                    
+                    if (formModel != null && int.TryParse(formModel["Id"].ToString(), out var id) &&
+                        int.TryParse(formModel["ProjectId"].ToString(), out var projectId))
+                    {
+                        model = new ProjectCartageSettings
+                        {
+                            Id = id,
+                            ProjectId = projectId,
+                            ForExpenseAccountId = int.TryParse(formModel["ForExpenseAccountId"].ToString(), out var forExpenseId) ? forExpenseId : null,
+                            CartageTransporterCategoryId = int.TryParse(formModel["CartageTransporterCategoryId"].ToString(), out var cartageId) ? cartageId : null
+                        };
+                    }
+                    
+                    projectImage = Request.Form.Files.GetFile("projectImage");
                 }
 
                 if (model == null)
                 {
-                    return BadRequest(new { success = false, message = "Invalid request data" });
+                    return BadRequest(new { success = false, message = "Invalid request data - model could not be deserialized." });
                 }
 
-                // Handle image upload from FormData (IFormFile)
                 if (projectImage != null)
                 {
-                    // Save image as byte array in database
-                    using (var memoryStream = new MemoryStream())
-                    {
-                        await projectImage.CopyToAsync(memoryStream);
-                        model.ProjectImage = memoryStream.ToArray();
-                        model.ProjectImageContentType = projectImage.ContentType;
-                    }
+                    using var memoryStream = new MemoryStream();
+                    await projectImage.CopyToAsync(memoryStream);
+                    var imageBytes = memoryStream.ToArray();
+                    var base64String = Convert.ToBase64String(imageBytes);
+                    model.ProjectImage = $"data:{projectImage.ContentType};base64,{base64String}";
+                }
+
+                var validationResults = new List<ValidationResult>();
+                var validationContext = new ValidationContext(model);
+                bool isValid = Validator.TryValidateObject(model, validationContext, validationResults, true);
+                
+                if (!isValid)
+                {
+                    var errors = validationResults.Select(v => v.ErrorMessage).ToList();
+                    return BadRequest(new { success = false, message = "Validation failed", errors = errors });
                 }
 
                 await _authService.SaveProjectCartageSettingsAsync(model);
@@ -561,8 +551,8 @@ namespace PureLedger.Controllers.Api
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error saving project cartage settings");
-                return StatusCode(500, new { success = false, message = "Error saving settings" });
+                _logger.LogError(ex, "Error saving project cartage settings: {Message}", ex.Message);
+                return StatusCode(500, new { success = false, message = $"Error saving settings: {ex.Message}" });
             }
         }
 
@@ -634,18 +624,7 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, data = (object?)null });
                 }
 
-                // Convert image byte array to base64 for frontend
-                string? projectImageBase64 = null;
-                if (settings.ProjectImage != null && settings.ProjectImage.Length > 0)
-                {
-                    projectImageBase64 = Convert.ToBase64String(settings.ProjectImage);
-                    // Add data URL prefix for easy display
-                    var contentType = !string.IsNullOrEmpty(settings.ProjectImageContentType) 
-                        ? settings.ProjectImageContentType 
-                        : "image/png";
-                    projectImageBase64 = $"data:{contentType};base64,{projectImageBase64}";
-                }
-
+                // ProjectImage is already stored as base64 string, return directly
                 return Ok(new
                 {
                     success = true,
@@ -655,8 +634,7 @@ namespace PureLedger.Controllers.Api
                         projectId = settings.ProjectId,
                         forExpenseAccountId = settings.ForExpenseAccountId ?? (int?)null,
                         cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
-                        projectImage = projectImageBase64,
-                        projectImageContentType = settings.ProjectImageContentType
+                        projectImage = settings.ProjectImage // Already base64 string
                     }
                 });
             }
