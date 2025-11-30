@@ -23,7 +23,7 @@ const AgingReport = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
   const [isAutoLoading, setIsAutoLoading] = useState(false);
-  const pageSize = 250;
+  const pageSize = 500;
   const observerRef = useRef(null);
   const loadingRef = useRef(null);
 

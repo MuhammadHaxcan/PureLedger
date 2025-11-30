@@ -313,6 +313,42 @@ namespace PureLedger.Services
                 return false;
 
             return _httpContextAccessor.HttpContext.User.IsInRole("Admin");
-        }   
+        }
+
+        // Signature management methods
+        public async Task<List<Signature>> GetAllSignaturesAsync()
+        {
+            return await _unitOfWork.Signatures.GetAllAsync();
+        }
+
+        public async Task<Signature?> GetSignatureByIdAsync(int id)
+        {
+            return await _unitOfWork.Signatures.GetByIdAsync(id);
+        }
+
+        public async Task<Signature?> GetActiveSignatureAsync()
+        {
+            return await _unitOfWork.Signatures.GetActiveAsync();
+        }
+
+        public async Task<Signature> CreateSignatureAsync(Signature signature)
+        {
+            return await _unitOfWork.Signatures.AddAsync(signature);
+        }
+
+        public async Task<Signature> UpdateSignatureAsync(Signature signature)
+        {
+            return await _unitOfWork.Signatures.UpdateAsync(signature);
+        }
+
+        public async Task<bool> DeleteSignatureAsync(int id)
+        {
+            return await _unitOfWork.Signatures.DeleteAsync(id);
+        }
+
+        public async Task SetActiveSignatureAsync(int id)
+        {
+            await _unitOfWork.Signatures.SetActiveAsync(id);
+        }
     }
 }

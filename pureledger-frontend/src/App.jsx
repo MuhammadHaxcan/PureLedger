@@ -27,6 +27,7 @@ import ProcessDC from './pages/DeliveryChallan/ProcessDC';
 import Users from './pages/Admin/Users';
 import EditProfile from './pages/Admin/EditProfile';
 import CartageSettings from './pages/Admin/CartageSettings';
+import Signatures from './pages/Admin/Signatures';
 import AccessDenied from './pages/Account/AccessDenied';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
@@ -81,6 +82,14 @@ function App() {
               element={
                 <ProtectedRoute requireAdmin={true}>
                   <CartageSettings />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/signatures" 
+              element={
+                <ProtectedRoute requireAdmin={true}>
+                  <Signatures />
                 </ProtectedRoute>
               } 
             />

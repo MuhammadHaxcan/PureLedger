@@ -234,6 +234,26 @@ body {
   tfoot {
     display: table-footer-group;
   }
+
+  .signature-image-container {
+    left: 50% !important;
+    top: -30px !important;
+    transform: translateX(-50%) !important;
+    -webkit-transform: translateX(-50%) !important;
+    position: absolute !important;
+    width: auto !important;
+    text-align: center !important;
+  }
+
+  .signature-image-container img {
+    margin: 0 auto !important;
+    display: block !important;
+  }
+
+  /* Ensure signature section cells are centered */
+  table[width="100%"] tbody tr td[width="33%"] {
+    text-align: center !important;
+  }
 }
 
 @page {

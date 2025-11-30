@@ -33,6 +33,9 @@ namespace PureLedger.Data
         public DbSet<Recipe> Recipes { get; set; }
         public DbSet<RecipeItem> RecipeItems { get; set; }
         public DbSet<Booker> Bookers { get; set; }
+        
+        // Signature table
+        public DbSet<Signature> Signatures { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -1,9 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { API_BASE_URL } from '../../services/api';
+import apiClient from '../../services/api';
 import '../../App.css';
 import './PrintVoucher.css';
 
 const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
+  const [activeSignature, setActiveSignature] = useState(null);
   // Get base URL for static files (remove /api from API_BASE_URL)
   const getBaseUrl = () => {
     const baseUrl = API_BASE_URL || 'https://localhost:7062/api';
@@ -23,10 +25,66 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
         .print-controls { display: none !important; }
         .card { border: none !important; box-shadow: none !important; }
         .card-body { padding: 0 !important; }
+        .signature-image { 
+          height: 64px !important;
+          max-height: 64px !important;
+          min-height: 64px !important;
+          width: auto !important;
+          max-width: none !important;
+          min-width: auto !important;
+          object-fit: contain !important;
+          display: block !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          image-rendering: -webkit-optimize-contrast !important;
+          image-rendering: crisp-edges !important;
+          transform: scale(1) !important;
+          -webkit-transform: scale(1) !important;
+          page-break-inside: avoid !important;
+          zoom: 1 !important;
+          -webkit-zoom: 1 !important;
+        }
+        img.signature-image {
+          height: 64px !important;
+        }
+        .signature-image-container {
+          height: 64px !important;
+          position: absolute !important;
+          left: 50% !important;
+          top: -30px !important;
+          transform: translateX(-50%) !important;
+          -webkit-transform: translateX(-50%) !important;
+          width: auto !important;
+          text-align: center !important;
+        }
+        .signature-image-container img {
+          margin: 0 auto !important;
+          display: block !important;
+        }
+        @page {
+          size: auto;
+          margin: 0;
+        }
       }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
+  }, []);
+
+  useEffect(() => {
+    // Fetch active signature
+    const fetchActiveSignature = async () => {
+      try {
+        const response = await apiClient.get('/AdminApi/signatures/active');
+        if (response.data.success && response.data.data) {
+          setActiveSignature(response.data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching active signature:', error);
+      }
+    };
+
+    fetchActiveSignature();
   }, []);
 
   if (!voucherData) return null;
@@ -446,27 +504,43 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
             <tbody>
               <tr>
                 <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
-                  <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
-                    &nbsp;
-                  </div>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                    Accountant
-                  </div>
-                </td>
-                <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
-                  <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
-                    {voucherData.authorizedBy || ''}
-                  </div>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                    Authorized By
+                  <div style={{ marginTop: '15px', paddingTop: '50px', position: 'relative' }}>
+                    <div style={{ borderTop: '1px solid #333' }}></div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px', marginTop: '5px' }}>
+                      Accountant
+                    </div>
                   </div>
                 </td>
                 <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
-                  <div style={{ borderBottom: '1px solid #333', height: '30px', marginBottom: '5px' }}>
-                    {voucherData.receivedBy || ''}
+                  <div style={{ marginTop: '15px', paddingTop: '50px', position: 'relative' }}>
+                    {activeSignature?.signatureImage && (() => {
+                      const signatureImage = activeSignature.signatureImage;
+                      const imageSrc = signatureImage.startsWith('data:image') 
+                        ? signatureImage 
+                        : `data:image/png;base64,${signatureImage}`;
+                      return (
+                        <div className="signature-image-container" style={{ position: 'absolute', top: '-30px', left: '50%', transform: 'translateX(-50%)', zIndex: 1 }}>
+                          <img 
+                            src={imageSrc}
+                            alt={activeSignature.name || 'Signature'}
+                            className="signature-image"
+                            style={{ height: '64px', width: 'auto', objectFit: 'contain', display: 'block' }}
+                          />
+                        </div>
+                      );
+                    })()}
+                    <div style={{ borderTop: '1px solid #333' }}></div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px', marginTop: '5px' }}>
+                      Authorized By
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>
-                    Received/Paid By
+                </td>
+                <td width="33%" style={{ textAlign: 'center', padding: '10px' }}>
+                  <div style={{ marginTop: '15px', paddingTop: '50px', position: 'relative' }}>
+                    <div style={{ borderTop: '1px solid #333' }}></div>
+                    <div style={{ fontWeight: 'bold', fontSize: '12px', marginTop: '5px' }}>
+                      Received/Paid By
+                    </div>
                   </div>
                 </td>
               </tr>

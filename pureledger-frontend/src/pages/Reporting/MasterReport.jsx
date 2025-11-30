@@ -54,7 +54,7 @@ const MasterReport = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [previousBalance, setPreviousBalance] = useState(0);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 250;
+    const pageSize = 500;
     const searchTermRef = useRef('');
     const abortControllerRef = useRef(null);
     const activeFiltersRef = useRef(null);

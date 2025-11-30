@@ -31,6 +31,15 @@ namespace PureLedger.Services.Interface
 
         // New method to get account by ID
         Task<Account?> GetAccountByIdAsync(int accountId);
+
+        // Signature management methods
+        Task<List<Signature>> GetAllSignaturesAsync();
+        Task<Signature?> GetSignatureByIdAsync(int id);
+        Task<Signature?> GetActiveSignatureAsync();
+        Task<Signature> CreateSignatureAsync(Signature signature);
+        Task<Signature> UpdateSignatureAsync(Signature signature);
+        Task<bool> DeleteSignatureAsync(int id);
+        Task SetActiveSignatureAsync(int id);
     }
 
 }

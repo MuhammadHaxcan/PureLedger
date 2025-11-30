@@ -44,6 +44,9 @@ const Layout = () => {
                       <NavDropdown.Item as={Link} to="/admin/cartage-settings">
                         <i className="fas fa-truck"></i> Cartage Settings
                       </NavDropdown.Item>
+                      <NavDropdown.Item as={Link} to="/admin/signatures">
+                        <i className="fas fa-signature"></i> Signatures
+                      </NavDropdown.Item>
                     </>
                   )}
                   <NavDropdown.Divider />

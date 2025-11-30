@@ -22,7 +22,7 @@ const MissedEntriesReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 250;
+    const pageSize = 500;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {

@@ -614,6 +614,252 @@ namespace PureLedger.Controllers.Api
                 return StatusCode(500, new { success = false, message = "Error loading projects" });
             }
         }
+
+        #region Signature Management
+
+        [HttpGet("signatures")]
+        public async Task<IActionResult> GetSignatures()
+        {
+            try
+            {
+                var signatures = await _authService.GetAllSignaturesAsync();
+                return Ok(new
+                {
+                    success = true,
+                    data = signatures.Select(s => new
+                    {
+                        id = s.Id,
+                        name = s.Name,
+                        signatureImage = s.SignatureImage, // Already base64 string
+                        isActive = s.IsActive,
+                        createdDate = s.CreatedDate
+                    })
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading signatures");
+                return StatusCode(500, new { success = false, message = "Error loading signatures" });
+            }
+        }
+
+        [HttpGet("signatures/{id}")]
+        public async Task<IActionResult> GetSignature(int id)
+        {
+            try
+            {
+                var signature = await _authService.GetSignatureByIdAsync(id);
+                if (signature == null)
+                {
+                    return NotFound(new { success = false, message = "Signature not found" });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        id = signature.Id,
+                        name = signature.Name,
+                        signatureImage = signature.SignatureImage,
+                        isActive = signature.IsActive,
+                        createdDate = signature.CreatedDate
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading signature {SignatureId}", id);
+                return StatusCode(500, new { success = false, message = "Error loading signature" });
+            }
+        }
+
+        [HttpGet("signatures/active")]
+        public async Task<IActionResult> GetActiveSignature()
+        {
+            try
+            {
+                var signature = await _authService.GetActiveSignatureAsync();
+                if (signature == null)
+                {
+                    return Ok(new { success = true, data = (object?)null });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        id = signature.Id,
+                        name = signature.Name,
+                        signatureImage = signature.SignatureImage,
+                        isActive = signature.IsActive
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading active signature");
+                return StatusCode(500, new { success = false, message = "Error loading active signature" });
+            }
+        }
+
+        [HttpPost("signatures")]
+        public async Task<IActionResult> CreateSignature([FromBody] SignatureViewModel model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        errors = ModelState.Values
+                            .SelectMany(v => v.Errors)
+                            .Select(e => e.ErrorMessage)
+                            .ToList()
+                    });
+                }
+
+                // Extract base64 data (remove data URL prefix if present)
+                string signatureImageBase64 = model.SignatureImageBase64 ?? string.Empty;
+                if (signatureImageBase64.StartsWith("data:image"))
+                {
+                    var base64Index = signatureImageBase64.IndexOf(",") + 1;
+                    signatureImageBase64 = signatureImageBase64.Substring(base64Index);
+                }
+
+                var signature = new Signature
+                {
+                    Name = model.Name,
+                    SignatureImage = signatureImageBase64,
+                    IsActive = false, // New signatures are inactive by default
+                    CreatedDate = DateTime.UtcNow
+                };
+
+                var createdSignature = await _authService.CreateSignatureAsync(signature);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Signature created successfully",
+                    data = new
+                    {
+                        id = createdSignature.Id,
+                        name = createdSignature.Name,
+                        signatureImage = createdSignature.SignatureImage,
+                        isActive = createdSignature.IsActive,
+                        createdDate = createdSignature.CreatedDate
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating signature");
+                return StatusCode(500, new { success = false, message = "Error creating signature" });
+            }
+        }
+
+        [HttpPut("signatures/{id}")]
+        public async Task<IActionResult> UpdateSignature(int id, [FromBody] SignatureViewModel model)
+        {
+            try
+            {
+                if (id != model.Id)
+                {
+                    return BadRequest(new { success = false, message = "Signature ID mismatch" });
+                }
+
+                var signature = await _authService.GetSignatureByIdAsync(id);
+                if (signature == null)
+                {
+                    return NotFound(new { success = false, message = "Signature not found" });
+                }
+
+                signature.Name = model.Name;
+
+                // Update image if provided
+                if (!string.IsNullOrEmpty(model.SignatureImageBase64))
+                {
+                    string signatureImageBase64 = model.SignatureImageBase64;
+                    if (signatureImageBase64.StartsWith("data:image"))
+                    {
+                        var base64Index = signatureImageBase64.IndexOf(",") + 1;
+                        signatureImageBase64 = signatureImageBase64.Substring(base64Index);
+                    }
+                    signature.SignatureImage = signatureImageBase64;
+                }
+
+                var updatedSignature = await _authService.UpdateSignatureAsync(signature);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Signature updated successfully",
+                    data = new
+                    {
+                        id = updatedSignature.Id,
+                        name = updatedSignature.Name,
+                        signatureImage = updatedSignature.SignatureImage,
+                        isActive = updatedSignature.IsActive,
+                        createdDate = updatedSignature.CreatedDate
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating signature {SignatureId}", id);
+                return StatusCode(500, new { success = false, message = "Error updating signature" });
+            }
+        }
+
+        [HttpPut("signatures/{id}/set-active")]
+        public async Task<IActionResult> SetActiveSignature(int id)
+        {
+            try
+            {
+                var signature = await _authService.GetSignatureByIdAsync(id);
+                if (signature == null)
+                {
+                    return NotFound(new { success = false, message = "Signature not found" });
+                }
+
+                await _authService.SetActiveSignatureAsync(id);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Active signature updated successfully"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting active signature {SignatureId}", id);
+                return StatusCode(500, new { success = false, message = "Error setting active signature" });
+            }
+        }
+
+        [HttpDelete("signatures/{id}")]
+        public async Task<IActionResult> DeleteSignature(int id)
+        {
+            try
+            {
+                var result = await _authService.DeleteSignatureAsync(id);
+                if (result)
+                {
+                    return Ok(new { success = true, message = "Signature deleted successfully" });
+                }
+
+                return NotFound(new { success = false, message = "Signature not found" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting signature {SignatureId}", id);
+                return StatusCode(500, new { success = false, message = "Error deleting signature" });
+            }
+        }
+
+        #endregion
     }
 }
 

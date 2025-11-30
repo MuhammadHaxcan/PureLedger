@@ -23,9 +23,9 @@
   --form-padding: 0.4rem 0.7rem;
   --border-radius: 0.375rem;
   --border-radius-lg: 0.5rem;
-  --font-size-sm: 0.85rem;
-  --font-size-base: 0.9rem;
-  --font-size-lg: 1rem;
+  --font-size-sm: 0.95rem; /* Increased by ~12% from 0.85rem */
+  --font-size-base: 1.05rem; /* Increased by ~17% from 0.9rem */
+  --font-size-lg: 1.15rem; /* Increased by 15% from 1rem */
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
@@ -56,7 +56,7 @@ input[type="number"].no-arrow {
 
 /* Base Styles */
 html {
-  font-size: 14px;
+  font-size: 16px; /* Increased by ~14% from 14px for better visibility */
   scroll-behavior: smooth;
 }
 
@@ -127,6 +127,45 @@ body {
 .card-body,
 .container-fluid {
   position: relative;
+}
+
+/* Custom wider container for consistent page width */
+.container-fluid,
+.container {
+  max-width: 1900px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.75rem;
+  padding-right: 1.75rem;
+}
+
+/* Responsive container adjustments */
+@media (min-width: 1400px) {
+  .container-fluid,
+  .container {
+    max-width: 1900px;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .container-fluid,
+  .container {
+    max-width: 1700px;
+  }
+}
+
+@media (min-width: 992px) and (max-width: 1199px) {
+  .container-fluid,
+  .container {
+    max-width: 1500px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .container-fluid,
+  .container {
+    max-width: 1300px;
+  }
 }
 
 .card-header {
@@ -252,7 +291,14 @@ h1, h2, h3, h4, h5, h6 {
 /* Responsive Design */
 @media (max-width: 768px) {
   html {
-    font-size: 12px;
+    font-size: 14px; /* Increased by 25% from 12px */
+  }
+  
+  .container-fluid,
+  .container {
+    max-width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
   .card-body {
