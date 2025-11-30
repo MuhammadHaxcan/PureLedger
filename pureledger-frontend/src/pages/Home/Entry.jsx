@@ -1038,6 +1038,9 @@ const HomeEntry = () => {
                             }}
                             onFocus={() => {
                               setFocusedFields(prev => ({ ...prev, [`debit-${index}`]: true }));
+                              if (!entry.debit && !entry.credit) {
+                                calculateRowAmounts(index);
+                              }
                             }}
                             onBlur={(e) => {
                               setFocusedFields(prev => {
@@ -1052,11 +1055,6 @@ const HomeEntry = () => {
                                   return updated;
                                 });
                                 updateTotals();
-                              }
-                            }}
-                            onFocus={() => {
-                              if (!entry.debit && !entry.credit) {
-                                calculateRowAmounts(index);
                               }
                             }}
                             onKeyDown={(e) => {
@@ -1135,6 +1133,9 @@ const HomeEntry = () => {
                             }}
                             onFocus={() => {
                               setFocusedFields(prev => ({ ...prev, [`credit-${index}`]: true }));
+                              if (!entry.debit && !entry.credit) {
+                                calculateRowAmounts(index);
+                              }
                             }}
                             onBlur={(e) => {
                               setFocusedFields(prev => {
@@ -1149,11 +1150,6 @@ const HomeEntry = () => {
                                   return updated;
                                 });
                                 updateTotals();
-                              }
-                            }}
-                            onFocus={() => {
-                              if (!entry.debit && !entry.credit) {
-                                calculateRowAmounts(index);
                               }
                             }}
                             onKeyDown={(e) => {
