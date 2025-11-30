@@ -62,7 +62,7 @@ builder.Services.AddHttpContextAccessor();
 
 // Configure CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "https://localhost:5173", "https://localhost:5174" };
+    ?? new[] { "http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "https://localhost:5173", "https://localhost:5174", "http://72.61.118.244:5000", "https://72.61.118.244:5000" };
 
 builder.Services.AddCors(options =>
 {
