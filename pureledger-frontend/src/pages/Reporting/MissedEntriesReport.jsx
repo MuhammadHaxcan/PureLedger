@@ -3,8 +3,10 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const MissedEntriesReport = () => {
+    usePageTitle('Missed Entries');
     const [projects, setProjects] = useState([]);
     const [allEntries, setAllEntries] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -202,49 +204,59 @@ const MissedEntriesReport = () => {
                 </div>
                 <div className="card-body">
                     <form id="filterForm" onSubmit={handleSubmit}>
-                        <div className="row g-3 align-items-end">
-                            <div className="col-md-3">
-                                <label className="form-label">Start Date</label>
-                                <input
+                        <div className="row">
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>Start Date</Form.Label>
+                                <Form.Control
                                     type="date"
-                                    className="form-control"
                                     id="startDate"
                                     value={formData.startDate}
                                     onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                                 />
                             </div>
-                            <div className="col-md-3">
-                                <label className="form-label">End Date</label>
-                                <input
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>End Date</Form.Label>
+                                <Form.Control
                                     type="date"
-                                    className="form-control"
                                     id="endDate"
                                     value={formData.endDate}
                                     onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                                 />
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-4 mb-3">
                                 <Form.Label>Project</Form.Label>
                                 <InputGroup>
                                     <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
                                     <SearchableSelect
                                         value={formData.projectId}
                                         onChange={(value) => setFormData({ ...formData, projectId: value ? parseInt(value) : null })}
-                                        options={[{ id: null, name: 'All Projects' }, ...projects.map(p => ({ id: p.id, name: p.name }))]}
-                                        placeholder="All Projects"
+                                        options={projects.map(p => ({ id: p.id, name: p.name }))}
+                                        placeholder="Select Project"
                                         disabled={searching}
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-2">
-                                <button 
-                                    type="submit" 
-                                    className="btn btn-primary w-100" 
-                                    disabled={searching || isLoadingMore}
-                                    title={searching ? 'Searching...' : ''}
-                                >
-                                    {searching ? <LoadingSpinner /> : <><i className="fas fa-search me-1"></i> Search</>}
-                                </button>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label>&nbsp;</Form.Label>
+                                <div className="d-grid">
+                                    <Button 
+                                        type="submit" 
+                                        variant="primary" 
+                                        disabled={searching || isLoadingMore}
+                                        title={searching ? 'Searching...' : ''}
+                                    >
+                                        {searching ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Searching...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-search me-1"></i> Search
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -264,7 +276,9 @@ const MissedEntriesReport = () => {
                         <h6 className="m-0 font-weight-bold text-primary">Missed Entries</h6>
                         <div>
                             {totalRecords > 0 && (
-                                <span className="badge bg-primary me-2">{allEntries.length} of {totalRecords}</span>
+                                <span className="badge bg-primary me-2">
+                                    {allEntries.length} of {totalRecords} entries
+                                </span>
                             )}
                             <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
                                 <i className="fas fa-file-csv me-1"></i> Export CSV
@@ -335,11 +349,6 @@ const MissedEntriesReport = () => {
                         {isLoadingMore && (
                             <div className="text-center my-3">
                                 <LoadingSpinner />
-                            </div>
-                        )}
-                        {!hasMoreData && allEntries.length > 0 && (
-                            <div className="text-center my-3 text-muted">
-                                End of report. Total records: {totalRecords}
                             </div>
                         )}
                     </div>

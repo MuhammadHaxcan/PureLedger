@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const AccessDenied = () => {
+    usePageTitle('Access Denied');
     const navigate = useNavigate();
     const location = useLocation();
     const { user, navigationMenu } = useAuth();

@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const EditProfile = () => {
+    usePageTitle('Edit Profile');
     const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);

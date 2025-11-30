@@ -4,9 +4,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import './Users.css';
 
 const Users = () => {
+  usePageTitle('Users');
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);

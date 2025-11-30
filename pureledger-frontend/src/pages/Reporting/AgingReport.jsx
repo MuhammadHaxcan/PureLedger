@@ -3,8 +3,10 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const AgingReport = () => {
+  usePageTitle('Aging Report');
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
   const [allEntries, setAllEntries] = useState([]);
@@ -345,11 +347,8 @@ const AgingReport = () => {
                   {allEntries.length} of {totalRecords} accounts
                 </span>
               )}
-              <Button variant="success" size="sm" onClick={() => window.print()} className="me-2">
-                <i className="fas fa-print me-1"></i>Print
-              </Button>
               <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
-                <i className="fas fa-file-csv me-1"></i>Export CSV
+                <i className="fas fa-file-csv me-1"></i> Export CSV
               </Button>
             </div>
           </Card.Header>
@@ -411,12 +410,6 @@ const AgingReport = () => {
               <div className="text-center my-3" ref={loadingRef}>
                 <LoadingSpinner />
                 <p className="text-muted mt-2">Loading more accounts...</p>
-              </div>
-            )}
-            {!hasMoreData && allEntries.length > 0 && (
-              <div className="text-center my-3 text-muted">
-                <i className="fas fa-check-circle me-2"></i>
-                All {totalRecords} accounts loaded
               </div>
             )}
           </Card.Body>

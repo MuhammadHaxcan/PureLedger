@@ -3,8 +3,10 @@ import { Card, Table, Button, Alert, Form, Badge } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Bookers = () => {
+  usePageTitle('Bookers');
   const [bookers, setBookers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

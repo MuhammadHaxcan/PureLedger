@@ -5,8 +5,10 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Modal from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Recipes = () => {
+    usePageTitle('Recipes');
     const [projects, setProjects] = useState([]);
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [recipes, setRecipes] = useState([]);

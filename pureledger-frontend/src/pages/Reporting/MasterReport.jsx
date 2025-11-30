@@ -4,6 +4,7 @@ import axios from 'axios';
 import apiClient, { API_BASE_URL } from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import './MasterReport.css';
 
 const buildVoucherUrl = (voucherId, type) => {
@@ -14,6 +15,7 @@ const buildVoucherUrl = (voucherId, type) => {
 };
 
 const MasterReport = () => {
+    usePageTitle('Master Report');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [accounts, setAccounts] = useState([]);
@@ -562,11 +564,21 @@ const MasterReport = () => {
                             <h6 className="m-0 font-weight-bold text-primary">
                                 <i className="fas fa-table me-2"></i>Master Report Results
                             </h6>
+                            <div>
+                                {totalRecords > 0 && (
+                                    <span className="badge bg-primary me-2">
+                                        {allEntries.length} of {totalRecords} entries
+                                    </span>
+                                )}
+                                <Button variant="outline-success" size="sm" onClick={handleExportMainReport} disabled={filteredEntries.length === 0}>
+                                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                                </Button>
+                            </div>
                         </Card.Header>
                         <Card.Body>
                             <div className="master-report-container">
-                                <div className="row mb-3 align-items-center">
-                                    <div className="col-md-9">
+                                <div className="row mb-3">
+                                    <div className="col-12">
                                         <Form.Label>Search</Form.Label>
                                         <InputGroup>
                                             <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
@@ -576,16 +588,6 @@ const MasterReport = () => {
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
                                         </InputGroup>
-                                    </div>
-                                    <div className="col-md-3 text-end">
-                                        <Form.Label className="d-block">&nbsp;</Form.Label>
-                                        <Button
-                                            variant="outline-success"
-                                            onClick={handleExportMainReport}
-                                            disabled={filteredEntries.length === 0}
-                                        >
-                                            <i className="fas fa-file-csv me-1"></i> Export CSV
-                                        </Button>
                                     </div>
                                 </div>
                                 <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
@@ -668,21 +670,11 @@ const MasterReport = () => {
                                 </Table>
                                 </div>
                             </div>
-                            {hasMoreData && (
+                            {hasMoreData && isLoadingMore && (
                                 <div className="text-center mt-3">
-                                    <div className="text-muted mb-2">
-                                        Loaded {allEntries.length} of {totalRecords} records
+                                    <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span className="visually-hidden">Loading more records...</span>
                                     </div>
-                                    {isLoadingMore && (
-                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
-                                            <span className="visually-hidden">Loading more records...</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            {!hasMoreData && allEntries.length > 0 && (
-                                <div className="text-center mt-3 text-muted">
-                                    All {allEntries.length} records loaded
                                 </div>
                             )}
                         </Card.Body>

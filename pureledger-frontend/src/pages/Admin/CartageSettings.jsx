@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
 import apiClient, { fileToBase64, validateImageFile, base64ToBlobUrl } from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const CartageSettings = () => {
+  usePageTitle('Cartage Settings');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

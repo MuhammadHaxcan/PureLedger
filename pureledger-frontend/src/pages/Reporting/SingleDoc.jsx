@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import PrintVoucher from './PrintVoucher';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const SingleDoc = () => {
+  usePageTitle('Single Document');
   const [voucherId, setVoucherId] = useState('');
   const [voucherType, setVoucherType] = useState('JV');
   const [loading, setLoading] = useState(false);
@@ -161,25 +163,28 @@ const SingleDoc = () => {
                       </Form.Select>
                     </Form.Group>
                   </div>
-                  <div className="col-md-3 d-flex align-items-end">
-                    <Button
-                      variant="primary"
-                      onClick={handleValidate}
-                      disabled={loading || !voucherId || parseInt(voucherId) <= 0}
-                      className="w-100"
-                      title={!voucherId || parseInt(voucherId) <= 0 ? 'Please enter a valid voucher ID' : ''}
-                    >
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          <i className="fas fa-file-alt me-2"></i>Generate
-                        </>
-                      )}
-                    </Button>
+                  <div className="col-md-3">
+                    <Form.Group className="mb-3">
+                      <Form.Label>&nbsp;</Form.Label>
+                      <Button
+                        variant="primary"
+                        onClick={handleValidate}
+                        disabled={loading || !voucherId || parseInt(voucherId) <= 0}
+                        className="w-100"
+                        title={!voucherId || parseInt(voucherId) <= 0 ? 'Please enter a valid voucher ID' : ''}
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-file-alt me-2"></i>Generate
+                          </>
+                        )}
+                      </Button>
+                    </Form.Group>
                   </div>
                 </div>
               </Form>

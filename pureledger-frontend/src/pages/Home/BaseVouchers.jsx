@@ -5,8 +5,10 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import ConfirmModal from '../../components/ConfirmModal';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const BaseVouchers = () => {
+    usePageTitle('Base Vouchers');
     const [vouchers, setVouchers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [loadingProjects, setLoadingProjects] = useState(true);

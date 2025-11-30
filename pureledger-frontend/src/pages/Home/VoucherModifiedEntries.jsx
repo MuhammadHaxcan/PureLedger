@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const VoucherModifiedEntries = () => {
+    usePageTitle('Voucher Modified Entries');
     const { jvId } = useParams();
     const [voucherData, setVoucherData] = useState(null);
     const [loading, setLoading] = useState(true);

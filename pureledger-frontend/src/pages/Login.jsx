@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 const Login = () => {
+  usePageTitle('Login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);

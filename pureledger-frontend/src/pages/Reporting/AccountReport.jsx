@@ -3,8 +3,10 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const AccountReport = () => {
+    usePageTitle('Account Report');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [accounts, setAccounts] = useState([]);
@@ -339,9 +341,16 @@ const AccountReport = () => {
                         <h6 className="m-0 font-weight-bold text-primary">
                             <i className="fas fa-table me-2"></i>Account Report Results
                         </h6>
-                        <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
-                            <i className="fas fa-file-csv me-1"></i> Export CSV
-                        </Button>
+                        <div>
+                            {totalRecords > 0 && (
+                                <span className="badge bg-primary me-2">
+                                    {allEntries.length} of {totalRecords} entries
+                                </span>
+                            )}
+                            <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
+                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                            </Button>
+                        </div>
                     </Card.Header>
                     <Card.Body>
                         <div className="row mb-3">
@@ -403,18 +412,6 @@ const AccountReport = () => {
                         {isLoadingMore && (
                             <div className="text-center my-3">
                                 <LoadingSpinner />
-                            </div>
-                        )}
-                        {!hasMoreData && allEntries.length > 0 && (
-                            <div className="text-center my-3 text-muted">
-                                End of report. Total records: {totalRecords}
-                            </div>
-                        )}
-                        {allEntries.length > 0 && totalRecords > 0 && (
-                            <div className="text-center my-2">
-                                <small className="text-muted">
-                                    Showing {allEntries.length} of {totalRecords} records
-                                </small>
                             </div>
                         )}
                     </Card.Body>

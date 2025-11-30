@@ -3,8 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, Form, Button, Alert, Table } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ProcessBaseVoucher = () => {
+    usePageTitle('Process Base Voucher');
     const { id } = useParams();
     const navigate = useNavigate();
     const [voucherData, setVoucherData] = useState(null);

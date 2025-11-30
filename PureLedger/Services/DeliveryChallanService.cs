@@ -859,7 +859,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = false
+                IsProcessed = true
             };
         }
 
@@ -879,7 +879,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = false
+                IsProcessed = true
             };
         }
 

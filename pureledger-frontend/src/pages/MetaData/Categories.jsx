@@ -4,8 +4,10 @@ import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Categories = () => {
+  usePageTitle('Categories');
   const [categories, setCategories] = useState([]);
   const [projects, setProjects] = useState([]);
   const [accountTypes, setAccountTypes] = useState([]);

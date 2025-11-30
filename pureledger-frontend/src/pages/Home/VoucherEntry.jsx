@@ -5,8 +5,10 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import ConfirmModal from '../../components/ConfirmModal';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const VoucherEntry = () => {
+    usePageTitle('Voucher Entry');
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [voucherId, setVoucherId] = useState(searchParams.get('jvId') || '');
@@ -263,33 +265,38 @@ const VoucherEntry = () => {
                 </div>
                 <div className="card-body py-2">
                     <form onSubmit={handleSearch}>
-                        <div className="row mb-2 align-items-end">
-                            <div className="col-md-5">
-                                <label htmlFor="voucherIdInput" className="form-label">Enter Voucher ID</label>
-                                <div className="input-group">
-                                    <span className="input-group-text"><i className="fas fa-hashtag"></i></span>
-                                    <input
+                        <div className="row">
+                            <div className="col-md-5 mb-3">
+                                <Form.Label htmlFor="voucherIdInput">Enter Voucher ID</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-hashtag"></i></InputGroup.Text>
+                                    <Form.Control
                                         type="number"
                                         id="voucherIdInput"
-                                        className="form-control no-arrow"
+                                        className="no-arrow"
                                         min="1"
                                         placeholder="Enter voucher ID to search"
                                         value={voucherId}
                                         onChange={(e) => setVoucherId(e.target.value)}
                                     />
-                                </div>
+                                </InputGroup>
                             </div>
-                            <div className="col-md-3 mt-md-0 mt-2">
-                                <button type="submit" className="btn btn-primary" disabled={loading} style={{ minWidth: '140px' }}>
-                                    {loading ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                            Loading...
-                                        </>
-                                    ) : (
-                                        <><i className="fas fa-search me-1"></i> Fetch Voucher</>
-                                    )}
-                                </button>
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>&nbsp;</Form.Label>
+                                <div className="d-grid">
+                                    <Button type="submit" variant="primary" disabled={loading}>
+                                        {loading ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                Loading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-search me-1"></i> Fetch Voucher
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </form>

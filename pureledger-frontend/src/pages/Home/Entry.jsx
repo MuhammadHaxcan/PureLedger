@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Table, Alert, Modal } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import './Entry.css';
 
 const HomeEntry = () => {
@@ -10,6 +11,8 @@ const HomeEntry = () => {
   const navigate = useNavigate();
   const editingVoucherId = searchParams.get('voucherId') ? parseInt(searchParams.get('voucherId')) : null;
   const isEditMode = editingVoucherId != null;
+  
+  usePageTitle(isEditMode ? 'Edit Entry' : 'Entry');
 
   // State
   const [projects, setProjects] = useState([]);
@@ -54,6 +57,9 @@ const HomeEntry = () => {
 
   // Refs for select dropdowns
   const selectDropdownsRef = useRef({});
+  
+  // Track focused fields to show raw input while typing
+  const [focusedFields, setFocusedFields] = useState({});
 
   // Load initial data
   useEffect(() => {
@@ -170,24 +176,50 @@ const HomeEntry = () => {
               }
             }
             
+            // Parse numeric values to ensure they're numbers
+            const parsedQty = entry.qty != null ? (typeof entry.qty === 'number' ? entry.qty : parseFloat(entry.qty)) : null;
+            const parsedRate = entry.rate != null ? (typeof entry.rate === 'number' ? entry.rate : parseFloat(entry.rate)) : null;
+            const parsedPercent = entry.percent != null ? (typeof entry.percent === 'number' ? entry.percent : parseFloat(entry.percent)) : 0;
+            const parsedDisc = entry.disc != null ? (typeof entry.disc === 'number' ? entry.disc : parseFloat(entry.disc)) : 0;
+            const parsedDebit = entry.debit != null ? (typeof entry.debit === 'number' ? entry.debit : parseFloat(entry.debit)) : null;
+            const parsedCredit = entry.credit != null ? (typeof entry.credit === 'number' ? entry.credit : parseFloat(entry.credit)) : null;
+            const parsedPkg = entry.pkg != null ? (typeof entry.pkg === 'number' ? entry.pkg : parseFloat(entry.pkg)) : (dataPkg != null ? (typeof dataPkg === 'number' ? dataPkg : parseFloat(dataPkg)) : null);
+            
+            // Calculate totalAmount and discount based on loaded values
+            const rbp = (entry.rbp || 'Y') === 'Y';
+            const qty = parsedQty || 0;
+            const rate = parsedRate || 0;
+            const pkg = parsedPkg || 0;
+            
+            let calculatedTotalAmount = 0;
+            if (rbp && pkg > 0) {
+              calculatedTotalAmount = pkg * qty * rate;
+            } else {
+              calculatedTotalAmount = qty * rate;
+            }
+            
+            // Recalculate discount based on totalAmount and percent
+            const calculatedDisc = parseFloat(((calculatedTotalAmount * parsedPercent) / 100).toFixed(2));
+            
             return {
               categoryId: entry.categoryId,
               accountId: entry.accountId,
-              pkg: entry.pkg || dataPkg,
+              pkg: parsedPkg,
               rbp: entry.rbp || 'Y',
               des: entry.des || '',
-              qty: entry.qty || null,
-              rate: entry.rate || null,
-              percent: entry.percent || 0,
-              disc: entry.disc || 0,
-              debit: entry.debit || null,
-              credit: entry.credit || null,
+              qty: parsedQty,
+              rate: parsedRate,
+              percent: parsedPercent,
+              disc: calculatedDisc, // Use recalculated discount
+              debit: parsedDebit,
+              credit: parsedCredit,
               accountGroup,
               accountType,
               dataPkg,
-              totalAmount: 0
+              totalAmount: calculatedTotalAmount
             };
           }));
+          
           setEntries(loadedEntries);
           setRowCategories(categoriesMap);
           setRowAccounts(accountsMap);
@@ -239,6 +271,9 @@ const HomeEntry = () => {
         setEntries(prev => {
           const updated = [...prev];
           if (updated[rowIndex]) {
+            // Check if entry already has a rate (preserve existing rates in edit mode)
+            const hasExistingRate = updated[rowIndex].rate != null && updated[rowIndex].rate !== 0;
+            
             updated[rowIndex] = {
               ...updated[rowIndex],
               accountGroup,
@@ -247,9 +282,13 @@ const HomeEntry = () => {
               pkg: updated[rowIndex].pkg || product.pkg || null
             };
             
-            // Set rate if not in edit mode and rate is available
-            if (!isEditMode && product.saleRate !== null && product.saleRate !== undefined) {
-              updated[rowIndex].rate = parseFloat(product.saleRate).toFixed(4);
+            // Set rate from product if:
+            // 1. Not in edit mode, OR
+            // 2. In edit mode but entry doesn't have an existing rate (new row)
+            if (product.saleRate !== null && product.saleRate !== undefined) {
+              if (!isEditMode || !hasExistingRate) {
+                updated[rowIndex].rate = parseFloat(parseFloat(product.saleRate).toFixed(4));
+              }
             }
           }
           return updated;
@@ -320,11 +359,28 @@ const HomeEntry = () => {
   };
 
   const handleAccountChange = async (rowIndex, accountId) => {
+    // Store which field has data before clearing
     setEntries(prev => {
+      const entry = prev[rowIndex];
+      const hasDebit = entry && entry.debit && entry.debit > 0;
+      const hasCredit = entry && entry.credit && entry.credit > 0;
+      const shouldRecalculate = hasDebit || hasCredit;
+      
+      // Store recalculation flag in a ref or state
+      if (shouldRecalculate) {
+        // Store in entry temporarily to know we need to recalculate
+        entry._needsRecalculation = hasDebit ? 'debit' : 'credit';
+      }
+      
       const updated = [...prev];
       updated[rowIndex] = {
         ...updated[rowIndex],
-        accountId
+        accountId,
+        rate: null, // Clear rate when account changes
+        rbp: 'Y', // Reset RBP to default when account changes
+        pkg: null, // Clear PKG when account changes
+        dataPkg: null, // Clear dataPkg when account changes
+        _needsRecalculation: shouldRecalculate ? (hasDebit ? 'debit' : 'credit') : null
       };
       return updated;
     });
@@ -334,12 +390,12 @@ const HomeEntry = () => {
       await loadProductDetails(accountId, rowIndex);
       // Trigger calculations for product accounts
       setTimeout(() => {
-        calculateRowAmounts(rowIndex);
+        calculateRowAmounts(rowIndex, true); // Pass flag to recalculate existing debit/credit
       }, 100);
     }
   };
 
-  const calculateRowAmounts = (rowIndex) => {
+  const calculateRowAmounts = (rowIndex, forceRecalculate = false) => {
     setEntries(prev => {
       const updated = [...prev];
       const entry = updated[rowIndex];
@@ -360,23 +416,50 @@ const HomeEntry = () => {
       
       // Calculate discount
       const percent = parseFloat(entry.percent) || 0;
-      const discount = (totalAmount * percent) / 100;
+      const discount = parseFloat(((totalAmount * percent) / 100).toFixed(2));
       
       // Calculate net amount (debit or credit)
       const netAmount = totalAmount - discount;
       
+      // Determine which field to update
+      const hasDebit = entry.debit && entry.debit > 0;
+      const hasCredit = entry.credit && entry.credit > 0;
+      const recalculationField = entry._needsRecalculation;
+      
+      // Always update discount and totalAmount
       updated[rowIndex] = {
         ...entry,
         disc: discount,
         totalAmount
       };
       
-      // Auto-set debit if both debit and credit are empty (not in edit mode with existing values)
-      if (!isEditMode || (!entry.debit && !entry.credit)) {
-        if (netAmount > 0) {
-          updated[rowIndex].debit = netAmount;
+      // Remove the recalculation flag
+      delete updated[rowIndex]._needsRecalculation;
+      
+      // If forceRecalculate is true and we have a recalculation field, recalculate that field
+      if (forceRecalculate && recalculationField && netAmount > 0) {
+        if (recalculationField === 'debit') {
+          updated[rowIndex].debit = parseFloat(netAmount.toFixed(2));
           updated[rowIndex].credit = null;
+        } else {
+          updated[rowIndex].credit = parseFloat(netAmount.toFixed(2));
+          updated[rowIndex].debit = null;
         }
+      }
+      // If debit has value, update it
+      else if (hasDebit && netAmount > 0) {
+        updated[rowIndex].debit = parseFloat(netAmount.toFixed(2));
+        updated[rowIndex].credit = null;
+      }
+      // If credit has value, update it
+      else if (hasCredit && netAmount > 0) {
+        updated[rowIndex].credit = parseFloat(netAmount.toFixed(2));
+        updated[rowIndex].debit = null;
+      }
+      // Auto-set debit if both are empty
+      else if (!hasDebit && !hasCredit && netAmount > 0) {
+        updated[rowIndex].debit = parseFloat(netAmount.toFixed(2));
+        updated[rowIndex].credit = null;
       }
       
       return updated;
@@ -704,18 +787,18 @@ const HomeEntry = () => {
               <Table bordered className="align-middle mb-0">
                 <thead className="table-primary">
                   <tr>
-                    <th>Category <span className="text-danger">*</span></th>
-                    <th>Account <span className="text-danger">*</span></th>
-                    <th>PKG</th>
-                    <th>RBP</th>
-                    <th>Description</th>
-                    <th>Qty <span className="text-danger" style={{ display: requireQuantity ? 'inline' : 'none' }}>*</span></th>
-                    <th>Rate</th>
-                    <th>%</th>
-                    <th>Discount</th>
-                    <th>Debit</th>
-                    <th>Credit</th>
-                    <th></th>
+                    <th className="text-center">Category <span className="text-danger">*</span></th>
+                    <th className="text-center">Account <span className="text-danger">*</span></th>
+                    <th className="text-center">PKG</th>
+                    <th className="text-center">RBP</th>
+                    <th className="text-center">Description</th>
+                    <th className="text-center">Qty <span className="text-danger" style={{ display: requireQuantity ? 'inline' : 'none' }}>*</span></th>
+                    <th className="text-center">Rate</th>
+                    <th className="text-center">%</th>
+                    <th className="text-center">Discount</th>
+                    <th className="text-center">Debit</th>
+                    <th className="text-center">Credit</th>
+                    <th className="text-center"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -793,6 +876,7 @@ const HomeEntry = () => {
                         <td>
                           <Form.Select
                             size="sm"
+                            className="rbp-select-no-arrow"
                             value={entry.rbp || 'Y'}
                             onChange={(e) => {
                               setEntries(prev => {
@@ -849,17 +933,26 @@ const HomeEntry = () => {
                             className="no-arrow"
                             min="0"
                             step="0.0001"
-                            value={entry.rate || ''}
+                            value={focusedFields[`rate-${index}`] ? (entry.rate != null ? entry.rate : '') : (entry.rate != null ? parseFloat(entry.rate).toFixed(4) : '')}
                             onChange={(e) => {
+                              const inputValue = e.target.value;
                               setEntries(prev => {
                                 const updated = [...prev];
-                                updated[index].rate = e.target.value ? parseFloat(e.target.value) : null;
+                                updated[index].rate = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].rate : parseFloat(inputValue));
                                 return updated;
                               });
                               calculateRowAmounts(index);
                             }}
+                            onFocus={() => {
+                              setFocusedFields(prev => ({ ...prev, [`rate-${index}`]: true }));
+                            }}
                             disabled={isAccountAccount}
                             onBlur={(e) => {
+                              setFocusedFields(prev => {
+                                const newFields = { ...prev };
+                                delete newFields[`rate-${index}`];
+                                return newFields;
+                              });
                               if (e.target.value) {
                                 setEntries(prev => {
                                   const updated = [...prev];
@@ -879,16 +972,35 @@ const HomeEntry = () => {
                             min="0"
                             max="100"
                             step="0.01"
-                            value={entry.percent || 0}
+                            value={focusedFields[`percent-${index}`] ? (entry.percent != null ? entry.percent : '') : (entry.percent != null ? parseFloat(entry.percent).toFixed(2) : '')}
                             onChange={(e) => {
+                              const inputValue = e.target.value;
                               setEntries(prev => {
                                 const updated = [...prev];
-                                updated[index].percent = e.target.value ? parseFloat(e.target.value) : 0;
+                                updated[index].percent = inputValue === '' ? 0 : (isNaN(parseFloat(inputValue)) ? prev[index].percent : parseFloat(inputValue));
                                 return updated;
                               });
                               calculateRowAmounts(index);
                             }}
+                            onFocus={() => {
+                              setFocusedFields(prev => ({ ...prev, [`percent-${index}`]: true }));
+                            }}
                             disabled={isAccountAccount}
+                            onBlur={(e) => {
+                              setFocusedFields(prev => {
+                                const newFields = { ...prev };
+                                delete newFields[`percent-${index}`];
+                                return newFields;
+                              });
+                              if (e.target.value) {
+                                setEntries(prev => {
+                                  const updated = [...prev];
+                                  updated[index].percent = parseFloat(parseFloat(e.target.value).toFixed(2));
+                                  return updated;
+                                });
+                                calculateRowAmounts(index);
+                              }
+                            }}
                           />
                         </td>
                         <td>
@@ -898,7 +1010,7 @@ const HomeEntry = () => {
                             className="no-arrow bg-light"
                             min="0"
                             step="0.0001"
-                            value={entry.disc ? entry.disc.toFixed(4) : '0.0000'}
+                            value={entry.disc ? entry.disc.toFixed(2) : '0.00'}
                             readOnly
                             tabIndex="-1"
                           />
@@ -909,12 +1021,13 @@ const HomeEntry = () => {
                             type="number"
                             className="no-arrow"
                             min="0"
-                            step="0.0001"
-                            value={entry.debit || ''}
+                            step="0.01"
+                            value={focusedFields[`debit-${index}`] ? (entry.debit != null ? entry.debit : '') : (entry.debit != null ? parseFloat(entry.debit).toFixed(2) : '')}
                             onChange={(e) => {
-                              const newValue = e.target.value ? parseFloat(e.target.value) : null;
+                              const inputValue = e.target.value;
                               setEntries(prev => {
                                 const updated = [...prev];
+                                const newValue = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].debit : parseFloat(inputValue));
                                 updated[index].debit = newValue;
                                 if (newValue) {
                                   updated[index].credit = null; // Clear credit when debit is set
@@ -922,6 +1035,24 @@ const HomeEntry = () => {
                                 return updated;
                               });
                               updateTotals();
+                            }}
+                            onFocus={() => {
+                              setFocusedFields(prev => ({ ...prev, [`debit-${index}`]: true }));
+                            }}
+                            onBlur={(e) => {
+                              setFocusedFields(prev => {
+                                const newFields = { ...prev };
+                                delete newFields[`debit-${index}`];
+                                return newFields;
+                              });
+                              if (e.target.value) {
+                                setEntries(prev => {
+                                  const updated = [...prev];
+                                  updated[index].debit = parseFloat(parseFloat(e.target.value).toFixed(2));
+                                  return updated;
+                                });
+                                updateTotals();
+                              }
                             }}
                             onFocus={() => {
                               if (!entry.debit && !entry.credit) {
@@ -957,8 +1088,8 @@ const HomeEntry = () => {
                                     e.preventDefault();
                                     setEntries(prev => {
                                       const updated = [...prev];
-                                      updated[index].credit = parseFloat(netAmount.toFixed(4));
-                                      updated[index].debit = null;
+                                    updated[index].credit = parseFloat(netAmount.toFixed(2));
+                                    updated[index].debit = null;
                                       return updated;
                                     });
                                     updateTotals();
@@ -987,12 +1118,13 @@ const HomeEntry = () => {
                             type="number"
                             className="no-arrow"
                             min="0"
-                            step="0.0001"
-                            value={entry.credit || ''}
+                            step="0.01"
+                            value={focusedFields[`credit-${index}`] ? (entry.credit != null ? entry.credit : '') : (entry.credit != null ? parseFloat(entry.credit).toFixed(2) : '')}
                             onChange={(e) => {
-                              const newValue = e.target.value ? parseFloat(e.target.value) : null;
+                              const inputValue = e.target.value;
                               setEntries(prev => {
                                 const updated = [...prev];
+                                const newValue = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].credit : parseFloat(inputValue));
                                 updated[index].credit = newValue;
                                 if (newValue) {
                                   updated[index].debit = null; // Clear debit when credit is set
@@ -1000,6 +1132,24 @@ const HomeEntry = () => {
                                 return updated;
                               });
                               updateTotals();
+                            }}
+                            onFocus={() => {
+                              setFocusedFields(prev => ({ ...prev, [`credit-${index}`]: true }));
+                            }}
+                            onBlur={(e) => {
+                              setFocusedFields(prev => {
+                                const newFields = { ...prev };
+                                delete newFields[`credit-${index}`];
+                                return newFields;
+                              });
+                              if (e.target.value) {
+                                setEntries(prev => {
+                                  const updated = [...prev];
+                                  updated[index].credit = parseFloat(parseFloat(e.target.value).toFixed(2));
+                                  return updated;
+                                });
+                                updateTotals();
+                              }
                             }}
                             onFocus={() => {
                               if (!entry.debit && !entry.credit) {
@@ -1035,8 +1185,8 @@ const HomeEntry = () => {
                                     e.preventDefault();
                                     setEntries(prev => {
                                       const updated = [...prev];
-                                      updated[index].debit = parseFloat(netAmount.toFixed(4));
-                                      updated[index].credit = null;
+                                    updated[index].debit = parseFloat(netAmount.toFixed(2));
+                                    updated[index].credit = null;
                                       return updated;
                                     });
                                     updateTotals();
@@ -1065,8 +1215,8 @@ const HomeEntry = () => {
                 <tfoot className="table-secondary">
                   <tr>
                     <td colSpan="9" className="text-end fw-bold">TOTAL</td>
-                    <td className="fw-bold">{totalDebit.toFixed(4)}</td>
-                    <td className="fw-bold">{totalCredit.toFixed(4)}</td>
+                    <td className="fw-bold">{totalDebit.toFixed(2)}</td>
+                    <td className="fw-bold">{totalCredit.toFixed(2)}</td>
                     <td></td>
                   </tr>
                 </tfoot>

@@ -3,10 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import PrintVoucher from './PrintVoucher';
+import { usePageTitle } from '../../hooks/usePageTitle';
 import '../../App.css';
 import './PrintVoucher.css';
 
 const PrintOnlyVoucher = () => {
+  usePageTitle('Print Voucher');
   const [searchParams] = useSearchParams();
   const [voucherData, setVoucherData] = useState(null);
   const [loading, setLoading] = useState(true);

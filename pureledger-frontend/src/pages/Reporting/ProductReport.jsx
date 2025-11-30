@@ -3,8 +3,10 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ProductReport = () => {
+    usePageTitle('Product Report');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [locations, setLocations] = useState([]);
@@ -296,17 +298,27 @@ const ProductReport = () => {
                                     />
                                 </InputGroup>
                             </div>
-                        </div>
-                        <div className="row">
-                            <div className="col-12">
-                                <button 
-                                    type="submit" 
-                                    className="btn btn-primary" 
-                                    disabled={generating || !formData.projectId}
-                                    title={!formData.projectId ? 'Please select a project' : ''}
-                                >
-                                    {generating ? <LoadingSpinner /> : <><i className="fas fa-search me-1"></i> Generate Report</>}
-                                </button>
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>&nbsp;</Form.Label>
+                                <div className="d-grid">
+                                    <Button 
+                                        type="submit" 
+                                        variant="primary" 
+                                        disabled={generating || !formData.projectId}
+                                        title={!formData.projectId ? 'Please select a project' : ''}
+                                    >
+                                        {generating ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-chart-bar me-1"></i> Generate Report
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -319,7 +331,9 @@ const ProductReport = () => {
                         <h6 className="m-0 font-weight-bold text-primary">Report Results</h6>
                         <div>
                             {totalRecords > 0 && (
-                                <span className="badge bg-primary me-2">{allProducts.length} of {totalRecords}</span>
+                                <span className="badge bg-primary me-2">
+                                    {allProducts.length} of {totalRecords} products
+                                </span>
                             )}
                             <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredProducts.length === 0}>
                                 <i className="fas fa-file-csv me-1"></i> Export CSV
@@ -410,11 +424,6 @@ const ProductReport = () => {
                         {isLoadingMore && (
                             <div className="text-center my-3">
                                 <LoadingSpinner />
-                            </div>
-                        )}
-                        {!hasMoreData && allProducts.length > 0 && (
-                            <div className="text-center my-3 text-muted">
-                                End of report. Total records: {totalRecords}
                             </div>
                         )}
                     </div>

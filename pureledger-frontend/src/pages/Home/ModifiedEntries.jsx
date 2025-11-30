@@ -4,8 +4,10 @@ import { Card, Form, InputGroup, Alert, Button } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ModifiedEntries = () => {
+    usePageTitle('Modified Entries');
     const [entries, setEntries] = useState([]);
     const [projects, setProjects] = useState([]);
     const [loadingProjects, setLoadingProjects] = useState(true);

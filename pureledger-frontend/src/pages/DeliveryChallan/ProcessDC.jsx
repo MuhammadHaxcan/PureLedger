@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
+import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ProcessDC = () => {
+  usePageTitle('Delivery Challan');
   // State for filter form
   const [filter, setFilter] = useState({
     sinceDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
