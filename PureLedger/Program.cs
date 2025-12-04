@@ -11,17 +11,22 @@ using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
+using ICacheInvalidationService = PureLedger.Services.ICacheInvalidationService;
+using CacheInvalidationService = PureLedger.Services.CacheInvalidationService;
 using PureLedger.Middleware;
 using System.Linq;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to listen on all IPs
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(5000); // Listen on all IPs, not just localhost
-});
+//// Configure Kestrel to listen on all IPs
+//builder.WebHost.ConfigureKestrel(options =>
+//{
+//    options.ListenAnyIP(5000); // Listen on all IPs, not just localhost
+//});
+
+// Add Memory Cache
+builder.Services.AddMemoryCache();
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -128,6 +133,7 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
 builder.Services.AddScoped<IMetaDataService, MetaDataService>();
+builder.Services.AddSingleton<ICacheInvalidationService, CacheInvalidationService>();
 
 // Register UnitOfWork - this will create all repositories internally with the same DbContext
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
