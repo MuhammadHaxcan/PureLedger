@@ -701,19 +701,16 @@ const ProcessDC = () => {
 
             <div className="row">
               <div className="col-md-4 mb-3">
-                <Form.Label>Location</Form.Label>
+                <Form.Label>Location <span className="text-danger">*</span></Form.Label>
                 <InputGroup>
                   <InputGroup.Text><i className="fas fa-map-marker-alt"></i></InputGroup.Text>
-                  <Form.Select
-                    value={dcForm.locationId || ''}
-                    onChange={(e) => setDcForm({ ...dcForm, locationId: e.target.value ? parseInt(e.target.value) : null })}
+                  <SearchableSelect
+                    value={dcForm.locationId}
+                    onChange={(value) => setDcForm({ ...dcForm, locationId: value ? parseInt(value) : null })}
+                    options={locations.map(loc => ({ id: loc.id, name: loc.name }))}
+                    placeholder="Select Location"
                     required
-                  >
-                    <option value="">Select Location</option>
-                    {locations.map(loc => (
-                      <option key={loc.id} value={loc.id}>{loc.name}</option>
-                    ))}
-                  </Form.Select>
+                  />
                 </InputGroup>
               </div>
               <div className="col-md-4 mb-3">
@@ -842,16 +839,13 @@ const ProcessDC = () => {
               </Form.Label>
               <InputGroup>
                 <InputGroup.Text><i className="fas fa-truck-moving"></i></InputGroup.Text>
-                <Form.Select
-                  value={cartageForm.transporterId || ''}
-                  onChange={(e) => setCartageForm({ ...cartageForm, transporterId: e.target.value ? parseInt(e.target.value) : null })}
+                <SearchableSelect
+                  value={cartageForm.transporterId}
+                  onChange={(value) => setCartageForm({ ...cartageForm, transporterId: value ? parseInt(value) : null })}
+                  options={transporters.map(t => ({ id: t.id, name: t.name }))}
+                  placeholder="Select Transporter"
                   required
-                >
-                  <option value="">Select Transporter</option>
-                  {transporters.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </Form.Select>
+                />
               </InputGroup>
             </Form.Group>
 

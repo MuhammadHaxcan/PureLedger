@@ -11,30 +11,63 @@ namespace PureLedger.Attributes
     /// Access Rules:
     /// 1. Admin users bypass all checks
     /// 2. Account controller is always accessible (for auth)
-    /// 3. If user has controller-level access → allow all endpoints
-    /// 4. If user has ANY action permission in the controller → allow all GET requests (read-only/utility)
-    /// 5. For specific action permissions, map the route to the permission action name
+    /// 3. Global lookup endpoints (locations, bookers, etc.) are accessible to any authenticated user
+    /// 4. If user has controller-level access → allow all endpoints
+    /// 5. If user has ANY action permission in the controller → allow all GET requests (read-only/utility)
+    /// 6. For specific action permissions, map the route to the permission action name
     /// </summary>
     public class ControllerAccessAttribute : ActionFilterAttribute
     {
+        // Global lookup endpoints that any authenticated user can access
+        // These are common dropdowns/selects needed across multiple features
+        private static readonly HashSet<string> GlobalLookupEndpoints = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // MetaData lookups
+            "locations",
+            "bookers",
+            "account-types",
+            "account-groups",
+            "projects-for-categories",
+            "projects-for-accounts",
+            "categories-by-project",
+            "categories-by-project-for-view",
+            "accounts-by-criteria",
+            "accounts-by-category",
+            // Home lookups (needed for entry forms)
+            "product-details",
+            "voucher-summary",
+            // Reporting lookups
+            "report-data",
+            // DeliveryChallan lookups
+            "transporter-category-id",
+            "check-for-charges-available"
+        };
+
         // Simple mapping from route patterns to permission action names
         // Key: controller name, Value: dictionary of route-to-permission mappings
         private static readonly Dictionary<string, Dictionary<string, string>> ActionPermissionMap = new(StringComparer.OrdinalIgnoreCase)
         {
             ["Home"] = new(StringComparer.OrdinalIgnoreCase)
             {
+                // Entry action
                 ["entry"] = "Entry",
                 ["entry-data"] = "Entry",
+                ["journal-entry"] = "Entry",
+                // VoucherEntry action
                 ["voucher-entry-data"] = "VoucherEntry",
                 ["voucher"] = "VoucherEntry",
                 ["edit-voucher"] = "VoucherEntry",
+                // BaseVouchers action
                 ["base-vouchers"] = "BaseVouchers",
                 ["base-vouchers-init"] = "BaseVouchers",
                 ["process-base-voucher"] = "BaseVouchers",
                 ["create-derived-voucher"] = "BaseVouchers",
+                ["mark-voucher-as-missed"] = "BaseVouchers",
+                // ModifiedEntries action
                 ["modified-entries"] = "ModifiedEntries",
                 ["modified-entries-init"] = "ModifiedEntries",
                 ["voucher-modified-entries"] = "ModifiedEntries",
+                // Recipes action
                 ["recipes"] = "Recipes",
                 ["recipe-items"] = "Recipes",
                 ["create-from-recipe"] = "Recipes"
@@ -47,21 +80,28 @@ namespace PureLedger.Attributes
                 ["check-existing-challan"] = "ProcessDC",
                 ["single-entry"] = "ProcessDC",
                 ["process-all"] = "ProcessDC",
-                ["add-cartage"] = "ProcessDC"
+                ["add-cartage"] = "ProcessDC",
+                ["locations"] = "ProcessDC"
             },
             ["Reporting"] = new(StringComparer.OrdinalIgnoreCase)
             {
+                // SingleDoc action
                 ["validate-voucher"] = "SingleDoc",
                 ["print-voucher"] = "SingleDoc",
+                // AgingReport action
                 ["report-data"] = "AgingReport",
                 ["aging-report"] = "AgingReport",
+                // AccountReport action
                 ["account-report"] = "AccountReport",
                 ["account-report-init"] = "AccountReport",
+                // MasterReport action
                 ["master-report"] = "MasterReport",
                 ["master-report-init"] = "MasterReport",
+                // ProductReport action
                 ["product-report"] = "ProductReport",
                 ["product-report-init"] = "ProductReport",
                 ["product-report-locations"] = "ProductReport",
+                // MissedEntriesReport action
                 ["missed-entries"] = "MissedEntriesReport",
                 ["missed-entries-init"] = "MissedEntriesReport",
                 ["missed-entries-summary"] = "MissedEntriesReport",
@@ -71,16 +111,17 @@ namespace PureLedger.Attributes
             },
             ["MetaData"] = new(StringComparer.OrdinalIgnoreCase)
             {
+                // Projects action
                 ["projects"] = "Projects",
-                ["projects-for-categories"] = "Categories",
-                ["projects-for-accounts"] = "Accounts",
+                // Categories action
                 ["categories"] = "Categories",
                 ["categories-by-project-for-view"] = "Categories",
+                // Accounts action
                 ["accounts"] = "Accounts",
                 ["accounts-by-criteria"] = "Accounts",
-                ["account-types"] = "Accounts",
-                ["account-groups"] = "Accounts",
+                // Locations action
                 ["locations"] = "Locations",
+                // Bookers action
                 ["bookers"] = "Bookers"
             }
         };
@@ -126,6 +167,14 @@ namespace PureLedger.Attributes
                 {
                     StatusCode = 401
                 };
+                return;
+            }
+
+            // Check if this is a global lookup endpoint (accessible to all authenticated users)
+            // These are common dropdowns/selects needed across multiple features
+            if (httpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) && IsGlobalLookupEndpoint(requestPath))
+            {
+                await next();
                 return;
             }
 
@@ -226,16 +275,40 @@ namespace PureLedger.Attributes
             var lowerPath = requestPath.ToLowerInvariant();
             return lowerPath.Contains("toggle-status") ||
                    lowerPath.Contains("can-delete") ||
-                   lowerPath.Contains("categories-by-project") ||
-                   lowerPath.Contains("accounts-by-category") ||
-                   lowerPath.Contains("by-project") ||
-                   lowerPath.Contains("by-category") ||
-                   lowerPath.Contains("locations") ||
-                   lowerPath.Contains("bookers") ||
-                   lowerPath.Contains("account-types") ||
-                   lowerPath.Contains("account-groups") ||
-                   lowerPath.Contains("transporter-category") ||
                    lowerPath.Contains("check-");
+        }
+
+        /// <summary>
+        /// Check if the endpoint is a global lookup endpoint accessible to all authenticated users
+        /// </summary>
+        private static bool IsGlobalLookupEndpoint(string requestPath)
+        {
+            var segments = requestPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 3)
+                return false;
+
+            // Check the third segment (route after controller)
+            var routeSegment = segments[2];
+            if (GlobalLookupEndpoints.Contains(routeSegment))
+                return true;
+
+            // Check for multi-segment routes like "categories/by-project" or "accounts/by-category"
+            // These are used in MetaData controller
+            if (segments.Length >= 4)
+            {
+                var combinedRoute = $"{segments[2]}/{segments[3]}";
+                var combinedRouteAlt = $"{segments[2]}-{segments[3]}";
+                
+                // Handle routes like "categories/by-project" matching "categories-by-project"
+                if (GlobalLookupEndpoints.Contains(combinedRouteAlt))
+                    return true;
+                    
+                // Also check "by-project", "by-category" pattern in segment 3
+                if (segments[3].StartsWith("by-", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private static async Task<bool> HasAccessToAnyActionInControllerAsync(IAuthService authService, int userId, string controllerName)

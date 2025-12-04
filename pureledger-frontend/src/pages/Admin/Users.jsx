@@ -142,12 +142,13 @@ const Users = () => {
           }
         }
         
-        // Ensure ProjectIds and AccessPermissions are arrays and properly formatted
-        const projectIds = Array.isArray(userData.ProjectIds) 
-          ? userData.ProjectIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        // Ensure projectIds and accessPermissions are arrays and properly formatted
+        // Note: C# serializes to camelCase, so use lowercase property names
+        const projectIds = Array.isArray(userData.projectIds) 
+          ? userData.projectIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
           : [];
-        const accessPermissions = Array.isArray(userData.AccessPermissions) 
-          ? userData.AccessPermissions.filter(p => p && typeof p === 'string')
+        const accessPermissions = Array.isArray(userData.accessPermissions) 
+          ? userData.accessPermissions.filter(p => p && typeof p === 'string')
           : [];
         
         console.log('Setting form data:', { projectIds, accessPermissions }); // Debug log

@@ -1029,7 +1029,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = false
+                IsProcessed = true
             };
 
             var creditEntry = new JournalEntry
@@ -1045,7 +1045,7 @@ namespace PureLedger.Services
                 Discount = 0,
                 DiscountPercent = 0,
                 Rbp = "N",
-                IsProcessed = false
+                IsProcessed = true
             };
 
             await _unitOfWork.JournalEntries.AddAsync(debitEntry);
