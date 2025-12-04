@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Table, Button, Alert, Form, Badge } from 'react-bootstrap';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
+import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import './Users.css';
 
@@ -290,16 +291,22 @@ const Users = () => {
     }
   };
 
-  // Toggle project selection
-  const toggleProject = (projectId) => {
+  // Handle project selection from SearchableSelect
+  const handleProjectSelect = (projectId) => {
+    if (!projectId) return;
     const projectIds = [...formData.projectIds];
     const numProjectId = Number(projectId);
     const index = projectIds.findIndex(id => Number(id) === numProjectId);
-    if (index > -1) {
-      projectIds.splice(index, 1);
-    } else {
+    if (index === -1) {
+      // Add project if not already selected
       projectIds.push(numProjectId);
+      setFormData({ ...formData, projectIds });
     }
+  };
+
+  // Remove project from selection
+  const removeProject = (projectId) => {
+    const projectIds = formData.projectIds.filter(id => Number(id) !== Number(projectId));
     setFormData({ ...formData, projectIds });
   };
 
@@ -625,29 +632,49 @@ const Users = () => {
           {/* Projects Selection */}
           <Form.Group className="mb-3">
             <Form.Label>Assign Projects</Form.Label>
-            <Card>
-              <Card.Body style={{ maxHeight: '200px', overflowY: 'auto', overflowX: 'visible' }}>
-                {projects.length === 0 ? (
-                  <p className="text-muted mb-0">No projects available</p>
-                ) : (
-                  projects.map((project) => {
-                    const projectId = Number(project.id);
-                    const isChecked = formData.projectIds.some(id => Number(id) === projectId);
-                    return (
-                      <Form.Check
-                        key={project.id}
-                        type="checkbox"
-                        id={`project_${project.id}`}
-                        label={project.name}
-                        checked={isChecked}
-                        onChange={() => toggleProject(project.id)}
+            
+            {/* Selected Projects Display */}
+            {formData.projectIds.length > 0 && (
+              <div className="selected-projects mb-2">
+                {formData.projectIds.map((projectId) => {
+                  const project = projects.find(p => Number(p.id) === Number(projectId));
+                  if (!project) return null;
+                  return (
+                    <Badge
+                      key={projectId}
+                      bg="primary"
+                      className="me-2 mb-2 project-badge"
+                      style={{ fontSize: '0.875rem', padding: '0.5rem 0.75rem' }}
+                    >
+                      {project.name}
+                      <button
+                        type="button"
+                        className="btn-close btn-close-white ms-2"
+                        style={{ fontSize: '0.6rem' }}
+                        onClick={() => removeProject(projectId)}
                         disabled={loading}
-                      />
-                    );
-                  })
-                )}
-              </Card.Body>
-            </Card>
+                        aria-label="Remove"
+                      ></button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Project SearchableSelect - filter out already selected projects */}
+            <SearchableSelect
+              value={null}
+              onChange={handleProjectSelect}
+              options={projects
+                .filter(p => !formData.projectIds.some(id => Number(id) === Number(p.id)))
+                .map(p => ({ id: p.id, name: p.name }))}
+              placeholder="Search and select projects..."
+              disabled={loading || projects.length === 0}
+              size="sm"
+            />
+            {projects.length === 0 && (
+              <Form.Text className="text-muted">No projects available</Form.Text>
+            )}
           </Form.Group>
 
           {/* Access Permissions */}
@@ -680,22 +707,22 @@ const Users = () => {
                         {/* Actions for this controller */}
                         <div className="ms-3">
                           <small className="text-muted mb-2 d-block">Or select specific actions:</small>
-                          <div className="row g-2">
+                          <div className="action-checkboxes-container">
                             {controllerActions[controller].map((action) => (
-                              <div key={action} className="col-md-6 col-lg-4">
-                                <Form.Check
-                                  type="checkbox"
-                                  id={`action_${controller}_${action}`}
-                                  label={
-                                    <>
-                                      <i className="fas fa-cog me-1 text-secondary"></i>{action}
-                                    </>
-                                  }
-                                  checked={hasActionAccess(controller, action)}
-                                  onChange={() => handleActionCheck(controller, action)}
-                                  disabled={loading}
-                                />
-                              </div>
+                              <Form.Check
+                                key={action}
+                                type="checkbox"
+                                id={`action_${controller}_${action}`}
+                                label={
+                                  <>
+                                    <i className="fas fa-cog me-1 text-secondary"></i>{action}
+                                  </>
+                                }
+                                checked={hasActionAccess(controller, action)}
+                                onChange={() => handleActionCheck(controller, action)}
+                                disabled={loading}
+                                className="action-checkbox-item"
+                              />
                             ))}
                           </div>
                         </div>

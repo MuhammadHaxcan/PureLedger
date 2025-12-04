@@ -58,10 +58,11 @@
   width: 100%;
   max-height: 200px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: white;
   border: 1px solid #ced4da;
   border-radius: 0.25rem;
-  z-index: 1060; /* Higher than Bootstrap modal z-index (1055) */
+  z-index: 1070; /* Higher than Bootstrap modal z-index (1055) and modal backdrop (1050) */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   display: none;
   margin-top: 2px;
@@ -74,10 +75,11 @@
   width: 100%;
   max-height: 200px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: white;
   border: 1px solid #ced4da;
   border-radius: 0.25rem;
-  z-index: 1060; /* Higher than Bootstrap modal z-index (1055) */
+  z-index: 1070; /* Higher than Bootstrap modal z-index (1055) and modal backdrop (1050) */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   display: none;
   margin-top: 2px;

@@ -5,336 +5,97 @@ using System.Security.Claims;
 
 namespace PureLedger.Attributes
 {
+    /// <summary>
+    /// Simplified controller access attribute that checks user permissions.
+    /// 
+    /// Access Rules:
+    /// 1. Admin users bypass all checks
+    /// 2. Account controller is always accessible (for auth)
+    /// 3. If user has controller-level access → allow all endpoints
+    /// 4. If user has ANY action permission in the controller → allow all GET requests (read-only/utility)
+    /// 5. For specific action permissions, map the route to the permission action name
+    /// </summary>
     public class ControllerAccessAttribute : ActionFilterAttribute
     {
-        // Define a list of "utility" API endpoints that should be accessible 
-        // when a user has access to any part of the controller
-        private static readonly Dictionary<string, HashSet<string>> ApiUtilityEndpoints = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        // Simple mapping from route patterns to permission action names
+        // Key: controller name, Value: dictionary of route-to-permission mappings
+        private static readonly Dictionary<string, Dictionary<string, string>> ActionPermissionMap = new(StringComparer.OrdinalIgnoreCase)
         {
-            ["Home"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            ["Home"] = new(StringComparer.OrdinalIgnoreCase)
             {
-                "GetCategoriesByProject",
-                "GetAccountsByCategory",
-                "GetProductDetails",
-                "GetJournalEntry",
-                "GetVoucherSummary",
-                "GetRecipeItems",
-                "EntryData", // Allow entry-data endpoint
-                "GetEntryData",
-                "Entry", // Allow if user has Entry permission
-                "entry-data" // Route name
+                ["entry"] = "Entry",
+                ["entry-data"] = "Entry",
+                ["voucher-entry-data"] = "VoucherEntry",
+                ["voucher"] = "VoucherEntry",
+                ["edit-voucher"] = "VoucherEntry",
+                ["base-vouchers"] = "BaseVouchers",
+                ["base-vouchers-init"] = "BaseVouchers",
+                ["process-base-voucher"] = "BaseVouchers",
+                ["create-derived-voucher"] = "BaseVouchers",
+                ["modified-entries"] = "ModifiedEntries",
+                ["modified-entries-init"] = "ModifiedEntries",
+                ["voucher-modified-entries"] = "ModifiedEntries",
+                ["recipes"] = "Recipes",
+                ["recipe-items"] = "Recipes",
+                ["create-from-recipe"] = "Recipes"
             },
-            ["DeliveryChallan"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            ["DeliveryChallan"] = new(StringComparer.OrdinalIgnoreCase)
             {
-                // These utility endpoints are accessible when user has access to ProcessDC action
-                "GetCategoriesByProject",
-                "GetAccountsByCategory",
-                "GetLocations",
-                "GetFilteredEntries",
-                "GetVoucherEntries",
-                "CheckExistingChallan",
-                "GetTransporterCategoryId",
-                "CheckForChargesAvailable",
-                "PostSingleEntry",
-                "ProcessAll",
-                "AddCartage",
-                "ProcessDCData", // Allow process-dc-data endpoint
-                "GetProcessDCData",
-                "ProcessDC", // Allow if user has ProcessDC permission
-                "process-dc-data" // Route name
+                ["process-dc-data"] = "ProcessDC",
+                ["filtered-entries"] = "ProcessDC",
+                ["voucher-entries"] = "ProcessDC",
+                ["check-existing-challan"] = "ProcessDC",
+                ["single-entry"] = "ProcessDC",
+                ["process-all"] = "ProcessDC",
+                ["add-cartage"] = "ProcessDC"
             },
-            ["Reporting"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            ["Reporting"] = new(StringComparer.OrdinalIgnoreCase)
             {
-                "GetCategoriesByProject",
-                "GetAccountsByCategory",
-                "GetAllBookers",
-                "ValidateVoucher",
-                "GetAgingReportData",
-                "GetAccountReportData",
-                "GetMasterReportData",
-                "GetProductReportData",
-                "GetMissedEntries",
-                "GetMissedEntriesData",
-                "GetMissedEntriesSummary",
-                "GetMissedEntriesByCustomer",
-                "GetMissedEntriesByProduct",
-                "GetReportData",
-                "GetAccountReportInit",
-                "GetMasterReportInit",
-                "GetProductReportInit",
-                "GetMissedEntriesInit",
-                "GetProductReportLocations",
-                "GetPrintVoucher",
-                // Route names (kebab-case)
-                "report-data",
-                "account-report-init",
-                "master-report-init",
-                "product-report-init",
-                "missed-entries-init",
-                "product-report-locations",
-                "validate-voucher",
-                "print-voucher",
-                "categories-by-project",
-                "accounts-by-category",
-                "bookers"
+                ["validate-voucher"] = "SingleDoc",
+                ["print-voucher"] = "SingleDoc",
+                ["report-data"] = "AgingReport",
+                ["aging-report"] = "AgingReport",
+                ["account-report"] = "AccountReport",
+                ["account-report-init"] = "AccountReport",
+                ["master-report"] = "MasterReport",
+                ["master-report-init"] = "MasterReport",
+                ["product-report"] = "ProductReport",
+                ["product-report-init"] = "ProductReport",
+                ["product-report-locations"] = "ProductReport",
+                ["missed-entries"] = "MissedEntriesReport",
+                ["missed-entries-init"] = "MissedEntriesReport",
+                ["missed-entries-summary"] = "MissedEntriesReport",
+                ["missed-entries-by-customer"] = "MissedEntriesReport",
+                ["missed-entries-by-product"] = "MissedEntriesReport",
+                ["missed-entries-data"] = "MissedEntriesReport"
             },
-            ["MetaData"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            ["MetaData"] = new(StringComparer.OrdinalIgnoreCase)
             {
-                "GetCategoriesByProject",
-                "GetCategoriesByProjectForView",
-                "GetAllProjectsForCategories",
-                "GetAllProjectsForAccounts",
-                "GetProjectsForAccounts",
-                "GetProjectsForCategories",
-                "GetAccountTypes",
-                "GetAccountGroups",
-                "GetAccountsByCriteria",
-                "GetAccountsByCategory",
-                "CanDeleteCategory",
-                "CanDeleteAccount",
-                "ToggleAccountStatusAjax",
-                "ToggleBookerStatusAjax",
-                "GetProjects",
-                "GetProject",
-                "GetCategories",
-                "GetCategory",
-                "GetAccounts",
-                "GetAccount",
-                "GetLocations",
-                "GetLocation",
-                "GetBookers",
-                "GetBooker",
-                // Route names (kebab-case)
-                "projects-for-categories",
-                "projects-for-accounts",
-                "account-types",
-                "account-groups",
-                "projects",
-                "categories",
-                "accounts",
-                "locations",
-                "bookers"
-            },
-            ["Admin"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "GetCategoriesByProject",
-                "GetAccountsByCategory",
-                "GetCategoryForAccount",
-                "GetProjectCartageSettingsByProject"
+                ["projects"] = "Projects",
+                ["projects-for-categories"] = "Categories",
+                ["projects-for-accounts"] = "Accounts",
+                ["categories"] = "Categories",
+                ["categories-by-project-for-view"] = "Categories",
+                ["accounts"] = "Accounts",
+                ["accounts-by-criteria"] = "Accounts",
+                ["account-types"] = "Accounts",
+                ["account-groups"] = "Accounts",
+                ["locations"] = "Locations",
+                ["bookers"] = "Bookers"
             }
         };
 
-        // Map route action names to permission action names
-        private static string NormalizeActionName(string controllerName, string routeActionName)
-        {
-            if (string.IsNullOrEmpty(routeActionName))
-                return routeActionName;
-            
-            // Remove "Api" suffix from controller name for matching
-            var normalizedController = controllerName?.Replace("Api", "") ?? "";
-            
-            // Map common route patterns and method names to permission action names
-            var actionMappings = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Home"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["entry-data"] = "Entry",
-                    ["GetEntryData"] = "Entry",
-                    ["EntryData"] = "Entry",
-                    ["voucher-entry-data"] = "VoucherEntry",
-                    ["GetVoucherEntryData"] = "VoucherEntry",
-                    ["VoucherEntryData"] = "VoucherEntry",
-                    ["base-vouchers"] = "BaseVouchers",
-                    ["GetBaseVouchers"] = "BaseVouchers",
-                    ["BaseVouchers"] = "BaseVouchers",
-                    ["modified-entries"] = "ModifiedEntries",
-                    ["GetModifiedEntries"] = "ModifiedEntries",
-                    ["ModifiedEntries"] = "ModifiedEntries",
-                    ["recipes"] = "Recipes",
-                    ["GetRecipes"] = "Recipes",
-                    ["Recipes"] = "Recipes"
-                },
-                ["DeliveryChallan"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["process-dc-data"] = "ProcessDC",
-                    ["GetProcessDCData"] = "ProcessDC",
-                    ["ProcessDCData"] = "ProcessDC",
-                    ["process-dc"] = "ProcessDC",
-                    ["ProcessDC"] = "ProcessDC"
-                },
-                ["Reporting"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["single-doc"] = "SingleDoc",
-                    ["GetSingleDoc"] = "SingleDoc",
-                    ["SingleDoc"] = "SingleDoc",
-                    ["aging-report"] = "AgingReport",
-                    ["GetAgingReport"] = "AgingReport",
-                    ["GetAgingReportData"] = "AgingReport",
-                    ["AgingReport"] = "AgingReport",
-                    ["AgingReportData"] = "AgingReport",
-                    ["account-report"] = "AccountReport",
-                    ["GetAccountReport"] = "AccountReport",
-                    ["GetAccountReportData"] = "AccountReport",
-                    ["GetAccountReportInit"] = "AccountReport",
-                    ["AccountReport"] = "AccountReport",
-                    ["AccountReportData"] = "AccountReport",
-                    ["AccountReportInit"] = "AccountReport",
-                    ["master-report"] = "MasterReport",
-                    ["GetMasterReport"] = "MasterReport",
-                    ["GetMasterReportData"] = "MasterReport",
-                    ["GetMasterReportInit"] = "MasterReport",
-                    ["MasterReport"] = "MasterReport",
-                    ["MasterReportData"] = "MasterReport",
-                    ["MasterReportInit"] = "MasterReport",
-                    ["product-report"] = "ProductReport",
-                    ["GetProductReport"] = "ProductReport",
-                    ["GetProductReportData"] = "ProductReport",
-                    ["GetProductReportInit"] = "ProductReport",
-                    ["GetProductReportLocations"] = "ProductReport",
-                    ["ProductReport"] = "ProductReport",
-                    ["ProductReportData"] = "ProductReport",
-                    ["ProductReportInit"] = "ProductReport",
-                    ["ProductReportLocations"] = "ProductReport",
-                    ["missed-entries"] = "MissedEntriesReport",
-                    ["GetMissedEntries"] = "MissedEntriesReport",
-                    ["GetMissedEntriesData"] = "MissedEntriesReport",
-                    ["GetMissedEntriesInit"] = "MissedEntriesReport",
-                    ["GetMissedEntriesSummary"] = "MissedEntriesReport",
-                    ["GetMissedEntriesByCustomer"] = "MissedEntriesReport",
-                    ["GetMissedEntriesByProduct"] = "MissedEntriesReport",
-                    ["MissedEntriesReport"] = "MissedEntriesReport",
-                    ["report-data"] = "AgingReport", // Used by AgingReport for initial data
-                    ["GetReportData"] = "AgingReport",
-                    ["ReportData"] = "AgingReport",
-                    ["account-report-init"] = "AccountReport",
-                    ["master-report-init"] = "MasterReport",
-                    ["product-report-init"] = "ProductReport",
-                    ["missed-entries-init"] = "MissedEntriesReport",
-                    ["product-report-locations"] = "ProductReport",
-                    ["validate-voucher"] = "SingleDoc",
-                    ["ValidateVoucher"] = "SingleDoc",
-                    ["print-voucher"] = "SingleDoc",
-                    ["GetPrintVoucher"] = "SingleDoc",
-                    ["categories-by-project"] = "SingleDoc", // Utility endpoint
-                    ["GetCategoriesByProject"] = "SingleDoc",
-                    ["accounts-by-category"] = "SingleDoc", // Utility endpoint
-                    ["GetAccountsByCategory"] = "SingleDoc",
-                    ["bookers"] = "SingleDoc", // Utility endpoint
-                    ["GetAllBookers"] = "SingleDoc"
-                },
-                ["MetaData"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["projects"] = "Projects",
-                    ["GetProjects"] = "Projects",
-                    ["Projects"] = "Projects",
-                    ["categories"] = "Categories",
-                    ["GetCategories"] = "Categories",
-                    ["Categories"] = "Categories",
-                    ["accounts"] = "Accounts",
-                    ["GetAccounts"] = "Accounts",
-                    ["Accounts"] = "Accounts",
-                    ["locations"] = "Locations",
-                    ["GetLocations"] = "Locations",
-                    ["Locations"] = "Locations",
-                    ["bookers"] = "Bookers",
-                    ["GetBookers"] = "Bookers",
-                    ["Bookers"] = "Bookers",
-                    ["projects-for-categories"] = "Projects",
-                    ["GetAllProjectsForCategories"] = "Projects",
-                    ["AllProjectsForCategories"] = "Projects",
-                    ["projects-for-accounts"] = "Projects",
-                    ["GetAllProjectsForAccounts"] = "Projects",
-                    ["AllProjectsForAccounts"] = "Projects",
-                    ["account-types"] = "Accounts",
-                    ["GetAccountTypes"] = "Accounts",
-                    ["AccountTypes"] = "Accounts",
-                    ["account-groups"] = "Accounts",
-                    ["GetAccountGroups"] = "Accounts",
-                    ["AccountGroups"] = "Accounts"
-                }
-            };
-
-            // Try to find a mapping for this controller and action
-            if (actionMappings.TryGetValue(normalizedController, out var mappings) &&
-                mappings.TryGetValue(routeActionName, out var mappedAction))
-            {
-                return mappedAction;
-            }
-
-            // If no mapping found and it looks like a method name (starts with Get/Post/Put/Delete), try removing the prefix
-            if (routeActionName.Length > 3 && 
-                (routeActionName.StartsWith("Get", StringComparison.OrdinalIgnoreCase) ||
-                 routeActionName.StartsWith("Post", StringComparison.OrdinalIgnoreCase) ||
-                 routeActionName.StartsWith("Put", StringComparison.OrdinalIgnoreCase) ||
-                 routeActionName.StartsWith("Delete", StringComparison.OrdinalIgnoreCase)))
-            {
-                // Remove HTTP verb prefix
-                var prefixLength = routeActionName.StartsWith("Delete", StringComparison.OrdinalIgnoreCase) ? 6 : 3;
-                var withoutPrefix = routeActionName.Substring(prefixLength);
-                
-                // Try mapping again without prefix
-                if (mappings != null && mappings.TryGetValue(withoutPrefix, out var mappedWithoutPrefix))
-                {
-                    return mappedWithoutPrefix;
-                }
-                
-                // If still no match, return without prefix (might match directly)
-                return withoutPrefix;
-            }
-
-            // If no mapping found, return as-is (might be already in correct format)
-            return routeActionName;
-        }
-
         public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            // Get controller and action names from route data
-            var controllerName = context.RouteData.Values["controller"]?.ToString();
-            var routeActionName = context.RouteData.Values["action"]?.ToString();
+            var controllerName = context.RouteData.Values["controller"]?.ToString() ?? "";
+            var normalizedControllerName = controllerName.Replace("Api", "", StringComparison.OrdinalIgnoreCase);
             
-            // Also try to get action name from action descriptor (method name)
-            var actionDescriptor = context.ActionDescriptor as Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor;
-            var methodActionName = actionDescriptor?.ActionName;
-            
-            // Get route template from action descriptor to find the actual route path
-            var routeTemplate = actionDescriptor?.AttributeRouteInfo?.Template;
-            var routePathSegment = "";
-            if (!string.IsNullOrEmpty(routeTemplate))
-            {
-                // Extract the route segment (e.g., "account-groups" from "account-groups")
-                routePathSegment = routeTemplate.Split('/').LastOrDefault() ?? "";
-            }
-            else
-            {
-                // Fallback: extract from request path
-                var requestPath = context.HttpContext.Request.Path.Value ?? "";
-                var pathSegments = requestPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                if (pathSegments.Length >= 3) // /api/ControllerName/action
-                {
-                    routePathSegment = pathSegments[2]; // Get the action segment
-                }
-            }
-            
-            // Normalize controller name (remove "Api" suffix)
-            var normalizedControllerName = controllerName?.Replace("Api", "") ?? "";
-            
-            // Try to normalize action name - use route action name first, fallback to method name
-            var actionNameToNormalize = routeActionName ?? methodActionName ?? "";
-            var actionName = NormalizeActionName(normalizedControllerName, actionNameToNormalize);
-            
-            // If normalization didn't change it and we have a method name, try normalizing the method name
-            if (actionName == actionNameToNormalize && !string.IsNullOrEmpty(methodActionName) && methodActionName != routeActionName)
-            {
-                var normalizedFromMethod = NormalizeActionName(normalizedControllerName, methodActionName);
-                if (normalizedFromMethod != methodActionName)
-                {
-                    actionName = normalizedFromMethod;
-                }
-            }
+            // Get the route path to determine the action
+            var requestPath = context.HttpContext.Request.Path.Value ?? "";
+            var httpMethod = context.HttpContext.Request.Method;
 
-            // Skip check for Account controller (check both original and normalized)
-            if (string.Equals(controllerName, "Account", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalizedControllerName, "Account", StringComparison.OrdinalIgnoreCase))
+            // Skip check for Account controller (authentication endpoints)
+            if (normalizedControllerName.Equals("Account", StringComparison.OrdinalIgnoreCase))
             {
                 await next();
                 return;
@@ -368,107 +129,138 @@ namespace PureLedger.Attributes
                 return;
             }
 
-            if (string.IsNullOrEmpty(controllerName) || string.IsNullOrEmpty(actionName))
-            {
-                context.Result = new JsonResult(new { success = false, message = "Invalid request." })
-                {
-                    StatusCode = 400
-                };
-                return;
-            }
-
             // Get the AuthService from DI
             var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
 
-            // Check if this is a utility API endpoint (use normalized controller name)
-            // Check both normalized action name and original route/method names
-            // Also check the route path segment from the route template
-            bool isUtilityEndpoint = ApiUtilityEndpoints.TryGetValue(normalizedControllerName, out var utilityActions) &&
-                                    utilityActions != null &&
-                                    (utilityActions.Contains(actionName) || 
-                                     utilityActions.Contains(routeActionName ?? "") ||
-                                     (!string.IsNullOrEmpty(methodActionName) && utilityActions.Contains(methodActionName)) ||
-                                     (!string.IsNullOrEmpty(routePathSegment) && utilityActions.Contains(routePathSegment)));
-
-            // Check project access if projectId is in route data or action parameters
+            // Check project access if projectId is in route or query
             if (context.RouteData.Values.TryGetValue("projectId", out var projectIdObj) ||
                 context.ActionArguments.TryGetValue("projectId", out projectIdObj))
             {
                 if (projectIdObj != null && int.TryParse(projectIdObj.ToString(), out int projectId) && projectId > 0)
                 {
-                    bool hasProjectAccess = await authService.HasProjectAccessAsync(userId, projectId);
-                    if (!hasProjectAccess)
+                    if (!await authService.HasProjectAccessAsync(userId, projectId))
                     {
-                        await DenyAccess(context, isUtilityEndpoint);
+                        DenyAccess(context);
                         return;
                     }
                 }
             }
 
-            // Check for controller-level access first (use normalized controller name)
-            bool hasControllerAccess = await authService.HasControllerAccessAsync(userId, normalizedControllerName);
-            if (hasControllerAccess)
+            // Check for controller-level access first
+            if (await authService.HasControllerAccessAsync(userId, normalizedControllerName))
             {
                 await next();
                 return;
             }
 
-            // If no controller-level access, check action-specific access (use normalized names)
-            bool hasActionAccess = await authService.HasActionAccessAsync(userId, normalizedControllerName, actionName);
-            if (hasActionAccess)
+            // Check if user has ANY action permission in this controller
+            bool hasAnyActionInController = await HasAccessToAnyActionInControllerAsync(authService, userId, normalizedControllerName);
+            
+            // For GET requests (read-only), allow if user has any action in the controller
+            // This covers utility endpoints like categories-by-project, accounts-by-category, etc.
+            if (httpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) && hasAnyActionInController)
             {
                 await next();
                 return;
             }
 
-            // Special case for utility endpoints: Check if user has access to ANY action in this controller
-            if (isUtilityEndpoint)
+            // For other requests or if no general access, check specific action permission
+            var actionPermission = GetActionPermission(normalizedControllerName, requestPath);
+            if (!string.IsNullOrEmpty(actionPermission))
             {
-                // Check if user has access to any action in current controller (use normalized controller name)
-                bool hasAnyActionInController = await HasAccessToAnyActionInControllerAsync(authService, userId, normalizedControllerName);
-                
-                if (hasAnyActionInController)
+                if (await authService.HasActionAccessAsync(userId, normalizedControllerName, actionPermission))
                 {
                     await next();
                     return;
                 }
             }
 
+            // If we have any action access and this is a POST/PUT/DELETE, still allow for utility operations
+            // that support the main actions (like toggle-status, can-delete checks, etc.)
+            if (hasAnyActionInController && IsUtilityOperation(requestPath))
+            {
+                await next();
+                return;
+            }
+
             // Access denied
-            await DenyAccess(context, isUtilityEndpoint);
+            DenyAccess(context);
         }
 
-        private async Task<bool> HasAccessToAnyActionInControllerAsync(IAuthService authService, int userId, string controllerName)
+        /// <summary>
+        /// Get the permission action name for a given route path
+        /// </summary>
+        private static string? GetActionPermission(string controllerName, string requestPath)
+        {
+            if (!ActionPermissionMap.TryGetValue(controllerName, out var controllerMappings))
+                return null;
+
+            // Extract the route segment after the controller name
+            // e.g., /api/HomeApi/entry-data -> entry-data
+            var segments = requestPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length < 3)
+                return null;
+
+            // Try to match the route segment (might have parameters after it)
+            var routeSegment = segments[2].ToLowerInvariant();
+            
+            // Direct match
+            if (controllerMappings.TryGetValue(routeSegment, out var permission))
+                return permission;
+
+            // Try partial match for routes with parameters (e.g., "voucher/123" -> "voucher")
+            foreach (var mapping in controllerMappings)
+            {
+                if (routeSegment.StartsWith(mapping.Key, StringComparison.OrdinalIgnoreCase))
+                    return mapping.Value;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Check if the operation is a utility operation (toggle status, can-delete, etc.)
+        /// </summary>
+        private static bool IsUtilityOperation(string requestPath)
+        {
+            var lowerPath = requestPath.ToLowerInvariant();
+            return lowerPath.Contains("toggle-status") ||
+                   lowerPath.Contains("can-delete") ||
+                   lowerPath.Contains("categories-by-project") ||
+                   lowerPath.Contains("accounts-by-category") ||
+                   lowerPath.Contains("by-project") ||
+                   lowerPath.Contains("by-category") ||
+                   lowerPath.Contains("locations") ||
+                   lowerPath.Contains("bookers") ||
+                   lowerPath.Contains("account-types") ||
+                   lowerPath.Contains("account-groups") ||
+                   lowerPath.Contains("transporter-category") ||
+                   lowerPath.Contains("check-");
+        }
+
+        private static async Task<bool> HasAccessToAnyActionInControllerAsync(IAuthService authService, int userId, string controllerName)
         {
             try
             {
-                // Get all user action permissions
                 var userActionAccess = await authService.GetUserActionAccessAsync(userId);
-
-                // Check if the user has access to any action in the specified controller
                 if (userActionAccess != null && userActionAccess.TryGetValue(controllerName, out var actions))
                 {
                     return actions != null && actions.Count > 0;
                 }
-
                 return false;
             }
-            catch (Exception)
+            catch
             {
-                // In case of any exception, fail safely by denying access
                 return false;
             }
         }
 
-        private static Task DenyAccess(ActionExecutingContext context, bool isApiRequest)
+        private static void DenyAccess(ActionExecutingContext context)
         {
-            // Always return JSON for API requests (this is a pure API project)
             context.Result = new JsonResult(new { success = false, message = "Access denied. You do not have permission to access this resource." })
             {
                 StatusCode = 403
             };
-
-            return Task.CompletedTask;
         }
     }
 }

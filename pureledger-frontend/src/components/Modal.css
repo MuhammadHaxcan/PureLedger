@@ -7,11 +7,13 @@
 }
 
 .custom-modal-body {
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
   position: relative;
-  max-height: calc(90vh - 120px);
+  max-height: calc(90vh - 200px) !important;
   padding: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Ensure modal dialog doesn't clip content */
@@ -25,7 +27,28 @@
   overflow: visible;
 }
 
-.custom-modal-body .card-body {
+/* Access permissions card must be contained - override general card rules */
+.custom-modal-body .access-permissions-card {
+  overflow: hidden !important;
+  height: 220px !important;
+  max-height: 220px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+}
+
+.custom-modal-body .access-permissions-card .card-body {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  position: relative !important;
+}
+
+/* General card body rules - but not for access permissions */
+.custom-modal-body .card:not(.access-permissions-card) .card-body {
   overflow-y: auto;
   overflow-x: hidden;
 }
