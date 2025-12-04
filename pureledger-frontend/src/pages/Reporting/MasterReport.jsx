@@ -5,6 +5,10 @@ import apiClient, { API_BASE_URL } from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import MasterReportPDFDocument from './MasterReportPDF';
+import AccountSummaryPDFDocument from './AccountSummaryPDF';
+import CategorySummaryPDFDocument from './CategorySummaryPDF';
 import './MasterReport.css';
 
 const buildVoucherUrl = (voucherId, type) => {
@@ -570,9 +574,52 @@ const MasterReport = () => {
                                         {allEntries.length} of {totalRecords} entries
                                     </span>
                                 )}
-                                <Button variant="outline-success" size="sm" onClick={handleExportMainReport} disabled={filteredEntries.length === 0}>
+                                <Button 
+                                    variant="outline-success" 
+                                    size="sm" 
+                                    onClick={handleExportMainReport} 
+                                    disabled={filteredEntries.length === 0}
+                                    className="me-2"
+                                >
                                     <i className="fas fa-file-csv me-1"></i> Export CSV
                                 </Button>
+                                {!hasMoreData && filteredEntries.length > 0 && (
+                                    <PDFDownloadLink
+                                        document={
+                                            <MasterReportPDFDocument
+                                                entries={filteredEntries}
+                                                formData={formData}
+                                                projects={projects}
+                                                categories={categories}
+                                                accounts={accounts}
+                                                bookers={bookers}
+                                                visibleColumns={visibleColumns}
+                                                totals={totals}
+                                                totalRecords={totalRecords}
+                                            />
+                                        }
+                                        fileName={`MasterReport_${new Date().toISOString().split('T')[0]}.pdf`}
+                                    >
+                                        {({ blob, url, loading, error }) => (
+                                            <Button 
+                                                variant="outline-danger" 
+                                                size="sm" 
+                                                disabled={loading || error}
+                                            >
+                                                {loading ? (
+                                                    <>
+                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                        Generating PDF...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </PDFDownloadLink>
+                                )}
                             </div>
                         </Card.Header>
                         <Card.Body>
@@ -685,14 +732,50 @@ const MasterReport = () => {
                             <h6 className="m-0 font-weight-bold text-primary">
                                 <i className="fas fa-users me-2"></i>Account Summary
                             </h6>
-                            <Button
-                                variant="outline-success"
-                                size="sm"
-                                onClick={handleExportAccountSummary}
-                                disabled={accountSummary.length === 0}
-                            >
-                                <i className="fas fa-file-csv me-1"></i> Export CSV
-                            </Button>
+                            <div>
+                                <Button
+                                    variant="outline-success"
+                                    size="sm"
+                                    onClick={handleExportAccountSummary}
+                                    disabled={accountSummary.length === 0}
+                                    className="me-2"
+                                >
+                                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                                </Button>
+                                {accountSummary.length > 0 && (
+                                    <PDFDownloadLink
+                                        document={
+                                            <AccountSummaryPDFDocument
+                                                accountSummary={accountSummary}
+                                                formData={formData}
+                                                projects={projects}
+                                                categories={categories}
+                                                accounts={accounts}
+                                            />
+                                        }
+                                        fileName={`AccountSummary_${new Date().toISOString().split('T')[0]}.pdf`}
+                                    >
+                                        {({ blob, url, loading, error }) => (
+                                            <Button 
+                                                variant="outline-danger" 
+                                                size="sm" 
+                                                disabled={loading || error}
+                                            >
+                                                {loading ? (
+                                                    <>
+                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                        Generating PDF...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </PDFDownloadLink>
+                                )}
+                            </div>
                         </Card.Header>
                         <Card.Body>
                             <div className="table-responsive">
@@ -738,14 +821,48 @@ const MasterReport = () => {
                             <h6 className="m-0 font-weight-bold text-primary">
                                 <i className="fas fa-tags me-2"></i>Category Summary
                             </h6>
-                            <Button
-                                variant="outline-success"
-                                size="sm"
-                                onClick={handleExportCategorySummary}
-                                disabled={categorySummary.length === 0}
-                            >
-                                <i className="fas fa-file-csv me-1"></i> Export CSV
-                            </Button>
+                            <div>
+                                <Button
+                                    variant="outline-success"
+                                    size="sm"
+                                    onClick={handleExportCategorySummary}
+                                    disabled={categorySummary.length === 0}
+                                    className="me-2"
+                                >
+                                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                                </Button>
+                                {categorySummary.length > 0 && (
+                                    <PDFDownloadLink
+                                        document={
+                                            <CategorySummaryPDFDocument
+                                                categorySummary={categorySummary}
+                                                formData={formData}
+                                                projects={projects}
+                                            />
+                                        }
+                                        fileName={`CategorySummary_${new Date().toISOString().split('T')[0]}.pdf`}
+                                    >
+                                        {({ blob, url, loading, error }) => (
+                                            <Button 
+                                                variant="outline-danger" 
+                                                size="sm" 
+                                                disabled={loading || error}
+                                            >
+                                                {loading ? (
+                                                    <>
+                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                        Generating PDF...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                    </>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </PDFDownloadLink>
+                                )}
+                            </div>
                         </Card.Header>
                         <Card.Body>
                             <div className="table-responsive">

@@ -988,7 +988,7 @@ namespace PureLedger.Services
                 var baseEntry = baseVoucher.JournalEntries
                     .FirstOrDefault(e => e.JournalEntryId == entryToProcess.EntryId);
 
-                if (baseEntry == null || baseEntry.IsProcessed)
+                if (baseEntry == null )
                     continue;
 
                 var account = await _unitOfWork.Accounts.GetByIdAsync(baseEntry.AccountId);

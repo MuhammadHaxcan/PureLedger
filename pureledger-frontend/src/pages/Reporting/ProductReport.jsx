@@ -4,6 +4,8 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import ProductReportPDFDocument from './ProductReportPDF';
 
 const ProductReport = () => {
     usePageTitle('Product Report');
@@ -335,9 +337,50 @@ const ProductReport = () => {
                                     {allProducts.length} of {totalRecords} products
                                 </span>
                             )}
-                            <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredProducts.length === 0}>
+                            <Button 
+                                variant="outline-success" 
+                                size="sm" 
+                                onClick={handleExportCsv} 
+                                disabled={filteredProducts.length === 0}
+                                className="me-2"
+                            >
                                 <i className="fas fa-file-csv me-1"></i> Export CSV
                             </Button>
+                            {!hasMoreData && filteredProducts.length > 0 && (
+                                <PDFDownloadLink
+                                    document={
+                                        <ProductReportPDFDocument
+                                            products={filteredProducts}
+                                            totals={totals}
+                                            formData={formData}
+                                            projects={projects}
+                                            categories={categories}
+                                            locations={locations}
+                                            totalRecords={totalRecords}
+                                        />
+                                    }
+                                    fileName={`ProductReport_${new Date().toISOString().split('T')[0]}.pdf`}
+                                >
+                                    {({ blob, url, loading, error }) => (
+                                        <Button 
+                                            variant="outline-danger" 
+                                            size="sm" 
+                                            disabled={loading || error}
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                    Generating PDF...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+                                </PDFDownloadLink>
+                            )}
                         </div>
                     </div>
                     <div className="card-body">
