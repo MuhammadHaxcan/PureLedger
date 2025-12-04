@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using PureLedger.Attributes;
+using PureLedger.Helpers;
 using PureLedger.Models;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
@@ -17,14 +19,17 @@ namespace PureLedger.Controllers.Api
         private readonly ILogger<HomeApiController> _logger;
         private readonly JournalEntryService _journalService;
         private readonly ICurrentUserService _currentUserService;
+        private readonly IMemoryCache _cache;
 
         public HomeApiController(
             JournalEntryService journalService,
             ICurrentUserService currentUserService,
+            IMemoryCache cache,
             ILogger<HomeApiController> logger)
         {
             _journalService = journalService;
             _currentUserService = currentUserService;
+            _cache = cache;
             _logger = logger;
         }
 
@@ -790,14 +795,26 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
-                if (categories == null || !categories.Any())
+                var cacheKey = CacheKeys.CategoriesByProject(projectId);
+                
+                if (!_cache.TryGetValue(cacheKey, out object? cachedResult))
                 {
-                    return Ok(new { success = true, data = Array.Empty<object>() });
+                    var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
+                    if (categories == null || !categories.Any())
+                    {
+                        return Ok(new { success = true, data = Array.Empty<object>() });
+                    }
+
+                    cachedResult = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }).ToList();
+                    
+                    // Cache indefinitely - will be invalidated manually on CRUD operations
+                    _cache.Set(cacheKey, cachedResult);
+                    CacheInvalidationService.RegisterCategoryKey(cacheKey);
+                    
+                    _logger.LogDebug("Cached categories for project {ProjectId}", projectId);
                 }
 
-                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
-                return Ok(new { success = true, data = result });
+                return Ok(new { success = true, data = cachedResult });
             }
             catch (Exception ex)
             {
@@ -811,9 +828,21 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var accounts = await _journalService.GetEnabledAccountsByCategoryAsync(categoryId);
-                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
-                return Ok(new { success = true, data = result });
+                var cacheKey = CacheKeys.AccountsByCategory(categoryId);
+                
+                if (!_cache.TryGetValue(cacheKey, out object? cachedResult))
+                {
+                    var accounts = await _journalService.GetEnabledAccountsByCategoryAsync(categoryId);
+                    cachedResult = accounts.Select(a => new { id = a.AccountId, name = a.AccountName }).ToList();
+                    
+                    // Cache indefinitely - will be invalidated manually on CRUD operations
+                    _cache.Set(cacheKey, cachedResult);
+                    CacheInvalidationService.RegisterAccountKey(cacheKey);
+                    
+                    _logger.LogDebug("Cached accounts for category {CategoryId}", categoryId);
+                }
+
+                return Ok(new { success = true, data = cachedResult });
             }
             catch (Exception ex)
             {

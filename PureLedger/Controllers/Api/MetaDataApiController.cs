@@ -18,17 +18,20 @@ namespace PureLedger.Controllers.Api
         private readonly MetaDataValidationService _validationService;
         private readonly IMetaDataService _metaDataService;
         private readonly ICurrentUserService _currentUserService;
+        private readonly ICacheInvalidationService _cacheService;
         private readonly ILogger<MetaDataApiController> _logger;
 
         public MetaDataApiController(
             MetaDataValidationService validationService,
             IMetaDataService metaDataService,
             ICurrentUserService currentUserService,
+            ICacheInvalidationService cacheService,
             ILogger<MetaDataApiController> logger)
         {
             _validationService = validationService;
             _metaDataService = metaDataService;
             _currentUserService = currentUserService;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -276,6 +279,10 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = creationErrors });
                 }
 
+                // Invalidate category cache for the project
+                _cacheService.InvalidateCategoriesForProject(category.ProjectId);
+                _logger.LogInformation("Category cache invalidated for project {ProjectId} after create", category.ProjectId);
+
                 // Return only the necessary fields to avoid circular reference issues
                 // Don't reload - use the category object we already have (it will have the ID after save)
                 return Ok(new { 
@@ -355,6 +362,10 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = updateErrors });
                 }
 
+                // Invalidate category cache for the project
+                _cacheService.InvalidateCategoriesForProject(category.ProjectId);
+                _logger.LogInformation("Category cache invalidated for project {ProjectId} after update", category.ProjectId);
+
                 // Return only the necessary fields to avoid circular reference issues
                 // Use the category object we already have (it's been updated in the service)
                 return Ok(new { 
@@ -380,6 +391,10 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                // Get category info before deletion for cache invalidation
+                var categoryToDelete = await _metaDataService.GetCategoryByIdAsync(id);
+                var projectId = categoryToDelete?.ProjectId ?? 0;
+
                 var (success, associatedAccountIds) = await _metaDataService.DeleteCategoryAsync(id);
                 if (!success)
                 {
@@ -387,6 +402,13 @@ namespace PureLedger.Controllers.Api
                         ? "This category cannot be deleted because it is associated with accounts."
                         : "Failed to delete the category.";
                     return BadRequest(new { success = false, message });
+                }
+
+                // Invalidate category cache for the project
+                if (projectId > 0)
+                {
+                    _cacheService.InvalidateCategoriesForProject(projectId);
+                    _logger.LogInformation("Category cache invalidated for project {ProjectId} after delete", projectId);
                 }
 
                 return Ok(new { success = true, message = "Category deleted successfully" });
@@ -597,6 +619,10 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = creationErrors });
                 }
 
+                // Invalidate account cache for the category
+                _cacheService.InvalidateAccountsForCategory(account.CategoryId);
+                _logger.LogInformation("Account cache invalidated for category {CategoryId} after create", account.CategoryId);
+
                 return Ok(new { success = true, message = "Account created successfully" });
             }
             catch (Exception ex)
@@ -678,6 +704,14 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, errors = updateErrors });
                 }
 
+                // Invalidate account cache for both old and new category (in case category changed)
+                _cacheService.InvalidateAccountsForCategory(account.CategoryId);
+                if (existingAccount.CategoryId != account.CategoryId)
+                {
+                    _cacheService.InvalidateAccountsForCategory(existingAccount.CategoryId);
+                }
+                _logger.LogInformation("Account cache invalidated for category {CategoryId} after update", account.CategoryId);
+
                 return Ok(new { success = true, message = "Account updated successfully" });
             }
             catch (Exception ex)
@@ -692,6 +726,10 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                // Get account info before deletion for cache invalidation
+                var accountToDelete = await _metaDataService.GetAccountByIdAsync(id);
+                var categoryId = accountToDelete?.CategoryId ?? 0;
+
                 var (success, associatedVoucherIds) = await _metaDataService.DeleteAccountAsync(id);
                 if (!success)
                 {
@@ -699,6 +737,13 @@ namespace PureLedger.Controllers.Api
                         ? "This account cannot be deleted because it is associated with journal vouchers."
                         : "Failed to delete the account.";
                     return BadRequest(new { success = false, message });
+                }
+
+                // Invalidate account cache for the category
+                if (categoryId > 0)
+                {
+                    _cacheService.InvalidateAccountsForCategory(categoryId);
+                    _logger.LogInformation("Account cache invalidated for category {CategoryId} after delete", categoryId);
                 }
 
                 return Ok(new { success = true, message = "Account deleted successfully" });
@@ -715,10 +760,21 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                // Get account info before toggle for cache invalidation
+                var accountBeforeToggle = await _metaDataService.GetAccountByIdAsync(id);
+                var categoryId = accountBeforeToggle?.CategoryId ?? 0;
+
                 var errors = await _metaDataService.ToggleAccountStatusAsync(id);
                 if (errors.Any())
                 {
                     return BadRequest(new { success = false, message = string.Join("; ", errors) });
+                }
+
+                // Invalidate account cache for the category
+                if (categoryId > 0)
+                {
+                    _cacheService.InvalidateAccountsForCategory(categoryId);
+                    _logger.LogInformation("Account cache invalidated for category {CategoryId} after toggle-status", categoryId);
                 }
 
                 var account = await _metaDataService.GetAccountByIdAsync(id);
