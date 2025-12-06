@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Modal, Form, Button, Alert, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -11,6 +11,10 @@ const VoucherEntry = () => {
     usePageTitle('Voucher Entry');
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    
+    // Ref to prevent duplicate submissions
+    const isSubmittingRef = useRef(false);
+    
     const [voucherId, setVoucherId] = useState(searchParams.get('jvId') || '');
     const [voucher, setVoucher] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -169,6 +173,10 @@ const VoucherEntry = () => {
     const confirmDeleteEntry = async () => {
         if (!editingEntry) return;
         
+        // Prevent duplicate submissions
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        
         try {
             setLoading(true);
             const entryId = editingEntry.entryId || editingEntry.journalEntryId;
@@ -184,6 +192,7 @@ const VoucherEntry = () => {
             setError(err.response?.data?.message || 'Failed to delete entry');
         } finally {
             setLoading(false);
+            isSubmittingRef.current = false;
         }
     };
 
@@ -211,6 +220,11 @@ const VoucherEntry = () => {
 
     const handleEditFormSubmit = async (e) => {
         e.preventDefault();
+        
+        // Prevent duplicate submissions
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        
         try {
             setLoading(true);
             const submitData = {
@@ -230,6 +244,7 @@ const VoucherEntry = () => {
             setError(errors.length > 0 ? errors.join(', ') : (err.response?.data?.message || 'Failed to update entry'));
         } finally {
             setLoading(false);
+            isSubmittingRef.current = false;
         }
     };
 

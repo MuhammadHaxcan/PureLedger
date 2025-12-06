@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Table, Button, Alert, Form, Badge } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -7,6 +7,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Bookers = () => {
   usePageTitle('Bookers');
+  const isSubmittingRef = useRef(false);
   const [bookers, setBookers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -59,6 +60,9 @@ const Bookers = () => {
   };
 
   const handleToggleStatus = async (booker) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       const response = await apiClient.post(`/MetaDataApi/bookers/${booker.bookerID}/toggle-status`);
       if (response.data.success) {
@@ -67,11 +71,16 @@ const Bookers = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to toggle booker status');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
@@ -93,10 +102,15 @@ const Bookers = () => {
     } catch (error) {
       const errors = error.response?.data?.errors || [];
       setError(errors.length > 0 ? errors.join(', ') : 'Failed to save booker');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleConfirmDelete = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       const response = await apiClient.delete(`/MetaDataApi/bookers/${editingBooker.bookerID}`);
       if (response.data.success) {
@@ -106,6 +120,8 @@ const Bookers = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to delete booker');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

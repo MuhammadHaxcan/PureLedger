@@ -11,6 +11,7 @@ import './Users.css';
 const Users = () => {
   usePageTitle('Users');
   const { user: currentUser } = useAuth();
+  const isSubmittingRef = useRef(false);
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [controllerActions, setControllerActions] = useState({});
@@ -188,17 +189,22 @@ const Users = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
     // Validate password
     if (!editingUser && !formData.password) {
       setError('Password is required for new users.');
+      isSubmittingRef.current = false;
       return;
     }
 
     if (formData.password && formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -268,10 +274,14 @@ const Users = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleConfirmDelete = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       setLoading(true);
       setError('');
@@ -289,6 +299,7 @@ const Users = () => {
       setError(error.response?.data?.message || 'Failed to delete user. Please try again.');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

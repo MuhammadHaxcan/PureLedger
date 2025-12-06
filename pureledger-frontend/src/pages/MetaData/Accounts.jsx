@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Table, Button, Alert, Form, Badge, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -8,6 +8,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Accounts = () => {
   usePageTitle('Accounts');
+  const isSubmittingRef = useRef(false);
   const [accounts, setAccounts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -271,6 +272,9 @@ const Accounts = () => {
   };
 
   const handleToggleStatus = async (account) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       const response = await apiClient.post(`/MetaDataApi/accounts/${account.accountId}/toggle-status`);
       if (response.data.success) {
@@ -279,11 +283,16 @@ const Accounts = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to toggle account status');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
@@ -327,10 +336,15 @@ const Accounts = () => {
     } catch (error) {
       const errors = error.response?.data?.errors || [];
       setError(errors.length > 0 ? errors.join(', ') : 'Failed to save account');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleConfirmDelete = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       const canDeleteRes = await apiClient.get(`/MetaDataApi/accounts/${editingAccount.accountId}/can-delete`);
       if (!canDeleteRes.data.canDelete) {
@@ -347,6 +361,8 @@ const Accounts = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to delete account');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

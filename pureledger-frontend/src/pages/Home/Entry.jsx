@@ -14,6 +14,9 @@ const HomeEntry = () => {
   
   usePageTitle(isEditMode ? 'Edit Entry' : 'Entry');
 
+  // Ref to prevent duplicate submissions
+  const isSubmittingRef = useRef(false);
+
   // State
   const [projects, setProjects] = useState([]);
   const [bookers, setBookers] = useState([]);
@@ -588,6 +591,11 @@ const HomeEntry = () => {
 
   const handleSubmit = async (e, action = 'submit') => {
     e.preventDefault();
+    
+    // Prevent duplicate submissions
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
     setValidationErrors([]);
@@ -595,6 +603,7 @@ const HomeEntry = () => {
     const errors = validateForm();
     if (errors.length > 0) {
       setValidationErrors(errors);
+      isSubmittingRef.current = false;
       return;
     }
     
@@ -645,6 +654,7 @@ const HomeEntry = () => {
         }
         // Reset form or navigate
         if (!isEditMode) {
+          // Keep submission blocked until form resets
           setTimeout(() => {
             setEntries([{
               categoryId: null,
@@ -668,13 +678,23 @@ const HomeEntry = () => {
             setEntryDate(new Date().toISOString().split('T')[0]);
             setCreditDays(0);
             setSuccess('');
+            setLoading(false);
+            isSubmittingRef.current = false;
           }, 2000);
+        } else {
+          // Edit mode - allow new submissions
+          setLoading(false);
+          isSubmittingRef.current = false;
         }
+      } else {
+        // Request succeeded but response indicated failure
+        setLoading(false);
+        isSubmittingRef.current = false;
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to save entries');
-    } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

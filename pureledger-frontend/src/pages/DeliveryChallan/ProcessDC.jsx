@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -6,6 +6,10 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ProcessDC = () => {
   usePageTitle('Delivery Challan');
+  
+  // Ref to prevent duplicate submissions
+  const isSubmittingRef = useRef(false);
+  
   // State for filter form
   const [filter, setFilter] = useState({
     sinceDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -282,6 +286,10 @@ const ProcessDC = () => {
       return;
     }
 
+    // Prevent duplicate submissions
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     try {
       setProcessing(true);
       setError('');
@@ -311,6 +319,7 @@ const ProcessDC = () => {
       setError(error.response?.data?.message || 'Failed to process entry. Please try again.');
     } finally {
       setProcessing(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -329,6 +338,10 @@ const ProcessDC = () => {
       setError('Please enter a valid amount for FOR charges.');
       return;
     }
+
+    // Prevent duplicate submissions
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     try {
       setProcessing(true);
@@ -359,6 +372,7 @@ const ProcessDC = () => {
       setError(error.response?.data?.message || 'Failed to process entries. Please try again.');
     } finally {
       setProcessing(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -393,6 +407,10 @@ const ProcessDC = () => {
       setError('Please select a location before adding cartage.');
       return;
     }
+
+    // Prevent duplicate submissions
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     try {
       setProcessing(true);
@@ -429,6 +447,7 @@ const ProcessDC = () => {
       setError(error.response?.data?.message || 'Failed to process cartage. Please try again.');
     } finally {
       setProcessing(false);
+      isSubmittingRef.current = false;
     }
   };
 

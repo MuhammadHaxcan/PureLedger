@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
 import apiClient, { fileToBase64, validateImageFile, base64ToBlobUrl } from '../../services/api';
@@ -8,6 +8,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 const CartageSettings = () => {
   usePageTitle('Cartage Settings');
   const navigate = useNavigate();
+  const isSubmittingRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -208,11 +209,15 @@ const CartageSettings = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
     if (!formData.projectId) {
       setError('Project is required.');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -249,6 +254,7 @@ const CartageSettings = () => {
       if (forExpenseAccountId === null && cartageTransporterCategoryId === null) {
         setError('At least one of FOR Expense Account or Cartage Transporter Category must be selected.');
         setLoading(false);
+        isSubmittingRef.current = false;
         return;
       }
       
@@ -289,6 +295,7 @@ const CartageSettings = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

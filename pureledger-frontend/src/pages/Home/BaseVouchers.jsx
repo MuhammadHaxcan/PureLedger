@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Form, InputGroup, Alert, Button } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -9,6 +9,10 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const BaseVouchers = () => {
     usePageTitle('Base Vouchers');
+    
+    // Ref to prevent duplicate submissions
+    const isSubmittingRef = useRef(false);
+    
     const [vouchers, setVouchers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [loadingProjects, setLoadingProjects] = useState(true);
@@ -147,7 +151,8 @@ const BaseVouchers = () => {
     };
 
     const confirmMarkMissed = async () => {
-        if (!selectedVoucher) return;
+        if (!selectedVoucher || isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
 
         try {
             const response = await apiClient.post(`/HomeApi/mark-voucher-as-missed/${selectedVoucher.journalVoucherId}`);
@@ -162,6 +167,7 @@ const BaseVouchers = () => {
         } finally {
             setShowMissedModal(false);
             setSelectedVoucher(null);
+            isSubmittingRef.current = false;
         }
     };
 

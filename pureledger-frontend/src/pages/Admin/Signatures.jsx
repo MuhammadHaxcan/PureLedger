@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Button, Alert, Modal, Table, Badge } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SignatureCanvas from '../../components/SignatureCanvas';
@@ -6,6 +6,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Signatures = () => {
   usePageTitle('Signatures');
+  const isSubmittingRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -51,6 +52,9 @@ const Signatures = () => {
       return;
     }
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     try {
       setLoading(true);
       setError('');
@@ -67,10 +71,14 @@ const Signatures = () => {
       setError(error.response?.data?.message || 'Failed to delete signature');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleSetActive = async (id) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       setLoading(true);
       setError('');
@@ -87,10 +95,14 @@ const Signatures = () => {
       setError(error.response?.data?.message || 'Failed to set active signature');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   const handleSave = async (name, imageData) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       setLoading(true);
       setError('');
@@ -125,6 +137,7 @@ const Signatures = () => {
       setError(error.response?.data?.message || 'Failed to save signature');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

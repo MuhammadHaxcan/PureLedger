@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Table, Button, Alert, Form } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -7,6 +7,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Locations = () => {
   usePageTitle('Locations');
+  const isSubmittingRef = useRef(false);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,6 +61,9 @@ const Locations = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
@@ -81,10 +85,15 @@ const Locations = () => {
     } catch (error) {
       const errors = error.response?.data?.errors || [];
       setError(errors.length > 0 ? errors.join(', ') : 'Failed to save location');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleConfirmDelete = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       const response = await apiClient.delete(`/MetaDataApi/locations/${editingLocation.locationId}`);
       if (response.data.success) {
@@ -94,6 +103,8 @@ const Locations = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to delete location');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

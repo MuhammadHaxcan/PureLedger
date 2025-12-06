@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -7,6 +7,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 const EditProfile = () => {
     usePageTitle('Edit Profile');
     const navigate = useNavigate();
+    const isSubmittingRef = useRef(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -56,6 +57,9 @@ const EditProfile = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        
         setSaving(true);
         setError('');
         setSuccess('');
@@ -63,6 +67,7 @@ const EditProfile = () => {
         if (formData.password && formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
             setSaving(false);
+            isSubmittingRef.current = false;
             return;
         }
 
@@ -97,6 +102,7 @@ const EditProfile = () => {
             setError(errorMessage);
         } finally {
             setSaving(false);
+            isSubmittingRef.current = false;
         }
     };
 

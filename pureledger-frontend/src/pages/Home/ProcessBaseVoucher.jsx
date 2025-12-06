@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -9,6 +9,10 @@ const ProcessBaseVoucher = () => {
     usePageTitle('Process Base Voucher');
     const { id } = useParams();
     const navigate = useNavigate();
+    
+    // Ref to prevent duplicate submissions
+    const isSubmittingRef = useRef(false);
+    
     const [voucherData, setVoucherData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -445,6 +449,11 @@ const ProcessBaseVoucher = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Prevent duplicate submissions
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        
         setError('');
         setSuccess('');
         setGenerating(true);
@@ -458,6 +467,7 @@ const ProcessBaseVoucher = () => {
             if (selectedProductEntries.length === 0) {
                 setError('Please select at least one product entry to process.');
                 setGenerating(false);
+                isSubmittingRef.current = false;
                 return;
             }
 
@@ -471,6 +481,7 @@ const ProcessBaseVoucher = () => {
             if (invalidEntries.length > 0) {
                 setError('All selected product entries must have a process quantity greater than zero.');
                 setGenerating(false);
+                isSubmittingRef.current = false;
                 return;
             }
 
@@ -520,6 +531,7 @@ const ProcessBaseVoucher = () => {
             setError(err.response?.data?.message || 'Failed to create derived voucher');
         } finally {
             setGenerating(false);
+            isSubmittingRef.current = false;
         }
     };
 

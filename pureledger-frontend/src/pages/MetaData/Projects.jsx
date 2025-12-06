@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Table, Button, Alert, Form } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -7,6 +7,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Projects = () => {
   usePageTitle('Projects');
+  const isSubmittingRef = useRef(false);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -53,6 +54,9 @@ const Projects = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
@@ -73,10 +77,15 @@ const Projects = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to save project');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
   const handleConfirmDelete = async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     try {
       const response = await apiClient.delete(`/MetaDataApi/projects/${editingProject.projectId}`);
       if (response.data.success) {
@@ -86,6 +95,8 @@ const Projects = () => {
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to delete project');
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Table, Button, Alert, Form, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -8,6 +8,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Categories = () => {
   usePageTitle('Categories');
+  const isSubmittingRef = useRef(false);
   const [categories, setCategories] = useState([]);
   const [projects, setProjects] = useState([]);
   const [accountTypes, setAccountTypes] = useState([]);
@@ -147,6 +148,9 @@ const Categories = () => {
   // Handle form submission (Create/Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     setError('');
     setSuccess('');
 
@@ -154,6 +158,7 @@ const Categories = () => {
     const trimmedName = formData.categoryName?.trim() || '';
     if (!trimmedName) {
       setError('Category name is required.');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -162,11 +167,13 @@ const Categories = () => {
 
     if (!projectId || projectId <= 0 || isNaN(projectId)) {
       setError('Please select a valid project.');
+      isSubmittingRef.current = false;
       return;
     }
 
     if (!accountTypeId || accountTypeId <= 0 || isNaN(accountTypeId)) {
       setError('Please select a valid account type.');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -237,12 +244,14 @@ const Categories = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
   // Handle confirm delete
   const handleConfirmDelete = async () => {
-    if (!editingCategory) return;
+    if (!editingCategory || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     try {
       setLoading(true);
@@ -274,6 +283,7 @@ const Categories = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
