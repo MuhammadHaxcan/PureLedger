@@ -744,8 +744,6 @@ namespace PureLedger.Services
                         ProductId = productId,
                         ProductName = productName,
                         LastVoucherId = lastEntry.JournalVoucherId,
-                        EntryDate = lastEntry.JournalVoucher.EntryDate.ToString("dd-MMM yyyy"),
-                        CreditableDate = lastEntry.JournalVoucher.CreditableDate.ToString("dd-MMM yyyy"),
                         PreviousDebitQty = prevDebitQty,
                         PreviousCreditQty = prevCreditQty,
                         PreviousBalance = prevQtyBalance,

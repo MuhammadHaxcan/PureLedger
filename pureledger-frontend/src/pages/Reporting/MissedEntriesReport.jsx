@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup, Nav, Tab } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Papa from 'papaparse';
 
 const MissedEntriesReport = () => {
     usePageTitle('Missed Entries');
@@ -39,21 +42,9 @@ const MissedEntriesReport = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [loadedCount, setLoadedCount] = useState(0);
     const [tabsDisabled, setTabsDisabled] = useState(false);
-    const pageSize = 500;
+    const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+    const pageSize = 1000;
     const isLoadingRef = useRef(false);
-
-    // Set default dates (1 month ago to today)
-    useEffect(() => {
-        const today = new Date();
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(today.getMonth() - 1);
-        
-        setFormData(prev => ({
-            ...prev,
-            startDate: prev.startDate || oneMonthAgo.toISOString().split('T')[0],
-            endDate: prev.endDate || today.toISOString().split('T')[0]
-        }));
-    }, []);
 
     useEffect(() => {
         loadInitData();
@@ -309,9 +300,9 @@ const MissedEntriesReport = () => {
     };
 
     const formatCurrency = (value) => {
-        return new Intl.NumberFormat('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
+        return new Intl.NumberFormat('en-PK', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         }).format(value || 0);
     };
 
@@ -319,16 +310,19 @@ const MissedEntriesReport = () => {
         if (!dateString) return '';
         try {
             const date = new Date(dateString);
-            return date.toLocaleDateString();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${month}/${day}/${year}`;
         } catch {
             return dateString;
         }
     };
 
     const formatNumber = (value) => {
-        return new Intl.NumberFormat('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
+        return new Intl.NumberFormat('en-PK', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         }).format(value || 0);
     };
 
@@ -338,15 +332,7 @@ const MissedEntriesReport = () => {
             return;
         }
 
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-            headers.join(','),
-            ...data.map(row => headers.map(header => {
-                const value = row[header];
-                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
-            }).join(','))
-        ].join('\n');
-
+        const csvContent = Papa.unparse(data);
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -360,38 +346,238 @@ const MissedEntriesReport = () => {
             Project: entry.projectName || entry.ProjectName || '',
             Customer: entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A',
             Product: entry.productName || entry.productAccountName || entry.ProductName || 'N/A',
-            Quantity: entry.quantity || entry.Quantity || 0,
-            Rate: entry.rate || entry.Rate || 0,
-            Discount: entry.discount || entry.Discount || 0,
-            'Total Value': entry.totalValue || entry.TotalValue || 0,
+            Quantity: (entry.quantity || entry.Quantity || 0).toFixed(2),
+            Rate: (entry.rate || entry.Rate || 0).toFixed(2),
+            Discount: (entry.discount || entry.Discount || 0).toFixed(2),
+            'Total Value': (entry.totalValue || entry.TotalValue || 0).toFixed(2),
             Description: entry.description || entry.Description || ''
         }));
         exportToCsv(csvData, `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.csv`);
     };
 
+    const handleExportDetailsPdf = () => {
+        const doc = new jsPDF('landscape', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Missed Entries Report', 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        if (formData.startDate) {
+            doc.text(`Date Range: ${formData.startDate} to ${formData.endDate || formData.startDate}`, 14, 34);
+        }
+        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, 40);
+
+        const rows = allEntries.map(entry => ({
+            date: formatDate(entry.missedDate || entry.MissedDate),
+            project: entry.projectName || entry.ProjectName || '',
+            customer: entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A',
+            product: entry.productName || entry.productAccountName || entry.ProductName || 'N/A',
+            quantity: formatNumber(entry.quantity || entry.Quantity || 0),
+            rate: formatCurrency(entry.rate || entry.Rate || 0),
+            discount: formatCurrency(entry.discount || entry.Discount || 0),
+            totalValue: formatCurrency(entry.totalValue || entry.TotalValue || 0)
+        }));
+
+        const columns = [
+            { header: 'Date', dataKey: 'date' },
+            { header: 'Project', dataKey: 'project' },
+            { header: 'Customer', dataKey: 'customer' },
+            { header: 'Product', dataKey: 'product' },
+            { header: 'Quantity', dataKey: 'quantity' },
+            { header: 'Rate', dataKey: 'rate' },
+            { header: 'Discount', dataKey: 'discount' },
+            { header: 'Total Value', dataKey: 'totalValue' }
+        ];
+
+        const rowsPerPage = 20;
+        let startY = 46;
+
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+
+            const chunk = rows.slice(i, i + rowsPerPage);
+
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 7, cellPadding: 1.5 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(
+                `PureLedger - Missed Entries Report | Page ${i} of ${pageCount}`,
+                14,
+                doc.internal.pageSize.height - 10
+            );
+        }
+
+        doc.save(`MissedEntries_Details_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
     const handleExportByCustomer = () => {
         const csvData = byCustomerData.map(item => ({
             Customer: item.customerName || 'Unknown',
-            'Entry Count': item.entryCount || 0,
-            'Total Quantity': item.totalQuantity || 0,
-            'Total Value': item.totalValue || 0,
-            'Unique Products': item.uniqueProductCount || 0,
-            'Avg Qty/Entry': item.averageQuantityPerEntry || 0
+            'Entry Count': (item.entryCount || 0).toFixed(2),
+            'Total Quantity': (item.totalQuantity || 0).toFixed(2),
+            'Total Value': (item.totalValue || 0).toFixed(2),
+            'Unique Products': (item.uniqueProductCount || 0).toFixed(2),
+            'Avg Qty/Entry': (item.averageQuantityPerEntry || 0).toFixed(2)
         }));
         exportToCsv(csvData, `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.csv`);
+    };
+
+    const handleExportByCustomerPdf = () => {
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Missed Entries by Customer', 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+
+        const rows = byCustomerData.map(item => ({
+            customer: item.customerName || 'Unknown',
+            entryCount: formatNumber(item.entryCount || 0),
+            totalQuantity: formatNumber(item.totalQuantity || 0),
+            totalValue: formatCurrency(item.totalValue || 0),
+            uniqueProducts: formatNumber(item.uniqueProductCount || 0),
+            avgQty: formatNumber(item.averageQuantityPerEntry || 0)
+        }));
+
+        const columns = [
+            { header: 'Customer', dataKey: 'customer' },
+            { header: 'Entry Count', dataKey: 'entryCount' },
+            { header: 'Total Qty', dataKey: 'totalQuantity' },
+            { header: 'Total Value', dataKey: 'totalValue' },
+            { header: 'Unique Products', dataKey: 'uniqueProducts' },
+            { header: 'Avg Qty/Entry', dataKey: 'avgQty' }
+        ];
+
+        const rowsPerPage = 20;
+        let startY = 40;
+
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+
+            const chunk = rows.slice(i, i + rowsPerPage);
+
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
+        }
+
+        doc.save(`MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     const handleExportByProduct = () => {
         const csvData = byProductData.map(item => ({
             Product: item.productName || 'Unknown',
-            'Entry Count': item.entryCount || 0,
-            'Total Quantity': item.totalQuantity || 0,
-            'Total Value': item.totalValue || 0,
-            'Unique Customers': item.uniqueCustomerCount || 0,
-            'Avg Rate': item.averageRate || 0,
-            'Avg Discount': item.averageDiscount || 0
+            'Entry Count': (item.entryCount || 0).toFixed(2),
+            'Total Quantity': (item.totalQuantity || 0).toFixed(2),
+            'Total Value': (item.totalValue || 0).toFixed(2),
+            'Unique Customers': (item.uniqueCustomerCount || 0).toFixed(2),
+            'Avg Rate': (item.averageRate || 0).toFixed(2),
+            'Avg Discount': (item.averageDiscount || 0).toFixed(2)
         }));
         exportToCsv(csvData, `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.csv`);
+    };
+
+    const handleExportByProductPdf = () => {
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Missed Entries by Product', 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+
+        const rows = byProductData.map(item => ({
+            product: item.productName || 'Unknown',
+            entryCount: formatNumber(item.entryCount || 0),
+            totalQuantity: formatNumber(item.totalQuantity || 0),
+            totalValue: formatCurrency(item.totalValue || 0),
+            uniqueCustomers: formatNumber(item.uniqueCustomerCount || 0),
+            avgRate: formatCurrency(item.averageRate || 0),
+            avgDiscount: formatCurrency(item.averageDiscount || 0)
+        }));
+
+        const columns = [
+            { header: 'Product', dataKey: 'product' },
+            { header: 'Entry Count', dataKey: 'entryCount' },
+            { header: 'Total Qty', dataKey: 'totalQuantity' },
+            { header: 'Total Value', dataKey: 'totalValue' },
+            { header: 'Unique Customers', dataKey: 'uniqueCustomers' },
+            { header: 'Avg Rate', dataKey: 'avgRate' },
+            { header: 'Avg Discount', dataKey: 'avgDiscount' }
+        ];
+
+        const rowsPerPage = 20;
+        let startY = 40;
+
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+
+            const chunk = rows.slice(i, i + rowsPerPage);
+
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
+        }
+
+        doc.save(`MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -402,70 +588,77 @@ const MissedEntriesReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2><i className="fas fa-exclamation-circle me-2"></i>Missed Entries</h2>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2><i className="fas fa-exclamation-circle me-2"></i>Missed Entries Report</h2>
             </div>
 
-            {/* Filter Card */}
             <Card className="shadow mb-4">
-                <Card.Header className="py-3">
-                    <h6 className="m-0 font-weight-bold text-primary">Filter Missed Entries</h6>
+                <Card.Header className="py-3 d-flex justify-content-between align-items-center">
+                    <h6 className="m-0 font-weight-bold text-primary">
+                        <i className="fas fa-filter me-2"></i>Report Parameters
+                    </h6>
                 </Card.Header>
                 <Card.Body>
                     <Form id="filterForm" onSubmit={handleSubmit}>
-                        <div className="row g-3 align-items-end">
-                            <div className="col-md-3">
-                                <Form.Label>Start Date</Form.Label>
-                                <Form.Control
-                                    type="date"
-                                    id="startDate"
-                                    value={formData.startDate}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, startDate: e.target.value });
-                                    }}
-                                    disabled={searching || isAutoLoading}
-                                />
+                        <div className="row mb-3">
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>Since</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                                    <Form.Control
+                                        type="date"
+                                        value={formData.startDate}
+                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                        disabled={searching || isAutoLoading}
+                                    />
+                                </InputGroup>
                             </div>
-                            <div className="col-md-3">
-                                <Form.Label>End Date</Form.Label>
-                                <Form.Control
-                                    type="date"
-                                    id="endDate"
-                                    value={formData.endDate}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, endDate: e.target.value });
-                                    }}
-                                    disabled={searching || isAutoLoading}
-                                />
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>To</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                                    <Form.Control
+                                        type="date"
+                                        value={formData.endDate}
+                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                        disabled={searching || isAutoLoading}
+                                    />
+                                </InputGroup>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-3 mb-3">
                                 <Form.Label>Project <span className="text-danger">*</span></Form.Label>
-                                <SearchableSelect
-                                    value={formData.projectId}
-                                    onChange={(value) => setFormData({ ...formData, projectId: value ? parseInt(value) : null })}
-                                    options={projects.map(p => ({ id: p.id, name: p.name }))}
-                                    placeholder="Select Project"
-                                    disabled={searching || isAutoLoading}
-                                />
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
+                                    <SearchableSelect
+                                        value={formData.projectId}
+                                        onChange={(value) => setFormData({ ...formData, projectId: value ? parseInt(value) : null })}
+                                        options={projects.map(p => ({ id: p.id, name: p.name }))}
+                                        placeholder="Search project..."
+                                        disabled={searching || isAutoLoading}
+                                    />
+                                </InputGroup>
                             </div>
-                            <div className="col-md-2">
-                                <Button 
-                                    type="submit" 
-                                    variant="primary" 
-                                    className="w-100"
-                                    disabled={searching || isAutoLoading}
-                                >
-                                    {searching ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                            Loading...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="fas fa-search me-1"></i> Search
-                                        </>
-                                    )}
-                                </Button>
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>&nbsp;</Form.Label>
+                                <div className="d-grid">
+                                    <Button 
+                                        type="submit" 
+                                        variant="primary" 
+                                        disabled={searching || isAutoLoading || !formData.projectId}
+                                        title={!formData.projectId ? 'Please select a project' : ''}
+                                    >
+                                        {searching ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-chart-bar me-2"></i> Generate Report
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </Form>
@@ -481,85 +674,94 @@ const MissedEntriesReport = () => {
             {/* Summary Statistics Card */}
             {hasData && (
                 <Card className="shadow mb-4">
-                    <Card.Header className="py-3">
-                        <h6 className="m-0 font-weight-bold text-primary">Summary Statistics</h6>
+                    <Card.Header 
+                        className="py-3 d-flex justify-content-between align-items-center" 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setSummaryCollapsed(!summaryCollapsed)}
+                    >
+                        <h6 className="m-0 font-weight-bold text-primary">
+                            <i className="fas fa-chart-pie me-2"></i>Summary Statistics
+                        </h6>
+                        <i className={`fas fa-chevron-${summaryCollapsed ? 'down' : 'up'} text-muted`}></i>
                     </Card.Header>
-                    <Card.Body>
-                        <div className="row" id="summaryStats">
-                            <div className="col-md-3">
-                                <div className="card bg-primary text-white mb-4">
-                                    <div className="card-body">
-                                        <h5 className="mb-0" id="totalEntries">{summaryStats.totalMissedEntries.toLocaleString()}</h5>
-                                        <div>Total Missed Entries</div>
+                    {!summaryCollapsed && (
+                        <Card.Body>
+                            <div className="row" id="summaryStats">
+                                <div className="col-md-3">
+                                    <div className="card bg-primary text-white mb-4">
+                                        <div className="card-body">
+                                            <h5 className="mb-0" id="totalEntries">{formatNumber(summaryStats.totalMissedEntries)}</h5>
+                                            <div>Total Missed Entries</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-3">
+                                    <div className="card bg-success text-white mb-4">
+                                        <div className="card-body">
+                                            <h5 className="mb-0" id="totalQuantity">{formatNumber(summaryStats.totalMissedQuantity)}</h5>
+                                            <div>Total Missed Quantity</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-3">
+                                    <div className="card bg-warning text-white mb-4">
+                                        <div className="card-body">
+                                            <h5 className="mb-0" id="uniqueCustomers">{formatNumber(summaryStats.uniqueCustomers)}</h5>
+                                            <div>Unique Customers</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-3">
+                                    <div className="card bg-info text-white mb-4">
+                                        <div className="card-body">
+                                            <h5 className="mb-0" id="uniqueProducts">{formatNumber(summaryStats.uniqueProducts)}</h5>
+                                            <div>Unique Products</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-md-3">
-                                <div className="card bg-success text-white mb-4">
-                                    <div className="card-body">
-                                        <h5 className="mb-0" id="totalQuantity">{summaryStats.totalMissedQuantity.toLocaleString()}</h5>
-                                        <div>Total Missed Quantity</div>
-                                    </div>
+                            <div className="row" id="additionalStats">
+                                <div className="col-md-6">
+                                    <Card className="mb-4">
+                                        <Card.Header>
+                                            <i className="fas fa-user me-1"></i> Top Customer
+                                        </Card.Header>
+                                        <Card.Body>
+                                            {summaryStats.topCustomer ? (
+                                                <>
+                                                    <strong>{summaryStats.topCustomer}</strong>
+                                                    <div className="text-muted small">
+                                                        Missed Quantity: {formatNumber(summaryStats.topCustomerMissedQuantity)}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-muted">No data available</span>
+                                            )}
+                                        </Card.Body>
+                                    </Card>
+                                </div>
+                                <div className="col-md-6">
+                                    <Card className="mb-4">
+                                        <Card.Header>
+                                            <i className="fas fa-box me-1"></i> Top Missed Product
+                                        </Card.Header>
+                                        <Card.Body>
+                                            {summaryStats.topMissedProduct ? (
+                                                <>
+                                                    <strong>{summaryStats.topMissedProduct}</strong>
+                                                    <div className="text-muted small">
+                                                        Missed Quantity: {formatNumber(summaryStats.topMissedProductQuantity)}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-muted">No data available</span>
+                                            )}
+                                        </Card.Body>
+                                    </Card>
                                 </div>
                             </div>
-                            <div className="col-md-3">
-                                <div className="card bg-warning text-white mb-4">
-                                    <div className="card-body">
-                                        <h5 className="mb-0" id="uniqueCustomers">{summaryStats.uniqueCustomers.toLocaleString()}</h5>
-                                        <div>Unique Customers</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-md-3">
-                                <div className="card bg-info text-white mb-4">
-                                    <div className="card-body">
-                                        <h5 className="mb-0" id="uniqueProducts">{summaryStats.uniqueProducts.toLocaleString()}</h5>
-                                        <div>Unique Products</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="row" id="additionalStats">
-                            <div className="col-md-6">
-                                <Card className="mb-4">
-                                    <Card.Header>
-                                        <i className="fas fa-user me-1"></i> Top Customer
-                                    </Card.Header>
-                                    <Card.Body>
-                                        {summaryStats.topCustomer ? (
-                                            <>
-                                                <strong>{summaryStats.topCustomer}</strong>
-                                                <div className="text-muted small">
-                                                    Missed Quantity: {summaryStats.topCustomerMissedQuantity.toLocaleString()}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <span className="text-muted">No data available</span>
-                                        )}
-                                    </Card.Body>
-                                </Card>
-                            </div>
-                            <div className="col-md-6">
-                                <Card className="mb-4">
-                                    <Card.Header>
-                                        <i className="fas fa-box me-1"></i> Top Missed Product
-                                    </Card.Header>
-                                    <Card.Body>
-                                        {summaryStats.topMissedProduct ? (
-                                            <>
-                                                <strong>{summaryStats.topMissedProduct}</strong>
-                                                <div className="text-muted small">
-                                                    Missed Quantity: {summaryStats.topMissedProductQuantity.toLocaleString()}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <span className="text-muted">No data available</span>
-                                        )}
-                                    </Card.Body>
-                                </Card>
-                            </div>
-                        </div>
-                    </Card.Body>
+                        </Card.Body>
+                    )}
                 </Card>
             )}
 
@@ -621,20 +823,31 @@ const MissedEntriesReport = () => {
                                                     )}
                                                 </span>
                                             )}
-                                            <Button 
-                                                variant="outline-success" 
-                                                size="sm" 
-                                                onClick={handleExportDetails}
-                                                disabled={allEntries.length === 0}
-                                            >
-                                                <i className="fas fa-file-csv me-1"></i> Export CSV
-                                            </Button>
+                                            {!isAutoLoading && allEntries.length > 0 && (
+                                                <>
+                                                    <Button 
+                                                        variant="outline-success" 
+                                                        size="sm" 
+                                                        onClick={handleExportDetails}
+                                                        className="me-2"
+                                                    >
+                                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline-danger" 
+                                                        size="sm" 
+                                                        onClick={handleExportDetailsPdf}
+                                                    >
+                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
                                     </Card.Header>
                                     <Card.Body>
-                                        <div className="table-responsive">
-                                            <Table bordered hover className="table-sm" id="missedEntriesTable">
-                                                <thead className="table-primary">
+                                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                                            <Table bordered striped hover className="table-sm mb-0 w-100" id="missedEntriesTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                                <thead className="table-light">
                                                     <tr>
                                                         <th>Date</th>
                                                         <th>Project</th>
@@ -671,7 +884,7 @@ const MissedEntriesReport = () => {
                                                                     <td>{projectName}</td>
                                                                     <td>{customerName}</td>
                                                                     <td>{productName}</td>
-                                                                    <td className="text-end">{quantity.toLocaleString()}</td>
+                                                                    <td className="text-end">{formatNumber(quantity)}</td>
                                                                     <td className="text-end">{formatCurrency(rate)}</td>
                                                                     <td className="text-end">{formatCurrency(discount)}</td>
                                                                     <td className="text-end">{formatCurrency(totalValue)}</td>
@@ -700,19 +913,32 @@ const MissedEntriesReport = () => {
                                         <h6 className="m-0 font-weight-bold text-primary">
                                             <i className="fas fa-users me-2"></i>Missed Entries by Customer
                                         </h6>
-                                        <Button 
-                                            variant="outline-success" 
-                                            size="sm" 
-                                            onClick={handleExportByCustomer}
-                                            disabled={byCustomerData.length === 0}
-                                        >
-                                            <i className="fas fa-file-csv me-1"></i> Export CSV
-                                        </Button>
+                                        <div>
+                                            {byCustomerData.length > 0 && (
+                                                <>
+                                                    <Button 
+                                                        variant="outline-success" 
+                                                        size="sm" 
+                                                        onClick={handleExportByCustomer}
+                                                        className="me-2"
+                                                    >
+                                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline-danger" 
+                                                        size="sm" 
+                                                        onClick={handleExportByCustomerPdf}
+                                                    >
+                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
                                     </Card.Header>
                                     <Card.Body>
-                                        <div className="table-responsive">
-                                            <Table bordered hover className="table-sm" id="byCustomerTable">
-                                                <thead className="table-primary">
+                                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                                            <Table bordered striped hover className="table-sm mb-0 w-100" id="byCustomerTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                                <thead className="table-light">
                                                     <tr>
                                                         <th>Customer</th>
                                                         <th className="text-end">Entry Count</th>
@@ -734,10 +960,10 @@ const MissedEntriesReport = () => {
                                                         byCustomerData.map((item, index) => (
                                                             <tr key={index}>
                                                                 <td>{item.customerName || 'Unknown'}</td>
-                                                                <td className="text-end">{(item.entryCount || 0).toLocaleString()}</td>
-                                                                <td className="text-end">{(item.totalQuantity || 0).toLocaleString()}</td>
-                                                                <td className="text-end">{formatNumber(item.totalValue || 0)}</td>
-                                                                <td className="text-end">{(item.uniqueProductCount || 0).toLocaleString()}</td>
+                                                                <td className="text-end">{formatNumber(item.entryCount || 0)}</td>
+                                                                <td className="text-end">{formatNumber(item.totalQuantity || 0)}</td>
+                                                                <td className="text-end">{formatCurrency(item.totalValue || 0)}</td>
+                                                                <td className="text-end">{formatNumber(item.uniqueProductCount || 0)}</td>
                                                                 <td className="text-end">{formatNumber(item.averageQuantityPerEntry || 0)}</td>
                                                                 <td className="text-center">
                                                                     <Button
@@ -782,9 +1008,9 @@ const MissedEntriesReport = () => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="table-responsive">
-                                                    <Table bordered className="table-sm" id="customerDetailsTable">
-                                                        <thead>
+                                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="customerDetailsTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                                        <thead className="table-light">
                                                             <tr>
                                                                 <th>Date</th>
                                                                 <th>Product</th>
@@ -815,10 +1041,10 @@ const MissedEntriesReport = () => {
                                                                         <tr key={index}>
                                                                             <td>{formatDate(missedDate)}</td>
                                                                             <td>{productName}</td>
-                                                                            <td className="text-end">{quantity.toLocaleString()}</td>
-                                                                            <td className="text-end">{formatNumber(rate)}</td>
-                                                                            <td className="text-end">{formatNumber(discount)}</td>
-                                                                            <td className="text-end">{formatNumber(totalValue)}</td>
+                                                                            <td className="text-end">{formatNumber(quantity)}</td>
+                                                                            <td className="text-end">{formatCurrency(rate)}</td>
+                                                                            <td className="text-end">{formatCurrency(discount)}</td>
+                                                                            <td className="text-end">{formatCurrency(totalValue)}</td>
                                                                             <td>{description}</td>
                                                                         </tr>
                                                                     );
@@ -840,19 +1066,32 @@ const MissedEntriesReport = () => {
                                         <h6 className="m-0 font-weight-bold text-primary">
                                             <i className="fas fa-boxes me-2"></i>Missed Entries by Product
                                         </h6>
-                                        <Button 
-                                            variant="outline-success" 
-                                            size="sm" 
-                                            onClick={handleExportByProduct}
-                                            disabled={byProductData.length === 0}
-                                        >
-                                            <i className="fas fa-file-csv me-1"></i> Export CSV
-                                        </Button>
+                                        <div>
+                                            {byProductData.length > 0 && (
+                                                <>
+                                                    <Button 
+                                                        variant="outline-success" 
+                                                        size="sm" 
+                                                        onClick={handleExportByProduct}
+                                                        className="me-2"
+                                                    >
+                                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline-danger" 
+                                                        size="sm" 
+                                                        onClick={handleExportByProductPdf}
+                                                    >
+                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                    </Button>
+                                                </>
+                                            )}
+                                        </div>
                                     </Card.Header>
                                     <Card.Body>
-                                        <div className="table-responsive">
-                                            <Table bordered hover className="table-sm" id="byProductTable">
-                                                <thead className="table-primary">
+                                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                                            <Table bordered striped hover className="table-sm mb-0 w-100" id="byProductTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                                <thead className="table-light">
                                                     <tr>
                                                         <th>Product</th>
                                                         <th className="text-end">Entry Count</th>
@@ -874,12 +1113,12 @@ const MissedEntriesReport = () => {
                                                         byProductData.map((item, index) => (
                                                             <tr key={index}>
                                                                 <td>{item.productName || 'Unknown'}</td>
-                                                                <td className="text-end">{(item.entryCount || 0).toLocaleString()}</td>
-                                                                <td className="text-end">{(item.totalQuantity || 0).toLocaleString()}</td>
-                                                                <td className="text-end">{formatNumber(item.totalValue || 0)}</td>
-                                                                <td className="text-end">{(item.uniqueCustomerCount || 0).toLocaleString()}</td>
-                                                                <td className="text-end">{formatNumber(item.averageRate || 0)}</td>
-                                                                <td className="text-end">{formatNumber(item.averageDiscount || 0)}</td>
+                                                                <td className="text-end">{formatNumber(item.entryCount || 0)}</td>
+                                                                <td className="text-end">{formatNumber(item.totalQuantity || 0)}</td>
+                                                                <td className="text-end">{formatCurrency(item.totalValue || 0)}</td>
+                                                                <td className="text-end">{formatNumber(item.uniqueCustomerCount || 0)}</td>
+                                                                <td className="text-end">{formatCurrency(item.averageRate || 0)}</td>
+                                                                <td className="text-end">{formatCurrency(item.averageDiscount || 0)}</td>
                                                             </tr>
                                                         ))
                                                     )}

@@ -4,8 +4,17 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import ProductReportPDFDocument from './ProductReportPDF';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Papa from 'papaparse';
+import './ProductReport.css';
+
+const buildVoucherUrl = (voucherId, type) => {
+    if (!voucherId) {
+        return '#';
+    }
+    return `/reporting/print-voucher?voucherId=${voucherId}&type=${type}`;
+};
 
 const ProductReport = () => {
     usePageTitle('Product Report');
@@ -29,7 +38,7 @@ const ProductReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 500;
+    const pageSize = 1000;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -155,7 +164,15 @@ const ProductReport = () => {
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
-            minimumFractionDigits: 2
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value || 0);
+    };
+
+    const formatNumber = (value) => {
+        return new Intl.NumberFormat('en-PK', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         }).format(value || 0);
     };
 
@@ -164,9 +181,7 @@ const ProductReport = () => {
         const search = searchTerm.toLowerCase();
         return (
             (product.productName || '').toLowerCase().includes(search) ||
-            product.lastVoucherId?.toString().includes(search) ||
-            (product.entryDate || '').toLowerCase().includes(search) ||
-            (product.creditableDate || '').toLowerCase().includes(search)
+            product.lastVoucherId?.toString().includes(search)
         );
     });
 
@@ -176,15 +191,7 @@ const ProductReport = () => {
             return;
         }
 
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-            headers.join(','),
-            ...data.map(row => headers.map(header => {
-                const value = row[header];
-                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
-            }).join(','))
-        ].join('\n');
-
+        const csvContent = Papa.unparse(data);
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -196,22 +203,127 @@ const ProductReport = () => {
         const csvData = filteredProducts.map(product => ({
             Product: product.productName || '',
             Voucher: `JV-${product.lastVoucherId || ''}`,
-            'Entry Date': product.entryDate || '-',
-            'Due Date': product.creditableDate || '-',
-            'Debit Qty': product.totalDebitQty || 0,
-            'Credit Qty': product.totalCreditQty || 0,
-            'Balance Qty': product.qtyBalance || 0,
-            'Avg Rate': product.averageRate || 0,
-            'Total Debit': product.totalDebit || 0,
-            'Total Credit': product.totalCredit || 0,
-            COGS: product.cogs || 0,
-            Margin: product.margin || 0,
-            'Margin %': `${product.marginPercentage?.toFixed(2) || '0.00'}%`
+            'Debit Qty': (product.totalDebitQty || 0).toFixed(2),
+            'Credit Qty': (product.totalCreditQty || 0).toFixed(2),
+            'Balance Qty': (product.qtyBalance || 0).toFixed(2),
+            'Avg Rate': (product.averageRate || 0).toFixed(2),
+            'Total Debit': (product.totalDebit || 0).toFixed(2),
+            'Total Credit': (product.totalCredit || 0).toFixed(2),
+            COGS: (product.cogs || 0).toFixed(2),
+            Margin: (product.margin || 0).toFixed(2),
+            'Margin %': `${(product.marginPercentage || 0).toFixed(2)}%`
         }));
         const dateRange = formData.startDate && formData.endDate 
             ? `${formData.startDate}_to_${formData.endDate}` 
             : 'report';
         exportToCsv(csvData, `ProductReport_${dateRange}.csv`);
+    };
+
+    const handleExportPdf = () => {
+        const doc = new jsPDF('landscape', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+        const selectedCategory = categories.find(c => c.id === formData.categoryId);
+        const selectedLocation = locations.find(l => l.id === formData.locationId);
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Product Stock & Margin Report', 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        if (formData.startDate) {
+            doc.text(`Date Range: ${formData.startDate} to ${formData.endDate || formData.startDate}`, 14, 34);
+        }
+        if (selectedCategory) {
+            doc.text(`Category: ${selectedCategory.name}`, 14, 40);
+        }
+        if (selectedLocation) {
+            doc.text(`Location: ${selectedLocation.name}`, 14, 46);
+        }
+        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, selectedCategory || selectedLocation ? 52 : 40);
+
+        const rows = filteredProducts.map(product => ({
+            product: product.productName || '',
+            voucher: `JV-${product.lastVoucherId || ''}`,
+            debitQty: formatNumber(product.totalDebitQty),
+            creditQty: formatNumber(product.totalCreditQty),
+            balanceQty: formatNumber(product.qtyBalance),
+            avgRate: formatCurrency(product.averageRate || 0),
+            totalDebit: formatCurrency(product.totalDebit || 0),
+            totalCredit: formatCurrency(product.totalCredit || 0),
+            cogs: formatCurrency(product.cogs || 0),
+            margin: formatCurrency(product.margin || 0),
+            marginPct: `${formatNumber(product.marginPercentage)}%`
+        }));
+
+        // Add totals row
+        if (totals) {
+            rows.push({
+                product: 'TOTAL',
+                voucher: '',
+                debitQty: formatNumber(totals.totalDebitQty),
+                creditQty: formatNumber(totals.totalCreditQty),
+                balanceQty: formatNumber(totals.netQuantity),
+                avgRate: '-',
+                totalDebit: formatCurrency(totals.totalDebit || 0),
+                totalCredit: formatCurrency(totals.totalCredit || 0),
+                cogs: formatCurrency(totals.totalCOGS || 0),
+                margin: formatCurrency(totals.totalMargin || 0),
+                marginPct: `${formatNumber(totals.marginPercentage)}%`
+            });
+        }
+
+        const columns = [
+            { header: 'Product', dataKey: 'product' },
+            { header: 'Voucher', dataKey: 'voucher' },
+            { header: 'Debit Qty', dataKey: 'debitQty' },
+            { header: 'Credit Qty', dataKey: 'creditQty' },
+            { header: 'Bal Qty', dataKey: 'balanceQty' },
+            { header: 'Avg Rate', dataKey: 'avgRate' },
+            { header: 'Total Debit', dataKey: 'totalDebit' },
+            { header: 'Total Credit', dataKey: 'totalCredit' },
+            { header: 'COGS', dataKey: 'cogs' },
+            { header: 'Margin', dataKey: 'margin' },
+            { header: 'Margin %', dataKey: 'marginPct' }
+        ];
+
+        // Split rows into chunks of 10 per page
+        const rowsPerPage = 20;
+        let startY = selectedCategory || selectedLocation ? 56 : 46;
+        
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            const chunk = rows.slice(i, i + rowsPerPage);
+            
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 6, cellPadding: 1.5 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        // Add page numbers to all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(
+                `PureLedger - Product Report | Page ${i} of ${pageCount}`,
+                14,
+                doc.internal.pageSize.height - 10
+            );
+        }
+
+        doc.save(`ProductReport_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -225,43 +337,44 @@ const ProductReport = () => {
             </div>
 
             {error && (
-                <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                <Alert variant="danger" dismissible onClose={() => setError('')}>
                     <i className="fas fa-exclamation-circle me-2"></i>{error}
-                    <button type="button" className="btn-close" onClick={() => setError('')}></button>
-                </div>
+                </Alert>
             )}
 
-            <div className="card shadow mb-4">
-                <div className="card-header py-3 d-flex justify-content-between align-items-center">
+            <Card className="shadow mb-4">
+                <Card.Header className="py-3 d-flex justify-content-between align-items-center">
                     <h6 className="m-0 font-weight-bold text-primary">
                         <i className="fas fa-filter me-2"></i>Report Parameters
                     </h6>
-                </div>
-                <div className="card-body">
-                    <form id="productReportForm" onSubmit={handleSubmit}>
+                </Card.Header>
+                <Card.Body>
+                    <Form onSubmit={handleSubmit}>
                         <div className="row mb-3">
                             <div className="col-md-3 mb-3">
-                                <label className="form-label">Since</label>
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    id="startDate"
-                                    value={formData.startDate}
-                                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                                />
+                                <Form.Label>Since</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                                    <Form.Control
+                                        type="date"
+                                        value={formData.startDate}
+                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                    />
+                                </InputGroup>
                             </div>
                             <div className="col-md-3 mb-3">
-                                <label className="form-label">To</label>
-                                <input
-                                    type="date"
-                                    className="form-control"
-                                    id="endDate"
-                                    value={formData.endDate}
-                                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                                />
+                                <Form.Label>To</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                                    <Form.Control
+                                        type="date"
+                                        value={formData.endDate}
+                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                    />
+                                </InputGroup>
                             </div>
                             <div className="col-md-3 mb-3">
-                                <Form.Label>Project</Form.Label>
+                                <Form.Label>Project <span className="text-danger">*</span></Form.Label>
                                 <InputGroup>
                                     <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
                                     <SearchableSelect
@@ -316,74 +429,51 @@ const ProductReport = () => {
                                             </>
                                         ) : (
                                             <>
-                                                <i className="fas fa-chart-bar me-1"></i> Generate Report
+                                                <i className="fas fa-chart-bar me-2"></i> Generate Report
                                             </>
                                         )}
                                     </Button>
                                 </div>
                             </div>
                         </div>
-                    </form>
-                </div>
-            </div>
+                    </Form>
+                </Card.Body>
+            </Card>
 
             {allProducts.length > 0 && (
-                <div className="card shadow">
-                    <div className="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 className="m-0 font-weight-bold text-primary">Report Results</h6>
+                <Card className="shadow mb-4">
+                    <Card.Header className="py-3 d-flex justify-content-between align-items-center">
+                        <h6 className="m-0 font-weight-bold text-primary">
+                            <i className="fas fa-table me-2"></i>Product Report Results
+                        </h6>
                         <div>
                             {totalRecords > 0 && (
                                 <span className="badge bg-primary me-2">
                                     {allProducts.length} of {totalRecords} products
                                 </span>
                             )}
-                            <Button 
-                                variant="outline-success" 
-                                size="sm" 
-                                onClick={handleExportCsv} 
-                                disabled={filteredProducts.length === 0}
-                                className="me-2"
-                            >
-                                <i className="fas fa-file-csv me-1"></i> Export CSV
-                            </Button>
                             {!hasMoreData && filteredProducts.length > 0 && (
-                                <PDFDownloadLink
-                                    document={
-                                        <ProductReportPDFDocument
-                                            products={filteredProducts}
-                                            totals={totals}
-                                            formData={formData}
-                                            projects={projects}
-                                            categories={categories}
-                                            locations={locations}
-                                            totalRecords={totalRecords}
-                                        />
-                                    }
-                                    fileName={`ProductReport_${new Date().toISOString().split('T')[0]}.pdf`}
-                                >
-                                    {({ blob, url, loading, error }) => (
-                                        <Button 
-                                            variant="outline-danger" 
-                                            size="sm" 
-                                            disabled={loading || error}
-                                        >
-                                            {loading ? (
-                                                <>
-                                                    <span className="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                    Generating PDF...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <i className="fas fa-file-pdf me-1"></i> Export PDF
-                                                </>
-                                            )}
-                                        </Button>
-                                    )}
-                                </PDFDownloadLink>
+                                <>
+                                    <Button 
+                                        variant="outline-success" 
+                                        size="sm" 
+                                        onClick={handleExportCsv} 
+                                        className="me-2"
+                                    >
+                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                    </Button>
+                                    <Button 
+                                        variant="outline-danger" 
+                                        size="sm" 
+                                        onClick={handleExportPdf}
+                                    >
+                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                    </Button>
+                                </>
                             )}
                         </div>
-                    </div>
-                    <div className="card-body">
+                    </Card.Header>
+                    <Card.Body>
                         <div className="row mb-3">
                             <div className="col-12">
                                 <Form.Label>Search</Form.Label>
@@ -397,80 +487,92 @@ const ProductReport = () => {
                                 </InputGroup>
                             </div>
                         </div>
-                        <div className="table-responsive" style={{ overflow: 'visible' }}>
-                            <table className="table table-bordered" style={{ width: '100%', marginBottom: 0 }}>
-                                <thead className="table-light">
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Voucher</th>
-                                        <th>Entry Date</th>
-                                        <th>Due Date</th>
-                                        <th className="text-end">Debit Qty</th>
-                                        <th className="text-end">Credit Qty</th>
-                                        <th className="text-end">Balance Qty</th>
-                                        <th className="text-end">Avg Rate</th>
-                                        <th className="text-end">Total Debit</th>
-                                        <th className="text-end">Total Credit</th>
-                                        <th className="text-end">COGS</th>
-                                        <th className="text-end">Margin</th>
-                                        <th className="text-end">Margin %</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredProducts.length === 0 ? (
+                        <div className="product-report-container">
+                            <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                                <Table bordered striped hover className="table-sm mb-0 w-100" id="productReportTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                    <thead className="table-light">
                                         <tr>
-                                            <td colSpan="13" className="text-center text-muted py-4">
-                                                {searchTerm ? 'No results found for your search' : 'No data available'}
-                                            </td>
+                                            <th className="product-column">Product</th>
+                                            <th className="voucher-column">Voucher</th>
+                                            <th className="qty-column text-end">Debit Qty</th>
+                                            <th className="qty-column text-end">Credit Qty</th>
+                                            <th className="qty-column text-end">Bal Qty</th>
+                                            <th className="currency-column text-end">Avg Rate</th>
+                                            <th className="currency-column text-end">Total Debit</th>
+                                            <th className="currency-column text-end">Total Credit</th>
+                                            <th className="currency-column text-end">COGS</th>
+                                            <th className="currency-column text-end">Margin</th>
+                                            <th className="percent-column text-end">Margin %</th>
                                         </tr>
-                                    ) : (
-                                        filteredProducts.map((product, index) => {
-                                            const isLastEntry = index === filteredProducts.length - 1;
-                                            return (
-                                                <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
-                                                    <td>{product.productName}</td>
-                                                    <td>JV-{product.lastVoucherId}</td>
-                                                    <td>{product.entryDate || '-'}</td>
-                                                    <td>{product.creditableDate || '-'}</td>
-                                                    <td className="text-end">{product.totalDebitQty || 0}</td>
-                                                    <td className="text-end">{product.totalCreditQty || 0}</td>
-                                                    <td className="text-end">{product.qtyBalance || 0}</td>
-                                                    <td className="text-end">{formatCurrency(product.averageRate || 0)}</td>
-                                                    <td className="text-end">{formatCurrency(product.totalDebit || 0)}</td>
-                                                    <td className="text-end">{formatCurrency(product.totalCredit || 0)}</td>
-                                                    <td className="text-end">{formatCurrency(product.cogs || 0)}</td>
-                                                    <td className="text-end">{formatCurrency(product.margin || 0)}</td>
-                                                    <td className="text-end">{product.marginPercentage?.toFixed(2) || '0.00'}%</td>
-                                                </tr>
-                                            );
-                                        })
+                                    </thead>
+                                    <tbody>
+                                        {filteredProducts.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                    {searchTerm ? 'No results found for your search' : 'No data available'}
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            filteredProducts.map((product, index) => {
+                                                const isLastEntry = index === filteredProducts.length - 1;
+                                                return (
+                                                    <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                        <td className="product-column" title={product.productName}>{product.productName}</td>
+                                                        <td className="voucher-column">
+                                                            <div className="d-flex flex-wrap gap-1 align-items-center">
+                                                                <a
+                                                                    href={buildVoucherUrl(product.lastVoucherId, 'JV')}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="voucher-link text-decoration-none badge bg-primary"
+                                                                    style={{ fontSize: '0.75rem', cursor: 'pointer' }}
+                                                                >
+                                                                    JV-{product.lastVoucherId}
+                                                                </a>
+                                                            </div>
+                                                        </td>
+                                                        <td className="qty-column text-end">{formatNumber(product.totalDebitQty)}</td>
+                                                        <td className="qty-column text-end">{formatNumber(product.totalCreditQty)}</td>
+                                                        <td className="qty-column text-end">{formatNumber(product.qtyBalance)}</td>
+                                                        <td className="currency-column text-end">{formatCurrency(product.averageRate || 0)}</td>
+                                                        <td className="currency-column text-end">{formatCurrency(product.totalDebit || 0)}</td>
+                                                        <td className="currency-column text-end">{formatCurrency(product.totalCredit || 0)}</td>
+                                                        <td className="currency-column text-end">{formatCurrency(product.cogs || 0)}</td>
+                                                        <td className="currency-column text-end">{formatCurrency(product.margin || 0)}</td>
+                                                        <td className="percent-column text-end">{formatNumber(product.marginPercentage)}%</td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                    {totals && (
+                                        <tfoot className="table-secondary">
+                                            <tr className="fw-bold">
+                                                <td colSpan="2" className="text-end">TOTAL</td>
+                                                <td className="qty-column text-end">{formatNumber(totals.totalDebitQty)}</td>
+                                                <td className="qty-column text-end">{formatNumber(totals.totalCreditQty)}</td>
+                                                <td className="qty-column text-end">{formatNumber(totals.netQuantity)}</td>
+                                                <td className="currency-column text-end">-</td>
+                                                <td className="currency-column text-end">{formatCurrency(totals.totalDebit || 0)}</td>
+                                                <td className="currency-column text-end">{formatCurrency(totals.totalCredit || 0)}</td>
+                                                <td className="currency-column text-end">{formatCurrency(totals.totalCOGS || 0)}</td>
+                                                <td className="currency-column text-end">{formatCurrency(totals.totalMargin || 0)}</td>
+                                                <td className="percent-column text-end">{formatNumber(totals.marginPercentage)}%</td>
+                                            </tr>
+                                        </tfoot>
                                     )}
-                                </tbody>
-                                {totals && (
-                                    <tfoot className="table-secondary">
-                                        <tr className="fw-bold">
-                                            <td colSpan="4" className="text-end">TOTAL</td>
-                                            <td className="text-end">{totals.totalDebitQty || 0}</td>
-                                            <td className="text-end">{totals.totalCreditQty || 0}</td>
-                                            <td className="text-end">{totals.netQuantity || 0}</td>
-                                            <td className="text-end">-</td>
-                                            <td className="text-end">{formatCurrency(totals.totalDebit || 0)}</td>
-                                            <td className="text-end">{formatCurrency(totals.totalCredit || 0)}</td>
-                                            <td className="text-end">{formatCurrency(totals.totalCOGS || 0)}</td>
-                                            <td className="text-end">{formatCurrency(totals.totalMargin || 0)}</td>
-                                            <td className="text-end">{totals.marginPercentage?.toFixed(2) || '0.00'}%</td>
-                                        </tr>
-                                    </tfoot>
-                                )}
-                            </table>
+                                </Table>
+                            </div>
                         </div>
-                        {isLoadingMore && (
-                            <div className="text-center my-3">
-                                <LoadingSpinner />
+                        {hasMoreData && isLoadingMore && (
+                            <div className="text-center mt-3">
+                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span className="visually-hidden">Loading more records...</span>
+                                </div>
                             </div>
                         )}
-                    </div>
-                </div>
+                    </Card.Body>
+                </Card>
             )}
         </div>
     );

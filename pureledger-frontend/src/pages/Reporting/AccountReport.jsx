@@ -4,13 +4,15 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Papa from 'papaparse';
 
 const AccountReport = () => {
     usePageTitle('Account Report');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [accounts, setAccounts] = useState([]);
-    const [reportData, setReportData] = useState(null);
     const [allEntries, setAllEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -27,7 +29,7 @@ const AccountReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 500;
+    const pageSize = 1000;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -188,58 +190,120 @@ const AccountReport = () => {
         credit: acc.credit + (entry.totalCredit || 0)
     }), { debit: 0, credit: 0 });
 
-    const exportToCsv = (data, filename) => {
-        if (!data || data.length === 0) {
+    const handleExportCsv = () => {
+        const csvData = filteredEntries.map(entry => ({
+            ID: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
+            Category: entry.categoryName || '',
+            'Account Name': entry.accountName || '',
+            Debit: (entry.totalDebit || 0).toFixed(2),
+            Credit: (entry.totalCredit || 0).toFixed(2),
+            Balance: ((entry.totalDebit || 0) - (entry.totalCredit || 0)).toFixed(2)
+        }));
+
+        if (!csvData || csvData.length === 0) {
             alert('No data to export');
             return;
         }
 
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-            headers.join(','),
-            ...data.map(row => headers.map(header => {
-                const value = row[header];
-                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
-            }).join(','))
-        ].join('\n');
-
+        const csvContent = Papa.unparse(csvData);
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = filename;
+        link.download = `AccountReport_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
     };
 
-    const handleExportCsv = () => {
-        const csvData = filteredEntries.map(entry => ({
-            ID: entry.formattedId || entry.id || '',
-            Category: entry.categoryName || '',
-            'Account Name': entry.accountName || '',
-            Debit: entry.totalDebit || 0,
-            Credit: entry.totalCredit || 0,
-            Balance: (entry.totalDebit || 0) - (entry.totalCredit || 0)
-        }));
-        const dateRange = formData.startDate && formData.endDate 
-            ? `${formData.startDate}_to_${formData.endDate}` 
-            : 'report';
-        exportToCsv(csvData, `AccountReport_${dateRange}.csv`);
+    const handleExportPdf = () => {
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+        const selectedCategory = categories.find(c => c.id === formData.categoryId);
+
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Account Report', 14, 20);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        if (selectedCategory) {
+            doc.text(`Category: ${selectedCategory.name}`, 14, 34);
+        }
+        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, selectedCategory ? 40 : 34);
+
+        const rows = filteredEntries.map(entry => {
+            const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
+            return {
+                id: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
+                category: entry.categoryName || '-',
+                account: entry.accountName || '-',
+                debit: formatCurrency(entry.totalDebit),
+                credit: formatCurrency(entry.totalCredit),
+                balance: formatCurrency(balance)
+            };
+        });
+
+        // Add totals row
+        rows.push({
+            id: '',
+            category: '',
+            account: 'TOTAL',
+            debit: formatCurrency(totals.debit),
+            credit: formatCurrency(totals.credit),
+            balance: formatCurrency(totals.debit - totals.credit)
+        });
+
+        const columns = [
+            { header: 'ID', dataKey: 'id' },
+            { header: 'Category', dataKey: 'category' },
+            { header: 'Account', dataKey: 'account' },
+            { header: 'Debit', dataKey: 'debit' },
+            { header: 'Credit', dataKey: 'credit' },
+            { header: 'Balance', dataKey: 'balance' }
+        ];
+
+        // Split rows into chunks per page
+        const rowsPerPage = 20;
+        let startY = selectedCategory ? 46 : 40;
+
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+
+            const chunk = rows.slice(i, i + rowsPerPage);
+
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        // Add page numbers to all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(
+                `PureLedger - Account Report | Page ${i} of ${pageCount}`,
+                14,
+                doc.internal.pageSize.height - 10
+            );
+        }
+
+        doc.save(`AccountReport_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
             minimumFractionDigits: 2,
-            maximumFractionDigits: 4
+            maximumFractionDigits: 2
         }).format(value || 0);
-    };
-
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '';
-        try {
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-GB');
-        } catch {
-            return dateStr;
-        }
     };
 
     if (loading) {
@@ -324,7 +388,7 @@ const AccountReport = () => {
                                             </>
                                         ) : (
                                             <>
-                                                <i className="fas fa-chart-bar me-1"></i> Generate Report
+                                                <i className="fas fa-chart-bar me-2"></i> Generate Report
                                             </>
                                         )}
                                     </Button>
@@ -347,9 +411,16 @@ const AccountReport = () => {
                                     {allEntries.length} of {totalRecords} entries
                                 </span>
                             )}
-                            <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
-                                <i className="fas fa-file-csv me-1"></i> Export CSV
-                            </Button>
+                            {!hasMoreData && filteredEntries.length > 0 && (
+                                <>
+                                    <Button variant="outline-success" size="sm" onClick={handleExportCsv} className="me-2">
+                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                    </Button>
+                                    <Button variant="outline-danger" size="sm" onClick={handleExportPdf}>
+                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                    </Button>
+                                </>
+                            )}
                         </div>
                     </Card.Header>
                     <Card.Body>
@@ -366,8 +437,8 @@ const AccountReport = () => {
                                 </InputGroup>
                             </div>
                         </div>
-                        <div className="table-responsive" style={{ overflow: 'visible' }}>
-                            <Table bordered>
+                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+                            <Table bordered striped hover className="table-sm mb-0 w-100" style={{ width: '100%', tableLayout: 'auto' }}>
                                 <thead className="table-light">
                                     <tr>
                                         <th>ID</th>
@@ -379,23 +450,31 @@ const AccountReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredEntries.map((entry, index) => {
-                                        const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
-                                        const formattedId = entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-';
-                                        const isLastEntry = index === filteredEntries.length - 1;
-                                        return (
-                                            <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
-                                                <td>{formattedId}</td>
-                                                <td>{entry.categoryName || '-'}</td>
-                                                <td>{entry.accountName || '-'}</td>
-                                                <td className="text-end">{formatCurrency(entry.totalDebit)}</td>
-                                                <td className="text-end">{formatCurrency(entry.totalCredit)}</td>
-                                                <td className={`text-end ${balance < 0 ? 'text-danger' : 'text-success'}`}>
-                                                    {formatCurrency(balance)}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                    {filteredEntries.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="text-center text-muted py-4">
+                                                {searchTerm ? 'No results found for your search' : 'No data available'}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredEntries.map((entry, index) => {
+                                            const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
+                                            const formattedId = entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-';
+                                            const isLastEntry = index === filteredEntries.length - 1;
+                                            return (
+                                                <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                    <td>{formattedId}</td>
+                                                    <td>{entry.categoryName || '-'}</td>
+                                                    <td>{entry.accountName || '-'}</td>
+                                                    <td className="text-end">{formatCurrency(entry.totalDebit)}</td>
+                                                    <td className="text-end">{formatCurrency(entry.totalCredit)}</td>
+                                                    <td className={`text-end ${balance < 0 ? 'text-danger' : 'text-success'}`}>
+                                                        {formatCurrency(balance)}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
                                 </tbody>
                                 <tfoot className="table-secondary">
                                     <tr className="fw-bold">
@@ -409,9 +488,11 @@ const AccountReport = () => {
                                 </tfoot>
                             </Table>
                         </div>
-                        {isLoadingMore && (
-                            <div className="text-center my-3">
-                                <LoadingSpinner />
+                        {hasMoreData && isLoadingMore && (
+                            <div className="text-center mt-3">
+                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span className="visually-hidden">Loading more records...</span>
+                                </div>
                             </div>
                         )}
                     </Card.Body>

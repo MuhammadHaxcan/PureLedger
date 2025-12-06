@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
-import axios from 'axios';
-import apiClient, { API_BASE_URL } from '../../services/api';
+import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import MasterReportPDFDocument from './MasterReportPDF';
-import AccountSummaryPDFDocument from './AccountSummaryPDF';
-import CategorySummaryPDFDocument from './CategorySummaryPDF';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Papa from 'papaparse';
 import './MasterReport.css';
 
 const buildVoucherUrl = (voucherId, type) => {
@@ -58,7 +56,7 @@ const MasterReport = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [previousBalance, setPreviousBalance] = useState(0);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 500;
+    const pageSize = 1000;
     const searchTermRef = useRef('');
     const abortControllerRef = useRef(null);
     const activeFiltersRef = useRef(null);
@@ -320,7 +318,7 @@ const MasterReport = () => {
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-PK', {
             minimumFractionDigits: 2,
-            maximumFractionDigits: 4
+            maximumFractionDigits: 2
         }).format(value || 0);
     };
 
@@ -343,15 +341,7 @@ const MasterReport = () => {
             return;
         }
 
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-            headers.join(','),
-            ...data.map(row => headers.map(header => {
-                const value = row[header];
-                return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
-            }).join(','))
-        ].join('\n');
-
+        const csvContent = Papa.unparse(data);
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -395,6 +385,227 @@ const MasterReport = () => {
             Balance: item.debit - item.credit
         }));
         exportToCsv(csvData, `CategorySummary_${new Date().toISOString().split('T')[0]}.csv`);
+    };
+
+    const handleExportMainReportPdf = () => {
+        const doc = new jsPDF('landscape', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+        
+        // Header
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Master Report', 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        if (formData.startDate) {
+            doc.text(`Date Range: ${formatDate(formData.startDate)} to ${formatDate(formData.endDate || formData.startDate)}`, 14, 34);
+        }
+        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords || filteredEntries.length}`, 14, 40);
+
+        // Build columns based on visibility
+        const columns = [{ header: 'ID', dataKey: 'id' }];
+        if (visibleColumns.date) columns.push({ header: 'Entry Date', dataKey: 'date' });
+        if (visibleColumns.creditableDate) columns.push({ header: 'Creditable Date', dataKey: 'creditableDate' });
+        if (visibleColumns.description) columns.push({ header: 'Description', dataKey: 'description' });
+        if (visibleColumns.account) columns.push({ header: 'Account', dataKey: 'account' });
+        if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
+        if (visibleColumns.quantity) columns.push({ header: 'Qty', dataKey: 'quantity' });
+        if (visibleColumns.debit) columns.push({ header: 'Debit', dataKey: 'debit' });
+        if (visibleColumns.credit) columns.push({ header: 'Credit', dataKey: 'credit' });
+        if (visibleColumns.balance) columns.push({ header: 'Balance', dataKey: 'balance' });
+
+        const rows = filteredEntries.map(entry => {
+            const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
+            return {
+                id: isOpening ? 'OPENING' : `JV-${entry.journalVoucherId}\nEntry: ${entry.id}`,
+                date: formatDate(entry.transactionDate),
+                creditableDate: formatDate(entry.creditableDate),
+                description: entry.description || '',
+                account: entry.accountName || '',
+                booker: entry.bookerName || '',
+                quantity: entry.quantity ?? '',
+                debit: formatCurrency(entry.debit),
+                credit: formatCurrency(entry.credit),
+                balance: formatCurrency(entry.balance)
+            };
+        });
+
+        // Add totals row
+        rows.push({
+            id: 'TOTAL',
+            date: '',
+            creditableDate: '',
+            description: '',
+            account: '',
+            booker: '',
+            quantity: totals.quantity,
+            debit: formatCurrency(totals.debit),
+            credit: formatCurrency(totals.credit),
+            balance: formatCurrency(totals.debit - totals.credit)
+        });
+
+        // Split rows into chunks of 10 per page
+        const rowsPerPage = 14;
+        let startY = 46;
+        
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            const chunk = rows.slice(i, i + rowsPerPage);
+            
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 7, cellPadding: 2 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+                footStyles: { fillColor: [241, 245, 249], fontStyle: 'bold' }
+            });
+        }
+
+        // Add page numbers to all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(
+                `PureLedger - Master Report | Page ${i} of ${pageCount}`,
+                14,
+                doc.internal.pageSize.height - 10
+            );
+        }
+
+        doc.save(`MasterReport_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const handleExportAccountSummaryPdf = () => {
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+        
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Account Summary', 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+
+        const rows = accountSummary.map(item => ({
+            id: item.id,
+            account: item.name,
+            debit: formatCurrency(item.debit),
+            credit: formatCurrency(item.credit),
+            balance: formatCurrency(item.debit - item.credit)
+        }));
+
+        const columns = [
+            { header: 'ID', dataKey: 'id' },
+            { header: 'Account', dataKey: 'account' },
+            { header: 'Debit', dataKey: 'debit' },
+            { header: 'Credit', dataKey: 'credit' },
+            { header: 'Balance', dataKey: 'balance' }
+        ];
+
+        // Split rows into chunks of 10 per page
+        const rowsPerPage = 10;
+        let startY = 40;
+        
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            const chunk = rows.slice(i, i + rowsPerPage);
+            
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 9 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        // Add page numbers
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
+        }
+
+        doc.save(`AccountSummary_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const handleExportCategorySummaryPdf = () => {
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        const selectedProject = projects.find(p => p.id === formData.projectId);
+        
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175);
+        doc.text('Category Summary', 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+
+        const rows = categorySummary.map(item => ({
+            id: item.id,
+            category: item.name,
+            debit: formatCurrency(item.debit),
+            credit: formatCurrency(item.credit),
+            balance: formatCurrency(item.debit - item.credit)
+        }));
+
+        const columns = [
+            { header: 'ID', dataKey: 'id' },
+            { header: 'Category', dataKey: 'category' },
+            { header: 'Debit', dataKey: 'debit' },
+            { header: 'Credit', dataKey: 'credit' },
+            { header: 'Balance', dataKey: 'balance' }
+        ];
+
+        // Split rows into chunks of 10 per page
+        const rowsPerPage = 10;
+        let startY = 40;
+        
+        for (let i = 0; i < rows.length; i += rowsPerPage) {
+            if (i > 0) {
+                doc.addPage();
+                startY = 20;
+            }
+            
+            const chunk = rows.slice(i, i + rowsPerPage);
+            
+            autoTable(doc, {
+                columns,
+                body: chunk,
+                startY: startY,
+                styles: { fontSize: 9 },
+                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            });
+        }
+
+        // Add page numbers
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
+        }
+
+        doc.save(`CategorySummary_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -494,7 +705,7 @@ const MasterReport = () => {
                                     <SearchableSelect
                                         value={formData.bookerId}
                                         onChange={(value) => setFormData({ ...formData, bookerId: value ? parseInt(value) : null })}
-                                        options={bookers.map(b => ({ id: b.id, name: b.name }))}
+                                        options={[{ id: null, name: 'All Bookers' }, ...bookers.map(b => ({ id: b.id, name: b.name }))]}
                                         placeholder="Search booker..."
                                         disabled={generating}
                                     />
@@ -516,7 +727,7 @@ const MasterReport = () => {
                                             </>
                                         ) : (
                                             <>
-                                                <i className="fas fa-chart-bar me-1"></i> Generate Report
+                                                <i className="fas fa-chart-bar me-2"></i> Generate Report
                                             </>
                                         )}
                                     </Button>
@@ -574,51 +785,24 @@ const MasterReport = () => {
                                         {allEntries.length} of {totalRecords} entries
                                     </span>
                                 )}
-                                <Button 
-                                    variant="outline-success" 
-                                    size="sm" 
-                                    onClick={handleExportMainReport} 
-                                    disabled={filteredEntries.length === 0}
-                                    className="me-2"
-                                >
-                                    <i className="fas fa-file-csv me-1"></i> Export CSV
-                                </Button>
                                 {!hasMoreData && filteredEntries.length > 0 && (
-                                    <PDFDownloadLink
-                                        document={
-                                            <MasterReportPDFDocument
-                                                entries={filteredEntries}
-                                                formData={formData}
-                                                projects={projects}
-                                                categories={categories}
-                                                accounts={accounts}
-                                                bookers={bookers}
-                                                visibleColumns={visibleColumns}
-                                                totals={totals}
-                                                totalRecords={totalRecords}
-                                            />
-                                        }
-                                        fileName={`MasterReport_${new Date().toISOString().split('T')[0]}.pdf`}
-                                    >
-                                        {({ blob, url, loading, error }) => (
-                                            <Button 
-                                                variant="outline-danger" 
-                                                size="sm" 
-                                                disabled={loading || error}
-                                            >
-                                                {loading ? (
-                                                    <>
-                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                        Generating PDF...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
-                                    </PDFDownloadLink>
+                                    <>
+                                        <Button 
+                                            variant="outline-success" 
+                                            size="sm" 
+                                            onClick={handleExportMainReport} 
+                                            className="me-2"
+                                        >
+                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                        </Button>
+                                        <Button 
+                                            variant="outline-danger" 
+                                            size="sm" 
+                                            onClick={handleExportMainReportPdf}
+                                        >
+                                            <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </Card.Header>
@@ -654,51 +838,59 @@ const MasterReport = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredEntries.map((entry, index) => {
-                                            const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
-                                            return (
-                                                <tr key={index} className={isOpening ? 'table-info' : ''}>
-                                                    <td className="id-column" style={{ whiteSpace: 'nowrap' }}>
-                                                        {isOpening ? (
-                                                            <span className="fw-bold text-primary">OPENING</span>
-                                                        ) : (
-                                                            <div>
-                                                                <div className="d-flex flex-wrap gap-1 align-items-center">
-                                                                    <a
-                                                                        href={buildVoucherUrl(entry.journalVoucherId, 'JV')}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="voucher-link text-decoration-none badge bg-primary me-1"
-                                                                        style={{ fontSize: '0.75rem', cursor: 'pointer' }}
-                                                                    >
-                                                                        JV-{entry.journalVoucherId}
-                                                                    </a>
-                                                                    <a
-                                                                        href={buildVoucherUrl(entry.journalVoucherId, 'INV')}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="voucher-link text-decoration-none badge bg-success"
-                                                                        style={{ fontSize: '0.75rem', cursor: 'pointer' }}
-                                                                    >
-                                                                        INV-{entry.journalVoucherId}
-                                                                    </a>
+                                        {filteredEntries.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="10" className="text-center text-muted py-4">
+                                                    {searchTerm ? 'No results found for your search' : 'No data available'}
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            filteredEntries.map((entry, index) => {
+                                                const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
+                                                return (
+                                                    <tr key={index} className={isOpening ? 'table-info' : ''}>
+                                                        <td className="id-column" style={{ whiteSpace: 'nowrap' }}>
+                                                            {isOpening ? (
+                                                                <span className="fw-bold text-primary">OPENING</span>
+                                                            ) : (
+                                                                <div>
+                                                                    <div className="d-flex flex-wrap gap-1 align-items-center">
+                                                                        <a
+                                                                            href={buildVoucherUrl(entry.journalVoucherId, 'JV')}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="voucher-link text-decoration-none badge bg-primary me-1"
+                                                                            style={{ fontSize: '0.75rem', cursor: 'pointer' }}
+                                                                        >
+                                                                            JV-{entry.journalVoucherId}
+                                                                        </a>
+                                                                        <a
+                                                                            href={buildVoucherUrl(entry.journalVoucherId, 'INV')}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="voucher-link text-decoration-none badge bg-success"
+                                                                            style={{ fontSize: '0.75rem', cursor: 'pointer' }}
+                                                                        >
+                                                                            INV-{entry.journalVoucherId}
+                                                                        </a>
+                                                                    </div>
+                                                                    <div className="entry-id mt-1 small text-muted">Entry: {entry.id}</div>
                                                                 </div>
-                                                                <div className="entry-id mt-1 small text-muted">Entry: {entry.id}</div>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                    {visibleColumns.date && <td className="date-column">{formatDate(entry.transactionDate)}</td>}
-                                                    {visibleColumns.creditableDate && <td className="creditable-date-column">{formatDate(entry.creditableDate)}</td>}
-                                                    {visibleColumns.description && <td className="description-column" style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
-                                                    {visibleColumns.account && <td className="account-column">{entry.accountName || ''}</td>}
-                                                    {visibleColumns.booker && <td className="booker-column">{entry.bookerName || ''}</td>}
-                                                    {visibleColumns.quantity && <td className="quantity-column text-end">{entry.quantity ?? ''}</td>}
-                                                    {visibleColumns.debit && <td className="debit-column text-end">{formatCurrency(entry.debit)}</td>}
-                                                    {visibleColumns.credit && <td className="credit-column text-end">{formatCurrency(entry.credit)}</td>}
-                                                    {visibleColumns.balance && <td className="balance-column text-end">{formatCurrency(entry.balance)}</td>}
-                                                </tr>
-                                            );
-                                        })}
+                                                            )}
+                                                        </td>
+                                                        {visibleColumns.date && <td className="date-column">{formatDate(entry.transactionDate)}</td>}
+                                                        {visibleColumns.creditableDate && <td className="creditable-date-column">{formatDate(entry.creditableDate)}</td>}
+                                                        {visibleColumns.description && <td className="description-column" style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
+                                                        {visibleColumns.account && <td className="account-column">{entry.accountName || ''}</td>}
+                                                        {visibleColumns.booker && <td className="booker-column">{entry.bookerName || ''}</td>}
+                                                        {visibleColumns.quantity && <td className="quantity-column text-end">{entry.quantity ?? ''}</td>}
+                                                        {visibleColumns.debit && <td className="debit-column text-end">{formatCurrency(entry.debit)}</td>}
+                                                        {visibleColumns.credit && <td className="credit-column text-end">{formatCurrency(entry.credit)}</td>}
+                                                        {visibleColumns.balance && <td className="balance-column text-end">{formatCurrency(entry.balance)}</td>}
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
                                     </tbody>
                                     <tfoot className="table-secondary">
                                         <tr>
@@ -733,47 +925,24 @@ const MasterReport = () => {
                                 <i className="fas fa-users me-2"></i>Account Summary
                             </h6>
                             <div>
-                                <Button
-                                    variant="outline-success"
-                                    size="sm"
-                                    onClick={handleExportAccountSummary}
-                                    disabled={accountSummary.length === 0}
-                                    className="me-2"
-                                >
-                                    <i className="fas fa-file-csv me-1"></i> Export CSV
-                                </Button>
-                                {accountSummary.length > 0 && (
-                                    <PDFDownloadLink
-                                        document={
-                                            <AccountSummaryPDFDocument
-                                                accountSummary={accountSummary}
-                                                formData={formData}
-                                                projects={projects}
-                                                categories={categories}
-                                                accounts={accounts}
-                                            />
-                                        }
-                                        fileName={`AccountSummary_${new Date().toISOString().split('T')[0]}.pdf`}
-                                    >
-                                        {({ blob, url, loading, error }) => (
-                                            <Button 
-                                                variant="outline-danger" 
-                                                size="sm" 
-                                                disabled={loading || error}
-                                            >
-                                                {loading ? (
-                                                    <>
-                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                        Generating PDF...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
-                                    </PDFDownloadLink>
+                                {!hasMoreData && accountSummary.length > 0 && (
+                                    <>
+                                        <Button
+                                            variant="outline-success"
+                                            size="sm"
+                                            onClick={handleExportAccountSummary}
+                                            className="me-2"
+                                        >
+                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                        </Button>
+                                        <Button 
+                                            variant="outline-danger" 
+                                            size="sm" 
+                                            onClick={handleExportAccountSummaryPdf}
+                                        >
+                                            <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </Card.Header>
@@ -822,45 +991,24 @@ const MasterReport = () => {
                                 <i className="fas fa-tags me-2"></i>Category Summary
                             </h6>
                             <div>
-                                <Button
-                                    variant="outline-success"
-                                    size="sm"
-                                    onClick={handleExportCategorySummary}
-                                    disabled={categorySummary.length === 0}
-                                    className="me-2"
-                                >
-                                    <i className="fas fa-file-csv me-1"></i> Export CSV
-                                </Button>
-                                {categorySummary.length > 0 && (
-                                    <PDFDownloadLink
-                                        document={
-                                            <CategorySummaryPDFDocument
-                                                categorySummary={categorySummary}
-                                                formData={formData}
-                                                projects={projects}
-                                            />
-                                        }
-                                        fileName={`CategorySummary_${new Date().toISOString().split('T')[0]}.pdf`}
-                                    >
-                                        {({ blob, url, loading, error }) => (
-                                            <Button 
-                                                variant="outline-danger" 
-                                                size="sm" 
-                                                disabled={loading || error}
-                                            >
-                                                {loading ? (
-                                                    <>
-                                                        <span className="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                        Generating PDF...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
-                                    </PDFDownloadLink>
+                                {!hasMoreData && categorySummary.length > 0 && (
+                                    <>
+                                        <Button
+                                            variant="outline-success"
+                                            size="sm"
+                                            onClick={handleExportCategorySummary}
+                                            className="me-2"
+                                        >
+                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                        </Button>
+                                        <Button 
+                                            variant="outline-danger" 
+                                            size="sm" 
+                                            onClick={handleExportCategorySummaryPdf}
+                                        >
+                                            <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </Card.Header>

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
-import LoadingSpinner from '../../components/LoadingSpinner';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Papa from 'papaparse';
 
 const AgingReport = () => {
   usePageTitle('Aging Report');
@@ -23,7 +25,7 @@ const AgingReport = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
   const [isAutoLoading, setIsAutoLoading] = useState(false);
-  const pageSize = 500;
+  const pageSize = 1000;
   const observerRef = useRef(null);
   const loadingRef = useRef(null);
 
@@ -211,36 +213,105 @@ const AgingReport = () => {
   const totalCredit = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalCredit) || 0), 0);
   const totalBalance = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.netBalance) || 0), 0);
 
-  const exportToCsv = (data, filename) => {
-    if (!data || data.length === 0) {
+  const handleExportCsv = () => {
+    const csvData = filteredEntries.map(entry => ({
+      Account: entry.accountName || entry.accountId || 'N/A',
+      'Total Debit': (entry.totalDebit || 0).toFixed(2),
+      'Total Credit': (entry.totalCredit || 0).toFixed(2),
+      'Net Balance': (entry.netBalance || 0).toFixed(2)
+    }));
+
+    if (!csvData || csvData.length === 0) {
       alert('No data to export');
       return;
     }
 
-    const headers = Object.keys(data[0]);
-    const csvContent = [
-      headers.join(','),
-      ...data.map(row => headers.map(header => {
-        const value = row[header];
-        return value !== null && value !== undefined ? `"${String(value).replace(/"/g, '""')}"` : '';
-      }).join(','))
-    ].join('\n');
-
+    const csvContent = Papa.unparse(csvData);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = filename;
+    link.download = `AgingReport_${formData.referenceDate || 'report'}.csv`;
     link.click();
   };
 
-  const handleExportCsv = () => {
-    const csvData = filteredEntries.map(entry => ({
-      Account: entry.accountName || entry.accountId || 'N/A',
-      'Total Debit': entry.totalDebit || 0,
-      'Total Credit': entry.totalCredit || 0,
-      'Net Balance': entry.netBalance || 0
+  const handleExportPdf = () => {
+    const doc = new jsPDF('portrait', 'mm', 'a4');
+    const selectedProject = projects.find(p => p.id === formData.projectId);
+    const selectedCategory = categories.find(c => c.id === formData.categoryId);
+
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(30, 64, 175);
+    doc.text('Aging Report', 14, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Reference Date: ${formData.referenceDate}`, 14, 28);
+    if (selectedProject) {
+      doc.text(`Project: ${selectedProject.name}`, 14, 34);
+    }
+    if (selectedCategory) {
+      doc.text(`Category: ${selectedCategory.name}`, 14, 40);
+    }
+    doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, selectedCategory ? 46 : 40);
+
+    const rows = filteredEntries.map(entry => ({
+      account: entry.accountName || entry.accountId || 'N/A',
+      debit: formatCurrency(entry.totalDebit),
+      credit: formatCurrency(entry.totalCredit),
+      balance: formatCurrency(entry.netBalance)
     }));
-    exportToCsv(csvData, `AgingReport_${formData.referenceDate || 'report'}.csv`);
+
+    // Add totals row
+    rows.push({
+      account: 'TOTAL',
+      debit: formatCurrency(totalDebit),
+      credit: formatCurrency(totalCredit),
+      balance: formatCurrency(totalBalance)
+    });
+
+    const columns = [
+      { header: 'Account', dataKey: 'account' },
+      { header: 'Total Debit', dataKey: 'debit' },
+      { header: 'Total Credit', dataKey: 'credit' },
+      { header: 'Net Balance', dataKey: 'balance' }
+    ];
+
+    // Split rows into chunks of 10 per page
+    const rowsPerPage = 20;
+    let startY = selectedCategory ? 52 : 46;
+    
+    for (let i = 0; i < rows.length; i += rowsPerPage) {
+      if (i > 0) {
+        doc.addPage();
+        startY = 20;
+      }
+      
+      const chunk = rows.slice(i, i + rowsPerPage);
+      
+      autoTable(doc, {
+        columns,
+        body: chunk,
+        startY: startY,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+      });
+    }
+
+    // Add page numbers to all pages
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.text(
+        `PureLedger - Aging Report | Page ${i} of ${pageCount}`,
+        14,
+        doc.internal.pageSize.height - 10
+      );
+    }
+
+    doc.save(`AgingReport_${formData.referenceDate || new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   return (
@@ -347,9 +418,16 @@ const AgingReport = () => {
                   {allEntries.length} of {totalRecords} accounts
                 </span>
               )}
-              <Button variant="outline-success" size="sm" onClick={handleExportCsv} disabled={filteredEntries.length === 0}>
-                <i className="fas fa-file-csv me-1"></i> Export CSV
-              </Button>
+              {!hasMoreData && filteredEntries.length > 0 && (
+                <>
+                  <Button variant="outline-success" size="sm" onClick={handleExportCsv} className="me-2">
+                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                  </Button>
+                  <Button variant="outline-danger" size="sm" onClick={handleExportPdf}>
+                    <i className="fas fa-file-pdf me-1"></i> Export PDF
+                  </Button>
+                </>
+              )}
             </div>
           </Card.Header>
           <Card.Body>
@@ -366,8 +444,8 @@ const AgingReport = () => {
                 </InputGroup>
               </div>
             </div>
-            <div className="table-responsive" style={{ overflow: 'visible' }}>
-              <Table responsive striped bordered hover style={{ width: '100%', marginBottom: 0 }}>
+            <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
+              <Table bordered striped hover className="table-sm mb-0 w-100" style={{ width: '100%', tableLayout: 'auto' }}>
                 <thead className="table-light">
                   <tr>
                     <th>Account</th>
@@ -406,10 +484,11 @@ const AgingReport = () => {
                 </tfoot>
               </Table>
             </div>
-            {(isLoadingMore || isAutoLoading) && (
-              <div className="text-center my-3" ref={loadingRef}>
-                <LoadingSpinner />
-                <p className="text-muted mt-2">Loading more accounts...</p>
+            {(isLoadingMore || isAutoLoading) && hasMoreData && (
+              <div className="text-center mt-3" ref={loadingRef}>
+                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                  <span className="visually-hidden">Loading more records...</span>
+                </div>
               </div>
             )}
           </Card.Body>
