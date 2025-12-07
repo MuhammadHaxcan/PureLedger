@@ -1,5 +1,14 @@
 import axios from 'axios';
 
+/**
+ * API Base URL Configuration
+ * 
+ * Development: Uses VITE_API_BASE_URL from .env.development or falls back to http://localhost:5221/api
+ * Production: Should be set to /api in .env.production for Nginx reverse proxy
+ * 
+ * The environment variable VITE_API_BASE_URL is injected at build time by Vite.
+ * For production builds, ensure .env.production has: VITE_API_BASE_URL=/api
+ */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5221/api';
 
 // Create axios instance with default configuration

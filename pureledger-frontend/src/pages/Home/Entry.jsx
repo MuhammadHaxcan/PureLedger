@@ -475,7 +475,7 @@ const HomeEntry = () => {
     // The totals are calculated in the render
   };
 
-  const addNewRow = async () => {
+  const addNewRow = useCallback(async () => {
     const newIndex = entries.length;
     setEntries(prev => [...prev, {
       categoryId: null,
@@ -503,7 +503,58 @@ const HomeEntry = () => {
         [newIndex]: categories
       }));
     }
-  };
+    
+    // Focus on the category input of the new row after it's rendered
+    setTimeout(() => {
+      const table = document.querySelector('table tbody');
+      if (table) {
+        const rows = table.querySelectorAll('tr');
+        if (rows[newIndex]) {
+          // Scroll the new row into view
+          rows[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          
+          // Find the category SearchableSelect input in the new row (first td, first input)
+          const firstTd = rows[newIndex].querySelector('td:first-child');
+          if (firstTd) {
+            const categoryInput = firstTd.querySelector('input.select-search');
+            if (categoryInput) {
+              // Small delay to ensure the input is fully rendered
+              setTimeout(() => {
+                categoryInput.focus();
+                // Trigger focus event to open dropdown if categories are available
+                categoryInput.dispatchEvent(new Event('focus', { bubbles: true }));
+              }, 50);
+            }
+          }
+        }
+      }
+    }, 100);
+  }, [selectedProjectId, entries.length]);
+
+  // Add keyboard shortcut for Alt+N to add new row
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Check if Alt+N is pressed and user is not typing in an input/textarea/select
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        const target = e.target;
+        const isInputField = target.tagName === 'INPUT' || 
+                            target.tagName === 'TEXTAREA' || 
+                            target.tagName === 'SELECT' ||
+                            target.isContentEditable;
+        
+        // Only trigger if not typing in an input field
+        if (!isInputField) {
+          e.preventDefault();
+          addNewRow();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [addNewRow]);
 
   const removeRow = (index) => {
     if (entries.length > 1) {
@@ -799,7 +850,7 @@ const HomeEntry = () => {
               <i className="fas fa-list-alt me-2"></i>Journal Entries
             </h6>
             <Button variant="primary" size="sm" type="button" onClick={addNewRow}>
-              <i className="fas fa-plus"></i> Add Row
+              <i className="fas fa-plus"></i> Add Row (Alt+N)
             </Button>
           </Card.Header>
           <Card.Body className="p-0">

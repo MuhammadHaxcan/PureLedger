@@ -20,6 +20,7 @@ const VoucherEntry = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [hasSearched, setHasSearched] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [editingEntry, setEditingEntry] = useState(null);
@@ -66,12 +67,14 @@ const VoucherEntry = () => {
     const fetchVoucher = async (id) => {
         if (!id || id <= 0) {
             setError('Please enter a valid voucher ID');
+            setHasSearched(false);
             return;
         }
 
         setLoading(true);
         setError('');
         setSuccess('');
+        setHasSearched(true);
 
         try {
             const response = await apiClient.get(`/HomeApi/voucher/${id}`);
@@ -137,13 +140,25 @@ const VoucherEntry = () => {
                     discountPercent: data.discountPercent || 0,
                     debit: data.debit || 0,
                     credit: data.credit || 0,
-                    accountGroupId: data.accountGroupId || 0
+                    accountGroupId: data.accountGroupId || 0,
+                    deliveryChallanEntryId: data.deliveryChallanEntryId || null
                 });
-                setShowLocationGroup(data.accountGroupId === 2 && data.locationId != null);
-                setLocationId(data.locationId || null);
-                if (data.locations) {
-                    setEditLocations(data.locations);
+                
+                // Show location group if entry has delivery challan
+                const hasDeliveryChallan = data.deliveryChallanEntryId != null || entry.hasDeliveryChallan;
+                setShowLocationGroup(hasDeliveryChallan);
+                setLocationId(data.locationId || entry.locationId || null);
+                
+                // Load locations if delivery challan exists or if locations are provided
+                if (hasDeliveryChallan) {
+                    if (data.locations && data.locations.length > 0) {
+                        setEditLocations(data.locations);
+                    } else {
+                        // Load all locations from API
+                        await loadEditLocations();
+                    }
                 }
+                
                 // Load categories and accounts for the edit form
                 if (data.projectId) {
                     await loadEditCategories(data.projectId);
@@ -218,6 +233,17 @@ const VoucherEntry = () => {
         }
     };
 
+    const loadEditLocations = async () => {
+        try {
+            const response = await apiClient.get('/HomeApi/locations');
+            if (response.data.success) {
+                setEditLocations(response.data.data || []);
+            }
+        } catch (err) {
+            console.error('Error loading locations:', err);
+        }
+    };
+
     const handleEditFormSubmit = async (e) => {
         e.preventDefault();
         
@@ -229,7 +255,8 @@ const VoucherEntry = () => {
             setLoading(true);
             const submitData = {
                 ...editFormData,
-                locationId: showLocationGroup ? locationId : null
+                locationId: showLocationGroup ? locationId : null,
+                deliveryChallanEntryId: editFormData.deliveryChallanEntryId || null
             };
             const response = await apiClient.put('/HomeApi/journal-entry', submitData);
             if (response.data.success) {
@@ -292,7 +319,13 @@ const VoucherEntry = () => {
                                         min="1"
                                         placeholder="Enter voucher ID to search"
                                         value={voucherId}
-                                        onChange={(e) => setVoucherId(e.target.value)}
+                                        onChange={(e) => {
+                                            setVoucherId(e.target.value);
+                                            setHasSearched(false);
+                                            setVoucher(null);
+                                            setError('');
+                                            setSuccess('');
+                                        }}
                                     />
                                 </InputGroup>
                             </div>
@@ -318,7 +351,7 @@ const VoucherEntry = () => {
                 </div>
             </div>
 
-            {!voucher && !loading && voucherId && (
+            {!voucher && !loading && hasSearched && voucherId && (
                 <div className="alert alert-warning">
                     <i className="fas fa-exclamation-triangle me-2"></i>No voucher found for the entered ID.
                 </div>
