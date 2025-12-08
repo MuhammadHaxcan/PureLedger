@@ -181,7 +181,17 @@ const ProductReport = () => {
         const search = searchTerm.toLowerCase();
         return (
             (product.productName || '').toLowerCase().includes(search) ||
-            product.lastVoucherId?.toString().includes(search)
+            product.lastVoucherId?.toString().includes(search) ||
+            `jv-${product.lastVoucherId || ''}`.includes(search) ||
+            (product.totalDebitQty?.toString() || '').includes(search) ||
+            (product.totalCreditQty?.toString() || '').includes(search) ||
+            (product.qtyBalance?.toString() || '').includes(search) ||
+            (product.averageRate?.toString() || '').includes(search) ||
+            (product.totalDebit?.toString() || '').includes(search) ||
+            (product.totalCredit?.toString() || '').includes(search) ||
+            (product.cogs?.toString() || '').includes(search) ||
+            (product.margin?.toString() || '').includes(search) ||
+            (product.marginPercentage?.toString() || '').includes(search)
         );
     });
 
@@ -452,7 +462,7 @@ const ProductReport = () => {
                                     {allProducts.length} of {totalRecords} products
                                 </span>
                             )}
-                            {!hasMoreData && filteredProducts.length > 0 && (
+                            {!hasMoreData && allProducts.length > 0 && (
                                 <>
                                     <Button 
                                         variant="outline-success" 
@@ -483,6 +493,7 @@ const ProductReport = () => {
                                         placeholder="Filter results..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
+                                        disabled={generating || isLoadingMore || hasMoreData}
                                     />
                                 </InputGroup>
                             </div>
@@ -506,10 +517,16 @@ const ProductReport = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredProducts.length === 0 ? (
+                                        {filteredProducts.length === 0 && allProducts.length > 0 ? (
                                             <tr>
                                                 <td colSpan="11" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
+                                                </td>
+                                            </tr>
+                                        ) : filteredProducts.length === 0 && allProducts.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                    No data available
                                                 </td>
                                             </tr>
                                         ) : (

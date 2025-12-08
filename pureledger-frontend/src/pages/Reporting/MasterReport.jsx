@@ -299,13 +299,31 @@ const MasterReport = () => {
     const filteredEntries = allEntries.filter(entry => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
+        // Format dates for searching
+        const entryDateStr = entry.entryDate 
+            ? new Date(entry.entryDate).toLocaleDateString().toLowerCase()
+            : '';
+        const creditableDateStr = entry.creditableDate 
+            ? new Date(entry.creditableDate).toLocaleDateString().toLowerCase()
+            : '';
         return (
             (entry.description || '').toLowerCase().includes(search) ||
             (entry.accountName || '').toLowerCase().includes(search) ||
             (entry.categoryName || '').toLowerCase().includes(search) ||
             (entry.bookerName || '').toLowerCase().includes(search) ||
             entry.journalVoucherId?.toString().includes(search) ||
-            entry.id?.toString().includes(search)
+            entry.id?.toString().includes(search) ||
+            entryDateStr.includes(search) ||
+            creditableDateStr.includes(search) ||
+            (entry.quantity?.toString() || '').includes(search) ||
+            (entry.debit?.toString() || '').includes(search) ||
+            (entry.credit?.toString() || '').includes(search) ||
+            (entry.balance?.toString() || '').includes(search) ||
+            `jv-${entry.journalVoucherId || ''}`.includes(search) ||
+            `inv-${entry.journalVoucherId || ''}`.includes(search) ||
+            `entry: ${entry.id || ''}`.includes(search) ||
+            entry.formattedId?.toLowerCase().includes(search) ||
+            'opening'.includes(search) && (entry.formattedId === "OPENING" || entry.description === "Opening Balance")
         );
     });
 
@@ -785,7 +803,7 @@ const MasterReport = () => {
                                         {allEntries.length} of {totalRecords} entries
                                     </span>
                                 )}
-                                {!hasMoreData && filteredEntries.length > 0 && (
+                                {!hasMoreData && allEntries.length > 0 && (
                                     <>
                                         <Button 
                                             variant="outline-success" 
@@ -817,6 +835,7 @@ const MasterReport = () => {
                                                 placeholder="Filter results..."
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
+                                                disabled={generating || isLoadingMore || hasMoreData}
                                             />
                                         </InputGroup>
                                     </div>
@@ -838,10 +857,16 @@ const MasterReport = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredEntries.length === 0 ? (
+                                        {filteredEntries.length === 0 && allEntries.length > 0 ? (
                                             <tr>
                                                 <td colSpan="10" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
+                                                </td>
+                                            </tr>
+                                        ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="10" className="text-center text-muted py-4">
+                                                    No data available
                                                 </td>
                                             </tr>
                                         ) : (

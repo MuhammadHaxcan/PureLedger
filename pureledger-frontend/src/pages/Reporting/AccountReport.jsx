@@ -176,12 +176,18 @@ const AccountReport = () => {
     const filteredEntries = allEntries.filter(entry => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
+        const formattedId = entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-';
+        const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
         return (
             (entry.categoryName || '').toLowerCase().includes(search) ||
             (entry.accountName || '').toLowerCase().includes(search) ||
             entry.accountId?.toString().includes(search) ||
             entry.projectId?.toString().includes(search) ||
-            entry.categoryId?.toString().includes(search)
+            entry.categoryId?.toString().includes(search) ||
+            formattedId.toLowerCase().includes(search) ||
+            (entry.totalDebit?.toString() || '').includes(search) ||
+            (entry.totalCredit?.toString() || '').includes(search) ||
+            balance?.toString().includes(search)
         );
     });
 
@@ -411,7 +417,7 @@ const AccountReport = () => {
                                     {allEntries.length} of {totalRecords} entries
                                 </span>
                             )}
-                            {!hasMoreData && filteredEntries.length > 0 && (
+                            {!hasMoreData && allEntries.length > 0 && (
                                 <>
                                     <Button variant="outline-success" size="sm" onClick={handleExportCsv} className="me-2">
                                         <i className="fas fa-file-csv me-1"></i> Export CSV
@@ -433,6 +439,7 @@ const AccountReport = () => {
                                         placeholder="Filter results..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
+                                        disabled={generating || isLoadingMore || hasMoreData}
                                     />
                                 </InputGroup>
                             </div>
@@ -450,10 +457,16 @@ const AccountReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredEntries.length === 0 ? (
+                                    {filteredEntries.length === 0 && allEntries.length > 0 ? (
                                         <tr>
                                             <td colSpan="6" className="text-center text-muted py-4">
                                                 {searchTerm ? 'No results found for your search' : 'No data available'}
+                                            </td>
+                                        </tr>
+                                    ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="text-center text-muted py-4">
+                                                No data available
                                             </td>
                                         </tr>
                                     ) : (

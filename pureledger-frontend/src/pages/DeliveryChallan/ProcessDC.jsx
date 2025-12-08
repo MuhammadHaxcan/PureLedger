@@ -456,15 +456,35 @@ const ProcessDC = () => {
     if (!searchTerm) return vouchers;
 
     const term = searchTerm.toLowerCase();
-    return vouchers.map(voucher => ({
-      ...voucher,
-      entries: voucher.entries?.filter(entry =>
-        entry.description?.toLowerCase().includes(term) ||
-        entry.accountName?.toLowerCase().includes(term) ||
-        voucher.jvId?.toString().includes(term) ||
-        entry.entryId?.toString().includes(term)
-      ) || []
-    })).filter(voucher => voucher.entries.length > 0);
+    return vouchers.map(voucher => {
+      // Format date for searching
+      const entryDateStr = voucher.entryDate 
+        ? new Date(voucher.entryDate).toLocaleDateString().toLowerCase()
+        : '';
+      
+      return {
+        ...voucher,
+        entries: voucher.entries?.filter(entry => {
+          // Search in all columns
+          const description = entry.description?.toLowerCase() || '';
+          const accountName = entry.accountName?.toLowerCase() || '';
+          const jvId = voucher.jvId?.toString() || '';
+          const entryId = entry.entryId?.toString() || '';
+          const quantity = entry.quantity?.toString() || '';
+          
+          return (
+            description.includes(term) ||
+            accountName.includes(term) ||
+            jvId.includes(term) ||
+            entryId.includes(term) ||
+            quantity.includes(term) ||
+            entryDateStr.includes(term) ||
+            `jv-${jvId}`.includes(term) ||
+            `e-id: ${entryId}`.includes(term)
+          );
+        }) || []
+      };
+    }).filter(voucher => voucher.entries.length > 0);
   }, [vouchers, searchTerm]);
 
   // Flatten entries for display
@@ -603,7 +623,7 @@ const ProcessDC = () => {
       </Card>
 
       {/* Results Card */}
-      {displayEntries.length > 0 && (
+      {vouchers.length > 0 && (
         <Card className="shadow mb-4">
           <Card.Header className="py-3 d-flex justify-content-between align-items-center">
             <h6 className="m-0 font-weight-bold text-primary">
@@ -625,49 +645,56 @@ const ProcessDC = () => {
                 </InputGroup>
               </div>
             </div>
-            <div className="table-responsive">
-              <Table bordered striped hover>
-                <thead className="table-light">
-                  <tr>
-                    <th>ID</th>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Account</th>
-                    <th>Quantity</th>
-                    <th className="text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayEntries.map((entry) => (
-                    <tr
-                      key={`${entry.voucherId}-${entry.entryId}`}
-                      className={entry.isProcessed ? 'table-success' : ''}
-                    >
-                      <td>
-                        <Badge bg="secondary" className="mb-1">JV-{entry.voucherId}</Badge>
-                        <br />
-                        <small>E-Id: {entry.entryId}</small>
-                      </td>
-                      <td>{new Date(entry.entryDate).toLocaleDateString()}</td>
-                      <td>{entry.description || '-'}</td>
-                      <td>{entry.accountName || '-'}</td>
-                      <td>{entry.quantity}</td>
-                      <td className="text-center">
-                        <Button
-                          variant={entry.isProcessed ? 'success' : 'primary'}
-                          size="sm"
-                          onClick={() => handleOpenDCModal(entry.voucherId, entry.entryId)}
-                          disabled={processing}
-                        >
-                          <i className={`fas fa-${entry.isProcessed ? 'check-circle' : 'pencil'}`}></i>{' '}
-                          {entry.isProcessed ? 'Processed' : 'Process'}
-                        </Button>
-                      </td>
+            {displayEntries.length > 0 ? (
+              <div className="table-responsive">
+                <Table bordered striped hover>
+                  <thead className="table-light">
+                    <tr>
+                      <th>ID</th>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Account</th>
+                      <th>Quantity</th>
+                      <th className="text-center">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {displayEntries.map((entry) => (
+                      <tr
+                        key={`${entry.voucherId}-${entry.entryId}`}
+                        className={entry.isProcessed ? 'table-success' : ''}
+                      >
+                        <td>
+                          <Badge bg="secondary" className="mb-1">JV-{entry.voucherId}</Badge>
+                          <br />
+                          <small>E-Id: {entry.entryId}</small>
+                        </td>
+                        <td>{new Date(entry.entryDate).toLocaleDateString()}</td>
+                        <td>{entry.description || '-'}</td>
+                        <td>{entry.accountName || '-'}</td>
+                        <td>{entry.quantity}</td>
+                        <td className="text-center">
+                          <Button
+                            variant={entry.isProcessed ? 'success' : 'primary'}
+                            size="sm"
+                            onClick={() => handleOpenDCModal(entry.voucherId, entry.entryId)}
+                            disabled={processing}
+                          >
+                            <i className={`fas fa-${entry.isProcessed ? 'check-circle' : 'pencil'}`}></i>{' '}
+                            {entry.isProcessed ? 'Processed' : 'Process'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            ) : (
+              <Alert variant="info" className="mb-0">
+                <i className="fas fa-info-circle me-2"></i>
+                No entries match your search criteria. Try adjusting your search term.
+              </Alert>
+            )}
           </Card.Body>
         </Card>
       )}

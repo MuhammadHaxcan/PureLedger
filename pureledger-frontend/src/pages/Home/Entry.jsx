@@ -540,27 +540,9 @@ const HomeEntry = () => {
   // Add keyboard shortcut for Alt+N to add new row
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Check if Alt+N is pressed
       if (e.altKey && e.key.toLowerCase() === 'n') {
-        const target = e.target;
-        
-        // Check if target is a SearchableSelect input (these are dropdown/autocomplete inputs)
-        const isSearchableSelectInput = target.classList && target.classList.contains('select-search');
-        
-        // Check if typing in a regular form input (but NOT dropdown inputs)
-        const isRegularInputField = !isSearchableSelectInput && (
-          target.tagName === 'INPUT' || 
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable
-        );
-        
-        // Only trigger if not typing in a regular input field
-        // Allow Alt+N to work in SearchableSelect inputs
-        if (!isRegularInputField) {
-          e.preventDefault();
-          addNewRow();
-        }
+        e.preventDefault();
+        addNewRow();
       }
     };
 

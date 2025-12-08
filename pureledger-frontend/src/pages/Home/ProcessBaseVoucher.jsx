@@ -56,17 +56,20 @@ const ProcessBaseVoucher = () => {
             }
             
             // Calculate discount based on total amount and percent
-            const discount = parseFloat(((totalAmount * percent) / 100).toFixed(2));
+            const discount = Math.round(((totalAmount * percent) / 100) * 100) / 100;
             
             // Calculate net amount (total amount - discount)
             const netAmount = totalAmount - discount;
             
+            // Round net amount to 2 decimal places
+            const roundedNetAmount = Math.round(netAmount * 100) / 100;
+            
             // Determine if it should be debit or credit based on original entry
             // Use the direction from the original entry, not the existing amount
             if (originalDebit > 0) {
-                debitAmount = parseFloat(netAmount.toFixed(2));
+                debitAmount = roundedNetAmount;
             } else if (originalCredit > 0) {
-                creditAmount = parseFloat(netAmount.toFixed(2));
+                creditAmount = roundedNetAmount;
             }
         }
 
@@ -78,7 +81,7 @@ const ProcessBaseVoucher = () => {
 
     // Update account entries based on other entries
     const updateAccountEntries = useCallback((updatedEntries) => {
-        // Calculate totals from non-account entries
+        // Calculate totals from non-account entries with proper rounding
         let totalDebits = 0;
         let totalCredits = 0;
         let hasSelectedProducts = false;
@@ -87,13 +90,22 @@ const ProcessBaseVoucher = () => {
             const isAccount = entry.accountGroupId === 1;
             if (!isAccount && entry.processQuantity > 0) {
                 hasSelectedProducts = true;
-                totalDebits += entry.calculatedDebit || 0;
-                totalCredits += entry.calculatedCredit || 0;
+                // Use calculated values, ensuring they're numbers
+                const debit = parseFloat(entry.calculatedDebit) || 0;
+                const credit = parseFloat(entry.calculatedCredit) || 0;
+                totalDebits += debit;
+                totalCredits += credit;
             }
         });
 
+        // Round totals to 2 decimal places to avoid floating point issues
+        totalDebits = Math.round(totalDebits * 100) / 100;
+        totalCredits = Math.round(totalCredits * 100) / 100;
+
         // Calculate the imbalance
         const difference = totalDebits - totalCredits;
+        // Round difference to 2 decimal places
+        const roundedDifference = Math.round(difference * 100) / 100;
 
         // Update account entries
         const finalEntries = updatedEntries.map(entry => {
@@ -107,15 +119,19 @@ const ProcessBaseVoucher = () => {
                 let accountDebit = 0;
                 let accountCredit = 0;
 
-                if (hasSelectedProducts) {
-                    if (difference > 0) {
+                if (hasSelectedProducts && Math.abs(roundedDifference) > 0.001) {
+                    if (roundedDifference > 0) {
                         // More debits than credits, so account entry needs to be credit
-                        accountCredit = difference;
-                    } else if (difference < 0) {
+                        accountCredit = roundedDifference;
+                    } else {
                         // More credits than debits, so account entry needs to be debit
-                        accountDebit = Math.abs(difference);
+                        accountDebit = Math.abs(roundedDifference);
                     }
                 }
+
+                // Round to 2 decimal places
+                accountDebit = Math.round(accountDebit * 100) / 100;
+                accountCredit = Math.round(accountCredit * 100) / 100;
 
                 return {
                     ...entry,
@@ -127,19 +143,18 @@ const ProcessBaseVoucher = () => {
             return entry;
         });
 
-        // Update account entry state
-        if (hasSelectedProducts) {
-            if (difference > 0) {
-                setAccountEntryAmount(difference);
+        // Update account entry state with rounded values
+        if (hasSelectedProducts && Math.abs(roundedDifference) > 0.001) {
+            if (roundedDifference > 0) {
+                setAccountEntryAmount(roundedDifference);
                 setAccountEntryIsDebit(false);
-            } else if (difference < 0) {
-                setAccountEntryAmount(Math.abs(difference));
-                setAccountEntryIsDebit(true);
             } else {
-                setAccountEntryAmount(0);
+                setAccountEntryAmount(Math.abs(roundedDifference));
+                setAccountEntryIsDebit(true);
             }
         } else {
             setAccountEntryAmount(0);
+            setAccountEntryIsDebit(false);
         }
 
         setAccountEntryIncluded(hasSelectedProducts);
@@ -178,6 +193,10 @@ const ProcessBaseVoucher = () => {
                         name: b.bookerName || b.name
                     }));
                 setBookers(enabledBookers);
+                // Set first booker as default
+                if (enabledBookers.length > 0 && !bookerId) {
+                    setBookerId(enabledBookers[0].id);
+                }
             }
         } catch (err) {
             console.error('Error loading bookers:', err);
@@ -413,17 +432,27 @@ const ProcessBaseVoucher = () => {
         return entries.filter(e => e.processQuantity > 0).length;
     }, [entries]);
 
-    // Calculate totals
+     // Calculate totals
     const totals = useMemo(() => {
         let totalDebit = 0;
         let totalCredit = 0;
 
         entries.forEach(entry => {
-            if (entry.processQuantity > 0) {
-                totalDebit += entry.calculatedDebit || 0;
-                totalCredit += entry.calculatedCredit || 0;
+            // Include entries that are selected (processQuantity > 0) or account entries with calculated amounts
+            const isSelected = entry.processQuantity > 0;
+            const isAccount = entry.accountGroupId === 1;
+            
+            if (isSelected || (isAccount && (entry.calculatedDebit > 0 || entry.calculatedCredit > 0))) {
+                const debit = parseFloat(entry.calculatedDebit) || 0;
+                const credit = parseFloat(entry.calculatedCredit) || 0;
+                totalDebit += debit;
+                totalCredit += credit;
             }
         });
+
+        // Round to 2 decimal places
+        totalDebit = Math.round(totalDebit * 100) / 100;
+        totalCredit = Math.round(totalCredit * 100) / 100;
 
         return { totalDebit, totalCredit };
     }, [entries]);
@@ -453,6 +482,14 @@ const ProcessBaseVoucher = () => {
                 return;
             }
 
+            // Validate booker is selected
+            if (!bookerId || bookerId <= 0) {
+                setError('Please select a booker.');
+                setGenerating(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+
             // Validate that all selected non-account entries have quantities > 0
             const invalidEntries = entries.filter(e => 
                 e.processQuantity > 0 && 
@@ -466,6 +503,15 @@ const ProcessBaseVoucher = () => {
                 isSubmittingRef.current = false;
                 return;
             }
+
+            // Find account entry to get its calculated amounts
+            const accountEntry = entries.find(e => e.accountGroupId === 1 && e.processQuantity > 0);
+            const finalAccountEntryAmount = accountEntry 
+                ? (accountEntry.calculatedDebit > 0 ? accountEntry.calculatedDebit : accountEntry.calculatedCredit)
+                : accountEntryAmount;
+            const finalAccountEntryIsDebit = accountEntry
+                ? (accountEntry.calculatedDebit > 0)
+                : accountEntryIsDebit;
 
             const model = {
                 baseVoucherId: voucherData.baseVoucherId,
@@ -484,15 +530,21 @@ const ProcessBaseVoucher = () => {
                     percent: entry.percent,
                     disc: entry.disc,
                     rbp: entry.rbp,
+                    pkg: entry.pkg,
                     accountGroupId: entry.accountGroupId,
-                    accountEntryAmount: entry.accountGroupId === 1 ? accountEntryAmount : 0,
-                    accountEntryIsDebit: entry.accountGroupId === 1 ? accountEntryIsDebit : false
+                    // Use calculated values from the entry itself
+                    accountEntryAmount: entry.accountGroupId === 1 
+                        ? (entry.calculatedDebit > 0 ? entry.calculatedDebit : entry.calculatedCredit)
+                        : 0,
+                    accountEntryIsDebit: entry.accountGroupId === 1 
+                        ? (entry.calculatedDebit > 0)
+                        : false
                 })),
-                accountEntryAmount: accountEntryAmount,
-                accountEntryIsDebit: accountEntryIsDebit,
+                accountEntryAmount: finalAccountEntryAmount,
+                accountEntryIsDebit: finalAccountEntryIsDebit,
                 accountEntryIncluded: accountEntryIncluded,
                 creditableDate: creditableDate || new Date().toISOString().split('T')[0],
-                bookerId: bookerId || null
+                bookerId: bookerId
             };
 
             const response = await apiClient.post('/HomeApi/create-derived-voucher', model);
@@ -621,14 +673,16 @@ const ProcessBaseVoucher = () => {
                                 <thead className="table-primary">
                                     <tr>
                                         <th width="5%">Select</th>
-                                        <th width="8%">Entry ID</th>
-                                        <th width="20%">Account</th>
-                                        <th width="22%">Description</th>
-                                        <th width="8%">Available</th>
-                                        <th width="10%">Process Qty</th>
-                                        <th width="7%">Rate</th>
-                                        <th width="10%">Debit</th>
-                                        <th width="10%">Credit</th>
+                                        <th width="7%">Entry ID</th>
+                                        <th width="18%">Account</th>
+                                        <th width="6%">Pkg</th>
+                                        <th width="18%">Description</th>
+                                        <th width="7%">Available</th>
+                                        <th width="8%">Process Qty</th>
+                                        <th width="6%">Rate</th>
+                                        <th width="6%">Discount %</th>
+                                        <th width="9%">Debit</th>
+                                        <th width="9%">Credit</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -667,6 +721,7 @@ const ProcessBaseVoucher = () => {
                                                         <span className="badge bg-info ms-1">Account</span>
                                                     )}
                                                 </td>
+                                                <td className="text-end">{formatNumber(entry.pkg || 0)}</td>
                                                 <td>{entry.description || '-'}</td>
                                                 <td className="text-end">{entry.availableQuantity}</td>
                                                 <td>
@@ -682,6 +737,7 @@ const ProcessBaseVoucher = () => {
                                                     />
                                                 </td>
                                                 <td className="text-end">{formatNumber(entry.rate || 0)}</td>
+                                                <td className="text-end">{formatNumber(entry.percent || 0)}</td>
                                                 <td className="text-end entry-debit">
                                                     {formatCurrency(entry.calculatedDebit || 0)}
                                                 </td>
@@ -694,7 +750,7 @@ const ProcessBaseVoucher = () => {
                                 </tbody>
                                 <tfoot className="table-secondary fw-bold">
                                     <tr>
-                                        <td colSpan="7" className="text-end">Totals:</td>
+                                        <td colSpan="9" className="text-end">Totals:</td>
                                         <td className="text-end" id="totalDebit">
                                             {formatCurrency(totals.totalDebit)}
                                         </td>
@@ -736,14 +792,14 @@ const ProcessBaseVoucher = () => {
                     </div>
                     {bookers.length > 0 && (
                         <div className="col-md-4">
-                            <Form.Label htmlFor="BookerId">Booker</Form.Label>
+                            <Form.Label htmlFor="BookerId">Booker <span className="text-danger">*</span></Form.Label>
                             <Form.Select
                                 id="BookerId"
                                 name="BookerId"
                                 value={bookerId || ''}
                                 onChange={(e) => setBookerId(e.target.value ? parseInt(e.target.value) : null)}
+                                required
                             >
-                                <option value="">Select Booker (Optional)</option>
                                 {bookers.map(booker => (
                                     <option key={booker.id} value={booker.id}>
                                         {booker.name}

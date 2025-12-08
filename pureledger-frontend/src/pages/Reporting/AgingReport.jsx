@@ -205,7 +205,10 @@ const AgingReport = () => {
     const search = searchTerm.toLowerCase();
     return (
       (entry.accountName || '').toLowerCase().includes(search) ||
-      entry.accountId?.toString().includes(search)
+      entry.accountId?.toString().includes(search) ||
+      (entry.totalDebit?.toString() || '').includes(search) ||
+      (entry.totalCredit?.toString() || '').includes(search) ||
+      (entry.netBalance?.toString() || '').includes(search)
     );
   });
 
@@ -418,7 +421,7 @@ const AgingReport = () => {
                   {allEntries.length} of {totalRecords} accounts
                 </span>
               )}
-              {!hasMoreData && filteredEntries.length > 0 && (
+              {!hasMoreData && allEntries.length > 0 && (
                 <>
                   <Button variant="outline-success" size="sm" onClick={handleExportCsv} className="me-2">
                     <i className="fas fa-file-csv me-1"></i> Export CSV
@@ -440,6 +443,7 @@ const AgingReport = () => {
                     placeholder="Filter results..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    disabled={loading || isLoadingMore || hasMoreData}
                   />
                 </InputGroup>
               </div>
@@ -455,10 +459,16 @@ const AgingReport = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.length === 0 ? (
+                  {filteredEntries.length === 0 && allEntries.length > 0 ? (
                     <tr>
                       <td colSpan="4" className="text-center text-muted py-4">
                         {searchTerm ? 'No results found for your search' : 'No data available'}
+                      </td>
+                    </tr>
+                  ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="text-center text-muted py-4">
+                        No data available
                       </td>
                     </tr>
                   ) : (
