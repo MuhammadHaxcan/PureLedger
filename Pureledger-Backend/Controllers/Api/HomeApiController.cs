@@ -574,6 +574,7 @@ namespace PureLedger.Controllers.Api
                             CategoryId = e.CategoryId,
                             AvailableQuantity = e.IsProcessed ? 0 : e.Quantity,
                             ProcessQuantity = 0,
+                            Pkg = e.Account?.ProductData?.Pkg ?? 0,
                             Rate = e.Rate,
                             Debit = e.Debit,
                             Credit = e.Credit,
@@ -615,6 +616,7 @@ namespace PureLedger.Controllers.Api
                             percent = e.Percent,
                             disc = e.Disc,
                             rbp = e.Rbp,
+                            pkg = e.Pkg,
                             accountGroupId = e.AccountGroupId,
                             isProcessed = e.IsProcessed
                         }).ToList()
@@ -659,7 +661,8 @@ namespace PureLedger.Controllers.Api
                     entriesToProcess,
                     model.AccountEntryAmount,
                     model.AccountEntryIsDebit,
-                    model.CreditableDate);
+                    model.CreditableDate,
+                    model.BookerId);
 
                 return Ok(new
                 {

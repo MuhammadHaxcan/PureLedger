@@ -453,7 +453,8 @@ namespace PureLedger.Services
             List<BaseVoucherEntryViewModel> entriesToProcess,
             int accountEntryAmount = 0,
             bool accountEntryIsDebit = false,
-            DateOnly? creditableDate = null)
+            DateOnly? creditableDate = null,
+            int? bookerId = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -465,6 +466,11 @@ namespace PureLedger.Services
                     if (baseVoucher != null)
                     {
                         baseVoucher.IsBaseVoucher = false;
+                        // Update booker if provided (don't use existing voucher's booker)
+                        if (bookerId.HasValue)
+                        {
+                            baseVoucher.BookerId = bookerId.Value;
+                        }
                         await _unitOfWork.JournalVouchers.UpdateAsync(baseVoucher);
                         await _unitOfWork.SaveChangesAsync();
                         await transaction.CommitAsync();
@@ -484,7 +490,8 @@ namespace PureLedger.Services
                     ProjectId = baseVoucherData.ProjectId,
                     EntryDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     CreditableDate = creditableDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
-                    IsCompleted = false
+                    IsCompleted = false,
+                    BookerId = bookerId ?? 0
                 };
 
                 derivedVoucher = await _unitOfWork.JournalVouchers.AddAsync(derivedVoucher);
@@ -1072,7 +1079,7 @@ namespace PureLedger.Services
             JournalEntry baseEntry,
             int processQuantity)
         {
-            decimal quantityRatio = processQuantity / baseEntry.Quantity;
+            decimal quantityRatio = (decimal)processQuantity / (decimal)baseEntry.Quantity;
 
             var newEntry = new JournalEntry
             {

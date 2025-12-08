@@ -97,6 +97,10 @@ const SearchableSelect = ({
     // If input is cleared and onClear callback exists, call it
     if (term === '' && onClear) {
       onClear();
+      // Delay clearing search term to allow parent to update value first
+      setTimeout(() => {
+        setSearchTerm('');
+      }, 0);
     }
   };
 

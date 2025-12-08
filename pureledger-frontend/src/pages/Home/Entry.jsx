@@ -369,9 +369,8 @@ const HomeEntry = () => {
       const hasCredit = entry && entry.credit && entry.credit > 0;
       const shouldRecalculate = hasDebit || hasCredit;
       
-      // Store recalculation flag in a ref or state
+      // Store in entry temporarily to know we need to recalculate
       if (shouldRecalculate) {
-        // Store in entry temporarily to know we need to recalculate
         entry._needsRecalculation = hasDebit ? 'debit' : 'credit';
       }
       
@@ -476,6 +475,13 @@ const HomeEntry = () => {
   };
 
   const addNewRow = useCallback(async () => {
+    // Close all open dropdowns by simulating click outside
+    document.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+
     const newIndex = entries.length;
     setEntries(prev => [...prev, {
       categoryId: null,
@@ -534,16 +540,24 @@ const HomeEntry = () => {
   // Add keyboard shortcut for Alt+N to add new row
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Check if Alt+N is pressed and user is not typing in an input/textarea/select
+      // Check if Alt+N is pressed
       if (e.altKey && e.key.toLowerCase() === 'n') {
         const target = e.target;
-        const isInputField = target.tagName === 'INPUT' || 
-                            target.tagName === 'TEXTAREA' || 
-                            target.tagName === 'SELECT' ||
-                            target.isContentEditable;
         
-        // Only trigger if not typing in an input field
-        if (!isInputField) {
+        // Check if target is a SearchableSelect input (these are dropdown/autocomplete inputs)
+        const isSearchableSelectInput = target.classList && target.classList.contains('select-search');
+        
+        // Check if typing in a regular form input (but NOT dropdown inputs)
+        const isRegularInputField = !isSearchableSelectInput && (
+          target.tagName === 'INPUT' || 
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable
+        );
+        
+        // Only trigger if not typing in a regular input field
+        // Allow Alt+N to work in SearchableSelect inputs
+        if (!isRegularInputField) {
           e.preventDefault();
           addNewRow();
         }

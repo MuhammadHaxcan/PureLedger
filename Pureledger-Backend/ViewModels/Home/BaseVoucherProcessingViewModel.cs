@@ -18,6 +18,7 @@ namespace PureLedger.ViewModels.Home
         public bool AccountEntryIsDebit { get; set; }
         public bool AccountEntryIncluded { get; set; } = true;
         public DateOnly CreditableDate { get; set; }
+        public int? BookerId { get; set; }
 
     }
 
@@ -31,6 +32,7 @@ namespace PureLedger.ViewModels.Home
         public int CategoryId { get; set; } // Added to match JournalEntryRowModel
         public int AvailableQuantity { get; set; }
         public int ProcessQuantity { get; set; }
+        public int Pkg { get; set; }
         public decimal Rate { get; set; }
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }

@@ -23,159 +23,50 @@ const ProcessBaseVoucher = () => {
     const [accountEntryIsDebit, setAccountEntryIsDebit] = useState(false);
     const [accountEntryIncluded, setAccountEntryIncluded] = useState(true);
     const [creditableDate, setCreditableDate] = useState('');
+    const [bookers, setBookers] = useState([]);
+    const [bookerId, setBookerId] = useState(null);
 
-    useEffect(() => {
-        if (id) {
-            loadBaseVoucher();
-        }
-    }, [id]);
-
-    useEffect(() => {
-        // Set default creditable date
-        if (!creditableDate) {
-            const today = new Date();
-            setCreditableDate(today.toISOString().split('T')[0]);
-        }
-    }, []);
-
-    // Initialize entries when voucher data loads
-    useEffect(() => {
-        if (voucherData && voucherData.entries && entries.length === 0) {
-            const initializedEntries = voucherData.entries.map(entry => ({
-                ...entry,
-                processQuantity: entry.accountGroupId === 1 && !entry.isProcessed 
-                    ? entry.availableQuantity 
-                    : (entry.processQuantity || 0),
-                calculatedDebit: 0,
-                calculatedCredit: 0
-            }));
-            
-            // Calculate initial amounts
-            let updatedEntries = initializedEntries.map(entry => {
-                if (entry.accountGroupId !== 1) {
-                    const isChecked = entry.processQuantity > 0;
-                    const quantity = entry.processQuantity || 0;
-                    const availableQuantity = entry.availableQuantity || 0;
-                    
-                    let debitAmount = 0;
-                    let creditAmount = 0;
-
-                    if (isChecked && quantity > 0 && availableQuantity > 0) {
-                        const ratio = quantity / availableQuantity;
-                        const originalDebit = entry.debit || 0;
-                        const originalCredit = entry.credit || 0;
-
-                        if (originalDebit > 0) {
-                            debitAmount = Math.round(originalDebit * ratio);
-                        } else {
-                            creditAmount = Math.round(originalCredit * ratio);
-                        }
-                    }
-
-                    return {
-                        ...entry,
-                        calculatedDebit: debitAmount,
-                        calculatedCredit: creditAmount
-                    };
-                }
-                return entry;
-            });
-
-            // Update account entries
-            let totalDebits = 0;
-            let totalCredits = 0;
-            let hasSelectedProducts = false;
-
-            updatedEntries.forEach(entry => {
-                if (entry.accountGroupId !== 1 && entry.processQuantity > 0) {
-                    hasSelectedProducts = true;
-                    totalDebits += entry.calculatedDebit || 0;
-                    totalCredits += entry.calculatedCredit || 0;
-                }
-            });
-
-            const difference = totalDebits - totalCredits;
-
-            updatedEntries = updatedEntries.map(entry => {
-                if (entry.accountGroupId === 1) {
-                    const isProcessed = entry.isProcessed;
-                    const shouldBeSelected = hasSelectedProducts && !isProcessed;
-                    const newProcessQuantity = shouldBeSelected ? entry.availableQuantity : 0;
-
-                    let accountDebit = 0;
-                    let accountCredit = 0;
-
-                    if (hasSelectedProducts) {
-                        if (difference > 0) {
-                            accountCredit = difference;
-                            setAccountEntryAmount(difference);
-                            setAccountEntryIsDebit(false);
-                        } else if (difference < 0) {
-                            accountDebit = Math.abs(difference);
-                            setAccountEntryAmount(Math.abs(difference));
-                            setAccountEntryIsDebit(true);
-                        } else {
-                            setAccountEntryAmount(0);
-                        }
-                    } else {
-                        setAccountEntryAmount(0);
-                    }
-
-                    setAccountEntryIncluded(hasSelectedProducts);
-
-                    return {
-                        ...entry,
-                        processQuantity: newProcessQuantity,
-                        calculatedDebit: accountDebit,
-                        calculatedCredit: accountCredit
-                    };
-                }
-                return entry;
-            });
-
-            setEntries(updatedEntries);
-        }
-    }, [voucherData]);
-
-    const loadBaseVoucher = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const response = await apiClient.get(`/HomeApi/process-base-voucher/${id}`);
-            if (response.data.success) {
-                const data = response.data.data;
-                setVoucherData(data);
-                // Don't set entries here - let the useEffect handle it
-            } else {
-                setError(response.data.message || 'Failed to load base voucher');
-            }
-        } catch (err) {
-            setError(err.response?.data?.message || 'Failed to load base voucher');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Calculate entry amounts based on process quantity
+    // Calculate entry amounts using the same formula as Entry.jsx
     const calculateEntryAmounts = useCallback((entry) => {
         const isAccount = entry.accountGroupId === 1;
-        const isChecked = entry.processQuantity > 0;
         const quantity = entry.processQuantity || 0;
         const availableQuantity = entry.availableQuantity || 0;
         
         let debitAmount = 0;
         let creditAmount = 0;
 
-        if (isChecked && quantity > 0 && availableQuantity > 0 && !isAccount) {
-            // For regular entries, calculate proportional values based on quantity
-            const ratio = quantity / availableQuantity;
-            const originalDebit = entry.debit || 0;
-            const originalCredit = entry.credit || 0;
-
-            if (originalDebit > 0) {
-                debitAmount = Math.round(originalDebit * ratio);
+        if (!isAccount && quantity > 0 && availableQuantity > 0) {
+            // Get values from entry (same as Entry.jsx calculation)
+            const rbp = entry.rbp === 'Y' || entry.rbp === 'y';
+            const qty = parseFloat(quantity) || 0;
+            const rate = parseFloat(entry.rate) || 0;
+            const percent = parseFloat(entry.percent) || 0;
+            const pkg = parseFloat(entry.pkg) || 0; // Use pkg directly from API
+            
+            // Get original debit/credit to determine direction (not for calculation)
+            const originalDebit = parseFloat(entry.debit) || 0;
+            const originalCredit = parseFloat(entry.credit) || 0;
+            
+            // Calculate total amount using the formula: pkg * qty * rate (if RBP is Y)
+            let totalAmount = 0;
+            if (rbp && pkg > 0) {
+                totalAmount = pkg * qty * rate;
             } else {
-                creditAmount = Math.round(originalCredit * ratio);
+                totalAmount = qty * rate;
+            }
+            
+            // Calculate discount based on total amount and percent
+            const discount = parseFloat(((totalAmount * percent) / 100).toFixed(2));
+            
+            // Calculate net amount (total amount - discount)
+            const netAmount = totalAmount - discount;
+            
+            // Determine if it should be debit or credit based on original entry
+            // Use the direction from the original entry, not the existing amount
+            if (originalDebit > 0) {
+                debitAmount = parseFloat(netAmount.toFixed(2));
+            } else if (originalCredit > 0) {
+                creditAmount = parseFloat(netAmount.toFixed(2));
             }
         }
 
@@ -255,7 +146,92 @@ const ProcessBaseVoucher = () => {
         return finalEntries;
     }, []);
 
+    // Load base voucher data
+    const loadBaseVoucher = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const response = await apiClient.get(`/HomeApi/process-base-voucher/${id}`);
+            if (response.data.success) {
+                const data = response.data.data;
+                setVoucherData(data);
+            } else {
+                setError(response.data.message || 'Failed to load base voucher');
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to load base voucher');
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    // Load bookers
+    const loadBookers = async () => {
+        try {
+            const response = await apiClient.get('/MetaDataApi/bookers');
+            if (response.data.success) {
+                // Transform to match the format used in Entry.jsx (id, name)
+                const enabledBookers = (response.data.data || [])
+                    .filter(b => b.isEnabled)
+                    .map(b => ({
+                        id: b.bookerID || b.id,
+                        name: b.bookerName || b.name
+                    }));
+                setBookers(enabledBookers);
+            }
+        } catch (err) {
+            console.error('Error loading bookers:', err);
+        }
+    };
+
+    // Initialize entries when voucher data loads
+    useEffect(() => {
+        if (voucherData && voucherData.entries && entries.length === 0) {
+            const initializedEntries = voucherData.entries.map(entry => ({
+                ...entry,
+                processQuantity: entry.accountGroupId === 1 && !entry.isProcessed 
+                    ? entry.availableQuantity 
+                    : (entry.processQuantity || 0),
+                calculatedDebit: 0,
+                calculatedCredit: 0
+            }));
+            
+            // Calculate initial amounts for non-account entries
+            let updatedEntries = initializedEntries.map(entry => {
+                if (entry.accountGroupId !== 1) {
+                    const amounts = calculateEntryAmounts(entry);
+                    return {
+                        ...entry,
+                        calculatedDebit: amounts.debit,
+                        calculatedCredit: amounts.credit
+                    };
+                }
+                return entry;
+            });
+
+            // Update account entries
+            updatedEntries = updateAccountEntries(updatedEntries);
+            setEntries(updatedEntries);
+        }
+    }, [voucherData, calculateEntryAmounts, updateAccountEntries]);
+
+    // Load data on mount
+    useEffect(() => {
+        if (id) {
+            loadBaseVoucher();
+        }
+        loadBookers();
+    }, [id]);
+
+    // Set default creditable date
+    useEffect(() => {
+        if (!creditableDate) {
+            const today = new Date();
+            setCreditableDate(today.toISOString().split('T')[0]);
+        }
+    }, [creditableDate]);
+
+    // Handle quantity change
     const handleQuantityChange = (index, value) => {
         const updatedEntries = [...entries];
         const entry = updatedEntries[index];
@@ -295,6 +271,7 @@ const ProcessBaseVoucher = () => {
         setEntries(recalculatedEntries);
     };
 
+    // Handle checkbox change
     const handleCheckboxChange = (index, checked) => {
         const updatedEntries = [...entries];
         const entry = updatedEntries[index];
@@ -331,6 +308,7 @@ const ProcessBaseVoucher = () => {
         setEntries(recalculatedEntries);
     };
 
+    // Handle select all
     const handleSelectAll = () => {
         let updatedEntries = entries.map(entry => {
             const isAccount = entry.accountGroupId === 1;
@@ -364,6 +342,7 @@ const ProcessBaseVoucher = () => {
         setEntries(updatedEntries);
     };
 
+    // Handle deselect all
     const handleDeselectAll = () => {
         let updatedEntries = entries.map(entry => {
             const isAccount = entry.accountGroupId === 1;
@@ -395,6 +374,7 @@ const ProcessBaseVoucher = () => {
         setEntries(updatedEntries);
     };
 
+    // Handle max quantities
     const handleMaxQuantities = () => {
         let updatedEntries = entries.map(entry => {
             const isAccount = entry.accountGroupId === 1;
@@ -428,11 +408,12 @@ const ProcessBaseVoucher = () => {
         setEntries(updatedEntries);
     };
 
-    // Calculate selected count and totals
+    // Calculate selected count
     const selectedCount = useMemo(() => {
         return entries.filter(e => e.processQuantity > 0).length;
     }, [entries]);
 
+    // Calculate totals
     const totals = useMemo(() => {
         let totalDebit = 0;
         let totalCredit = 0;
@@ -447,6 +428,7 @@ const ProcessBaseVoucher = () => {
         return { totalDebit, totalCredit };
     }, [entries]);
 
+    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault();
         
@@ -509,7 +491,8 @@ const ProcessBaseVoucher = () => {
                 accountEntryAmount: accountEntryAmount,
                 accountEntryIsDebit: accountEntryIsDebit,
                 accountEntryIncluded: accountEntryIncluded,
-                creditableDate: creditableDate || new Date().toISOString().split('T')[0]
+                creditableDate: creditableDate || new Date().toISOString().split('T')[0],
+                bookerId: bookerId || null
             };
 
             const response = await apiClient.post('/HomeApi/create-derived-voucher', model);
@@ -535,6 +518,7 @@ const ProcessBaseVoucher = () => {
         }
     };
 
+    // Format currency
     const formatCurrency = (value) => {
         return new Intl.NumberFormat('en-US', {
             minimumFractionDigits: 0,
@@ -542,6 +526,7 @@ const ProcessBaseVoucher = () => {
         }).format(value || 0);
     };
 
+    // Format number
     const formatNumber = (value) => {
         return new Intl.NumberFormat('en-US', {
             minimumFractionDigits: 2,
@@ -723,7 +708,7 @@ const ProcessBaseVoucher = () => {
                     </Card.Body>
                 </Card>
 
-                    <div className="row mb-3">
+                <div className="row mb-3">
                     <div className="col-md-4">
                         <Form.Label htmlFor="CreditableDate">Creditable Date</Form.Label>
                         <InputGroup>
@@ -749,6 +734,24 @@ const ProcessBaseVoucher = () => {
                             />
                         </InputGroup>
                     </div>
+                    {bookers.length > 0 && (
+                        <div className="col-md-4">
+                            <Form.Label htmlFor="BookerId">Booker</Form.Label>
+                            <Form.Select
+                                id="BookerId"
+                                name="BookerId"
+                                value={bookerId || ''}
+                                onChange={(e) => setBookerId(e.target.value ? parseInt(e.target.value) : null)}
+                            >
+                                <option value="">Select Booker (Optional)</option>
+                                {bookers.map(booker => (
+                                    <option key={booker.id} value={booker.id}>
+                                        {booker.name}
+                                    </option>
+                                ))}
+                            </Form.Select>
+                        </div>
+                    )}
                 </div>
 
                 <div className="d-flex justify-content-between">
