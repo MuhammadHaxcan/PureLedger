@@ -1,4 +1,4 @@
-﻿using PureLedger.Models;
+using PureLedger.Models;
 
 namespace PureLedger.Repositories.Interfaces
 {
@@ -11,5 +11,12 @@ namespace PureLedger.Repositories.Interfaces
         Task<Project> AddAsync(Project project);
         Task<Project> UpdateAsync(Project project);
         Task<bool> UserHasAccessToProjectAsync(int userId, int projectId);
+
+        /// <summary>
+        /// Checks if a project with the given name exists (case-insensitive)
+        /// </summary>
+        /// <param name="name">Project name to check</param>
+        /// <param name="excludeId">Optional project ID to exclude from check (for updates)</param>
+        Task<bool> ExistsByNameAsync(string name, int? excludeId = null);
     }
 }

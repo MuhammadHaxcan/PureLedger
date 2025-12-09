@@ -16,7 +16,9 @@ namespace PureLedger.Repositories
 
         public async Task<List<Project>> GetAllAsync()
         {
-            return await _context.Projects.ToListAsync();
+            return await _context.Projects
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<List<Project>> GetAllForUserAsync(int userId)
@@ -30,6 +32,7 @@ namespace PureLedger.Repositories
 
             // Return only projects the user has access to
             return await _context.Projects
+                .AsNoTracking()
                 .Where(p => _context.UserProjects.Any(up => up.UserId == userId && up.ProjectId == p.ProjectId))
                 .ToListAsync();
         }
@@ -50,6 +53,7 @@ namespace PureLedger.Repositories
 
             // Return project only if user has access to it
             return await _context.Projects
+                .AsNoTracking()
                 .Where(p => p.ProjectId == id &&
                            _context.UserProjects.Any(up => up.UserId == userId && up.ProjectId == p.ProjectId))
                 .FirstOrDefaultAsync();
@@ -81,6 +85,15 @@ namespace PureLedger.Repositories
             // Check if user has explicit access to the project
             return await _context.UserProjects
                 .AnyAsync(up => up.UserId == userId && up.ProjectId == projectId);
+        }
+
+        public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
+        {
+            var normalizedName = name.Trim().ToLower();
+            return await _context.Projects
+                .AsNoTracking()
+                .AnyAsync(p => p.ProjectName.ToLower().Trim() == normalizedName
+                    && (!excludeId.HasValue || p.ProjectId != excludeId.Value));
         }
     }
 }

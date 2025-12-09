@@ -9,5 +9,10 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<Booker>> GetAllEnabledAsync();
         Task<Booker> AddAsync(Booker booker);
         Task<Booker> UpdateAsync(Booker booker);
+
+        /// <summary>
+        /// Checks if a booker with the given name exists (case-insensitive)
+        /// </summary>
+        Task<bool> ExistsByNameAsync(string name, int? excludeId = null);
     }
 }

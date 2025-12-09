@@ -17,6 +17,8 @@ namespace PureLedger.Repositories
         public async Task<List<JournalVoucher>> GetAllWithEntriesAsync()
         {
             return await _context.JournalVouchers
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(jv => jv.JournalEntries)
                     .ThenInclude(e => e.Account)
                 .OrderByDescending(jv => jv.EntryDate)
@@ -26,6 +28,7 @@ namespace PureLedger.Repositories
         public async Task<JournalVoucher?> GetWithEntriesAsync(int id)
         {
             return await _context.JournalVouchers
+                .AsSplitQuery()
                 .Include(jv => jv.Project)
                 .Include(jv => jv.JournalEntries)
                     .ThenInclude(e => e.Account)
@@ -175,6 +178,7 @@ namespace PureLedger.Repositories
         public async Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id)
         {
             return await _context.JournalVouchers
+                .AsSplitQuery()
                 .Where(v => v.IsBaseVoucher && v.JournalVoucherId == id)
                 .Include(v => v.Project)
                 .Include(v => v.JournalEntries)

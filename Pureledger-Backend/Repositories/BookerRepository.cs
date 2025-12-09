@@ -16,11 +16,16 @@ namespace PureLedger.Repositories
 
         public async Task<List<Booker>> GetAllAsync()
         {
-            return await _context.Bookers.ToListAsync();
+            return await _context.Bookers
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<List<Booker>> GetAllEnabledAsync(){
-            return await _context.Bookers.Where(b => b.IsEnabled).ToListAsync();
+            return await _context.Bookers
+                .AsNoTracking()
+                .Where(b => b.IsEnabled)
+                .ToListAsync();
         }
 
 
@@ -41,6 +46,15 @@ namespace PureLedger.Repositories
             _context.Bookers.Update(booker);
             await _context.SaveChangesAsync();
             return booker;
+        }
+
+        public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
+        {
+            var normalizedName = name.Trim().ToLower();
+            return await _context.Bookers
+                .AsNoTracking()
+                .AnyAsync(b => b.BookerName.ToLower().Trim() == normalizedName
+                    && (!excludeId.HasValue || b.BookerID != excludeId.Value));
         }
     }
 }

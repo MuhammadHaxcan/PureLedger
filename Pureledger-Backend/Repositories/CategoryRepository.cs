@@ -17,6 +17,7 @@ namespace PureLedger.Repositories
         public async Task<List<Category>> GetAllWithDetailsAsync()
         {
             return await _context.Categories
+                .AsNoTracking()
                 .Include(c => c.Project)
                 .Include(c => c.AccountType)
                 .ToListAsync();
@@ -33,6 +34,7 @@ namespace PureLedger.Repositories
         public async Task<List<Category>> GetByProjectIdAsync(int projectId)
         {
             return await _context.Categories
+                .AsNoTracking()
                 .Where(c => c.ProjectId == projectId)
                 .ToListAsync();
         }
@@ -60,7 +62,9 @@ namespace PureLedger.Repositories
 
         public async Task<List<Category>> GetAllAsync()
         {
-            return await _context.Categories.ToListAsync();
+            return await _context.Categories
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<bool> DeleteAsync(Category category)
@@ -75,6 +79,32 @@ namespace PureLedger.Repositories
             {
                 return false;
             }
+        }
+
+        public async Task<bool> ExistsByNameInProjectAsync(string name, int projectId, int? excludeId = null)
+        {
+            var normalizedName = name.Trim().ToLower();
+            return await _context.Categories
+                .AsNoTracking()
+                .AnyAsync(c => c.CategoryName.ToLower().Trim() == normalizedName
+                    && c.ProjectId == projectId
+                    && (!excludeId.HasValue || c.CategoryId != excludeId.Value));
+        }
+
+        public async Task<bool> HasAssociatedAccountsAsync(int categoryId)
+        {
+            return await _context.Accounts
+                .AsNoTracking()
+                .AnyAsync(a => a.CategoryId == categoryId);
+        }
+
+        public async Task<List<int>> GetAssociatedAccountIdsAsync(int categoryId)
+        {
+            return await _context.Accounts
+                .AsNoTracking()
+                .Where(a => a.CategoryId == categoryId)
+                .Select(a => a.AccountId)
+                .ToListAsync();
         }
     }
 }

@@ -100,36 +100,43 @@ namespace PureLedger.Repositories
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int accountId, int maxVoucherId)
         {
-
-            var balanceQuery = _context.JournalEntries
+            // Optimized: Single aggregate query instead of two separate queries
+            var totals = await _context.JournalEntries
                 .AsNoTracking()
                 .Where(je =>
                     je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
                     je.JournalVoucherId < maxVoucherId
                 )
-                .Select(je => new { je.Debit, je.Credit });
+                .GroupBy(je => 1)
+                .Select(g => new
+                {
+                    Debit = g.Sum(je => (decimal?)je.Debit) ?? 0m,
+                    Credit = g.Sum(je => (decimal?)je.Credit) ?? 0m
+                })
+                .FirstOrDefaultAsync();
 
-            var totalDebit = await balanceQuery.SumAsync(e => e.Debit);
-            var totalCredit = await balanceQuery.SumAsync(e => e.Credit);
-
-            return totalDebit - totalCredit;
+            return (totals?.Debit ?? 0m) - (totals?.Credit ?? 0m);
         }
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsyncMinus1(int accountId, int maxVoucherId)
         {
-            var balanceQuery = _context.JournalEntries
-                
+            // Optimized: Single aggregate query instead of two separate queries
+            var totals = await _context.JournalEntries
+                .AsNoTracking()
                 .Where(je =>
                     je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
-                    je.JournalVoucherId <= maxVoucherId);
+                    je.JournalVoucherId <= maxVoucherId)
+                .GroupBy(je => 1)
+                .Select(g => new
+                {
+                    Debit = g.Sum(je => (decimal?)je.Debit) ?? 0m,
+                    Credit = g.Sum(je => (decimal?)je.Credit) ?? 0m
+                })
+                .FirstOrDefaultAsync();
 
-            // Use SumAsync to calculate at database level
-            var totalDebit = await balanceQuery.SumAsync(e => (decimal?)e.Debit) ?? 0m;
-            var totalCredit = await balanceQuery.SumAsync(e => (decimal?)e.Credit) ?? 0m;
-
-            return totalDebit - totalCredit;
+            return (totals?.Debit ?? 0m) - (totals?.Credit ?? 0m);
         }
 
         public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
@@ -190,27 +197,21 @@ namespace PureLedger.Repositories
 
         public async Task<List<JournalEntry>> GetCartageEntriesByJournalVoucherIdAsync(int journalVoucherId)
         {
-
-            var cartageReferences = await _context.JournalVoucherReferences
+            // Optimized: Batch fetch all entries in a single query instead of N+1 queries
+            var referencedVoucherIds = await _context.JournalVoucherReferences
                 .AsNoTracking()
                 .Where(r => r.MainVoucherId == journalVoucherId && r.ReferenceType == "Cartage")
+                .Select(r => r.ReferencedVoucherId)
                 .ToListAsync();
 
-            if (cartageReferences == null || !cartageReferences.Any())
+            if (!referencedVoucherIds.Any())
                 return new List<JournalEntry>();
 
-            List<JournalEntry> cartageEntries = new List<JournalEntry>();
-
-            foreach (var reference in cartageReferences)
-            {
-                var cartageEntry = await GetByCartageId(reference.ReferencedVoucherId);
-                if (cartageEntry != null)
-                {
-                    cartageEntries.Add(cartageEntry);
-                }
-            }
-
-            return cartageEntries;
+            // Single query to fetch all cartage entries instead of looping
+            return await _context.JournalEntries
+                .AsNoTracking()
+                .Where(e => referencedVoucherIds.Contains(e.JournalVoucherId) && e.Debit == 0 && e.Credit > 0)
+                .ToListAsync();
         }
 
         public async Task<decimal> GetPreviousEntriesBalanceAsync(
@@ -230,7 +231,6 @@ namespace PureLedger.Repositories
 
             var baseQuery = _context.JournalEntries
                 .AsNoTracking()
-                .Include(je => je.JournalVoucher)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     je.JournalVoucher.EntryDate >= startDate &&
@@ -256,23 +256,23 @@ namespace PureLedger.Repositories
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
-            var ordered = baseQuery
+            int takeCount = page * pageSize;
+
+            // Optimized: Single aggregate query instead of two separate queries
+            var totals = await baseQuery
                 .OrderBy(je => je.JournalVoucher.EntryDate)
                 .ThenBy(je => je.JournalVoucherId)
                 .ThenBy(je => je.JournalEntryId)
-                .Select(je => new { je.Debit, je.Credit });
-
-            int takeCount = page * pageSize;
-
-            // Sum previous entries directly in the database
-            var previousDebit = await ordered
                 .Take(takeCount)
-                .SumAsync(x => (decimal?)x.Debit) ?? 0m;
-            var previousCredit = await ordered
-                .Take(takeCount)
-                .SumAsync(x => (decimal?)x.Credit) ?? 0m;
+                .GroupBy(je => 1)
+                .Select(g => new
+                {
+                    Debit = g.Sum(je => (decimal?)je.Debit) ?? 0m,
+                    Credit = g.Sum(je => (decimal?)je.Credit) ?? 0m
+                })
+                .FirstOrDefaultAsync();
 
-            return previousDebit - previousCredit;
+            return (totals?.Debit ?? 0m) - (totals?.Credit ?? 0m);
         }
 
         public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(
@@ -348,7 +348,6 @@ namespace PureLedger.Repositories
         {
             var query = _context.JournalEntries
                 .AsNoTracking()
-                .Include(je => je.JournalVoucher)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     je.JournalVoucher.EntryDate < startDate);
@@ -362,10 +361,17 @@ namespace PureLedger.Repositories
             if (accountId.HasValue)
                 query = query.Where(je => je.AccountId == accountId.Value);
 
-            var debit = await query.SumAsync(e => (decimal?)e.Debit) ?? 0m;
-            var credit = await query.SumAsync(e => (decimal?)e.Credit) ?? 0m;
+            // Optimized: Single aggregate query instead of two separate queries
+            var totals = await query
+                .GroupBy(je => 1)
+                .Select(g => new
+                {
+                    Debit = g.Sum(je => (decimal?)je.Debit) ?? 0m,
+                    Credit = g.Sum(je => (decimal?)je.Credit) ?? 0m
+                })
+                .FirstOrDefaultAsync();
 
-            return (debit, credit);
+            return (totals?.Debit ?? 0m, totals?.Credit ?? 0m);
         }
 
         public async Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(

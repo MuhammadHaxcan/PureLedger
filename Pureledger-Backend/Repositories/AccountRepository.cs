@@ -17,6 +17,7 @@ namespace PureLedger.Repositories
         public async Task<List<Account>> GetAllWithDetailsAsync()
         {
             return await _context.Accounts
+                .AsNoTracking()
                 .Include(a => a.AccountData)
                 .Include(a => a.ProductData)
                 .Include(a => a.Category)
@@ -28,12 +29,14 @@ namespace PureLedger.Repositories
         public async Task<List<Account>> GetByCategoryIdAsync(int categoryId)
         {
             return await _context.Accounts
+                .AsNoTracking()
                 .Where(a => a.CategoryId == categoryId)
                 .ToListAsync();
         }
 
         public async Task<List<Account>> GetEnabledByCategoryIdAsync(int categoryId) {
             return await _context.Accounts
+                .AsNoTracking()
                 .Where(a => a.CategoryId == categoryId && a.IsEnabled)
                 .ToListAsync();
         }
@@ -98,12 +101,15 @@ namespace PureLedger.Repositories
 
         public async Task<List<Account>> GetAllAsync()
         {
-            return await _context.Accounts.ToListAsync();
+            return await _context.Accounts
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<Account?> GetByIdWithCategoryAsync(int id)
         {
             return await _context.Accounts
+                .AsNoTracking()
                 .Include(a => a.Category)
                 .FirstOrDefaultAsync(a => a.AccountId == id);
         }
@@ -111,6 +117,7 @@ namespace PureLedger.Repositories
         public async Task<List<Account>> GetByCategoryIdWithCategoryAsync(int categoryId)
         {
             return await _context.Accounts
+                .AsNoTracking()
                 .Include(a => a.Category)
                 .Where(a => a.CategoryId == categoryId)
                 .ToListAsync();
@@ -167,6 +174,23 @@ namespace PureLedger.Repositories
             }
 
             return await query.ToListAsync();
+        }
+
+        public async Task<bool> ExistsByNameInCategoryAsync(string name, int categoryId, int? excludeId = null)
+        {
+            var normalizedName = name.Trim().ToLower();
+            return await _context.Accounts
+                .AsNoTracking()
+                .AnyAsync(a => a.AccountName.ToLower().Trim() == normalizedName
+                    && a.CategoryId == categoryId
+                    && (!excludeId.HasValue || a.AccountId != excludeId.Value));
+        }
+
+        public async Task<bool> HasAssociatedJournalEntriesAsync(int accountId)
+        {
+            return await _context.JournalEntries
+                .AsNoTracking()
+                .AnyAsync(je => je.AccountId == accountId);
         }
     }
 }

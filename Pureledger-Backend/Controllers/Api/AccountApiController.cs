@@ -128,14 +128,17 @@ namespace PureLedger.Controllers.Api
                 return Unauthorized(new { success = false, message = "Invalid token" });
             }
 
-            var controllers = await _authService.GetUserControllerAccessAsync(userId);
-            var actions = await _authService.GetUserActionAccessAsync(userId);
+            // Optimized: Run both async calls in parallel
+            var controllersTask = _authService.GetUserControllerAccessAsync(userId);
+            var actionsTask = _authService.GetUserActionAccessAsync(userId);
+
+            await Task.WhenAll(controllersTask, actionsTask);
 
             return Ok(new
             {
                 success = true,
-                controllers,
-                actions
+                controllers = await controllersTask,
+                actions = await actionsTask
             });
         }
 
@@ -150,9 +153,17 @@ namespace PureLedger.Controllers.Api
             }
 
             var isAdmin = User.IsInRole("Admin");
-            var controllerAccess = await _authService.GetUserControllerAccessAsync(userId);
-            var actionAccess = await _authService.GetUserActionAccessAsync(userId);
-            var accessibleProjects = await _authService.GetUserProjectsAsync(userId);
+
+            // Optimized: Run all async calls in parallel
+            var controllerAccessTask = _authService.GetUserControllerAccessAsync(userId);
+            var actionAccessTask = _authService.GetUserActionAccessAsync(userId);
+            var accessibleProjectsTask = _authService.GetUserProjectsAsync(userId);
+
+            await Task.WhenAll(controllerAccessTask, actionAccessTask, accessibleProjectsTask);
+
+            var controllerAccess = await controllerAccessTask;
+            var actionAccess = await actionAccessTask;
+            var accessibleProjects = await accessibleProjectsTask;
 
             // Build navigation structure similar to NavigationMenuViewComponent
             var navigationMap = new List<object>();

@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using PureLedger.Helpers;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services.Interface;
@@ -9,13 +11,20 @@ namespace PureLedger.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<MetaDataService> _logger;
+        private readonly IMemoryCache _cache;
+
+        // Cache durations
+        private static readonly TimeSpan StaticDataCacheDuration = TimeSpan.FromHours(1);
+        private static readonly TimeSpan DynamicDataCacheDuration = TimeSpan.FromMinutes(15);
 
         public MetaDataService(
             IUnitOfWork unitOfWork,
-            ILogger<MetaDataService> logger)
+            ILogger<MetaDataService> logger,
+            IMemoryCache cache)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _cache = cache;
         }
 
         #region Project Operations
@@ -37,9 +46,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicate project name (case-insensitive)
-            var existing = await _unitOfWork.Projects.GetAllAsync();
-            if (existing.Any(p => p.ProjectName.ToLower().Trim() == project.ProjectName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Projects.ExistsByNameAsync(project.ProjectName))
             {
                 errors.Add("A project with this name already exists.");
                 return errors;
@@ -49,10 +57,12 @@ namespace PureLedger.Services
             {
                 await _unitOfWork.Projects.AddAsync(project);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllProjects);
             }
             catch (DbUpdateException ex)
             {
-                // Optional: log detailed internal error
                 _logger.LogError(ex, "Error while creating project.");
                 errors.Add("An error occurred while saving the project.");
             }
@@ -71,11 +81,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicate name excluding current
-            var existingProjects = await _unitOfWork.Projects.GetAllAsync();
-            if (existingProjects.Any(p =>
-                p.ProjectId != project.ProjectId &&
-                p.ProjectName.ToLower().Trim() == project.ProjectName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Projects.ExistsByNameAsync(project.ProjectName, project.ProjectId))
             {
                 errors.Add("A project with this name already exists.");
                 return errors;
@@ -93,6 +100,9 @@ namespace PureLedger.Services
             try
             {
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllProjects);
             }
             catch (DbUpdateException ex)
             {
@@ -147,9 +157,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            var existing = await _unitOfWork.Categories.GetAllWithDetailsAsync();
-            if (existing.Any(c => c.CategoryName.ToLower().Trim() == category.CategoryName.ToLower().Trim()
-                               && c.ProjectId == category.ProjectId))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Categories.ExistsByNameInProjectAsync(category.CategoryName, category.ProjectId))
             {
                 errors.Add("This category already exists under the selected project.");
                 return errors;
@@ -159,6 +168,10 @@ namespace PureLedger.Services
             {
                 await _unitOfWork.Categories.AddAsync(category);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllCategories);
+                _cache.Remove(CacheKeys.CategoriesByProject(category.ProjectId));
             }
             catch (DbUpdateException ex)
             {
@@ -173,12 +186,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicate name in same project, excluding the current category
-            var existing = await _unitOfWork.Categories.GetAllWithDetailsAsync();
-            if (existing.Any(c =>
-                c.CategoryId != category.CategoryId &&
-                c.ProjectId == category.ProjectId &&
-                c.CategoryName.ToLower().Trim() == category.CategoryName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Categories.ExistsByNameInProjectAsync(category.CategoryName, category.ProjectId, category.CategoryId))
             {
                 errors.Add("This category name already exists under the selected project.");
                 return errors;
@@ -191,6 +200,8 @@ namespace PureLedger.Services
                 return errors;
             }
 
+            var oldProjectId = existingCategory.ProjectId;
+
             // Update properties safely
             existingCategory.CategoryName = category.CategoryName;
             existingCategory.ProjectId = category.ProjectId;
@@ -199,6 +210,14 @@ namespace PureLedger.Services
             try
             {
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllCategories);
+                _cache.Remove(CacheKeys.CategoriesByProject(category.ProjectId));
+                if (oldProjectId != category.ProjectId)
+                {
+                    _cache.Remove(CacheKeys.CategoriesByProject(oldProjectId));
+                }
             }
             catch (DbUpdateException ex)
             {
@@ -218,11 +237,8 @@ namespace PureLedger.Services
 
         public async Task<List<int>> GetAssociatedAccountIdsAsync(int categoryId)
         {
-            // Returns a list of AccountIds associated with the given category
-            var accounts = await _unitOfWork.Accounts.GetAllAsync();
-            return accounts.Where(a => a.CategoryId == categoryId)
-                          .Select(a => a.AccountId)
-                          .ToList();
+            // Optimized: Use direct database query instead of loading all records
+            return await _unitOfWork.Categories.GetAssociatedAccountIdsAsync(categoryId);
         }
 
         public async Task<(bool Success, List<int> AssociatedAccountIds)> DeleteCategoryAsync(int id)
@@ -301,10 +317,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicate account name (case-insensitive)
-            var existing = await _unitOfWork.Accounts.GetAllAsync();
-            if (existing.Any(a => a.AccountName.ToLower().Trim() == account.AccountName.ToLower().Trim() &&
-            a.CategoryId == account.CategoryId))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Accounts.ExistsByNameInCategoryAsync(account.AccountName, account.CategoryId))
             {
                 errors.Add("An account with this name already exists.");
                 return errors;
@@ -329,6 +343,10 @@ namespace PureLedger.Services
 
                 await _unitOfWork.Accounts.AddAsync(account);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllAccounts);
+                _cache.Remove(CacheKeys.AccountsByCategory(account.CategoryId));
             }
             catch (DbUpdateException ex)
             {
@@ -343,12 +361,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicates (excluding current)
-            var existingAccounts = await _unitOfWork.Accounts.GetAllAsync();
-            if (existingAccounts.Any(a =>
-                a.AccountId != account.AccountId &&
-                a.AccountName.ToLower().Trim() == account.AccountName.ToLower().Trim() &&
-                a.CategoryId == account.CategoryId))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Accounts.ExistsByNameInCategoryAsync(account.AccountName, account.CategoryId, account.AccountId))
             {
                 errors.Add("An account with this name already exists under the selected category.");
                 return errors;
@@ -360,6 +374,8 @@ namespace PureLedger.Services
                 errors.Add($"Account with ID {account.AccountId} not found.");
                 return errors;
             }
+
+            var oldCategoryId = existingAccount.CategoryId;
 
             try
             {
@@ -438,6 +454,14 @@ namespace PureLedger.Services
                 }
 
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllAccounts);
+                _cache.Remove(CacheKeys.AccountsByCategory(account.CategoryId));
+                if (oldCategoryId != account.CategoryId)
+                {
+                    _cache.Remove(CacheKeys.AccountsByCategory(oldCategoryId));
+                }
             }
             catch (DbUpdateException ex)
             {
@@ -523,8 +547,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            var existing = await _unitOfWork.Locations.GetAllAsync();
-            if (existing.Any(l => l.LocationName.ToLower().Trim() == location.LocationName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Locations.ExistsByNameAsync(location.LocationName))
             {
                 errors.Add("A location with this name already exists.");
                 return errors;
@@ -534,6 +558,9 @@ namespace PureLedger.Services
             {
                 await _unitOfWork.Locations.AddAsync(location);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllLocations);
             }
             catch (DbUpdateException ex)
             {
@@ -548,11 +575,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Prevent duplicate name (case-insensitive, exclude current ID)
-            var existing = await _unitOfWork.Locations.GetAllAsync();
-            if (existing.Any(l =>
-                l.LocationId != location.LocationId &&
-                l.LocationName.ToLower().Trim() == location.LocationName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Locations.ExistsByNameAsync(location.LocationName, location.LocationId))
             {
                 errors.Add("A location with this name already exists.");
                 return errors;
@@ -573,6 +597,9 @@ namespace PureLedger.Services
 
                 await _unitOfWork.Locations.UpdateAsync(existingLocation);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllLocations);
             }
             catch (DbUpdateException ex)
             {
@@ -603,9 +630,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicate booker name (case-insensitive)
-            var existing = await _unitOfWork.Bookers.GetAllAsync();
-            if (existing.Any(b => b.BookerName.ToLower().Trim() == booker.BookerName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Bookers.ExistsByNameAsync(booker.BookerName))
             {
                 errors.Add("A booker with this name already exists.");
                 return errors;
@@ -615,6 +641,9 @@ namespace PureLedger.Services
             {
                 await _unitOfWork.Bookers.AddAsync(booker);
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllBookers);
             }
             catch (DbUpdateException ex)
             {
@@ -629,11 +658,8 @@ namespace PureLedger.Services
         {
             var errors = new List<string>();
 
-            // Check for duplicate name excluding current
-            var existingBookers = await _unitOfWork.Bookers.GetAllAsync();
-            if (existingBookers.Any(b =>
-                b.BookerID != booker.BookerID &&
-                b.BookerName.ToLower().Trim() == booker.BookerName.ToLower().Trim()))
+            // Optimized: Use direct database check instead of loading all records
+            if (await _unitOfWork.Bookers.ExistsByNameAsync(booker.BookerName, booker.BookerID))
             {
                 errors.Add("A booker with this name already exists.");
                 return errors;
@@ -651,6 +677,9 @@ namespace PureLedger.Services
             try
             {
                 await _unitOfWork.SaveChangesAsync();
+
+                // Invalidate cache
+                _cache.Remove(CacheKeys.AllBookers);
             }
             catch (DbUpdateException ex)
             {

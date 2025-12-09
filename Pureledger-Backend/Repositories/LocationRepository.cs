@@ -16,7 +16,9 @@ namespace PureLedger.Repositories
 
         public async Task<List<Location>> GetAllAsync()
         {
-            return await _context.Locations.ToListAsync();
+            return await _context.Locations
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task<Location?> GetByIdAsync(int id)
@@ -38,5 +40,13 @@ namespace PureLedger.Repositories
             return location;
         }
 
+        public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
+        {
+            var normalizedName = name.Trim().ToLower();
+            return await _context.Locations
+                .AsNoTracking()
+                .AnyAsync(l => l.LocationName.ToLower().Trim() == normalizedName
+                    && (!excludeId.HasValue || l.LocationId != excludeId.Value));
+        }
     }
 }

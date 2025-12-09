@@ -241,6 +241,70 @@ namespace PureLedger.Data
                 .WithMany()
                 .HasForeignKey(ri => ri.AccountId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // ========================================
+            // Performance Indexes
+            // ========================================
+
+            // Journal Entries indexes for common query patterns
+            modelBuilder.Entity<JournalEntry>()
+                .HasIndex(je => new { je.AccountId, je.JournalVoucherId })
+                .HasDatabaseName("IX_JournalEntries_AccountId_JournalVoucherId");
+
+            modelBuilder.Entity<JournalEntry>()
+                .HasIndex(je => je.CategoryId)
+                .HasDatabaseName("IX_JournalEntries_CategoryId");
+
+            modelBuilder.Entity<JournalEntry>()
+                .HasIndex(je => new { je.IsProcessed, je.Quantity })
+                .HasDatabaseName("IX_JournalEntries_IsProcessed_Quantity");
+
+            // Journal Vouchers indexes for filtering and reporting
+            modelBuilder.Entity<JournalVoucher>()
+                .HasIndex(jv => new { jv.EntryDate, jv.IsCompleted })
+                .HasDatabaseName("IX_JournalVouchers_EntryDate_IsCompleted");
+
+            modelBuilder.Entity<JournalVoucher>()
+                .HasIndex(jv => new { jv.ProjectId, jv.IsCompleted })
+                .HasDatabaseName("IX_JournalVouchers_ProjectId_IsCompleted");
+
+            modelBuilder.Entity<JournalVoucher>()
+                .HasIndex(jv => jv.IsBaseVoucher)
+                .HasDatabaseName("IX_JournalVouchers_IsBaseVoucher");
+
+            // Delivery Challan indexes
+            modelBuilder.Entity<DeliveryChallanEntry>()
+                .HasIndex(dce => dce.JournalEntryId)
+                .HasDatabaseName("IX_DeliveryChallanEntries_JournalEntryId");
+
+            modelBuilder.Entity<DeliveryChallanVoucher>()
+                .HasIndex(dcv => dcv.JournalVoucherId)
+                .HasDatabaseName("IX_DeliveryChallanVouchers_JournalVoucherId");
+
+            // Account indexes
+            modelBuilder.Entity<Account>()
+                .HasIndex(a => new { a.CategoryId, a.IsEnabled })
+                .HasDatabaseName("IX_Accounts_CategoryId_IsEnabled");
+
+            // Category indexes
+            modelBuilder.Entity<Category>()
+                .HasIndex(c => c.ProjectId)
+                .HasDatabaseName("IX_Categories_ProjectId");
+
+            // User indexes
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique()
+                .HasDatabaseName("IX_Users_Username");
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Subroute)
+                .HasDatabaseName("IX_Users_Subroute");
+
+            // JournalVoucherReference indexes
+            modelBuilder.Entity<JournalVoucherReference>()
+                .HasIndex(r => new { r.MainVoucherId, r.ReferenceType })
+                .HasDatabaseName("IX_JournalVoucherReferences_MainVoucherId_ReferenceType");
         }
     }
 }

@@ -57,6 +57,9 @@ namespace PureLedger.Services
                 projectImage = projectCartageSettings.ProjectImage;
             }
 
+            // Optimized: Parse customer info once instead of calling 4 times
+            var parsedCustomerInfo = ParseCustomerInfo(customerInfo);
+
             var viewModel = new JournalVoucherReportViewModel
             {
                 JvId = journalVoucherId,
@@ -65,10 +68,10 @@ namespace PureLedger.Services
                 CreatedDate = dcVoucher.DCDate,
                 Entries = processedEntries,
 
-                CustomerAccountName = ParseCustomerInfo(customerInfo).Name,
-                CustomerPhone = ParseCustomerInfo(customerInfo).Phone,
-                CustomerAddress = ParseCustomerInfo(customerInfo).Address,
-                CustomerCity = ParseCustomerInfo(customerInfo).City,
+                CustomerAccountName = parsedCustomerInfo.Name,
+                CustomerPhone = parsedCustomerInfo.Phone,
+                CustomerAddress = parsedCustomerInfo.Address,
+                CustomerCity = parsedCustomerInfo.City,
 
                 Adda = locationNames,
                 ForChargesAmount = forChargesAmount,
