@@ -451,7 +451,7 @@ namespace PureLedger.Services
         public async Task<int> CreateDerivedVoucherAsync(
             int baseVoucherId,
             List<BaseVoucherEntryViewModel> entriesToProcess,
-            int accountEntryAmount = 0,
+            decimal accountEntryAmount = 0,
             bool accountEntryIsDebit = false,
             DateOnly? creditableDate = null,
             int? bookerId = null)
@@ -996,7 +996,7 @@ namespace PureLedger.Services
             JournalVoucher baseVoucher,
             int derivedVoucherId,
             List<BaseVoucherEntryViewModel> entriesToProcess,
-            int accountEntryAmount,
+            decimal accountEntryAmount,
             bool accountEntryIsDebit)
         {
             bool accountEntryAdded = false;
@@ -1033,10 +1033,11 @@ namespace PureLedger.Services
                 else
                 {
                     // Process regular product/service entry
+                    // Use calculated values from frontend to ensure accuracy
                     await CreateRegularEntryForDerivedVoucherAsync(
                         derivedVoucherId,
                         baseEntry,
-                        entryToProcess.ProcessQuantity);
+                        entryToProcess);
 
                     // Update base entry quantity
                     baseEntry.Quantity -= entryToProcess.ProcessQuantity;
@@ -1052,7 +1053,7 @@ namespace PureLedger.Services
         private async Task CreateAccountEntryForDerivedVoucherAsync(
             int derivedVoucherId,
             JournalEntry baseEntry,
-            int accountEntryAmount,
+            decimal accountEntryAmount,
             bool accountEntryIsDebit)
         {
             var newEntry = new JournalEntry
@@ -1077,9 +1078,43 @@ namespace PureLedger.Services
         private async Task CreateRegularEntryForDerivedVoucherAsync(
             int derivedVoucherId,
             JournalEntry baseEntry,
-            int processQuantity)
+            BaseVoucherEntryViewModel entryToProcess)
         {
-            decimal quantityRatio = (decimal)processQuantity / (decimal)baseEntry.Quantity;
+
+            decimal calculatedDebit = entryToProcess.CalculatedDebit;
+            decimal calculatedCredit = entryToProcess.CalculatedCredit;
+            
+            if (calculatedDebit == 0 && calculatedCredit == 0)
+            {
+                decimal quantityRatio = (decimal)entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity;
+                calculatedDebit = baseEntry.Debit > 0 ? baseEntry.Debit * quantityRatio : 0m;
+                calculatedCredit = baseEntry.Credit > 0 ? baseEntry.Credit * quantityRatio : 0m;
+            }
+
+            decimal discount = 0m;
+            if (entryToProcess.Percent > 0)
+            {
+                bool rbp = (entryToProcess.Rbp ?? "Y").Equals("Y", StringComparison.OrdinalIgnoreCase);
+                decimal pkg = entryToProcess.Pkg;
+                decimal totalAmount = 0m;
+                
+                if (rbp && pkg > 0)
+                {
+                    totalAmount = pkg * entryToProcess.ProcessQuantity * entryToProcess.Rate;
+                }
+                else
+                {
+                    totalAmount = entryToProcess.ProcessQuantity * entryToProcess.Rate;
+                }
+                
+                discount = Math.Round((totalAmount * entryToProcess.Percent / 100m) * 100m) / 100m;
+            }
+            else
+            {
+                // Fall back to ratio-based discount if percent is 0
+                decimal quantityRatio = (decimal)entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity;
+                discount = baseEntry.Discount * quantityRatio;
+            }
 
             var newEntry = new JournalEntry
             {
@@ -1087,13 +1122,13 @@ namespace PureLedger.Services
                 AccountId = baseEntry.AccountId,
                 CategoryId = baseEntry.CategoryId,
                 Description = baseEntry.Description,
-                Quantity = processQuantity,
-                Rate = baseEntry.Rate,
-                DiscountPercent = baseEntry.DiscountPercent,
-                Discount = baseEntry.Discount * quantityRatio,
-                Debit = baseEntry.Debit > 0 ? baseEntry.Debit * quantityRatio : 0m,
-                Credit = baseEntry.Credit > 0 ? baseEntry.Credit * quantityRatio : 0m,
-                Rbp = baseEntry.Rbp,
+                Quantity = entryToProcess.ProcessQuantity,
+                Rate = entryToProcess.Rate,
+                DiscountPercent = entryToProcess.Percent,
+                Discount = discount,
+                Debit = calculatedDebit,
+                Credit = calculatedCredit,
+                Rbp = entryToProcess.Rbp ?? baseEntry.Rbp,
                 IsProcessed = false
             };
 

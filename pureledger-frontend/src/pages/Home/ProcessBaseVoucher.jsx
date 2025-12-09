@@ -74,8 +74,8 @@ const ProcessBaseVoucher = () => {
         }
 
         return {
-            debit: debitAmount,
-            credit: creditAmount
+            debit: parseFloat(debitAmount) || 0,
+            credit: parseFloat(creditAmount) || 0
         };
     }, []);
 
@@ -112,10 +112,6 @@ const ProcessBaseVoucher = () => {
             if (entry.accountGroupId === 1) {
                 const isProcessed = entry.isProcessed;
                 
-                // Auto-check account entries if products are selected
-                const shouldBeSelected = hasSelectedProducts && !isProcessed;
-                const newProcessQuantity = shouldBeSelected ? entry.availableQuantity : 0;
-
                 let accountDebit = 0;
                 let accountCredit = 0;
 
@@ -132,12 +128,17 @@ const ProcessBaseVoucher = () => {
                 // Round to 2 decimal places
                 accountDebit = Math.round(accountDebit * 100) / 100;
                 accountCredit = Math.round(accountCredit * 100) / 100;
+                
+                // Auto-check account entries if products are selected AND amount > 0
+                const hasAmount = accountDebit > 0 || accountCredit > 0;
+                const shouldBeSelected = hasSelectedProducts && hasAmount && !isProcessed;
+                const newProcessQuantity = shouldBeSelected ? entry.availableQuantity : 0;
 
                 return {
                     ...entry,
                     processQuantity: newProcessQuantity,
-                    calculatedDebit: accountDebit,
-                    calculatedCredit: accountCredit
+                    calculatedDebit: parseFloat(accountDebit) || 0,
+                    calculatedCredit: parseFloat(accountCredit) || 0
                 };
             }
             return entry;
@@ -146,10 +147,10 @@ const ProcessBaseVoucher = () => {
         // Update account entry state with rounded values
         if (hasSelectedProducts && Math.abs(roundedDifference) > 0.001) {
             if (roundedDifference > 0) {
-                setAccountEntryAmount(roundedDifference);
+                setAccountEntryAmount(parseFloat(roundedDifference) || 0);
                 setAccountEntryIsDebit(false);
             } else {
-                setAccountEntryAmount(Math.abs(roundedDifference));
+                setAccountEntryAmount(parseFloat(Math.abs(roundedDifference)) || 0);
                 setAccountEntryIsDebit(true);
             }
         } else {
@@ -208,9 +209,18 @@ const ProcessBaseVoucher = () => {
         if (voucherData && voucherData.entries && entries.length === 0) {
             const initializedEntries = voucherData.entries.map(entry => ({
                 ...entry,
+                // Ensure all numeric values are properly parsed
+                rate: parseFloat(entry.rate) || 0,
+                debit: parseFloat(entry.debit) || 0,
+                credit: parseFloat(entry.credit) || 0,
+                percent: parseFloat(entry.percent) || 0,
+                disc: parseFloat(entry.disc) || 0,
+                pkg: parseFloat(entry.pkg) || 0,
+                availableQuantity: parseInt(entry.availableQuantity) || 0,
                 processQuantity: entry.accountGroupId === 1 && !entry.isProcessed 
-                    ? entry.availableQuantity 
-                    : (entry.processQuantity || 0),
+                    ? parseInt(entry.availableQuantity) || 0
+                    : (parseInt(entry.processQuantity) || 0),
+                accountGroupId: parseInt(entry.accountGroupId) || 0,
                 calculatedDebit: 0,
                 calculatedCredit: 0
             }));
@@ -490,15 +500,29 @@ const ProcessBaseVoucher = () => {
                 return;
             }
 
-            // Validate that all selected non-account entries have quantities > 0
+            // Validate that all selected non-account entries have valid quantities and amounts
             const invalidEntries = entries.filter(e => 
                 e.processQuantity > 0 && 
                 e.accountGroupId !== 1 && 
-                e.processQuantity <= 0
+                (e.processQuantity <= 0 || 
+                 (e.calculatedDebit <= 0 && e.calculatedCredit <= 0))
             );
 
             if (invalidEntries.length > 0) {
-                setError('All selected product entries must have a process quantity greater than zero.');
+                setError('All selected product entries must have a valid process quantity and calculated amounts.');
+                setGenerating(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+            
+            // Validate that at least one entry has calculated amounts
+            const entriesWithAmounts = entries.filter(e => 
+                e.processQuantity > 0 && 
+                (e.calculatedDebit > 0 || e.calculatedCredit > 0)
+            );
+            
+            if (entriesWithAmounts.length === 0) {
+                setError('No entries have valid calculated amounts. Please check your selections.');
                 setGenerating(false);
                 isSubmittingRef.current = false;
                 return;
@@ -506,48 +530,73 @@ const ProcessBaseVoucher = () => {
 
             // Find account entry to get its calculated amounts
             const accountEntry = entries.find(e => e.accountGroupId === 1 && e.processQuantity > 0);
-            const finalAccountEntryAmount = accountEntry 
-                ? (accountEntry.calculatedDebit > 0 ? accountEntry.calculatedDebit : accountEntry.calculatedCredit)
-                : accountEntryAmount;
+            const finalAccountEntryAmount = parseFloat(accountEntry 
+                ? (Math.round((accountEntry.calculatedDebit > 0 ? accountEntry.calculatedDebit : accountEntry.calculatedCredit) * 100) / 100)
+                : (Math.round(accountEntryAmount * 100) / 100)) || 0;
             const finalAccountEntryIsDebit = accountEntry
                 ? (accountEntry.calculatedDebit > 0)
                 : accountEntryIsDebit;
+            
+            // Final validation: ensure debits and credits balance
+            const totalDebit = totals.totalDebit;
+            const totalCredit = totals.totalCredit;
+            const difference = Math.abs(totalDebit - totalCredit);
+            
+            if (difference > 0.01) {
+                setError(`Debits and credits do not balance. Difference: ${difference.toFixed(2)}. Please check your entries.`);
+                setGenerating(false);
+                isSubmittingRef.current = false;
+                return;
+            }
 
             const model = {
                 baseVoucherId: voucherData.baseVoucherId,
                 projectId: voucherData.projectId,
                 entries: entries.map(entry => ({
                     entryId: entry.entryId,
-                    description: entry.description,
-                    accountName: entry.accountName,
-                    accountId: entry.accountId,
-                    categoryId: entry.categoryId,
-                    availableQuantity: entry.availableQuantity,
-                    processQuantity: entry.processQuantity,
-                    rate: entry.rate,
-                    debit: entry.debit,
-                    credit: entry.credit,
-                    percent: entry.percent,
-                    disc: entry.disc,
-                    rbp: entry.rbp,
-                    pkg: entry.pkg,
-                    accountGroupId: entry.accountGroupId,
+                    description: entry.description || '',
+                    accountName: entry.accountName || '',
+                    accountId: parseInt(entry.accountId) || 0,
+                    categoryId: parseInt(entry.categoryId) || 0,
+                    availableQuantity: parseInt(entry.availableQuantity) || 0,
+                    processQuantity: parseInt(entry.processQuantity) || 0,
+                    rate: parseFloat(entry.rate) || 0,
+                    debit: parseFloat(entry.debit) || 0,
+                    credit: parseFloat(entry.credit) || 0,
+                    percent: parseFloat(entry.percent) || 0,
+                    disc: parseFloat(entry.disc) || 0,
+                    rbp: entry.rbp || 'Y',
+                    pkg: parseFloat(entry.pkg) || 0,
+                    accountGroupId: parseInt(entry.accountGroupId) || 0,
+                    // Send calculated values from frontend to ensure backend uses correct amounts
+                    calculatedDebit: parseFloat(entry.calculatedDebit) || 0,
+                    calculatedCredit: parseFloat(entry.calculatedCredit) || 0,
                     // Use calculated values from the entry itself
                     accountEntryAmount: entry.accountGroupId === 1 
-                        ? (entry.calculatedDebit > 0 ? entry.calculatedDebit : entry.calculatedCredit)
+                        ? parseFloat(entry.calculatedDebit > 0 ? entry.calculatedDebit : entry.calculatedCredit) || 0
                         : 0,
                     accountEntryIsDebit: entry.accountGroupId === 1 
                         ? (entry.calculatedDebit > 0)
                         : false
                 })),
-                accountEntryAmount: finalAccountEntryAmount,
+                accountEntryAmount: parseFloat(finalAccountEntryAmount) || 0,
                 accountEntryIsDebit: finalAccountEntryIsDebit,
                 accountEntryIncluded: accountEntryIncluded,
                 creditableDate: creditableDate || new Date().toISOString().split('T')[0],
-                bookerId: bookerId
+                bookerId: bookerId ? parseInt(bookerId) : null
             };
 
+            console.log('Submitting derived voucher with model:', {
+                baseVoucherId: model.baseVoucherId,
+                entriesCount: model.entries.length,
+                selectedEntries: model.entries.filter(e => e.processQuantity > 0).length,
+                accountEntryAmount: model.accountEntryAmount,
+                bookerId: model.bookerId
+            });
+            
             const response = await apiClient.post('/HomeApi/create-derived-voucher', model);
+            
+            console.log('Response received:', response.data);
             
             if (response.data.success) {
                 const voucherId = response.data.voucherId;
@@ -563,19 +612,29 @@ const ProcessBaseVoucher = () => {
                 setError(response.data.message || 'Failed to create derived voucher');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to create derived voucher');
+            console.error('Error creating derived voucher:', err);
+            const errorMessage = err.response?.data?.message || 
+                                err.response?.data?.errors?.join(', ') ||
+                                err.message || 
+                                'Failed to create derived voucher. Please try again.';
+            setError(errorMessage);
         } finally {
             setGenerating(false);
-            isSubmittingRef.current = false;
+            // Reset submission flag after a delay to prevent immediate re-submission
+            setTimeout(() => {
+                isSubmittingRef.current = false;
+            }, 1000);
         }
     };
 
-    // Format currency
+    // Format currency - show up to 2 decimal places
     const formatCurrency = (value) => {
+        const numValue = parseFloat(value) || 0;
+        // Show up to 2 decimal places (don't round off the actual stored value, just display)
         return new Intl.NumberFormat('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(value || 0);
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(numValue);
     };
 
     // Format number
@@ -592,7 +651,7 @@ const ProcessBaseVoucher = () => {
 
     if (!voucherData) {
         return (
-            <div className="container-fluid">
+            <div className="container-fluid" style={{ maxWidth: '98%', width: '98%', paddingLeft: '1rem', paddingRight: '1rem' }}>
                 <Alert variant="danger">
                     <i className="fas fa-exclamation-circle me-2"></i>Base voucher not found
                 </Alert>
@@ -604,7 +663,7 @@ const ProcessBaseVoucher = () => {
     }
 
     return (
-        <div className="container-fluid">
+        <div className="container-fluid" style={{ maxWidth: '98%', width: '98%', paddingLeft: '1rem', paddingRight: '1rem' }}>
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>
                     <i className="fas fa-cogs me-2"></i>Process Base Voucher JV-{voucherData.baseVoucherId}
@@ -692,7 +751,13 @@ const ProcessBaseVoucher = () => {
                                         const rowClass = isProcessed 
                                             ? 'bg-light' 
                                             : (isAccountEntry ? 'table-info' : '');
-                                        const isSelected = entry.processQuantity > 0;
+                                        
+                                        // For account entries, check if products are selected and amount > 0
+                                        // For regular entries, check if processQuantity > 0
+                                        const isSelected = isAccountEntry 
+                                            ? (entry.processQuantity > 0 && (entry.calculatedDebit > 0 || entry.calculatedCredit > 0))
+                                            : (entry.processQuantity > 0);
+                                        
                                         const rowActiveClass = isSelected && !isProcessed ? 'table-active' : '';
 
                                         return (
@@ -711,7 +776,7 @@ const ProcessBaseVoucher = () => {
                                                             opacity: 0.7, 
                                                             cursor: 'not-allowed' 
                                                         } : {}}
-                                                        title={isAccountEntry ? 'This account entry is automatically selected when any product is selected' : ''}
+                                                        title={isAccountEntry ? 'This account entry is automatically selected when products are selected and has a calculated amount' : ''}
                                                     />
                                                 </td>
                                                 <td>{entry.entryId}</td>

@@ -14,7 +14,7 @@ namespace PureLedger.ViewModels.Home
         public List<BaseVoucherEntryViewModel> Entries { get; set; } = new();
         
         // New properties for account entry
-        public int AccountEntryAmount { get; set; }
+        public decimal AccountEntryAmount { get; set; }
         public bool AccountEntryIsDebit { get; set; }
         public bool AccountEntryIncluded { get; set; } = true;
         public DateOnly CreditableDate { get; set; }
@@ -51,7 +51,11 @@ namespace PureLedger.ViewModels.Home
         public bool IsPartialQuantity => ProcessQuantity > 0 && ProcessQuantity < AvailableQuantity;
 
         // For account entries
-        public int AccountEntryAmount { get; set; }
+        public decimal AccountEntryAmount { get; set; }
         public bool AccountEntryIsDebit { get; set; }
+        
+        // Calculated values from frontend (to ensure accuracy)
+        public decimal CalculatedDebit { get; set; }
+        public decimal CalculatedCredit { get; set; }
     }
 }
