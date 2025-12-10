@@ -161,6 +161,7 @@ namespace PureLedger.Services
             {
                 AccountId = entry.AccountId,
                 AccountName = entry.Account?.AccountName ?? "",
+                AccountGroupId = entry.Account?.AccountGroupId ?? 0,
                 Description = entry.Description ?? "",
                 Quantity = entry.Quantity,
                 Rate = entry.Rate,

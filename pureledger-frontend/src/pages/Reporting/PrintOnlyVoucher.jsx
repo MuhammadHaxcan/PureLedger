@@ -102,7 +102,8 @@ const PrintOnlyVoucher = () => {
       <PrintVoucher 
         voucherData={voucherData} 
         voucherType={voucherType} 
-        voucherId={voucherId} 
+        voucherId={voucherId}
+        filter={filter}
       />
     </div>
   );

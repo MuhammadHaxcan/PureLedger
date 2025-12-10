@@ -36,7 +36,6 @@ const Accounts = () => {
       productDataId: null,
       pkgForm: '',
       pkg: null,
-      type: '',
       saleRate: null
     }
   });
@@ -233,13 +232,11 @@ const Accounts = () => {
             productDataId: productData.productDataId || productData.ProductDataId || null,
             pkgForm: productData.pkgForm || productData.PkgForm || '',
             pkg: productData.pkg || productData.Pkg || null,
-            type: productData.type || productData.Type || '',
             saleRate: productData.saleRate || productData.SaleRate || null
           } : {
             productDataId: null,
             pkgForm: '',
             pkg: null,
-            type: '',
             saleRate: null
           }
         });
@@ -319,7 +316,6 @@ const Accounts = () => {
           productDataId: formData.productData.productDataId,
           pkgForm: formData.productData.pkgForm || null,
           pkg: formData.productData.pkg || null,
-          type: formData.productData.type || null,
           saleRate: formData.productData.saleRate || null
         } : null
       };
@@ -701,71 +697,55 @@ const Accounts = () => {
           {accountGroups.find(ag => ag.id.toString() === formData.accountGroupId)?.name?.toLowerCase().trim() === 'product' && (
             <div className="mb-3">
               <h5 className="mt-4 mb-3">Product Details</h5>
-              <div className="row">
-                <div className="col-md-6">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Package Form</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={formData.productData.pkgForm}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        productData: { ...formData.productData, pkgForm: e.target.value }
-                      })}
-                      placeholder="Enter package form"
-                    />
-                  </Form.Group>
-                </div>
-                <div className="col-md-6">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Package</Form.Label>
-                    <Form.Control
-                      type="number"
-                      className="no-arrow"
-                      min="0"
-                      value={formData.productData.pkg || ''}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        productData: { ...formData.productData, pkg: e.target.value ? parseInt(e.target.value) : null }
-                      })}
-                      placeholder="Enter package"
-                    />
-                  </Form.Group>
-                </div>
+            <div className="row">
+              <div className="col-md-4">
+                <Form.Group className="mb-3">
+                  <Form.Label>Package Form</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={formData.productData.pkgForm}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      productData: { ...formData.productData, pkgForm: e.target.value }
+                    })}
+                    placeholder="Enter package form"
+                  />
+                </Form.Group>
               </div>
-              <div className="row">
-                <div className="col-md-6">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Type</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={formData.productData.type}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        productData: { ...formData.productData, type: e.target.value }
-                      })}
-                      placeholder="Enter type"
-                    />
-                  </Form.Group>
-                </div>
-                <div className="col-md-6">
-                  <Form.Group className="mb-3">
-                    <Form.Label>Sale Rate</Form.Label>
-                    <Form.Control
-                      type="number"
-                      className="no-arrow"
-                      min="0"
-                      step="0.0001"
-                      value={formData.productData.saleRate || ''}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        productData: { ...formData.productData, saleRate: e.target.value ? parseFloat(e.target.value) : null }
-                      })}
-                      placeholder="Enter sale rate"
-                    />
-                  </Form.Group>
-                </div>
+              <div className="col-md-4">
+                <Form.Group className="mb-3">
+                  <Form.Label>Package</Form.Label>
+                  <Form.Control
+                    type="number"
+                    className="no-arrow"
+                    min="0"
+                    value={formData.productData.pkg || ''}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      productData: { ...formData.productData, pkg: e.target.value ? parseInt(e.target.value) : null }
+                    })}
+                    placeholder="Enter package"
+                  />
+                </Form.Group>
               </div>
+              <div className="col-md-4">
+                <Form.Group className="mb-3">
+                  <Form.Label>Sale Rate</Form.Label>
+                  <Form.Control
+                    type="number"
+                    className="no-arrow"
+                    min="0"
+                    step="0.0001"
+                    value={formData.productData.saleRate || ''}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      productData: { ...formData.productData, saleRate: e.target.value ? parseFloat(e.target.value) : null }
+                    })}
+                    placeholder="Enter sale rate"
+                  />
+                </Form.Group>
+              </div>
+            </div>
             </div>
           )}
         </Form>

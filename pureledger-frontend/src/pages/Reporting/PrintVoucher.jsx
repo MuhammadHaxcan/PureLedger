@@ -4,8 +4,9 @@ import apiClient from '../../services/api';
 import '../../App.css';
 import './PrintVoucher.css';
 
-const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
+const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) => {
   const [activeSignature, setActiveSignature] = useState(null);
+  const normalizedFilter = (filter || 'all').toLowerCase();
   // Get base URL for static files (remove /api from API_BASE_URL)
   const getBaseUrl = () => {
     const baseUrl = API_BASE_URL || 'https://localhost:7062/api';
@@ -112,6 +113,24 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
   const invoiceTotal = useMemo(() => {
     return invoiceEntries.reduce((sum, entry) => sum + calculateEntryAmount(entry), 0);
   }, [invoiceEntries]);
+
+  const getEntryAccountGroupId = (entry) => {
+    return entry.accountGroupId ?? entry.AccountGroupId ?? entry.accountGroup ?? entry.AccountGroup ?? null;
+  };
+
+  const shouldHideAccountName = (entry) => {
+    if (voucherType !== 'JV') return false;
+    const groupId = getEntryAccountGroupId(entry);
+    if (!groupId) return false;
+    if (normalizedFilter === 'products' && groupId === 1) return true;
+    if (normalizedFilter === 'accounts' && groupId === 2) return true;
+    return false;
+  };
+
+  const getDisplayAccountName = (entry) => {
+    if (shouldHideAccountName(entry)) return '';
+    return entry.accountName ?? entry.AccountName ?? '';
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -456,7 +475,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId }) => {
                 <tbody>
                   {voucherData.entries?.map((entry, index) => (
                     <tr key={index}>
-                      <td>{entry.accountName || ''}</td>
+                      <td>{getDisplayAccountName(entry)}</td>
                       <td>{entry.description || ''}</td>
                       <td style={{ textAlign: 'right' }}>{entry.quantity || ''}</td>
                       <td style={{ textAlign: 'right' }}>{entry.rate || ''}</td>

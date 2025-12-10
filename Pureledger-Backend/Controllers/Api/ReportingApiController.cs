@@ -4,6 +4,7 @@ using PureLedger.Attributes;
 using PureLedger.Models;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels.Reporting;
+using System.Linq;
 
 namespace PureLedger.Controllers.Api
 {
@@ -63,6 +64,7 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, message = "Invalid voucher type" });
                 }
 
+                var normalizedFilter = filter?.ToLowerInvariant() ?? "all";
                 var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, voucherType);
                 if (report == null)
                 {
@@ -84,6 +86,24 @@ namespace PureLedger.Controllers.Api
                     previousBalance = await _reportingService.GetAccountBalanceBeforeVoucherAsync(journalVoucherId);
                 }
 
+                if (voucherType == VoucherType.JV && report.Entries != null)
+                {
+                    if (normalizedFilter == "products")
+                    {
+                        foreach (var entry in report.Entries.Where(e => e.AccountGroupId == 1))
+                        {
+                            entry.AccountName = string.Empty;
+                        }
+                    }
+                    else if (normalizedFilter == "accounts")
+                    {
+                        foreach (var entry in report.Entries.Where(e => e.AccountGroupId == 2))
+                        {
+                            entry.AccountName = string.Empty;
+                        }
+                    }
+                }
+
                 // Project image is now set in the service methods, but ensure it's included for all types
                 // The service already handles ProjectImage for all voucher types
 
@@ -92,7 +112,7 @@ namespace PureLedger.Controllers.Api
                     success = true,
                     data = report,
                     type = voucherType.ToString(),
-                    filter = voucherType == VoucherType.JV ? filter : null,
+                    filter = voucherType == VoucherType.JV ? normalizedFilter : null,
                     customerBalance,
                     previousBalance
                 });

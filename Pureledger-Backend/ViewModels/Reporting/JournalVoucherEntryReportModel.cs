@@ -6,6 +6,7 @@ namespace PureLedger.ViewModels.Reporting
     {
         public int AccountId { get; set; }
         public string? AccountName { get; set; }
+        public int AccountGroupId { get; set; }
         public string? Description { get; set; }
         public int Quantity { get; set; }
         public int PKG { get; set; } = 1;

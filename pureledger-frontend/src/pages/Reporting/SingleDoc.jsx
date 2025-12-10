@@ -11,11 +11,12 @@ const SingleDoc = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [voucherData, setVoucherData] = useState(null);
+  const [filter, setFilter] = useState('all');
 
-  const loadVoucherFromUrl = async (id, type) => {
+  const loadVoucherFromUrl = async (id, type, filterValue = 'all') => {
     try {
       const response = await apiClient.get(`/ReportingApi/print-voucher/${id}`, {
-        params: { type: type, filter: 'all' }
+        params: { type: type, filter: filterValue }
       });
 
       if (response.data.success) {
@@ -32,7 +33,7 @@ const SingleDoc = () => {
     }
   };
 
-  const handleValidateFromUrl = async (id, type) => {
+  const handleValidateFromUrl = async (id, type, filterValue = 'all') => {
     try {
       setLoading(true);
       setError('');
@@ -41,7 +42,7 @@ const SingleDoc = () => {
       });
 
       if (response.data.success && response.data.exists) {
-        await loadVoucherFromUrl(id, type);
+        await loadVoucherFromUrl(id, type, filterValue);
       } else {
         setError('Voucher not found or invalid');
       }
@@ -57,16 +58,20 @@ const SingleDoc = () => {
     const params = new URLSearchParams(window.location.search);
     const urlVoucherId = params.get('voucherId');
     const urlType = params.get('type');
+    const urlFilter = params.get('filter');
     
     if (urlVoucherId) {
       setVoucherId(urlVoucherId);
       if (urlType && ['JV', 'INV', 'DC'].includes(urlType.toUpperCase())) {
         setVoucherType(urlType.toUpperCase());
       }
+      if (urlFilter && ['all', 'products', 'accounts'].includes(urlFilter.toLowerCase())) {
+        setFilter(urlFilter.toLowerCase());
+      }
       // Auto-load if parameters are present
       const idNum = parseInt(urlVoucherId, 10);
       if (idNum > 0) {
-        handleValidateFromUrl(idNum, urlType?.toUpperCase() || 'JV');
+        handleValidateFromUrl(idNum, urlType?.toUpperCase() || 'JV', urlFilter || 'all');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,7 +92,8 @@ const SingleDoc = () => {
 
       if (response.data.success && response.data.exists) {
         // Open voucher in new tab (print-only page without header)
-        const url = `/reporting/print-voucher?voucherId=${voucherId}&type=${voucherType}`;
+        const filterParam = voucherType === 'JV' ? `&filter=${filter}` : '';
+        const url = `/reporting/print-voucher?voucherId=${voucherId}&type=${voucherType}${filterParam}`;
         window.open(url, '_blank');
         setError('');
       } else {
@@ -103,7 +109,7 @@ const SingleDoc = () => {
   const loadVoucher = async () => {
     try {
       const response = await apiClient.get(`/ReportingApi/print-voucher/${voucherId}`, {
-        params: { type: voucherType, filter: 'all' }
+        params: { type: voucherType, filter: filter }
       });
 
       if (response.data.success) {
@@ -163,6 +169,21 @@ const SingleDoc = () => {
                       </Form.Select>
                     </Form.Group>
                   </div>
+                  {voucherType === 'JV' && (
+                    <div className="col-md-3">
+                      <Form.Group className="mb-3">
+                        <Form.Label>Filter</Form.Label>
+                        <Form.Select
+                          value={filter}
+                          onChange={(e) => setFilter(e.target.value)}
+                        >
+                          <option value="all">All</option>
+                          <option value="products">Products only</option>
+                          <option value="accounts">Accounts only</option>
+                        </Form.Select>
+                      </Form.Group>
+                    </div>
+                  )}
                   <div className="col-md-3">
                     <Form.Group className="mb-3">
                       <Form.Label>&nbsp;</Form.Label>
@@ -195,7 +216,8 @@ const SingleDoc = () => {
         <PrintVoucher 
           voucherData={voucherData} 
           voucherType={voucherType} 
-          voucherId={voucherId} 
+          voucherId={voucherId}
+          filter={filter}
         />
       )}
     </div>
