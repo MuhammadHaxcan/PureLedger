@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import apiClient from '../services/api';
 import { PERMISSIONS, PAGE_PERMISSIONS } from '../constants/permissions';
 
