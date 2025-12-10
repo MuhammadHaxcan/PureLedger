@@ -528,10 +528,6 @@ namespace PureLedger.Migrations
                     b.Property<int?>("SaleRate")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Type")
-                        .HasMaxLength(15)
-                        .HasColumnType("character varying(15)");
-
                     b.HasKey("ProductDataId");
 
                     b.HasIndex("AccountId")
