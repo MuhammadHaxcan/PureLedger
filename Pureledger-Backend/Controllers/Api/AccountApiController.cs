@@ -7,7 +7,6 @@ namespace PureLedger.Controllers.Api
 {
     [ApiController]
     [Route("api/[controller]")]
-    [AllowAnonymous]
     public class AccountApiController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -28,6 +27,7 @@ namespace PureLedger.Controllers.Api
         }
 
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginViewModel model)
         {
             if (!ModelState.IsValid)
