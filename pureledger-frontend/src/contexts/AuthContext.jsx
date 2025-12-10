@@ -78,6 +78,26 @@ export const AuthProvider = ({ children }) => {
     return permissionList.some(perm => permissions.includes(perm));
   };
 
+  // Fetch user access and rebuild navigation menu (used on login and refresh)
+  const fetchAccessAndMenu = useCallback(async (userData) => {
+    try {
+      const accessResponse = await apiClient.get('/AccountApi/access');
+      if (accessResponse.data.success) {
+        const { controllers, actions } = accessResponse.data;
+        setUserAccess({ controllers, actions });
+        localStorage.setItem('userAccess', JSON.stringify({ controllers, actions }));
+
+        const navMenu = buildNavigationMenu(userData.isAdmin, controllers, actions);
+        setNavigationMenu(navMenu);
+        localStorage.setItem('navigationMenu', JSON.stringify(navMenu));
+        return navMenu;
+      }
+    } catch (error) {
+      console.error('Error loading user access:', error);
+    }
+    return [];
+  }, []);
+
   useEffect(() => {
     // Check if user is already logged in
     const token = localStorage.getItem('authToken');
@@ -85,38 +105,51 @@ export const AuthProvider = ({ children }) => {
     const savedAccess = localStorage.getItem('userAccess');
     const savedNavMenu = localStorage.getItem('navigationMenu');
     
-    if (token && savedUser) {
-      try {
-        const userData = JSON.parse(savedUser);
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        // Restore access and navigation menu if available
-        if (savedAccess) {
-          try {
-            setUserAccess(JSON.parse(savedAccess));
-          } catch (e) {
-            console.error('Error parsing saved access:', e);
+    const restoreSession = async () => {
+      if (token && savedUser) {
+        try {
+          const userData = JSON.parse(savedUser);
+          setUser(userData);
+          setIsAuthenticated(true);
+          
+          // Restore access and navigation menu if available
+          if (savedAccess) {
+            try {
+              setUserAccess(JSON.parse(savedAccess));
+            } catch (e) {
+              console.error('Error parsing saved access:', e);
+            }
           }
-        }
-        
-        if (savedNavMenu) {
-          try {
-            setNavigationMenu(JSON.parse(savedNavMenu));
-          } catch (e) {
-            console.error('Error parsing saved navigation menu:', e);
+          
+          if (savedNavMenu) {
+            try {
+              const parsedNav = JSON.parse(savedNavMenu);
+              setNavigationMenu(parsedNav);
+              // If nav is empty, try to refetch access to build it
+              if (!parsedNav || parsedNav.length === 0) {
+                await fetchAccessAndMenu(userData);
+              }
+            } catch (e) {
+              console.error('Error parsing saved navigation menu:', e);
+              await fetchAccessAndMenu(userData);
+            }
+          } else {
+            // No saved menu, fetch it now
+            await fetchAccessAndMenu(userData);
           }
+        } catch (error) {
+          console.error('Error parsing saved user data:', error);
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('user');
+          localStorage.removeItem('userAccess');
+          localStorage.removeItem('navigationMenu');
         }
-      } catch (error) {
-        console.error('Error parsing saved user data:', error);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('userAccess');
-        localStorage.removeItem('navigationMenu');
       }
-    }
-    setLoading(false);
-  }, []);
+      setLoading(false);
+    };
+
+    restoreSession();
+  }, [fetchAccessAndMenu]);
 
   // Build navigation menu structure from user access
   const buildNavigationMenu = (isAdmin, controllers, actions) => {
@@ -255,18 +288,9 @@ export const AuthProvider = ({ children }) => {
         
         // Load user access and build navigation menu
         try {
-          const accessResponse = await apiClient.get('/AccountApi/access');
-          if (accessResponse.data.success) {
-            const { controllers, actions } = accessResponse.data;
-            setUserAccess({ controllers, actions });
-            localStorage.setItem('userAccess', JSON.stringify({ controllers, actions }));
-            
-            // Build navigation menu once at login
-            const navMenu = buildNavigationMenu(userData.isAdmin, controllers, actions);
-            setNavigationMenu(navMenu);
-            localStorage.setItem('navigationMenu', JSON.stringify(navMenu));
-            
-            // Find first accessible route
+          const navMenu = await fetchAccessAndMenu(userData);
+          if (navMenu && navMenu.length > 0) {
+            const { controllers = [], actions = {} } = JSON.parse(localStorage.getItem('userAccess') || '{"controllers":[],"actions":{}}');
             const firstRoute = findFirstAccessibleRoute(userData.isAdmin, controllers, actions);
             return { success: true, redirectTo: firstRoute };
           }
