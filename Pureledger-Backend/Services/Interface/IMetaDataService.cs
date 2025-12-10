@@ -42,6 +42,7 @@ namespace PureLedger.Services.Interface
         Task<Location?> GetLocationByIdAsync(int id);
         Task<List<string>> CreateLocationAsync(Location location);
         Task<List<string>> UpdateLocationAsync(Location location);
+        Task<List<string>> DeleteLocationAsync(int id);
 
 
         // Booker
@@ -51,6 +52,7 @@ namespace PureLedger.Services.Interface
         Task<Booker?> GetBookerByIdAsync(int id);
         Task<List<string>> UpdateBookerAsync(Booker booker);
         Task<List<string>> ToggleBookerStatusAsync(int bookerId);
+        Task<List<string>> DeleteBookerAsync(int id);
 
 
     }

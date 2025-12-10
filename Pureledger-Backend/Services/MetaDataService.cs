@@ -432,7 +432,6 @@ namespace PureLedger.Services
                                 {
                                     PkgForm = account.ProductData.PkgForm,
                                     Pkg = account.ProductData.Pkg,
-                                    Type = account.ProductData.Type,
                                     SaleRate = account.ProductData.SaleRate
                                 };
                             }
@@ -440,7 +439,6 @@ namespace PureLedger.Services
                             {
                                 existingAccount.ProductData.PkgForm = account.ProductData.PkgForm;
                                 existingAccount.ProductData.Pkg = account.ProductData.Pkg;
-                                existingAccount.ProductData.Type = account.ProductData.Type;
                                 existingAccount.ProductData.SaleRate = account.ProductData.SaleRate;
                             }
                         }
@@ -610,6 +608,37 @@ namespace PureLedger.Services
             return errors;
         }
 
+        public async Task<List<string>> DeleteLocationAsync(int id)
+        {
+            var errors = new List<string>();
+
+            var location = await _unitOfWork.Locations.GetByIdAsync(id);
+            if (location == null)
+            {
+                errors.Add("Location not found.");
+                return errors;
+            }
+
+            try
+            {
+                var deleted = await _unitOfWork.Locations.DeleteAsync(id);
+                if (!deleted)
+                {
+                    errors.Add("Unable to delete location.");
+                    return errors;
+                }
+
+                _cache.Remove(CacheKeys.AllLocations);
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while deleting location {LocationId}", id);
+                errors.Add("Unable to delete location. It may be in use.");
+            }
+
+            return errors;
+        }
+
 
         #endregion
 
@@ -714,6 +743,37 @@ namespace PureLedger.Services
             {
                 _logger.LogError(ex, "Error while updating booker status.");
                 errors.Add("An error occurred while updating the booker status.");
+            }
+
+            return errors;
+        }
+
+        public async Task<List<string>> DeleteBookerAsync(int id)
+        {
+            var errors = new List<string>();
+
+            var booker = await _unitOfWork.Bookers.GetByIdAsync(id);
+            if (booker == null)
+            {
+                errors.Add("Booker not found.");
+                return errors;
+            }
+
+            try
+            {
+                var deleted = await _unitOfWork.Bookers.DeleteAsync(id);
+                if (!deleted)
+                {
+                    errors.Add("Unable to delete booker.");
+                    return errors;
+                }
+
+                _cache.Remove(CacheKeys.AllBookers);
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while deleting booker {BookerId}", id);
+                errors.Add("Unable to delete booker. It may be in use.");
             }
 
             return errors;

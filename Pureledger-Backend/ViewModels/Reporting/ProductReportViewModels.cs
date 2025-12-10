@@ -56,7 +56,6 @@ namespace PureLedger.ViewModels.Reporting
     {
         public int ProductId { get; set; }
         public string ProductName { get; set; }
-        public int LastVoucherId { get; set; }
 
         // Previous balance data (before start date)
         public int PreviousDebitQty { get; set; }

@@ -146,8 +146,6 @@ namespace PureLedger.Services
             }).ToList();
 
             return new { entries, jvId = voucher.JournalVoucherId, projectName = voucher.Project?.ProjectName ?? "Unknown Project" };
-
-            return new { entries, jvId = voucher.JournalVoucherId };
         }
 
         #endregion
@@ -938,6 +936,9 @@ namespace PureLedger.Services
             await _unitOfWork.JournalEntries.DeleteAsync(entryId);
             await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
 
+            // Clean up any references where this voucher is either the main or referenced voucher
+            await _unitOfWork.JournalVoucherReferences.DeleteByVoucherIdAsync(voucherId);
+
             var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
             if (deliveryChallanVoucher != null)
             {
@@ -1069,7 +1070,7 @@ namespace PureLedger.Services
                 Debit = accountEntryIsDebit ? accountEntryAmount : 0,
                 Credit = !accountEntryIsDebit ? accountEntryAmount : 0,
                 Rbp = baseEntry.Rbp,
-                IsProcessed = false
+                IsProcessed = true
             };
 
             await _unitOfWork.JournalEntries.AddAsync(newEntry);

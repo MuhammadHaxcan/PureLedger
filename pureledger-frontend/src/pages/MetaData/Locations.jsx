@@ -95,14 +95,15 @@ const Locations = () => {
     isSubmittingRef.current = true;
     
     try {
-      const response = await apiClient.delete(`/MetaDataApi/locations/${editingLocation.locationId}`);
-      if (response.data.success) {
-        setSuccess(response.data.message);
-        setShowDeleteModal(false);
-        loadLocations();
-      }
+        const response = await apiClient.delete(`/MetaDataApi/locations/${editingLocation.locationId}`);
+        if (response.data.success) {
+          setSuccess(response.data.message || 'Location deleted successfully');
+          setError('');
+          setShowDeleteModal(false);
+          loadLocations();
+        }
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to delete location');
+        setError(error?.message || error.response?.data?.message || 'Failed to delete location');
     } finally {
       isSubmittingRef.current = false;
     }

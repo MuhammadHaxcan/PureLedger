@@ -22,8 +22,6 @@ namespace PureLedger.Services
             if (string.IsNullOrWhiteSpace(project.ProjectName))
                 errors.Add("Project name is required.");
 
-            // Additional validation rules as needed
-
             return errors;
         }
 
@@ -95,8 +93,6 @@ namespace PureLedger.Services
                             errors.Add("Pkg Form is required.");
                         if (account.ProductData.Pkg == null)
                             errors.Add("Pkg is required.");
-                        if (string.IsNullOrWhiteSpace(account.ProductData.Type))
-                            errors.Add("Type is required.");
                     }
                 }
             }

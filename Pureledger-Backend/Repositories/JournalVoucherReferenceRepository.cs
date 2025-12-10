@@ -46,6 +46,8 @@ namespace PureLedger.Repositories
             }
         }
 
+
+
         public async Task<List<JournalVoucherReference>> GetByMainVoucherIdAsync(int mainVoucherId)
         {
             try
@@ -116,6 +118,26 @@ namespace PureLedger.Repositories
 
                 _context.JournalVoucherReferences.Remove(reference);
                 return true;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        public async Task<int> DeleteByVoucherIdAsync(int voucherId)
+        {
+            try
+            {
+                var references = await _context.JournalVoucherReferences
+                    .Where(r => r.MainVoucherId == voucherId || r.ReferencedVoucherId == voucherId)
+                    .ToListAsync();
+
+                if (!references.Any())
+                    return 0;
+
+                _context.JournalVoucherReferences.RemoveRange(references);
+                return references.Count;
             }
             catch (Exception)
             {

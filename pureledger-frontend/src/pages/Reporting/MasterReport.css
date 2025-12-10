@@ -66,6 +66,18 @@
     font-weight: 600;
 }
 
+/* Ensure totals row handles large numbers */
+#masterReportTable tfoot .debit-column,
+#masterReportTable tfoot .credit-column,
+#masterReportTable tfoot .balance-column {
+    min-width: 130px !important;
+    max-width: 160px !important;
+    width: 140px !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+
 #masterReportTable .voucher-link {
     display: inline-block;
     padding: 0.25rem 0.5rem;
@@ -124,9 +136,9 @@
 
 #masterReportTable .date-column,
 #masterReportTable .creditable-date-column {
-    width: 85px;
-    min-width: 75px;
-    max-width: 85px;
+    width: 90px;
+    min-width: 85px;
+    max-width: 95px;
     white-space: nowrap;
 }
 
@@ -139,41 +151,52 @@
 }
 
 #masterReportTable .account-column {
-    width: 115px;
-    min-width: 95px;
-    max-width: 115px;
+    width: 100px;
+    min-width: 85px;
+    max-width: 120px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal;
 }
 
 #masterReportTable .booker-column {
-    width: 140px;
-    min-width: 115px;
+    width: 120px;
+    min-width: 100px;
+    max-width: 140px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
 }
 
 #masterReportTable .quantity-column {
-    width: 70px;
-    min-width: 60px;
-    max-width: 70px;
+    width: 100px;
+    min-width: 90px;
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #masterReportTable .debit-column,
 #masterReportTable .credit-column {
-    width: 110px;
-    min-width: 95px;
-    max-width: 110px;
+    width: 140px;
+    min-width: 130px;
+    max-width: 160px;
     white-space: nowrap;
     word-wrap: normal;
     overflow-wrap: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #masterReportTable .balance-column {
-    width: 115px;
-    min-width: 100px;
-    max-width: 115px;
+    width: 140px;
+    min-width: 130px;
+    max-width: 160px;
     white-space: nowrap;
     word-wrap: normal;
     overflow-wrap: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 

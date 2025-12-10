@@ -8,6 +8,7 @@ namespace PureLedger.Repositories.Interfaces
         Task<Location?> GetByIdAsync(int id);
         Task<Location> AddAsync(Location location);
         Task<Location> UpdateAsync(Location location);
+        Task<bool> DeleteAsync(int id);
 
         /// <summary>
         /// Checks if a location with the given name exists (case-insensitive)

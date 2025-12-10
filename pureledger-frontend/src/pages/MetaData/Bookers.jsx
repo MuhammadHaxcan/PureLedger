@@ -114,12 +114,13 @@ const Bookers = () => {
     try {
       const response = await apiClient.delete(`/MetaDataApi/bookers/${editingBooker.bookerID}`);
       if (response.data.success) {
-        setSuccess(response.data.message);
+        setSuccess(response.data.message || 'Booker deleted successfully');
+        setError('');
         setShowDeleteModal(false);
         loadBookers();
       }
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to delete booker');
+      setError(error?.message || error.response?.data?.message || 'Failed to delete booker');
     } finally {
       isSubmittingRef.current = false;
     }

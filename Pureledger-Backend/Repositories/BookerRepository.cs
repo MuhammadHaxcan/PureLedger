@@ -48,6 +48,17 @@ namespace PureLedger.Repositories
             return booker;
         }
 
+        public async Task<bool> DeleteAsync(int id)
+        {
+            var booker = await _context.Bookers.FindAsync(id);
+            if (booker == null)
+                return false;
+
+            _context.Bookers.Remove(booker);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
         {
             var normalizedName = name.Trim().ToLower();

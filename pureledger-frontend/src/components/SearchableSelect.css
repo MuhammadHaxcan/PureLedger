@@ -45,6 +45,11 @@
   overflow: visible !important;
 }
 
+.modal,
+.modal-dialog {
+  overflow: visible !important;
+}
+
 .select-container {
   position: relative;
   width: 100%;
@@ -62,7 +67,7 @@
   background: white;
   border: 1px solid #ced4da;
   border-radius: 0.25rem;
-  z-index: 1070; /* Higher than Bootstrap modal z-index (1055) and modal backdrop (1050) */
+  z-index: 2000; /* Sit above modal content/backdrops */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   display: none;
   margin-top: 2px;

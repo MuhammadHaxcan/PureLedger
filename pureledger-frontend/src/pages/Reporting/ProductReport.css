@@ -69,8 +69,9 @@
 
 /* Column width constraints */
 #productReportTable .product-column {
-    width: 200px;
-    min-width: 160px;
+    width: 180px;
+    min-width: 140px;
+    max-width: 200px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal !important;

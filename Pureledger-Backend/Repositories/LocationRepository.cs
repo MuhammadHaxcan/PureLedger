@@ -40,6 +40,17 @@ namespace PureLedger.Repositories
             return location;
         }
 
+        public async Task<bool> DeleteAsync(int id)
+        {
+            var location = await _context.Locations.FindAsync(id);
+            if (location == null)
+                return false;
+
+            _context.Locations.Remove(location);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
         {
             var normalizedName = name.Trim().ToLower();

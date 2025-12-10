@@ -532,7 +532,6 @@ namespace PureLedger.Controllers.Api
                             accountId = account.ProductData.AccountId,
                             pkgForm = account.ProductData.PkgForm,
                             pkg = account.ProductData.Pkg,
-                            type = account.ProductData.Type,
                             saleRate = account.ProductData.SaleRate
                         }
                     },
@@ -602,7 +601,6 @@ namespace PureLedger.Controllers.Api
                     {
                         PkgForm = accountDto.ProductData.PkgForm,
                         Pkg = accountDto.ProductData.Pkg,
-                        Type = accountDto.ProductData.Type,
                         SaleRate = accountDto.ProductData.SaleRate
                     };
                 }
@@ -687,7 +685,6 @@ namespace PureLedger.Controllers.Api
                         AccountId = accountDto.AccountId,
                         PkgForm = accountDto.ProductData.PkgForm,
                         Pkg = accountDto.ProductData.Pkg,
-                        Type = accountDto.ProductData.Type,
                         SaleRate = accountDto.ProductData.SaleRate
                     };
                 }
@@ -923,6 +920,26 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        [HttpDelete("locations/{id}")]
+        public async Task<IActionResult> DeleteLocation(int id)
+        {
+            try
+            {
+                var errors = await _metaDataService.DeleteLocationAsync(id);
+                if (errors.Any())
+                {
+                    return BadRequest(new { success = false, message = string.Join("; ", errors) });
+                }
+
+                return Ok(new { success = true, message = "Location deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting location {LocationId}", id);
+                return StatusCode(500, new { success = false, message = "Error deleting location" });
+            }
+        }
+
         #endregion
 
         #region Bookers
@@ -1013,6 +1030,26 @@ namespace PureLedger.Controllers.Api
             {
                 _logger.LogError(ex, "Error updating booker {BookerId}", id);
                 return StatusCode(500, new { success = false, message = "Error updating booker" });
+            }
+        }
+
+        [HttpDelete("bookers/{id}")]
+        public async Task<IActionResult> DeleteBooker(int id)
+        {
+            try
+            {
+                var errors = await _metaDataService.DeleteBookerAsync(id);
+                if (errors.Any())
+                {
+                    return BadRequest(new { success = false, message = string.Join("; ", errors) });
+                }
+
+                return Ok(new { success = true, message = "Booker deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting booker {BookerId}", id);
+                return StatusCode(500, new { success = false, message = "Error deleting booker" });
             }
         }
 

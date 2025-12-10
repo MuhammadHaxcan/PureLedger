@@ -9,13 +9,6 @@ import autoTable from 'jspdf-autotable';
 import Papa from 'papaparse';
 import './ProductReport.css';
 
-const buildVoucherUrl = (voucherId, type) => {
-    if (!voucherId) {
-        return '#';
-    }
-    return `/reporting/print-voucher?voucherId=${voucherId}&type=${type}`;
-};
-
 const ProductReport = () => {
     usePageTitle('Product Report');
     const [projects, setProjects] = useState([]);
@@ -181,8 +174,6 @@ const ProductReport = () => {
         const search = searchTerm.toLowerCase();
         return (
             (product.productName || '').toLowerCase().includes(search) ||
-            product.lastVoucherId?.toString().includes(search) ||
-            `jv-${product.lastVoucherId || ''}`.includes(search) ||
             (product.totalDebitQty?.toString() || '').includes(search) ||
             (product.totalCreditQty?.toString() || '').includes(search) ||
             (product.qtyBalance?.toString() || '').includes(search) ||
@@ -212,7 +203,6 @@ const ProductReport = () => {
     const handleExportCsv = () => {
         const csvData = filteredProducts.map(product => ({
             Product: product.productName || '',
-            Voucher: `JV-${product.lastVoucherId || ''}`,
             'Debit Qty': (product.totalDebitQty || 0).toFixed(2),
             'Credit Qty': (product.totalCreditQty || 0).toFixed(2),
             'Balance Qty': (product.qtyBalance || 0).toFixed(2),
@@ -256,7 +246,6 @@ const ProductReport = () => {
 
         const rows = filteredProducts.map(product => ({
             product: product.productName || '',
-            voucher: `JV-${product.lastVoucherId || ''}`,
             debitQty: formatNumber(product.totalDebitQty),
             creditQty: formatNumber(product.totalCreditQty),
             balanceQty: formatNumber(product.qtyBalance),
@@ -272,7 +261,6 @@ const ProductReport = () => {
         if (totals) {
             rows.push({
                 product: 'TOTAL',
-                voucher: '',
                 debitQty: formatNumber(totals.totalDebitQty),
                 creditQty: formatNumber(totals.totalCreditQty),
                 balanceQty: formatNumber(totals.netQuantity),
@@ -287,7 +275,6 @@ const ProductReport = () => {
 
         const columns = [
             { header: 'Product', dataKey: 'product' },
-            { header: 'Voucher', dataKey: 'voucher' },
             { header: 'Debit Qty', dataKey: 'debitQty' },
             { header: 'Credit Qty', dataKey: 'creditQty' },
             { header: 'Bal Qty', dataKey: 'balanceQty' },
@@ -503,8 +490,7 @@ const ProductReport = () => {
                                 <Table bordered striped hover className="table-sm mb-0 w-100" id="productReportTable" style={{ width: '100%', tableLayout: 'auto' }}>
                                     <thead className="table-light">
                                         <tr>
-                                            <th className="product-column">Product</th>
-                                            <th className="voucher-column">Voucher</th>
+                                            <th className="product-column" style={{ minWidth: '140px', maxWidth: '200px' }}>Product</th>
                                             <th className="qty-column text-end">Debit Qty</th>
                                             <th className="qty-column text-end">Credit Qty</th>
                                             <th className="qty-column text-end">Bal Qty</th>
@@ -519,13 +505,13 @@ const ProductReport = () => {
                                     <tbody>
                                         {filteredProducts.length === 0 && allProducts.length > 0 ? (
                                             <tr>
-                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                <td colSpan="10" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
                                                 </td>
                                             </tr>
                                         ) : filteredProducts.length === 0 && allProducts.length === 0 ? (
                                             <tr>
-                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                <td colSpan="10" className="text-center text-muted py-4">
                                                     No data available
                                                 </td>
                                             </tr>
@@ -534,20 +520,7 @@ const ProductReport = () => {
                                                 const isLastEntry = index === filteredProducts.length - 1;
                                                 return (
                                                     <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
-                                                        <td className="product-column" title={product.productName}>{product.productName}</td>
-                                                        <td className="voucher-column">
-                                                            <div className="d-flex flex-wrap gap-1 align-items-center">
-                                                                <a
-                                                                    href={buildVoucherUrl(product.lastVoucherId, 'JV')}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="voucher-link text-decoration-none badge bg-primary"
-                                                                    style={{ fontSize: '0.75rem', cursor: 'pointer' }}
-                                                                >
-                                                                    JV-{product.lastVoucherId}
-                                                                </a>
-                                                            </div>
-                                                        </td>
+                                                        <td className="product-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: '140px', maxWidth: '200px' }} title={product.productName}>{product.productName}</td>
                                                         <td className="qty-column text-end">{formatNumber(product.totalDebitQty)}</td>
                                                         <td className="qty-column text-end">{formatNumber(product.totalCreditQty)}</td>
                                                         <td className="qty-column text-end">{formatNumber(product.qtyBalance)}</td>
@@ -565,7 +538,7 @@ const ProductReport = () => {
                                     {totals && (
                                         <tfoot className="table-secondary">
                                             <tr className="fw-bold">
-                                                <td colSpan="2" className="text-end">TOTAL</td>
+                                                <td colSpan="1" className="text-end">TOTAL</td>
                                                 <td className="qty-column text-end">{formatNumber(totals.totalDebitQty)}</td>
                                                 <td className="qty-column text-end">{formatNumber(totals.totalCreditQty)}</td>
                                                 <td className="qty-column text-end">{formatNumber(totals.netQuantity)}</td>

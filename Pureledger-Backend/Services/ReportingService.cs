@@ -722,31 +722,10 @@ namespace PureLedger.Services
                     decimal margin = currentCredit - cogs;
                     decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
 
-                    JournalEntry? lastEntry = null;
-
-                    if (entriesInDateRange.Any())
-                    {
-                        lastEntry = entriesInDateRange
-                            .OrderByDescending(x => x.Entry.JournalVoucher.EntryDate)
-                            .ThenByDescending(x => x.Entry.JournalVoucherId)
-                            .First().Entry;
-                    }
-                    else if (entriesBeforeStartDate.Any())
-                    {
-                        lastEntry = entriesBeforeStartDate
-                            .OrderByDescending(x => x.Entry.JournalVoucher.EntryDate)
-                            .ThenByDescending(x => x.Entry.JournalVoucherId)
-                            .First().Entry;
-                    }
-
-                    if (lastEntry == null)
-                        continue;
-
                     var summary = new ProductSummaryViewModel
                     {
                         ProductId = productId,
                         ProductName = productName,
-                        LastVoucherId = lastEntry.JournalVoucherId,
                         PreviousDebitQty = prevDebitQty,
                         PreviousCreditQty = prevCreditQty,
                         PreviousBalance = prevQtyBalance,

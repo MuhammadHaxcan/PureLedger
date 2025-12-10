@@ -55,9 +55,6 @@ namespace PureLedger.ViewModels.MetaData
         [JsonPropertyName("pkg")]
         public int? Pkg { get; set; }
         
-        [JsonPropertyName("type")]
-        public string? Type { get; set; }
-        
         [JsonPropertyName("saleRate")]
         public int? SaleRate { get; set; }
     }

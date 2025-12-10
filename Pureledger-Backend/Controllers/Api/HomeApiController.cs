@@ -217,6 +217,17 @@ namespace PureLedger.Controllers.Api
         public async Task<IActionResult> GetJournalEntry(int entryId)
         {
             var model = await _journalService.GetJournalEntryForEditAsync(entryId);
+            
+            if (model != null)
+            {
+                // Normalize numeric values for the edit modal
+                model.Rate = Math.Round(model.Rate, 4);
+                model.Discount = Math.Round(model.Discount, 2);
+                model.DiscountPercent = Math.Round(model.DiscountPercent, 2);
+                model.Debit = Math.Round(model.Debit, 2);
+                model.Credit = Math.Round(model.Credit, 2);
+            }
+
             return model == null 
                 ? NotFound(new { success = false, message = "Entry not found" })
                 : Ok(new { success = true, data = model });

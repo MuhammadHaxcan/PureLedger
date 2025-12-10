@@ -41,6 +41,7 @@ const VoucherEntry = () => {
     const [editCategories, setEditCategories] = useState([]);
     const [editAccounts, setEditAccounts] = useState([]);
     const [editLocations, setEditLocations] = useState([]);
+    const [focusedFields, setFocusedFields] = useState({});
     const [showLocationGroup, setShowLocationGroup] = useState(false);
     const [locationId, setLocationId] = useState(null);
 
@@ -519,10 +520,24 @@ const VoucherEntry = () => {
                                     <Form.Control
                                         type="number"
                                         className="no-arrow"
-                                        value={editFormData.rate}
-                                        onChange={(e) => setEditFormData({ ...editFormData, rate: parseFloat(e.target.value) || 0 })}
+                                        value={focusedFields.rate ? (editFormData.rate ?? '') : (editFormData.rate !== null && editFormData.rate !== undefined ? parseFloat(editFormData.rate).toFixed(4) : '')}
+                                        onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            setEditFormData({ ...editFormData, rate: inputValue === '' ? 0 : parseFloat(inputValue) || 0 });
+                                        }}
                                         min="0"
-                                        step="0.01"
+                                        step="0.0001"
+                                        onFocus={() => setFocusedFields(prev => ({ ...prev, rate: true }))}
+                                        onBlur={(e) => {
+                                            setFocusedFields(prev => {
+                                                const next = { ...prev };
+                                                delete next.rate;
+                                                return next;
+                                            });
+                                            if (e.target.value) {
+                                                setEditFormData(prev => ({ ...prev, rate: parseFloat(parseFloat(e.target.value).toFixed(4)) }));
+                                            }
+                                        }}
                                     />
                             </div>
                             <div className="col-md-3">
@@ -530,10 +545,24 @@ const VoucherEntry = () => {
                                     <Form.Control
                                         type="number"
                                         className="no-arrow"
-                                        value={editFormData.discount}
-                                        onChange={(e) => setEditFormData({ ...editFormData, discount: parseFloat(e.target.value) || 0 })}
+                                        value={focusedFields.discount ? (editFormData.discount ?? '') : (editFormData.discount !== null && editFormData.discount !== undefined ? parseFloat(editFormData.discount).toFixed(2) : '')}
+                                        onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            setEditFormData({ ...editFormData, discount: inputValue === '' ? 0 : parseFloat(inputValue) || 0 });
+                                        }}
                                         min="0"
                                         step="0.01"
+                                        onFocus={() => setFocusedFields(prev => ({ ...prev, discount: true }))}
+                                        onBlur={(e) => {
+                                            setFocusedFields(prev => {
+                                                const next = { ...prev };
+                                                delete next.discount;
+                                                return next;
+                                            });
+                                            if (e.target.value) {
+                                                setEditFormData(prev => ({ ...prev, discount: parseFloat(parseFloat(e.target.value).toFixed(2)) }));
+                                            }
+                                        }}
                                     />
                             </div>
                             <div className="col-md-3">
@@ -541,11 +570,25 @@ const VoucherEntry = () => {
                                     <Form.Control
                                         type="number"
                                         className="no-arrow"
-                                        value={editFormData.discountPercent}
-                                        onChange={(e) => setEditFormData({ ...editFormData, discountPercent: parseFloat(e.target.value) || 0 })}
+                                        value={focusedFields.discountPercent ? (editFormData.discountPercent ?? '') : (editFormData.discountPercent !== null && editFormData.discountPercent !== undefined ? parseFloat(editFormData.discountPercent).toFixed(2) : '')}
+                                        onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            setEditFormData({ ...editFormData, discountPercent: inputValue === '' ? 0 : parseFloat(inputValue) || 0 });
+                                        }}
                                         min="0"
                                         max="100"
                                         step="0.01"
+                                        onFocus={() => setFocusedFields(prev => ({ ...prev, discountPercent: true }))}
+                                        onBlur={(e) => {
+                                            setFocusedFields(prev => {
+                                                const next = { ...prev };
+                                                delete next.discountPercent;
+                                                return next;
+                                            });
+                                            if (e.target.value) {
+                                                setEditFormData(prev => ({ ...prev, discountPercent: parseFloat(parseFloat(e.target.value).toFixed(2)) }));
+                                            }
+                                        }}
                                     />
                             </div>
                         </div>
@@ -556,10 +599,24 @@ const VoucherEntry = () => {
                                     <Form.Control
                                         type="number"
                                         className="no-arrow"
-                                        value={editFormData.debit}
-                                        onChange={(e) => setEditFormData({ ...editFormData, debit: parseFloat(e.target.value) || 0 })}
+                                        value={focusedFields.debit ? (editFormData.debit ?? '') : (editFormData.debit !== null && editFormData.debit !== undefined ? parseFloat(editFormData.debit).toFixed(2) : '')}
+                                        onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            setEditFormData({ ...editFormData, debit: inputValue === '' ? 0 : parseFloat(inputValue) || 0 });
+                                        }}
                                         min="0"
                                         step="0.01"
+                                        onFocus={() => setFocusedFields(prev => ({ ...prev, debit: true }))}
+                                        onBlur={(e) => {
+                                            setFocusedFields(prev => {
+                                                const next = { ...prev };
+                                                delete next.debit;
+                                                return next;
+                                            });
+                                            if (e.target.value) {
+                                                setEditFormData(prev => ({ ...prev, debit: parseFloat(parseFloat(e.target.value).toFixed(2)) }));
+                                            }
+                                        }}
                                     />
                             </div>
                             <div className="col-md-6">
@@ -567,10 +624,24 @@ const VoucherEntry = () => {
                                     <Form.Control
                                         type="number"
                                         className="no-arrow"
-                                        value={editFormData.credit}
-                                        onChange={(e) => setEditFormData({ ...editFormData, credit: parseFloat(e.target.value) || 0 })}
+                                        value={focusedFields.credit ? (editFormData.credit ?? '') : (editFormData.credit !== null && editFormData.credit !== undefined ? parseFloat(editFormData.credit).toFixed(2) : '')}
+                                        onChange={(e) => {
+                                            const inputValue = e.target.value;
+                                            setEditFormData({ ...editFormData, credit: inputValue === '' ? 0 : parseFloat(inputValue) || 0 });
+                                        }}
                                         min="0"
                                         step="0.01"
+                                        onFocus={() => setFocusedFields(prev => ({ ...prev, credit: true }))}
+                                        onBlur={(e) => {
+                                            setFocusedFields(prev => {
+                                                const next = { ...prev };
+                                                delete next.credit;
+                                                return next;
+                                            });
+                                            if (e.target.value) {
+                                                setEditFormData(prev => ({ ...prev, credit: parseFloat(parseFloat(e.target.value).toFixed(2)) }));
+                                            }
+                                        }}
                                     />
                             </div>
                         </div>

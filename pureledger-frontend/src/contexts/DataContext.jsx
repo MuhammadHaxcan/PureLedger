@@ -325,6 +325,7 @@ export function DataProvider({ children }) {
             const response = await apiClient.delete(`/MetaDataApi/locations/${id}`);
             if (response.data.success) {
                 await loadLocations(true);
+                return response.data;
             } else {
                 throw new Error(response.data.message || 'Failed to delete location');
             }
@@ -365,6 +366,7 @@ export function DataProvider({ children }) {
             const response = await apiClient.delete(`/MetaDataApi/bookers/${id}`);
             if (response.data.success) {
                 await loadBookers(true);
+                return response.data;
             } else {
                 throw new Error(response.data.message || 'Failed to delete booker');
             }

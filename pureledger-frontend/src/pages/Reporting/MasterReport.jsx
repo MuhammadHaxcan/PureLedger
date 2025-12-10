@@ -346,7 +346,7 @@ const MasterReport = () => {
             const date = new Date(dateStr);
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
-            const year = date.getFullYear();
+            const year = String(date.getFullYear()).slice(-2); // Get last 2 digits of year
             return `${month}/${day}/${year}`;
         } catch {
             return dateStr;
@@ -371,7 +371,7 @@ const MasterReport = () => {
         const csvData = filteredEntries.map(entry => ({
             ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}`,
             'Entry Date': formatDate(entry.transactionDate),
-            'Creditable Date': formatDate(entry.creditableDate),
+            'Credit Date': formatDate(entry.creditableDate),
             Description: entry.description || '',
             Account: entry.accountName || '',
             Booker: entry.bookerName || '',
@@ -425,7 +425,7 @@ const MasterReport = () => {
         // Build columns based on visibility
         const columns = [{ header: 'ID', dataKey: 'id' }];
         if (visibleColumns.date) columns.push({ header: 'Entry Date', dataKey: 'date' });
-        if (visibleColumns.creditableDate) columns.push({ header: 'Creditable Date', dataKey: 'creditableDate' });
+        if (visibleColumns.creditableDate) columns.push({ header: 'Credit Date', dataKey: 'creditableDate' });
         if (visibleColumns.description) columns.push({ header: 'Description', dataKey: 'description' });
         if (visibleColumns.account) columns.push({ header: 'Account', dataKey: 'account' });
         if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
@@ -631,7 +631,7 @@ const MasterReport = () => {
     }
 
     return (
-        <div className="container-fluid">
+        <div className="container-fluid" style={{ maxWidth: '100%', width: '100%', paddingLeft: '1rem', paddingRight: '1rem' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2><i className="fas fa-file-alt me-2"></i>Master Report</h2>
             </div>
@@ -759,7 +759,7 @@ const MasterReport = () => {
                                     <div className="btn-group column-toggles" role="group">
                                         {Object.entries({
                                             showDate: { key: 'date', label: 'Entry Date', icon: 'fa-calendar-day' },
-                                            showCreditableDate: { key: 'creditableDate', label: 'Creditable Date', icon: 'fa-calendar-check' },
+                                            showCreditableDate: { key: 'creditableDate', label: 'Credit Date', icon: 'fa-calendar-check' },
                                             showDescription: { key: 'description', label: 'Description', icon: 'fa-align-left' },
                                             showAccount: { key: 'account', label: 'Account', icon: 'fa-user' },
                                             showBooker: { key: 'booker', label: 'Booker', icon: 'fa-user-tag' },
@@ -840,20 +840,20 @@ const MasterReport = () => {
                                         </InputGroup>
                                     </div>
                                 </div>
-                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="masterReportTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
+                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="masterReportTable" style={{ width: '100%', minWidth: '1200px', tableLayout: 'auto' }}>
                                     <thead className="table-light">
                                         <tr>
                                             <th className="id-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>
-                                            {visibleColumns.date && <th className="date-column" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Entry Date</th>}
-                                            {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Creditable Date</th>}
+                                            {visibleColumns.date && <th className="date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Entry Date</th>}
+                                            {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Credit Date</th>}
                                             {visibleColumns.description && <th className="description-column" style={{ minWidth: '200px' }}>Description</th>}
-                                            {visibleColumns.account && <th className="account-column" style={{ minWidth: '150px' }}>Account</th>}
-                                            {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '120px' }}>Booker</th>}
-                                            {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '80px', whiteSpace: 'nowrap' }}>Quantity</th>}
-                                            {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Debit</th>}
-                                            {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Credit</th>}
-                                            {visibleColumns.balance && <th className="balance-column text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Balance</th>}
+                                            {visibleColumns.account && <th className="account-column" style={{ minWidth: '85px', maxWidth: '120px' }}>Account</th>}
+                                            {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '100px', maxWidth: '140px' }}>Booker</th>}
+                                            {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Quantity</th>}
+                                            {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '130px', maxWidth: '160px', whiteSpace: 'nowrap' }}>Debit</th>}
+                                            {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '130px', maxWidth: '160px', whiteSpace: 'nowrap' }}>Credit</th>}
+                                            {visibleColumns.balance && <th className="balance-column text-end" style={{ minWidth: '130px', maxWidth: '160px', whiteSpace: 'nowrap' }}>Balance</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -903,15 +903,15 @@ const MasterReport = () => {
                                                                 </div>
                                                             )}
                                                         </td>
-                                                        {visibleColumns.date && <td className="date-column">{formatDate(entry.transactionDate)}</td>}
-                                                        {visibleColumns.creditableDate && <td className="creditable-date-column">{formatDate(entry.creditableDate)}</td>}
+                                                        {visibleColumns.date && <td className="date-column" style={{ whiteSpace: 'nowrap', minWidth: '85px', maxWidth: '95px' }}>{formatDate(entry.transactionDate)}</td>}
+                                                        {visibleColumns.creditableDate && <td className="creditable-date-column" style={{ whiteSpace: 'nowrap', minWidth: '85px', maxWidth: '95px' }}>{formatDate(entry.creditableDate)}</td>}
                                                         {visibleColumns.description && <td className="description-column" style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
-                                                        {visibleColumns.account && <td className="account-column">{entry.accountName || ''}</td>}
-                                                        {visibleColumns.booker && <td className="booker-column">{entry.bookerName || ''}</td>}
-                                                        {visibleColumns.quantity && <td className="quantity-column text-end">{entry.quantity ?? ''}</td>}
-                                                        {visibleColumns.debit && <td className="debit-column text-end">{formatCurrency(entry.debit)}</td>}
-                                                        {visibleColumns.credit && <td className="credit-column text-end">{formatCurrency(entry.credit)}</td>}
-                                                        {visibleColumns.balance && <td className="balance-column text-end">{formatCurrency(entry.balance)}</td>}
+                                                        {visibleColumns.account && <td className="account-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.accountName || ''}</td>}
+                                                        {visibleColumns.booker && <td className="booker-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.bookerName || ''}</td>}
+                                                        {visibleColumns.quantity && <td className="quantity-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{entry.quantity ?? ''}</td>}
+                                                        {visibleColumns.debit && <td className="debit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(entry.debit)}</td>}
+                                                        {visibleColumns.credit && <td className="credit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(entry.credit)}</td>}
+                                                        {visibleColumns.balance && <td className="balance-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(entry.balance)}</td>}
                                                     </tr>
                                                 );
                                             })
@@ -925,10 +925,10 @@ const MasterReport = () => {
                                             {visibleColumns.description && <td></td>}
                                             {visibleColumns.account && <td></td>}
                                             {visibleColumns.booker && <td></td>}
-                                            {visibleColumns.quantity && <td className="quantity-column text-end fw-bold">{totals.quantity}</td>}
-                                            {visibleColumns.debit && <td className="debit-column text-end fw-bold">{formatCurrency(totals.debit)}</td>}
-                                            {visibleColumns.credit && <td className="credit-column text-end fw-bold">{formatCurrency(totals.credit)}</td>}
-                                            {visibleColumns.balance && <td className="balance-column text-end fw-bold">{formatCurrency(totals.debit - totals.credit)}</td>}
+                                            {visibleColumns.quantity && <td className="quantity-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px', overflow: 'visible' }}>{totals.quantity}</td>}
+                                            {visibleColumns.debit && <td className="debit-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.debit)}</td>}
+                                            {visibleColumns.credit && <td className="credit-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.credit)}</td>}
+                                            {visibleColumns.balance && <td className="balance-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.debit - totals.credit)}</td>}
                                         </tr>
                                     </tfoot>
                                 </Table>

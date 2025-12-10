@@ -277,7 +277,10 @@ namespace PureLedger.Attributes
             var lowerPath = requestPath.ToLowerInvariant();
             return lowerPath.Contains("toggle-status") ||
                    lowerPath.Contains("can-delete") ||
-                   lowerPath.Contains("check-");
+                   lowerPath.Contains("check-") ||
+                   // Allow maintenance endpoints (locations/bookers) when user already has any action in controller
+                   lowerPath.Contains("/locations") ||
+                   lowerPath.Contains("/bookers");
         }
 
         /// <summary>

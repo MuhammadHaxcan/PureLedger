@@ -25,6 +25,8 @@ const ProcessBaseVoucher = () => {
     const [creditableDate, setCreditableDate] = useState('');
     const [bookers, setBookers] = useState([]);
     const [bookerId, setBookerId] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasSubmitted, setHasSubmitted] = useState(false);
 
     // Calculate entry amounts using the same formula as Entry.jsx
     const calculateEntryAmounts = useCallback((entry) => {
@@ -472,8 +474,10 @@ const ProcessBaseVoucher = () => {
         e.preventDefault();
         
         // Prevent duplicate submissions
-        if (isSubmittingRef.current) return;
+        if (isSubmittingRef.current || isSubmitting) return;
         isSubmittingRef.current = true;
+        setIsSubmitting(true);
+        setHasSubmitted(false);
         
         setError('');
         setSuccess('');
@@ -600,6 +604,7 @@ const ProcessBaseVoucher = () => {
             
             if (response.data.success) {
                 const voucherId = response.data.voucherId;
+                setHasSubmitted(true);
                 setSuccess(response.data.message || `Derived voucher JV-${voucherId} created successfully`);
                 setTimeout(() => {
                     if (voucherId) {
@@ -623,6 +628,7 @@ const ProcessBaseVoucher = () => {
             // Reset submission flag after a delay to prevent immediate re-submission
             setTimeout(() => {
                 isSubmittingRef.current = false;
+                setIsSubmitting(false);
             }, 1000);
         }
     };
@@ -651,7 +657,7 @@ const ProcessBaseVoucher = () => {
 
     if (!voucherData) {
         return (
-            <div className="container-fluid" style={{ maxWidth: '98%', width: '98%', paddingLeft: '1rem', paddingRight: '1rem' }}>
+            <div className="container-fluid">
                 <Alert variant="danger">
                     <i className="fas fa-exclamation-circle me-2"></i>Base voucher not found
                 </Alert>
@@ -884,7 +890,7 @@ const ProcessBaseVoucher = () => {
                         type="submit" 
                         variant="success" 
                         id="submitBtn"
-                        disabled={generating || selectedCount === 0}
+                        disabled={generating || isSubmitting || selectedCount === 0 || hasSubmitted}
                     >
                         {generating ? (
                             <>
