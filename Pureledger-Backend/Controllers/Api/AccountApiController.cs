@@ -120,25 +120,19 @@ namespace PureLedger.Controllers.Api
 
         [HttpGet("access")]
         [Authorize]
-        public async Task<IActionResult> GetUserAccess()
-        {
+        public async Task<IActionResult> GetUserAccess() {
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
-            {
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId)) {
                 return Unauthorized(new { success = false, message = "Invalid token" });
             }
 
-            // Optimized: Run both async calls in parallel
-            var controllersTask = _authService.GetUserControllerAccessAsync(userId);
-            var actionsTask = _authService.GetUserActionAccessAsync(userId);
+            var controllers = await _authService.GetUserControllerAccessAsync(userId);
+            var actions = await _authService.GetUserActionAccessAsync(userId);
 
-            await Task.WhenAll(controllersTask, actionsTask);
-
-            return Ok(new
-            {
+            return Ok(new {
                 success = true,
-                controllers = await controllersTask,
-                actions = await actionsTask
+                controllers,
+                actions
             });
         }
 
