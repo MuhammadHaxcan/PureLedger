@@ -84,6 +84,7 @@ namespace PureLedger.Controllers.Api
                 {
                     success = true,
                     voucherId = journalVoucher.JournalVoucherId,
+                    projectId = journalVoucher.ProjectId,
                     message = editingVoucherId.HasValue ? $"Journal voucher updated. Jv-{journalVoucher.JournalVoucherId}" : $"Journal entries created. Jv-{journalVoucher.JournalVoucherId}",
                     shouldPrint = action == "submit_print",
                     printUrl = action == "submit_print" ? $"/api/reporting/print-voucher/{journalVoucher.JournalVoucherId}?type=JV" : null
@@ -535,6 +536,9 @@ namespace PureLedger.Controllers.Api
                         journalVoucherId = v.JournalVoucherId,
                         projectId = v.ProjectId,
                         projectName = v.Project?.ProjectName ?? "Unknown Project",
+                        customerName = v.JournalEntries?
+                            .FirstOrDefault(e => e.Account?.AccountGroupId == 1)?
+                            .Account?.AccountName ?? "N/A",
                         entryDate = v.EntryDate,
                         unprocessedEntries = v.JournalEntries?.Count(e => !e.IsProcessed && e.Quantity > 0) ?? 0,
                         totalEntries = v.JournalEntries?.Count ?? 0

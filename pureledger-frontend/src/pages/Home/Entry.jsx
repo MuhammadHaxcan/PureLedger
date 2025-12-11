@@ -6,6 +6,9 @@ import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import './Entry.css';
 
+const LAST_PROJECT_STORAGE_KEY = 'pl_last_selected_project';
+const LAST_JV_MESSAGE_KEY = 'pl_last_jv_message';
+
 const HomeEntry = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -60,6 +63,7 @@ const HomeEntry = () => {
 
     // Refs for select dropdowns
     const selectDropdownsRef = useRef({});
+    const persistedSuccessRef = useRef(null);
 
     // Track focused fields to show raw input while typing
     const [focusedFields, setFocusedFields] = useState({});
@@ -71,6 +75,28 @@ const HomeEntry = () => {
             loadVoucherForEdit();
         }
     }, []);
+
+    // Restore persisted success message when no other message is showing.
+    useEffect(() => {
+        // If another message appears, clear persisted message
+        if (error || validationErrors.length > 0) {
+            localStorage.removeItem(LAST_JV_MESSAGE_KEY);
+            return;
+        }
+        // If a new success different from persisted appears, clear storage
+        if (success && persistedSuccessRef.current && success !== persistedSuccessRef.current) {
+            localStorage.removeItem(LAST_JV_MESSAGE_KEY);
+            return;
+        }
+        // If nothing is showing, attempt to restore persisted success
+        if (!success) {
+            const persistedMessage = localStorage.getItem(LAST_JV_MESSAGE_KEY);
+            if (persistedMessage) {
+                persistedSuccessRef.current = persistedMessage;
+                setSuccess(persistedMessage);
+            }
+        }
+    }, [success, error, validationErrors.length]);
 
     // Load categories when project changes
     useEffect(() => {
@@ -106,8 +132,13 @@ const HomeEntry = () => {
                 const bookersAvailable = (response.data.bookers || []).length > 0;
                 setHasBookers(bookersAvailable);
                 setBookersLoaded(true);
-                if (response.data.selectedProjectId) {
-                    setSelectedProjectId(response.data.selectedProjectId);
+                const persistedProjectId = localStorage.getItem(LAST_PROJECT_STORAGE_KEY);
+                const apiSelectedProjectId = response.data.selectedProjectId;
+                const projectIdToUse = apiSelectedProjectId || (persistedProjectId ? parseInt(persistedProjectId) : null);
+                if (projectIdToUse) {
+                    setSelectedProjectId(projectIdToUse);
+                } else if ((response.data.projects || []).length > 0) {
+                    setSelectedProjectId(response.data.projects[0].id);
                 }
                 // Set first booker by default if available
                 if (response.data.bookers && response.data.bookers.length > 0) {
@@ -307,6 +338,9 @@ const HomeEntry = () => {
 
     const handleProjectChange = async (projectId) => {
         setSelectedProjectId(projectId);
+        if (projectId) {
+            localStorage.setItem(LAST_PROJECT_STORAGE_KEY, projectId.toString());
+        }
         // Clear all entries' categories and accounts when project changes
         setEntries(prev => prev.map(entry => ({
             ...entry,
@@ -730,10 +764,18 @@ const HomeEntry = () => {
 
             if (response.data.success) {
                 setSuccess(response.data.message);
+                if (response.data.message) {
+                    localStorage.setItem(LAST_JV_MESSAGE_KEY, response.data.message);
+                }
                 if (response.data.shouldPrint && response.data.voucherId) {
                     // Use the new print voucher route
                     const printUrl = `/reporting/print-voucher?voucherId=${response.data.voucherId}&type=JV`;
                     window.open(printUrl, '_blank');
+                }
+                const projectIdFromResponse = response.data.projectId || model.projectId;
+                if (projectIdFromResponse) {
+                    localStorage.setItem(LAST_PROJECT_STORAGE_KEY, projectIdFromResponse.toString());
+                    setSelectedProjectId(projectIdFromResponse);
                 }
                 // Reset form or navigate
                 if (!isEditMode) {
@@ -756,7 +798,7 @@ const HomeEntry = () => {
                             dataPkg: null,
                             totalAmount: 0
                         }]);
-                        setSelectedProjectId(null);
+                        // Keep selected project (persisted)
                         setBookerId(bookers.length > 0 ? bookers[0].id : null);
                         setEntryDate(new Date().toISOString().split('T')[0]);
                         setCreditDays(0);
@@ -784,6 +826,7 @@ const HomeEntry = () => {
     // Calculate totals
     const totalDebit = entries.reduce((sum, entry) => sum + (parseFloat(entry.debit) || 0), 0);
     const totalCredit = entries.reduce((sum, entry) => sum + (parseFloat(entry.credit) || 0), 0);
+    const totalBalance = totalDebit - totalCredit;
 
     // Check if base voucher checkbox should be shown
     const accountEntriesCount = entries.filter(e => e.accountGroup === 'account').length;
@@ -811,7 +854,10 @@ const HomeEntry = () => {
             )}
 
             {success && (
-                <Alert variant="success" dismissible onClose={() => setSuccess('')}>
+                <Alert variant="success" dismissible onClose={() => {
+                    setSuccess('');
+                    localStorage.removeItem(LAST_JV_MESSAGE_KEY);
+                }}>
                     <i className="fas fa-check-circle me-2"></i>{success}
                 </Alert>
             )}
@@ -1320,6 +1366,11 @@ const HomeEntry = () => {
                                         <td className="fw-bold">{totalCredit.toFixed(2)}</td>
                                         <td></td>
                                     </tr>
+                                    <tr>
+                                        <td colSpan="9" className="text-end fw-bold">BALANCE</td>
+                                        <td colSpan="2" className="fw-bold text-center">{totalBalance.toFixed(2)}</td>
+                                        <td></td>
+                                    </tr>
                                 </tfoot>
                             </Table>
                         </div>
@@ -1477,7 +1528,8 @@ const HomeEntry = () => {
                     <div>
                         <Button
                             variant="primary"
-                            type="submit"
+                            type="button"
+                            onClick={(e) => handleSubmit(e, 'submit')}
                             disabled={loading || !hasBookers || !bookerId}
                             className="me-2"
                         >

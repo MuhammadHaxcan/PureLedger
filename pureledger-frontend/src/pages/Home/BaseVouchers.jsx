@@ -198,6 +198,7 @@ const BaseVouchers = () => {
         return (
             `JV-${voucher.journalVoucherId}`.toLowerCase().includes(search) ||
             (voucher.projectName || '').toLowerCase().includes(search) ||
+            (voucher.customerName || '').toLowerCase().includes(search) ||
             formatDate(voucher.entryDate).toLowerCase().includes(search) ||
             (voucher.unprocessedEntries || 0).toString().includes(search) ||
             (voucher.totalEntries || 0).toString().includes(search)
@@ -303,6 +304,7 @@ const BaseVouchers = () => {
                                     <tr>
                                         <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Voucher ID</th>
                                         <th style={{ minWidth: '150px' }}>Project</th>
+                                        <th style={{ minWidth: '150px' }}>Customer</th>
                                         <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Entry Date</th>
                                         <th className="text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Available Items</th>
                                         <th className="text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Total Items</th>
@@ -324,6 +326,7 @@ const BaseVouchers = () => {
                                                     <span className="fw-bold">JV-{voucher.journalVoucherId}</span>
                                                 </td>
                                                 <td>{voucher.projectName || 'Unknown Project'}</td>
+                                                <td>{voucher.customerName || 'N/A'}</td>
                                                 <td style={{ whiteSpace: 'nowrap' }}>{formatDate(voucher.entryDate)}</td>
                                                 <td className="text-end" style={{ whiteSpace: 'nowrap' }}>{unprocessed}</td>
                                                 <td className="text-end" style={{ whiteSpace: 'nowrap' }}>{total}</td>
@@ -396,7 +399,7 @@ const BaseVouchers = () => {
 
             <ConfirmModal
                 show={showMissedModal}
-                onClose={() => setShowMissedModal(false)}
+                onHide={() => setShowMissedModal(false)}
                 onConfirm={confirmMarkMissed}
                 title="Mark Entries as Missed"
                 message={`Are you sure you want to mark voucher JV-${selectedVoucher?.journalVoucherId} as missed? These entries cannot be processed later.`}

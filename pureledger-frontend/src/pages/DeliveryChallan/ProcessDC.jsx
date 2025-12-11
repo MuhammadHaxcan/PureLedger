@@ -119,6 +119,13 @@ const ProcessDC = () => {
     }
   };
 
+  const openDeliveryChallanPrint = (deliveryChallanId) => {
+    if (deliveryChallanId) {
+      const url = `/reporting/print-voucher?voucherId=${deliveryChallanId}&type=DC`;
+      window.open(url, '_blank');
+    }
+  };
+
   const loadCategories = async (projectId) => {
     try {
       const response = await apiClient.get(`/DeliveryChallanApi/categories-by-project/${projectId}`);
@@ -310,6 +317,7 @@ const ProcessDC = () => {
       if (response.data.success) {
         setSuccess(response.data.message || 'Entry processed successfully.');
         setShowDCModal(false);
+        openDeliveryChallanPrint(response.data.data?.deliveryChallanId);
         await handleSearch();
       } else {
         setError(response.data.message || 'Failed to process entry.');
@@ -363,6 +371,7 @@ const ProcessDC = () => {
       if (response.data.success) {
         setSuccess(response.data.message || 'Entries processed successfully.');
         setShowDCModal(false);
+        openDeliveryChallanPrint(response.data.data?.deliveryChallanId);
         await handleSearch();
       } else {
         setError(response.data.message || 'Failed to process entries.');
@@ -438,6 +447,7 @@ const ProcessDC = () => {
         setSuccess(response.data.message || 'Cartage added and delivery challan processed successfully.');
         setShowCartageModal(false);
         setShowDCModal(false);
+        openDeliveryChallanPrint(response.data.data?.deliveryChallanId);
         await handleSearch();
       } else {
         setError(response.data.message || 'Failed to process cartage.');

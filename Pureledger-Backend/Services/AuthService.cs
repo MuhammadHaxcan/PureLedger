@@ -60,10 +60,6 @@ namespace PureLedger.Services
 
         public async Task<bool> CheckPasswordAsync(User user, string password)
         {
-            if (user.Username == "admin" && password == "admin123")
-            {
-                return true;
-            }
             return await Task.FromResult(BCrypt.Net.BCrypt.Verify(password, user.PasswordHash));
         }
 

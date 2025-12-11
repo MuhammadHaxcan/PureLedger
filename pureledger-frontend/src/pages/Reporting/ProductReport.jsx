@@ -32,6 +32,17 @@ const ProductReport = () => {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
     const pageSize = 1000;
+    const [visibleColumns, setVisibleColumns] = useState({
+        debitQty: true,
+        creditQty: true,
+        balanceQty: true,
+        avgRate: true,
+        totalDebit: true,
+        totalCredit: true,
+        cogs: true,
+        margin: true,
+        marginPct: true,
+    });
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -473,6 +484,38 @@ const ProductReport = () => {
                     <Card.Body>
                         <div className="row mb-3">
                             <div className="col-12">
+                                <Form.Label className="d-block">Column Visibility</Form.Label>
+                                <div className="btn-group column-toggles" role="group">
+                                    {Object.entries({
+                                        showDebitQty: { key: 'debitQty', label: 'Debit Qty', icon: 'fa-arrow-down' },
+                                        showCreditQty: { key: 'creditQty', label: 'Credit Qty', icon: 'fa-arrow-up' },
+                                        showBalanceQty: { key: 'balanceQty', label: 'Bal Qty', icon: 'fa-balance-scale' },
+                                        showAvgRate: { key: 'avgRate', label: 'Avg Rate', icon: 'fa-tags' },
+                                        showTotalDebit: { key: 'totalDebit', label: 'Total Debit', icon: 'fa-plus' },
+                                        showTotalCredit: { key: 'totalCredit', label: 'Total Credit', icon: 'fa-minus' },
+                                        showCOGS: { key: 'cogs', label: 'COGS', icon: 'fa-industry' },
+                                        showMargin: { key: 'margin', label: 'Margin', icon: 'fa-chart-line' },
+                                        showMarginPct: { key: 'marginPct', label: 'Margin %', icon: 'fa-percentage' },
+                                    }).map(([id, config]) => (
+                                        <React.Fragment key={id}>
+                                            <input
+                                                type="checkbox"
+                                                className="btn-check"
+                                                id={id}
+                                                checked={visibleColumns[config.key]}
+                                                onChange={(e) => setVisibleColumns(prev => ({ ...prev, [config.key]: e.target.checked }))}
+                                                autoComplete="off"
+                                            />
+                                            <label className="btn btn-outline-primary btn-sm" htmlFor={id}>
+                                                <i className={`fas ${config.icon} me-1`}></i>{config.label}
+                                            </label>
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="row mb-3">
+                            <div className="col-12">
                                 <Form.Label>Search</Form.Label>
                                 <InputGroup>
                                     <InputGroup.Text><i className="fas fa-search"></i></InputGroup.Text>
@@ -491,15 +534,15 @@ const ProductReport = () => {
                                     <thead className="table-light">
                                         <tr>
                                             <th className="product-column" style={{ minWidth: '140px', maxWidth: '200px' }}>Product</th>
-                                            <th className="qty-column text-end">Debit Qty</th>
-                                            <th className="qty-column text-end">Credit Qty</th>
-                                            <th className="qty-column text-end">Bal Qty</th>
-                                            <th className="currency-column text-end">Avg Rate</th>
-                                            <th className="currency-column text-end">Total Debit</th>
-                                            <th className="currency-column text-end">Total Credit</th>
-                                            <th className="currency-column text-end">COGS</th>
-                                            <th className="currency-column text-end">Margin</th>
-                                            <th className="percent-column text-end">Margin %</th>
+                                            {visibleColumns.debitQty && <th className="qty-column text-end">Debit Qty</th>}
+                                            {visibleColumns.creditQty && <th className="qty-column text-end">Credit Qty</th>}
+                                            {visibleColumns.balanceQty && <th className="qty-column text-end">Bal Qty</th>}
+                                            {visibleColumns.avgRate && <th className="currency-column text-end">Avg Rate</th>}
+                                            {visibleColumns.totalDebit && <th className="currency-column text-end">Total Debit</th>}
+                                            {visibleColumns.totalCredit && <th className="currency-column text-end">Total Credit</th>}
+                                            {visibleColumns.cogs && <th className="currency-column text-end">COGS</th>}
+                                            {visibleColumns.margin && <th className="currency-column text-end">Margin</th>}
+                                            {visibleColumns.marginPct && <th className="percent-column text-end">Margin %</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -521,15 +564,15 @@ const ProductReport = () => {
                                                 return (
                                                     <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
                                                         <td className="product-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: '140px', maxWidth: '200px' }} title={product.productName}>{product.productName}</td>
-                                                        <td className="qty-column text-end">{formatNumber(product.totalDebitQty)}</td>
-                                                        <td className="qty-column text-end">{formatNumber(product.totalCreditQty)}</td>
-                                                        <td className="qty-column text-end">{formatNumber(product.qtyBalance)}</td>
-                                                        <td className="currency-column text-end">{formatCurrency(product.averageRate || 0)}</td>
-                                                        <td className="currency-column text-end">{formatCurrency(product.totalDebit || 0)}</td>
-                                                        <td className="currency-column text-end">{formatCurrency(product.totalCredit || 0)}</td>
-                                                        <td className="currency-column text-end">{formatCurrency(product.cogs || 0)}</td>
-                                                        <td className="currency-column text-end">{formatCurrency(product.margin || 0)}</td>
-                                                        <td className="percent-column text-end">{formatNumber(product.marginPercentage)}%</td>
+                                                        {visibleColumns.debitQty && <td className="qty-column text-end">{formatNumber(product.totalDebitQty)}</td>}
+                                                        {visibleColumns.creditQty && <td className="qty-column text-end">{formatNumber(product.totalCreditQty)}</td>}
+                                                        {visibleColumns.balanceQty && <td className="qty-column text-end">{formatNumber(product.qtyBalance)}</td>}
+                                                        {visibleColumns.avgRate && <td className="currency-column text-end">{formatCurrency(product.averageRate || 0)}</td>}
+                                                        {visibleColumns.totalDebit && <td className="currency-column text-end">{formatCurrency(product.totalDebit || 0)}</td>}
+                                                        {visibleColumns.totalCredit && <td className="currency-column text-end">{formatCurrency(product.totalCredit || 0)}</td>}
+                                                        {visibleColumns.cogs && <td className="currency-column text-end">{formatCurrency(product.cogs || 0)}</td>}
+                                                        {visibleColumns.margin && <td className="currency-column text-end">{formatCurrency(product.margin || 0)}</td>}
+                                                        {visibleColumns.marginPct && <td className="percent-column text-end">{formatNumber(product.marginPercentage)}%</td>}
                                                     </tr>
                                                 );
                                             })
@@ -538,16 +581,16 @@ const ProductReport = () => {
                                     {totals && (
                                         <tfoot className="table-secondary">
                                             <tr className="fw-bold">
-                                                <td colSpan="1" className="text-end">TOTAL</td>
-                                                <td className="qty-column text-end">{formatNumber(totals.totalDebitQty)}</td>
-                                                <td className="qty-column text-end">{formatNumber(totals.totalCreditQty)}</td>
-                                                <td className="qty-column text-end">{formatNumber(totals.netQuantity)}</td>
-                                                <td className="currency-column text-end">-</td>
-                                                <td className="currency-column text-end">{formatCurrency(totals.totalDebit || 0)}</td>
-                                                <td className="currency-column text-end">{formatCurrency(totals.totalCredit || 0)}</td>
-                                                <td className="currency-column text-end">{formatCurrency(totals.totalCOGS || 0)}</td>
-                                                <td className="currency-column text-end">{formatCurrency(totals.totalMargin || 0)}</td>
-                                                <td className="percent-column text-end">{formatNumber(totals.marginPercentage)}%</td>
+                                                <td className="text-end">TOTAL</td>
+                                                {visibleColumns.debitQty && <td className="qty-column text-end">{formatNumber(totals.totalDebitQty)}</td>}
+                                                {visibleColumns.creditQty && <td className="qty-column text-end">{formatNumber(totals.totalCreditQty)}</td>}
+                                                {visibleColumns.balanceQty && <td className="qty-column text-end">{formatNumber(totals.netQuantity)}</td>}
+                                                {visibleColumns.avgRate && <td className="currency-column text-end">-</td>}
+                                                {visibleColumns.totalDebit && <td className="currency-column text-end">{formatCurrency(totals.totalDebit || 0)}</td>}
+                                                {visibleColumns.totalCredit && <td className="currency-column text-end">{formatCurrency(totals.totalCredit || 0)}</td>}
+                                                {visibleColumns.cogs && <td className="currency-column text-end">{formatCurrency(totals.totalCOGS || 0)}</td>}
+                                                {visibleColumns.margin && <td className="currency-column text-end">{formatCurrency(totals.totalMargin || 0)}</td>}
+                                                {visibleColumns.marginPct && <td className="percent-column text-end">{formatNumber(totals.marginPercentage)}%</td>}
                                             </tr>
                                         </tfoot>
                                     )}
