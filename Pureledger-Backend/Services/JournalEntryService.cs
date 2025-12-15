@@ -426,6 +426,19 @@ namespace PureLedger.Services
             }
         }
 
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectForUserAsync(int projectId, int userId)
+        {
+            try
+            {
+                return await _unitOfWork.Categories.GetByProjectIdForUserAsync(projectId, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting categories for project {ProjectId} and user {UserId}", projectId, userId);
+                throw;
+            }
+        }
+
         public async Task<IEnumerable<Account>> GetEnabledAccountsByCategoryAsync(int categoryId)
         {
             try

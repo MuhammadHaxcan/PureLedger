@@ -22,6 +22,8 @@ namespace PureLedger.Repositories.Interfaces
         IUserRepository Users { get; }
         IUserControllerAccessRepository UserControllerAccess { get; }
         IUserProjectRepository UserProjects { get; }
+        IUserCategoryRepository UserCategories { get; }
+        IRefreshTokenRepository RefreshTokens { get; }
         IProjectCartageSettingsRepository ProjectCartageSettings { get; }
         IMissedEntryRepository MissedEntries { get; }
         IRecipeRepository Recipes { get; }

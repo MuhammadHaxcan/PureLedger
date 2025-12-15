@@ -4,9 +4,8 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Papa from 'papaparse';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 import './ProductReport.css';
 
 const ProductReport = () => {
@@ -19,6 +18,8 @@ const ProductReport = () => {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
+    const [exportingCsv, setExportingCsv] = useState(false);
+    const [exportingPdf, setExportingPdf] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [formData, setFormData] = useState({
         projectId: null,
@@ -27,6 +28,8 @@ const ProductReport = () => {
         startDate: '',
         endDate: ''
     });
+    const [excludeNilProducts, setExcludeNilProducts] = useState(false);
+    const [dateFilterType, setDateFilterType] = useState('custom');
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -124,6 +127,7 @@ const ProductReport = () => {
                 endDate: formData.endDate || null,
                 categoryId: formData.categoryId ? formData.categoryId.toString() : '',
                 locationId: formData.locationId ? formData.locationId.toString() : '',
+                excludeNilProducts: excludeNilProducts,
                 page: page,
                 pageSize: pageSize
             };
@@ -159,6 +163,19 @@ const ProductReport = () => {
             setGenerating(false);
             setIsLoadingMore(false);
         }
+    };
+
+    const handleDateFilterChange = (filterType) => {
+        setDateFilterType(filterType);
+        if (filterType === 'custom') {
+            return;
+        }
+        const dateRange = getDateRange(filterType);
+        setFormData(prev => ({
+            ...prev,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -197,141 +214,108 @@ const ProductReport = () => {
         );
     });
 
-    const exportToCsv = (data, filename) => {
-        if (!data || data.length === 0) {
-            alert('No data to export');
-            return;
+    const handleExportCsv = async () => {
+        setExportingCsv(true);
+        try {
+            const csvData = filteredProducts.map(product => ({
+                Product: product.productName || '',
+                'Debit Qty': (product.totalDebitQty || 0).toFixed(2),
+                'Credit Qty': (product.totalCreditQty || 0).toFixed(2),
+                'Balance Qty': (product.qtyBalance || 0).toFixed(2),
+                'Avg Rate': (product.averageRate || 0).toFixed(2),
+                'Total Debit': (product.totalDebit || 0).toFixed(2),
+                'Total Credit': (product.totalCredit || 0).toFixed(2),
+                COGS: (product.cogs || 0).toFixed(2),
+                Margin: (product.margin || 0).toFixed(2),
+                'Margin %': `${(product.marginPercentage || 0).toFixed(2)}%`
+            }));
+            const dateRange = formData.startDate && formData.endDate 
+                ? `${formData.startDate}_to_${formData.endDate}` 
+                : 'report';
+            await exportToCsvAsync(csvData, `ProductReport_${dateRange}.csv`);
+        } finally {
+            setExportingCsv(false);
         }
-
-        const csvContent = Papa.unparse(data);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
     };
 
-    const handleExportCsv = () => {
-        const csvData = filteredProducts.map(product => ({
-            Product: product.productName || '',
-            'Debit Qty': (product.totalDebitQty || 0).toFixed(2),
-            'Credit Qty': (product.totalCreditQty || 0).toFixed(2),
-            'Balance Qty': (product.qtyBalance || 0).toFixed(2),
-            'Avg Rate': (product.averageRate || 0).toFixed(2),
-            'Total Debit': (product.totalDebit || 0).toFixed(2),
-            'Total Credit': (product.totalCredit || 0).toFixed(2),
-            COGS: (product.cogs || 0).toFixed(2),
-            Margin: (product.margin || 0).toFixed(2),
-            'Margin %': `${(product.marginPercentage || 0).toFixed(2)}%`
-        }));
-        const dateRange = formData.startDate && formData.endDate 
-            ? `${formData.startDate}_to_${formData.endDate}` 
-            : 'report';
-        exportToCsv(csvData, `ProductReport_${dateRange}.csv`);
-    };
+    const handleExportPdf = async () => {
+        setExportingPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
+            const selectedCategory = categories.find(c => c.id === formData.categoryId);
+            const selectedLocation = locations.find(l => l.id === formData.locationId);
 
-    const handleExportPdf = () => {
-        const doc = new jsPDF('landscape', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
-        const selectedCategory = categories.find(c => c.id === formData.categoryId);
-        const selectedLocation = locations.find(l => l.id === formData.locationId);
+            const rows = filteredProducts.map(product => ({
+                product: product.productName || '',
+                debitQty: formatNumber(product.totalDebitQty),
+                creditQty: formatNumber(product.totalCreditQty),
+                balanceQty: formatNumber(product.qtyBalance),
+                avgRate: formatCurrency(product.averageRate || 0),
+                totalDebit: formatCurrency(product.totalDebit || 0),
+                totalCredit: formatCurrency(product.totalCredit || 0),
+                cogs: formatCurrency(product.cogs || 0),
+                margin: formatCurrency(product.margin || 0),
+                marginPct: `${formatNumber(product.marginPercentage)}%`
+            }));
 
-        // Header
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Product Stock & Margin Report', 14, 20);
-
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        if (formData.startDate) {
-            doc.text(`Date Range: ${formData.startDate} to ${formData.endDate || formData.startDate}`, 14, 34);
-        }
-        if (selectedCategory) {
-            doc.text(`Category: ${selectedCategory.name}`, 14, 40);
-        }
-        if (selectedLocation) {
-            doc.text(`Location: ${selectedLocation.name}`, 14, 46);
-        }
-        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, selectedCategory || selectedLocation ? 52 : 40);
-
-        const rows = filteredProducts.map(product => ({
-            product: product.productName || '',
-            debitQty: formatNumber(product.totalDebitQty),
-            creditQty: formatNumber(product.totalCreditQty),
-            balanceQty: formatNumber(product.qtyBalance),
-            avgRate: formatCurrency(product.averageRate || 0),
-            totalDebit: formatCurrency(product.totalDebit || 0),
-            totalCredit: formatCurrency(product.totalCredit || 0),
-            cogs: formatCurrency(product.cogs || 0),
-            margin: formatCurrency(product.margin || 0),
-            marginPct: `${formatNumber(product.marginPercentage)}%`
-        }));
-
-        // Add totals row
-        if (totals) {
-            rows.push({
-                product: 'TOTAL',
-                debitQty: formatNumber(totals.totalDebitQty),
-                creditQty: formatNumber(totals.totalCreditQty),
-                balanceQty: formatNumber(totals.netQuantity),
-                avgRate: '-',
-                totalDebit: formatCurrency(totals.totalDebit || 0),
-                totalCredit: formatCurrency(totals.totalCredit || 0),
-                cogs: formatCurrency(totals.totalCOGS || 0),
-                margin: formatCurrency(totals.totalMargin || 0),
-                marginPct: `${formatNumber(totals.marginPercentage)}%`
-            });
-        }
-
-        const columns = [
-            { header: 'Product', dataKey: 'product' },
-            { header: 'Debit Qty', dataKey: 'debitQty' },
-            { header: 'Credit Qty', dataKey: 'creditQty' },
-            { header: 'Bal Qty', dataKey: 'balanceQty' },
-            { header: 'Avg Rate', dataKey: 'avgRate' },
-            { header: 'Total Debit', dataKey: 'totalDebit' },
-            { header: 'Total Credit', dataKey: 'totalCredit' },
-            { header: 'COGS', dataKey: 'cogs' },
-            { header: 'Margin', dataKey: 'margin' },
-            { header: 'Margin %', dataKey: 'marginPct' }
-        ];
-
-        // Split rows into chunks of 10 per page
-        const rowsPerPage = 20;
-        let startY = selectedCategory || selectedLocation ? 56 : 46;
-        
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
+            if (totals) {
+                rows.push({
+                    product: 'TOTAL',
+                    debitQty: formatNumber(totals.totalDebitQty),
+                    creditQty: formatNumber(totals.totalCreditQty),
+                    balanceQty: formatNumber(totals.netQuantity),
+                    avgRate: '-',
+                    totalDebit: formatCurrency(totals.totalDebit || 0),
+                    totalCredit: formatCurrency(totals.totalCredit || 0),
+                    cogs: formatCurrency(totals.totalCOGS || 0),
+                    margin: formatCurrency(totals.totalMargin || 0),
+                    marginPct: `${formatNumber(totals.marginPercentage)}%`
+                });
             }
-            
-            const chunk = rows.slice(i, i + rowsPerPage);
-            
-            autoTable(doc, {
+
+            const columns = [
+                { header: 'Product', dataKey: 'product' },
+                { header: 'Debit Qty', dataKey: 'debitQty' },
+                { header: 'Credit Qty', dataKey: 'creditQty' },
+                { header: 'Bal Qty', dataKey: 'balanceQty' },
+                { header: 'Avg Rate', dataKey: 'avgRate' },
+                { header: 'Total Debit', dataKey: 'totalDebit' },
+                { header: 'Total Credit', dataKey: 'totalCredit' },
+                { header: 'COGS', dataKey: 'cogs' },
+                { header: 'Margin', dataKey: 'margin' },
+                { header: 'Margin %', dataKey: 'marginPct' }
+            ];
+
+            let subtitle = '';
+            if (formData.startDate) {
+                subtitle += `Date Range: ${formData.startDate} to ${formData.endDate || formData.startDate}`;
+            }
+            if (selectedCategory) {
+                subtitle += (subtitle ? '\n' : '') + `Category: ${selectedCategory.name}`;
+            }
+            if (selectedLocation) {
+                subtitle += (subtitle ? '\n' : '') + `Location: ${selectedLocation.name}`;
+            }
+            const generatedInfo = `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`;
+
+            await generatePdfAsync({
+                orientation: 'landscape',
+                format: 'a4',
+                title: 'Product Stock & Margin Report',
+                projectName: selectedProject?.name || 'All Projects',
+                subtitle: subtitle || null,
+                generatedInfo,
                 columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 6, cellPadding: 1.5 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+                rows,
+                rowsPerPage: 20,
+                startY: selectedCategory || selectedLocation ? 56 : 46,
+                fontSize: 6,
+                cellPadding: 1.5,
+                filename: `ProductReport_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } finally {
+            setExportingPdf(false);
         }
-
-        // Add page numbers to all pages
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(
-                `PureLedger - Product Report | Page ${i} of ${pageCount}`,
-                14,
-                doc.internal.pageSize.height - 10
-            );
-        }
-
-        doc.save(`ProductReport_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -359,25 +343,53 @@ const ProductReport = () => {
                 <Card.Body>
                     <Form onSubmit={handleSubmit}>
                         <div className="row mb-3">
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>Since</Form.Label>
-                                <InputGroup>
-                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small text-muted">Quick Filter</Form.Label>
+                                <Form.Select
+                                    size="sm"
+                                    value={dateFilterType}
+                                    onChange={(e) => handleDateFilterChange(e.target.value)}
+                                    disabled={generating}
+                                    style={{ fontSize: '0.875rem' }}
+                                >
+                                    {dateFilterOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </Form.Select>
+                            </div>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">Since</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                                     <Form.Control
                                         type="date"
+                                        size="sm"
                                         value={formData.startDate}
-                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, startDate: e.target.value });
+                                            setDateFilterType('custom');
+                                        }}
+                                        disabled={generating}
+                                        style={{ fontSize: '0.875rem' }}
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>To</Form.Label>
-                                <InputGroup>
-                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">To</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                                     <Form.Control
                                         type="date"
+                                        size="sm"
                                         value={formData.endDate}
-                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, endDate: e.target.value });
+                                            setDateFilterType('custom');
+                                        }}
+                                        disabled={generating}
+                                        style={{ fontSize: '0.875rem' }}
                                     />
                                 </InputGroup>
                             </div>
@@ -421,6 +433,16 @@ const ProductReport = () => {
                                     />
                                 </InputGroup>
                             </div>
+                            <div className="col-md-3 mb-3 d-flex align-items-center" style={{ paddingTop: '2rem' }}>
+                                <Form.Check
+                                    type="checkbox"
+                                    id="excludeNilProducts"
+                                    label="Nil Product"
+                                    checked={excludeNilProducts}
+                                    onChange={(e) => setExcludeNilProducts(e.target.checked)}
+                                    disabled={generating}
+                                />
+                            </div>
                             <div className="col-md-3 mb-3">
                                 <Form.Label>&nbsp;</Form.Label>
                                 <div className="d-grid">
@@ -444,6 +466,40 @@ const ProductReport = () => {
                                 </div>
                             </div>
                         </div>
+                        {allProducts.length > 0 && (
+                            <div className="row mb-3">
+                                <div className="col-12">
+                                    <Form.Label className="d-block">Column Visibility</Form.Label>
+                                    <div className="btn-group column-toggles" role="group">
+                                        {Object.entries({
+                                            showDebitQty: { key: 'debitQty', label: 'Debit Qty', icon: 'fa-arrow-down' },
+                                            showCreditQty: { key: 'creditQty', label: 'Credit Qty', icon: 'fa-arrow-up' },
+                                            showBalanceQty: { key: 'balanceQty', label: 'Bal Qty', icon: 'fa-balance-scale' },
+                                            showAvgRate: { key: 'avgRate', label: 'Avg Rate', icon: 'fa-tags' },
+                                            showTotalDebit: { key: 'totalDebit', label: 'Total Debit', icon: 'fa-plus' },
+                                            showTotalCredit: { key: 'totalCredit', label: 'Total Credit', icon: 'fa-minus' },
+                                            showCOGS: { key: 'cogs', label: 'COGS', icon: 'fa-industry' },
+                                            showMargin: { key: 'margin', label: 'Margin', icon: 'fa-chart-line' },
+                                            showMarginPct: { key: 'marginPct', label: 'Margin %', icon: 'fa-percentage' },
+                                        }).map(([id, config]) => (
+                                            <React.Fragment key={id}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="btn-check"
+                                                    id={id}
+                                                    checked={visibleColumns[config.key]}
+                                                    onChange={(e) => setVisibleColumns(prev => ({ ...prev, [config.key]: e.target.checked }))}
+                                                    autoComplete="off"
+                                                />
+                                                <label className="btn btn-outline-primary btn-sm" htmlFor={id}>
+                                                    <i className={`fas ${config.icon} me-1`}></i>{config.label}
+                                                </label>
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </Form>
                 </Card.Body>
             </Card>
@@ -467,53 +523,41 @@ const ProductReport = () => {
                                         size="sm" 
                                         onClick={handleExportCsv} 
                                         className="me-2"
+                                        disabled={exportingCsv || exportingPdf}
                                     >
-                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                        {exportingCsv ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                                            </>
+                                        )}
                                     </Button>
                                     <Button 
                                         variant="outline-danger" 
                                         size="sm" 
                                         onClick={handleExportPdf}
+                                        disabled={exportingCsv || exportingPdf}
                                     >
-                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                        {exportingPdf ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                            </>
+                                        )}
                                     </Button>
                                 </>
                             )}
                         </div>
                     </Card.Header>
                     <Card.Body>
-                        <div className="row mb-3">
-                            <div className="col-12">
-                                <Form.Label className="d-block">Column Visibility</Form.Label>
-                                <div className="btn-group column-toggles" role="group">
-                                    {Object.entries({
-                                        showDebitQty: { key: 'debitQty', label: 'Debit Qty', icon: 'fa-arrow-down' },
-                                        showCreditQty: { key: 'creditQty', label: 'Credit Qty', icon: 'fa-arrow-up' },
-                                        showBalanceQty: { key: 'balanceQty', label: 'Bal Qty', icon: 'fa-balance-scale' },
-                                        showAvgRate: { key: 'avgRate', label: 'Avg Rate', icon: 'fa-tags' },
-                                        showTotalDebit: { key: 'totalDebit', label: 'Total Debit', icon: 'fa-plus' },
-                                        showTotalCredit: { key: 'totalCredit', label: 'Total Credit', icon: 'fa-minus' },
-                                        showCOGS: { key: 'cogs', label: 'COGS', icon: 'fa-industry' },
-                                        showMargin: { key: 'margin', label: 'Margin', icon: 'fa-chart-line' },
-                                        showMarginPct: { key: 'marginPct', label: 'Margin %', icon: 'fa-percentage' },
-                                    }).map(([id, config]) => (
-                                        <React.Fragment key={id}>
-                                            <input
-                                                type="checkbox"
-                                                className="btn-check"
-                                                id={id}
-                                                checked={visibleColumns[config.key]}
-                                                onChange={(e) => setVisibleColumns(prev => ({ ...prev, [config.key]: e.target.checked }))}
-                                                autoComplete="off"
-                                            />
-                                            <label className="btn btn-outline-primary btn-sm" htmlFor={id}>
-                                                <i className={`fas ${config.icon} me-1`}></i>{config.label}
-                                            </label>
-                                        </React.Fragment>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
                         <div className="row mb-3">
                             <div className="col-12">
                                 <Form.Label>Search</Form.Label>

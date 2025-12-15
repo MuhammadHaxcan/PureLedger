@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { DataProvider } from './contexts/DataContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -34,10 +36,11 @@ import './App.css';
 
 function App() {
   return (
-    <AuthProvider>
-      <DataProvider>
-        <Router>
-        <Routes>
+    <ToastProvider>
+      <AuthProvider>
+        <DataProvider>
+          <Router>
+          <Routes>
           <Route path="/login" element={<Login />} />
           {/* Print-only route without layout */}
           <Route path="/reporting/print-voucher" element={<ProtectedRoute><PrintOnlyVoucher /></ProtectedRoute>} />
@@ -103,6 +106,8 @@ function App() {
       </Router>
       </DataProvider>
     </AuthProvider>
+    <ToastContainer hideProgressBar />
+    </ToastProvider>
   );
 }
 

@@ -38,7 +38,7 @@ const AccessDenied = () => {
     const attemptedPath = location.state?.from?.pathname || location.pathname;
 
     return (
-        <div className="container mt-5">
+        <div className="container-fluid">
             <div className="row justify-content-center">
                 <div className="col-md-8">
                     <div className="card shadow">

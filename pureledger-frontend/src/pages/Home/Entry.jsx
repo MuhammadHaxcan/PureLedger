@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, Form, Button, Table, Alert, Modal } from 'react-bootstrap';
+import { Card, Form, Button, Table, Alert } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -17,10 +17,8 @@ const HomeEntry = () => {
 
     usePageTitle(isEditMode ? 'Edit Entry' : 'Entry');
 
-    // Ref to prevent duplicate submissions
     const isSubmittingRef = useRef(false);
 
-    // State
     const [projects, setProjects] = useState([]);
     const [bookers, setBookers] = useState([]);
     const [selectedProjectId, setSelectedProjectId] = useState(null);
@@ -44,31 +42,26 @@ const HomeEntry = () => {
         disc: 0,
         debit: null,
         credit: null,
-        accountGroup: null, // 'product' or 'account'
+        accountGroup: null,
         accountType: null,
         dataPkg: null,
         totalAmount: 0
     }]);
 
-    // Store categories and accounts for each row
     const [rowCategories, setRowCategories] = useState({});
     const [rowAccounts, setRowAccounts] = useState({});
 
     const [loading, setLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [validationErrors, setValidationErrors] = useState([]);
     const [hasBookers, setHasBookers] = useState(false);
     const [bookersLoaded, setBookersLoaded] = useState(false);
 
-    // Refs for select dropdowns
-    const selectDropdownsRef = useRef({});
     const persistedSuccessRef = useRef(null);
-
-    // Track focused fields to show raw input while typing
     const [focusedFields, setFocusedFields] = useState({});
 
-    // Load initial data
     useEffect(() => {
         loadEntryData();
         if (isEditMode) {
@@ -76,29 +69,37 @@ const HomeEntry = () => {
         }
     }, []);
 
-    // Restore persisted success message when no other message is showing.
     useEffect(() => {
-        // If another message appears, clear persisted message
         if (error || validationErrors.length > 0) {
             localStorage.removeItem(LAST_JV_MESSAGE_KEY);
+            persistedSuccessRef.current = null;
             return;
         }
-        // If a new success different from persisted appears, clear storage
         if (success && persistedSuccessRef.current && success !== persistedSuccessRef.current) {
             localStorage.removeItem(LAST_JV_MESSAGE_KEY);
+            persistedSuccessRef.current = null;
             return;
         }
-        // If nothing is showing, attempt to restore persisted success
-        if (!success) {
+        const hasEntries = entries.length > 0 && entries.some(e => 
+            e.categoryId || e.accountId || e.debit || e.credit || e.qty || e.rate || e.des
+        );
+        if (hasEntries && persistedSuccessRef.current && !success) {
+            localStorage.removeItem(LAST_JV_MESSAGE_KEY);
+            persistedSuccessRef.current = null;
+            if (success) {
+                setSuccess('');
+            }
+            return;
+        }
+        if (!success && !hasEntries) {
             const persistedMessage = localStorage.getItem(LAST_JV_MESSAGE_KEY);
             if (persistedMessage) {
                 persistedSuccessRef.current = persistedMessage;
                 setSuccess(persistedMessage);
             }
         }
-    }, [success, error, validationErrors.length]);
+    }, [success, error, validationErrors.length, entries]);
 
-    // Load categories when project changes
     useEffect(() => {
         if (selectedProjectId && !isEditMode) {
             const loadCategoriesForAllRows = async () => {
@@ -113,7 +114,6 @@ const HomeEntry = () => {
         }
     }, [selectedProjectId, entries.length]);
 
-    // Update due date when entry date or credit days change
     useEffect(() => {
         if (entryDate) {
             const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
@@ -140,18 +140,16 @@ const HomeEntry = () => {
                 } else if ((response.data.projects || []).length > 0) {
                     setSelectedProjectId(response.data.projects[0].id);
                 }
-                // Set first booker by default if available
                 if (response.data.bookers && response.data.bookers.length > 0) {
                     setBookerId(response.data.bookers[0].id);
                 }
             }
         } catch (error) {
-            console.error('Error loading entry data:', error);
             const errorMessage = error.message ||
                 error.response?.data?.message ||
                 'Failed to load entry data. Please try again.';
             setError(errorMessage);
-            setBookersLoaded(true); // Mark as loaded even on error to show the warning
+            setBookersLoaded(true);
         }
     };
 
@@ -174,23 +172,18 @@ const HomeEntry = () => {
                 setRequireQuantity(model.requireQuantity !== false);
                 setIsBaseVoucher(model.isBaseVoucher || false);
 
-                // Load entries with category and account data
                 if (model.entries && model.entries.length > 0) {
-                    // Load categories for the project
                     const categories = await loadCategories(projId, 0);
                     const categoriesMap = {};
                     const accountsMap = {};
 
                     const loadedEntries = await Promise.all(model.entries.map(async (entry, index) => {
-                        // Load product details for each entry
                         let accountGroup = null;
                         let accountType = null;
                         let dataPkg = null;
 
-                        // Store categories for this row
                         categoriesMap[index] = categories;
 
-                        // Load accounts for this category
                         if (entry.categoryId) {
                             const accounts = await loadAccounts(entry.categoryId, index);
                             accountsMap[index] = accounts;
@@ -206,11 +199,9 @@ const HomeEntry = () => {
                                     dataPkg = product.pkg || null;
                                 }
                             } catch (err) {
-                                console.error('Error loading product details:', err);
                             }
                         }
 
-                        // Parse numeric values to ensure they're numbers
                         const parsedQty = entry.qty != null ? (typeof entry.qty === 'number' ? entry.qty : parseFloat(entry.qty)) : null;
                         const parsedRate = entry.rate != null ? (typeof entry.rate === 'number' ? entry.rate : parseFloat(entry.rate)) : null;
                         const parsedPercent = entry.percent != null ? (typeof entry.percent === 'number' ? entry.percent : parseFloat(entry.percent)) : 0;
@@ -219,7 +210,6 @@ const HomeEntry = () => {
                         const parsedCredit = entry.credit != null ? (typeof entry.credit === 'number' ? entry.credit : parseFloat(entry.credit)) : null;
                         const parsedPkg = entry.pkg != null ? (typeof entry.pkg === 'number' ? entry.pkg : parseFloat(entry.pkg)) : (dataPkg != null ? (typeof dataPkg === 'number' ? dataPkg : parseFloat(dataPkg)) : null);
 
-                        // Calculate totalAmount and discount based on loaded values
                         const rbp = (entry.rbp || 'Y') === 'Y';
                         const qty = parsedQty || 0;
                         const rate = parsedRate || 0;
@@ -232,7 +222,6 @@ const HomeEntry = () => {
                             calculatedTotalAmount = qty * rate;
                         }
 
-                        // Recalculate discount based on totalAmount and percent
                         const calculatedDisc = parseFloat(((calculatedTotalAmount * parsedPercent) / 100).toFixed(2));
 
                         return {
@@ -244,7 +233,7 @@ const HomeEntry = () => {
                             qty: parsedQty,
                             rate: parsedRate,
                             percent: parsedPercent,
-                            disc: calculatedDisc, // Use recalculated discount
+                            disc: calculatedDisc,
                             debit: parsedDebit,
                             credit: parsedCredit,
                             accountGroup,
@@ -260,7 +249,6 @@ const HomeEntry = () => {
                 }
             }
         } catch (error) {
-            console.error('Error loading voucher for edit:', error);
             setError('Failed to load voucher data');
         } finally {
             setLoading(false);
@@ -275,7 +263,6 @@ const HomeEntry = () => {
                 return response.data.data || [];
             }
         } catch (error) {
-            console.error('Error loading categories:', error);
         }
         return [];
     };
@@ -288,7 +275,6 @@ const HomeEntry = () => {
                 return response.data.data || [];
             }
         } catch (error) {
-            console.error('Error loading accounts:', error);
         }
         return [];
     };
@@ -301,11 +287,9 @@ const HomeEntry = () => {
                 const product = response.data.data;
                 const accountGroup = product.accountGroupId === 1 ? 'account' : 'product';
 
-                // Update the entry with product details
                 setEntries(prev => {
                     const updated = [...prev];
                     if (updated[rowIndex]) {
-                        // Check if entry already has a rate (preserve existing rates in edit mode)
                         const hasExistingRate = updated[rowIndex].rate != null && updated[rowIndex].rate !== 0;
 
                         updated[rowIndex] = {
@@ -316,9 +300,6 @@ const HomeEntry = () => {
                             pkg: updated[rowIndex].pkg || product.pkg || null
                         };
 
-                        // Set rate from product if:
-                        // 1. Not in edit mode, OR
-                        // 2. In edit mode but entry doesn't have an existing rate (new row)
                         if (product.saleRate !== null && product.saleRate !== undefined) {
                             if (!isEditMode || !hasExistingRate) {
                                 updated[rowIndex].rate = parseFloat(parseFloat(product.saleRate).toFixed(4));
@@ -331,7 +312,6 @@ const HomeEntry = () => {
                 return product;
             }
         } catch (error) {
-            console.error('Error loading product details:', error);
         }
         return null;
     };
@@ -341,7 +321,6 @@ const HomeEntry = () => {
         if (projectId) {
             localStorage.setItem(LAST_PROJECT_STORAGE_KEY, projectId.toString());
         }
-        // Clear all entries' categories and accounts when project changes
         setEntries(prev => prev.map(entry => ({
             ...entry,
             categoryId: null,
@@ -350,7 +329,6 @@ const HomeEntry = () => {
             accountType: null
         })));
 
-        // Load categories for all rows
         if (projectId) {
             const categories = await loadCategories(projectId, 0);
             const categoriesMap = {};
@@ -358,7 +336,6 @@ const HomeEntry = () => {
                 categoriesMap[index] = categories;
             });
             setRowCategories(categoriesMap);
-            // Clear accounts
             setRowAccounts({});
         } else {
             setRowCategories({});
@@ -372,14 +349,13 @@ const HomeEntry = () => {
             updated[rowIndex] = {
                 ...updated[rowIndex],
                 categoryId,
-                accountId: null, // Clear account when category changes
+                accountId: null,
                 accountGroup: null,
                 accountType: null
             };
             return updated;
         });
 
-        // Load accounts for this category
         if (categoryId && selectedProjectId) {
             const accounts = await loadAccounts(categoryId, rowIndex);
             setRowAccounts(prev => ({
@@ -396,14 +372,12 @@ const HomeEntry = () => {
     };
 
     const handleAccountChange = async (rowIndex, accountId) => {
-        // Store which field has data before clearing
         setEntries(prev => {
             const entry = prev[rowIndex];
             const hasDebit = entry && entry.debit && entry.debit > 0;
             const hasCredit = entry && entry.credit && entry.credit > 0;
             const shouldRecalculate = hasDebit || hasCredit;
 
-            // Store in entry temporarily to know we need to recalculate
             if (shouldRecalculate) {
                 entry._needsRecalculation = hasDebit ? 'debit' : 'credit';
             }
@@ -412,21 +386,19 @@ const HomeEntry = () => {
             updated[rowIndex] = {
                 ...updated[rowIndex],
                 accountId,
-                rate: null, // Clear rate when account changes
-                rbp: 'Y', // Reset RBP to default when account changes
-                pkg: 0, // Reset PKG when account changes
-                dataPkg: null, // Clear dataPkg when account changes
+                rate: null,
+                rbp: 'Y',
+                pkg: 0,
+                dataPkg: null,
                 _needsRecalculation: shouldRecalculate ? (hasDebit ? 'debit' : 'credit') : null
             };
             return updated;
         });
 
-        // Load product details
         if (accountId) {
             await loadProductDetails(accountId, rowIndex);
-            // Trigger calculations for product accounts
             setTimeout(() => {
-                calculateRowAmounts(rowIndex, true); // Pass flag to recalculate existing debit/credit
+                calculateRowAmounts(rowIndex, true);
             }, 100);
         }
     };
@@ -442,7 +414,6 @@ const HomeEntry = () => {
             const rate = parseFloat(entry.rate) || 0;
             const pkg = parseFloat(entry.pkg || entry.dataPkg) || 0;
 
-            // Calculate total amount
             let totalAmount = 0;
             if (rbp && pkg > 0) {
                 totalAmount = pkg * qty * rate;
@@ -450,29 +421,22 @@ const HomeEntry = () => {
                 totalAmount = qty * rate;
             }
 
-            // Calculate discount
             const percent = parseFloat(entry.percent) || 0;
             const discount = parseFloat(((totalAmount * percent) / 100).toFixed(2));
-
-            // Calculate net amount (debit or credit)
             const netAmount = totalAmount - discount;
 
-            // Determine which field to update
             const hasDebit = entry.debit && entry.debit > 0;
             const hasCredit = entry.credit && entry.credit > 0;
             const recalculationField = entry._needsRecalculation;
 
-            // Always update discount and totalAmount
             updated[rowIndex] = {
                 ...entry,
                 disc: discount,
                 totalAmount
             };
 
-            // Remove the recalculation flag
             delete updated[rowIndex]._needsRecalculation;
 
-            // If forceRecalculate is true and we have a recalculation field, recalculate that field
             if (forceRecalculate && recalculationField && netAmount > 0) {
                 if (recalculationField === 'debit') {
                     updated[rowIndex].debit = parseFloat(netAmount.toFixed(2));
@@ -481,19 +445,13 @@ const HomeEntry = () => {
                     updated[rowIndex].credit = parseFloat(netAmount.toFixed(2));
                     updated[rowIndex].debit = null;
                 }
-            }
-            // If debit has value, update it
-            else if (hasDebit && netAmount > 0) {
+            } else if (hasDebit && netAmount > 0) {
                 updated[rowIndex].debit = parseFloat(netAmount.toFixed(2));
                 updated[rowIndex].credit = null;
-            }
-            // If credit has value, update it
-            else if (hasCredit && netAmount > 0) {
+            } else if (hasCredit && netAmount > 0) {
                 updated[rowIndex].credit = parseFloat(netAmount.toFixed(2));
                 updated[rowIndex].debit = null;
-            }
-            // Auto-set debit if both are empty
-            else if (!hasDebit && !hasCredit && netAmount > 0) {
+            } else if (!hasDebit && !hasCredit && netAmount > 0) {
                 updated[rowIndex].debit = parseFloat(netAmount.toFixed(2));
                 updated[rowIndex].credit = null;
             }
@@ -504,12 +462,9 @@ const HomeEntry = () => {
     };
 
     const updateTotals = () => {
-        // This will be called to update the footer totals
-        // The totals are calculated in the render
     };
 
     const addNewRow = useCallback(async () => {
-        // Close all open dropdowns by simulating click outside
         document.dispatchEvent(new MouseEvent('mousedown', {
             bubbles: true,
             cancelable: true,
@@ -535,7 +490,6 @@ const HomeEntry = () => {
             totalAmount: 0
         }]);
 
-        // Load categories for the new row if project is selected
         if (selectedProjectId) {
             const categories = await loadCategories(selectedProjectId, newIndex);
             setRowCategories(prev => ({
@@ -544,24 +498,18 @@ const HomeEntry = () => {
             }));
         }
 
-        // Focus on the category input of the new row after it's rendered
         setTimeout(() => {
             const table = document.querySelector('table tbody');
             if (table) {
                 const rows = table.querySelectorAll('tr');
                 if (rows[newIndex]) {
-                    // Scroll the new row into view
                     rows[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-                    // Find the category SearchableSelect input in the new row (first td, first input)
                     const firstTd = rows[newIndex].querySelector('td:first-child');
                     if (firstTd) {
                         const categoryInput = firstTd.querySelector('input.select-search');
                         if (categoryInput) {
-                            // Small delay to ensure the input is fully rendered
                             setTimeout(() => {
                                 categoryInput.focus();
-                                // Trigger focus event to open dropdown if categories are available
                                 categoryInput.dispatchEvent(new Event('focus', { bubbles: true }));
                             }, 50);
                         }
@@ -571,7 +519,6 @@ const HomeEntry = () => {
         }, 100);
     }, [selectedProjectId, entries.length]);
 
-    // Add keyboard shortcut for Alt+N to add new row
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.altKey && e.key.toLowerCase() === 'n') {
@@ -588,39 +535,30 @@ const HomeEntry = () => {
 
     const removeRow = (index) => {
         if (entries.length > 1) {
-            // Remove the entry
             setEntries(prev => prev.filter((_, i) => i !== index));
 
-            // Remap rowCategories: shift all indices after the removed index down by 1
             setRowCategories(prev => {
                 const updated = {};
                 Object.keys(prev).forEach(key => {
                     const oldIndex = parseInt(key);
                     if (oldIndex < index) {
-                        // Keep indices before the removed row as-is
                         updated[oldIndex] = prev[oldIndex];
                     } else if (oldIndex > index) {
-                        // Shift indices after the removed row down by 1
                         updated[oldIndex - 1] = prev[oldIndex];
                     }
-                    // Skip the removed index
                 });
                 return updated;
             });
 
-            // Remap rowAccounts: shift all indices after the removed index down by 1
             setRowAccounts(prev => {
                 const updated = {};
                 Object.keys(prev).forEach(key => {
                     const oldIndex = parseInt(key);
                     if (oldIndex < index) {
-                        // Keep indices before the removed row as-is
                         updated[oldIndex] = prev[oldIndex];
                     } else if (oldIndex > index) {
-                        // Shift indices after the removed row down by 1
                         updated[oldIndex - 1] = prev[oldIndex];
                     }
-                    // Skip the removed index
                 });
                 return updated;
             });
@@ -709,10 +647,12 @@ const HomeEntry = () => {
     const handleSubmit = async (e, action = 'submit') => {
         e.preventDefault();
 
-        // Prevent duplicate submissions
-        if (isSubmittingRef.current) return;
-        isSubmittingRef.current = true;
+        if (isSubmitting || loading || isSubmittingRef.current) {
+            return;
+        }
 
+        isSubmittingRef.current = true;
+        setIsSubmitting(true);
         setError('');
         setSuccess('');
         setValidationErrors([]);
@@ -721,6 +661,7 @@ const HomeEntry = () => {
         if (errors.length > 0) {
             setValidationErrors(errors);
             isSubmittingRef.current = false;
+            setIsSubmitting(false);
             return;
         }
 
@@ -763,24 +704,27 @@ const HomeEntry = () => {
             const response = await apiClient.post(`/HomeApi/entry?${params.toString()}`, model);
 
             if (response.data.success) {
-                setSuccess(response.data.message);
-                if (response.data.message) {
-                    localStorage.setItem(LAST_JV_MESSAGE_KEY, response.data.message);
-                }
+                const successMessage = response.data.message || (isEditMode ? 'Journal voucher updated successfully' : 'Journal entry created successfully');
+                setSuccess(successMessage);
+                localStorage.setItem(LAST_JV_MESSAGE_KEY, successMessage);
+
                 if (response.data.shouldPrint && response.data.voucherId) {
-                    // Use the new print voucher route
                     const printUrl = `/reporting/print-voucher?voucherId=${response.data.voucherId}&type=JV`;
                     window.open(printUrl, '_blank');
                 }
+
                 const projectIdFromResponse = response.data.projectId || model.projectId;
                 if (projectIdFromResponse) {
                     localStorage.setItem(LAST_PROJECT_STORAGE_KEY, projectIdFromResponse.toString());
                     setSelectedProjectId(projectIdFromResponse);
                 }
-                // Reset form or navigate
-                if (!isEditMode) {
-                    // Keep submission blocked until form resets
-                    setTimeout(() => {
+
+                setLoading(false);
+
+                setTimeout(() => {
+                    if (isEditMode) {
+                        window.location.href = '/home/entry';
+                    } else {
                         setEntries([{
                             categoryId: null,
                             accountId: null,
@@ -798,48 +742,40 @@ const HomeEntry = () => {
                             dataPkg: null,
                             totalAmount: 0
                         }]);
-                        // Keep selected project (persisted)
                         setBookerId(bookers.length > 0 ? bookers[0].id : null);
                         setEntryDate(new Date().toISOString().split('T')[0]);
                         setCreditDays(0);
                         setSuccess('');
-                        setLoading(false);
-                        isSubmittingRef.current = false;
-                    }, 2000);
-                } else {
-                    // Edit mode - allow new submissions
-                    setLoading(false);
-                    isSubmittingRef.current = false;
-                }
+                    }
+                }, 2000);
             } else {
-                // Request succeeded but response indicated failure
+                setError(response.data.message || 'Failed to save entries');
                 setLoading(false);
                 isSubmittingRef.current = false;
+                setIsSubmitting(false);
             }
         } catch (error) {
             setError(error.response?.data?.message || 'Failed to save entries');
             setLoading(false);
             isSubmittingRef.current = false;
+            setIsSubmitting(false);
         }
-    };
+    };  
 
-    // Calculate totals
     const totalDebit = entries.reduce((sum, entry) => sum + (parseFloat(entry.debit) || 0), 0);
     const totalCredit = entries.reduce((sum, entry) => sum + (parseFloat(entry.credit) || 0), 0);
     const totalBalance = totalDebit - totalCredit;
 
-    // Check if base voucher checkbox should be shown
     const accountEntriesCount = entries.filter(e => e.accountGroup === 'account').length;
     const productEntriesCount = entries.filter(e => e.accountGroup === 'product').length;
     const showBaseVoucherCheckbox = accountEntriesCount === 1 && productEntriesCount >= 1;
 
-    // Check if save recipe checkbox should be shown
     const allEntriesAreProducts = entries.every(e => !e.accountGroup || e.accountGroup === 'product');
     const hasAtLeastOneProduct = productEntriesCount > 0;
     const showSaveRecipeCheckbox = entries.length >= 2 && allEntriesAreProducts && hasAtLeastOneProduct;
 
     return (
-        <div>
+        <div className="container-fluid">
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>
                     <i className={`fas fa-${isEditMode ? 'edit' : 'book-open'} me-2`}></i>
@@ -881,7 +817,6 @@ const HomeEntry = () => {
             )}
 
             <form onSubmit={(e) => handleSubmit(e, 'submit')}>
-                {/* Entry Details Card */}
                 <Card className="shadow mb-3">
                     <Card.Header className="py-2">
                         <h6 className="m-0 font-weight-bold text-primary">
@@ -921,7 +856,6 @@ const HomeEntry = () => {
                     </Card.Body>
                 </Card>
 
-                {/* Journal Entries Card */}
                 <Card className="shadow mb-3">
                     <Card.Header className="py-2 d-flex justify-content-between align-items-center">
                         <h6 className="m-0 font-weight-bold text-primary">
@@ -1181,7 +1115,7 @@ const HomeEntry = () => {
                                                                 const newValue = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].debit : parseFloat(inputValue));
                                                                 updated[index].debit = newValue;
                                                                 if (newValue) {
-                                                                    updated[index].credit = null; // Clear credit when debit is set
+                                                                    updated[index].credit = null;
                                                                 }
                                                                 return updated;
                                                             });
@@ -1210,13 +1144,10 @@ const HomeEntry = () => {
                                                         }}
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Tab' && !e.shiftKey) {
-                                                                // Get current input value (may be cleared)
                                                                 const inputValue = e.target.value;
                                                                 const isEmpty = !inputValue || inputValue.trim() === '' || parseFloat(inputValue) === 0;
 
-                                                                // If debit field is empty/cleared and credit is also empty, calculate and place in credit
                                                                 if (isEmpty && (!entry.credit || entry.credit === 0)) {
-                                                                    // Calculate net amount
                                                                     const qty = parseFloat(entry.qty) || 0;
                                                                     const rate = parseFloat(entry.rate) || 0;
                                                                     const rbp = entry.rbp === 'Y';
@@ -1242,12 +1173,10 @@ const HomeEntry = () => {
                                                                             return updated;
                                                                         });
                                                                         updateTotals();
-                                                                        // Focus on credit field after state update
                                                                         setTimeout(() => {
                                                                             const row = e.target.closest('tr');
                                                                             if (row) {
                                                                                 const inputs = row.querySelectorAll('input[type="number"]');
-                                                                                // Credit input is typically the last numeric input before the delete button
                                                                                 const creditInput = inputs[inputs.length - 1];
                                                                                 if (creditInput) {
                                                                                     creditInput.focus();
@@ -1276,7 +1205,7 @@ const HomeEntry = () => {
                                                                 const newValue = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].credit : parseFloat(inputValue));
                                                                 updated[index].credit = newValue;
                                                                 if (newValue) {
-                                                                    updated[index].debit = null; // Clear debit when credit is set
+                                                                    updated[index].debit = null;
                                                                 }
                                                                 return updated;
                                                             });
@@ -1305,13 +1234,10 @@ const HomeEntry = () => {
                                                         }}
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Tab' && !e.shiftKey) {
-                                                                // Get current input value (may be cleared)
                                                                 const inputValue = e.target.value;
                                                                 const isEmpty = !inputValue || inputValue.trim() === '' || parseFloat(inputValue) === 0;
 
-                                                                // If credit field is empty/cleared and debit is also empty, calculate and place in debit
                                                                 if (isEmpty && (!entry.debit || entry.debit === 0)) {
-                                                                    // Calculate net amount
                                                                     const qty = parseFloat(entry.qty) || 0;
                                                                     const rate = parseFloat(entry.rate) || 0;
                                                                     const rbp = entry.rbp === 'Y';
@@ -1337,7 +1263,6 @@ const HomeEntry = () => {
                                                                             return updated;
                                                                         });
                                                                         updateTotals();
-                                                                        // Focus will move to next field naturally after state update
                                                                     }
                                                                 }
                                                             }
@@ -1377,7 +1302,6 @@ const HomeEntry = () => {
                     </Card.Body>
                 </Card>
 
-                {/* Additional Details Card */}
                 <Card className="shadow mb-3">
                     <Card.Header className="py-2">
                         <h6 className="m-0 font-weight-bold text-primary">
@@ -1429,7 +1353,6 @@ const HomeEntry = () => {
                             </div>
                         </div>
 
-                        {/* Require Quantity Checkbox */}
                         <div className="row mt-3">
                             <div className="col-12">
                                 <Form.Check
@@ -1451,7 +1374,6 @@ const HomeEntry = () => {
                             </div>
                         </div>
 
-                        {/* Base Voucher Checkbox */}
                         {showBaseVoucherCheckbox && (
                             <div className="row mt-2">
                                 <div className="col-12">
@@ -1475,7 +1397,6 @@ const HomeEntry = () => {
                             </div>
                         )}
 
-                        {/* Save Recipe Checkbox */}
                         {showSaveRecipeCheckbox && (
                             <div className="row mt-2">
                                 <div className="col-12">
@@ -1499,7 +1420,6 @@ const HomeEntry = () => {
                             </div>
                         )}
 
-                        {/* Recipe Name Input */}
                         {saveAsRecipe && (
                             <div className="row mt-3">
                                 <div className="col-md-6">
@@ -1520,7 +1440,6 @@ const HomeEntry = () => {
                     </Card.Body>
                 </Card>
 
-                {/* Form Actions */}
                 <div className="d-flex justify-content-between mb-3">
                     <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
                         <i className="fas fa-arrow-left me-1"></i> Back
@@ -1530,7 +1449,7 @@ const HomeEntry = () => {
                             variant="primary"
                             type="button"
                             onClick={(e) => handleSubmit(e, 'submit')}
-                            disabled={loading || !hasBookers || !bookerId}
+                            disabled={loading || isSubmitting || !hasBookers || !bookerId}
                             className="me-2"
                         >
                             {loading ? (
@@ -1549,7 +1468,7 @@ const HomeEntry = () => {
                             variant="success"
                             type="button"
                             onClick={(e) => handleSubmit(e, 'submit_print')}
-                            disabled={loading || !hasBookers || !bookerId}
+                            disabled={loading || isSubmitting || !hasBookers || !bookerId}
                         >
                             <i className="fas fa-print me-1"></i>
                             {isEditMode ? 'Update and Print' : 'Submit and Print'}

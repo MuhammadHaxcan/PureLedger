@@ -143,8 +143,8 @@
 }
 
 #masterReportTable .description-column {
-    width: 240px;
-    min-width: 190px;
+    width: 210px;
+    min-width: 170px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal !important;

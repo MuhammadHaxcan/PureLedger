@@ -56,7 +56,17 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, vouchers = new List<object>() });
                 }
 
-                ApplyDefaultDatesIfNeeded(filter);
+                if (filter.SinceDate == null && !string.IsNullOrEmpty(Request.Query["SinceDate"].ToString()))
+                {
+                    if (DateOnly.TryParse(Request.Query["SinceDate"], out DateOnly sinceDate))
+                        filter.SinceDate = sinceDate;
+                }
+
+                if (filter.ToDate == null && !string.IsNullOrEmpty(Request.Query["ToDate"].ToString()))
+                {
+                    if (DateOnly.TryParse(Request.Query["ToDate"], out DateOnly toDate))
+                        filter.ToDate = toDate;
+                }
 
                 var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
                     filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
@@ -245,7 +255,8 @@ namespace PureLedger.Controllers.Api
                     data = new
                     {
                         deliveryChallanId = dcEntry.DeliveryChallanVoucherId,
-                        dcEntryId = dcEntry.DeliveryChallanEntryId
+                        dcEntryId = dcEntry.DeliveryChallanEntryId,
+                        journalVoucherId = dcEntry.DeliveryChallanVoucher.JournalVoucherId
                     }
                 });
             }
@@ -290,6 +301,7 @@ namespace PureLedger.Controllers.Api
                     data = new
                     {
                         deliveryChallanId,
+                        journalVoucherId = model.JournalVoucherId,
                         results = results.Select(r => new
                         {
                             r.EntryId,
@@ -329,7 +341,8 @@ namespace PureLedger.Controllers.Api
                     message = "Cartage and delivery challan processed successfully",
                     data = new
                     {
-                        deliveryChallanId = deliveryChallan.DeliveryChallanVoucherId
+                        deliveryChallanId = deliveryChallan.DeliveryChallanVoucherId,
+                        journalVoucherId = deliveryChallan.JournalVoucherId
                     }
                 });
             }
@@ -363,12 +376,6 @@ namespace PureLedger.Controllers.Api
         private static bool IsValidProjectSelection(int? projectId)
         {
             return projectId.HasValue && projectId.Value > 0;
-        }
-
-        private static void ApplyDefaultDatesIfNeeded(DeliveryChallanFilterViewModel filter)
-        {
-            filter.SinceDate ??= DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30));
-            filter.ToDate ??= DateOnly.FromDateTime(DateTime.UtcNow);
         }
 
         #endregion

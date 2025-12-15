@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using PureLedger.Services.Interface;
+using PureLedger.Services.Auth;
 using System.Security.Claims;
 
 namespace PureLedger.Attributes

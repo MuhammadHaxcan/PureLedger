@@ -31,9 +31,14 @@ const Categories = () => {
     loadAccountTypes();
   }, []);
 
-  // Reload categories when filter changes
+  // Load categories only when a project is selected
   useEffect(() => {
-    loadCategories();
+    if (filterProjectId) {
+      loadCategories();
+    } else {
+      // Clear categories when no project is selected
+      setCategories([]);
+    }
   }, [filterProjectId]);
 
   // Load projects for dropdown
@@ -62,12 +67,17 @@ const Categories = () => {
     }
   };
 
-  // Load categories list
+  // Load categories list - only called when project is selected
   const loadCategories = async () => {
+    if (!filterProjectId) {
+      setCategories([]);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
-      const params = filterProjectId ? { projectId: filterProjectId } : {};
+      const params = { projectId: filterProjectId };
       const response = await apiClient.get('/MetaDataApi/categories', { params });
       if (response.data.success) {
         setCategories(response.data.data);
@@ -297,7 +307,7 @@ const Categories = () => {
   };
 
   return (
-    <div>
+    <div className="container-fluid">
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>
@@ -368,11 +378,18 @@ const Categories = () => {
                 </tr>
               </thead>
               <tbody>
-                {categories.length === 0 ? (
+                {!filterProjectId ? (
+                  <tr>
+                    <td colSpan="5" className="text-center text-muted py-4">
+                      <i className="fas fa-filter fa-2x mb-2 d-block"></i>
+                      Please select a project to view categories.
+                    </td>
+                  </tr>
+                ) : categories.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="text-center text-muted py-4">
                       <i className="fas fa-inbox fa-2x mb-2 d-block"></i>
-                      No categories found{filterProjectId ? ' for the selected project' : ''}.
+                      No categories found for the selected project.
                     </td>
                   </tr>
                 ) : (

@@ -1,33 +1,62 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Container, Card, Form, Button, Alert, InputGroup } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 const Login = () => {
   usePageTitle('Login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { showError } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Load remembered username on mount
+  useEffect(() => {
+    const rememberedUsername = localStorage.getItem('rememberedUsername');
+    if (rememberedUsername) {
+      setUsername(rememberedUsername);
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Check for session expired parameter on mount
+  useEffect(() => {
+    const sessionExpired = searchParams.get('sessionExpired');
+    if (sessionExpired) {
+      showError('Your session has expired due to inactivity. Please log in again.', {
+        autoClose: 8000,
+        toastId: 'session-expired-login',
+      });
+    }
+  }, [searchParams, showError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
     const result = await login(username, password);
     setLoading(false);
 
     if (result.success) {
+      // Handle remember me functionality
+      if (rememberMe) {
+        localStorage.setItem('rememberedUsername', username);
+      } else {
+        localStorage.removeItem('rememberedUsername');
+      }
+
       // Redirect to the first accessible route or default
       const redirectTo = result.redirectTo || '/';
       navigate(redirectTo);
     } else {
-      setError(result.message || 'Invalid username or password');
+      showError(result.message || 'Invalid username or password');
     }
   };
 
@@ -39,11 +68,6 @@ const Login = () => {
             <i className="fas fa-book-open me-2"></i>PureLedger
           </Card.Title>
           <Form onSubmit={handleSubmit}>
-            {error && (
-              <Alert variant="danger" dismissible onClose={() => setError('')}>
-                {error}
-              </Alert>
-            )}
             <Form.Group className="mb-3">
               <Form.Label>Username</Form.Label>
               <Form.Control
@@ -57,13 +81,22 @@ const Login = () => {
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Password</Form.Label>
-              <Form.Control
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <InputGroup>
+                <Form.Control
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ borderLeft: 'none' }}
+                >
+                  <i className={showPassword ? "fas fa-eye-slash" : "fas fa-eye"}></i>
+                </Button>
+              </InputGroup>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Check

@@ -25,7 +25,9 @@ namespace PureLedger.Data
         // Authentication tables
         public DbSet<User> Users { get; set; }
         public DbSet<UserProject> UserProjects { get; set; }
+        public DbSet<UserCategory> UserCategories { get; set; }
         public DbSet<UserControllerAccess> UserControllerAccess { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<ProjectCartageSettings> ProjectCartageSettings { get; set; }
         public DbSet<MissedEntry> MissedEntries { get; set; }
 
@@ -134,6 +136,25 @@ namespace PureLedger.Data
                 .HasForeignKey(uca => uca.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<UserCategory>()
+                .HasOne(uc => uc.User)
+                .WithMany(u => u.UserCategories)
+                .HasForeignKey(uc => uc.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserCategory>()
+                .HasOne(uc => uc.Category)
+                .WithMany()
+                .HasForeignKey(uc => uc.CategoryId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // RefreshToken relationships
+            modelBuilder.Entity<RefreshToken>()
+                .HasOne(rt => rt.User)
+                .WithMany()
+                .HasForeignKey(rt => rt.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             // Seed AccountType data
             modelBuilder.Entity<AccountType>().HasData(
                 new AccountType { AccountTypeId = 1, AccountTypeName = "Assets" },
@@ -164,13 +185,14 @@ namespace PureLedger.Data
                 
             // Seed default admin user (password: admin123)
             modelBuilder.Entity<User>().HasData(
-                new User { 
-                    UserId = 1, 
+                new User {
+                    UserId = 1,
                     Username = "admin",
                     PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa", // Pre-generated hash for "admin123"
+                    SecurityStamp = "d4ff2fc7-6913-4fe8-a501-66ddd274aa8d", // Fixed GUID for seed data
                     FullName = "System Administrator",
                     Email = "admin@example.com",
-                    IsAdmin = true, 
+                    IsAdmin = true,
                     Subroute = "Default",
                     IsActive = true,
                     CreatedDate = new DateTime(2023, 1, 1, 0, 0, 0, DateTimeKind.Utc) // Fixed date
@@ -305,6 +327,16 @@ namespace PureLedger.Data
             modelBuilder.Entity<JournalVoucherReference>()
                 .HasIndex(r => new { r.MainVoucherId, r.ReferenceType })
                 .HasDatabaseName("IX_JournalVoucherReferences_MainVoucherId_ReferenceType");
+
+            // RefreshToken indexes
+            modelBuilder.Entity<RefreshToken>()
+                .HasIndex(rt => rt.Token)
+                .IsUnique()
+                .HasDatabaseName("IX_RefreshTokens_Token");
+
+            modelBuilder.Entity<RefreshToken>()
+                .HasIndex(rt => new { rt.UserId, rt.IsRevoked, rt.ExpiryDate })
+                .HasDatabaseName("IX_RefreshTokens_UserId_IsRevoked_ExpiryDate");
         }
     }
 }

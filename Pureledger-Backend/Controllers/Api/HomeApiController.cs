@@ -828,14 +828,14 @@ namespace PureLedger.Controllers.Api
             try
             {
                 var cacheKey = CacheKeys.CategoriesByProject(projectId);
-                
+
                 if (!_cache.TryGetValue(cacheKey, out object? cachedResult))
                 {
                     var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
-                    if (categories == null || !categories.Any())
-                    {
-                        return Ok(new { success = true, data = Array.Empty<object>() });
-                    }
+                if (categories == null || !categories.Any())
+                {
+                    return Ok(new { success = true, data = Array.Empty<object>() });
+                }
 
                     cachedResult = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }).ToList();
                     

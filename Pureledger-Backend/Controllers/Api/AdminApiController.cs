@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using PureLedger.Models;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels;
-using System.Security.Claims;
 using System.IO;
+using IAuthService = PureLedger.Services.Auth.IAuthService;
 
 namespace PureLedger.Controllers.Api
 {
@@ -15,6 +15,7 @@ namespace PureLedger.Controllers.Api
     public class AdminApiController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly ICurrentUserService _currentUserService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AdminApiController> _logger;
 
@@ -29,12 +30,14 @@ namespace PureLedger.Controllers.Api
 
         public AdminApiController(
             IAuthService authService,
+            ICurrentUserService currentUserService,
             IHttpContextAccessor httpContextAccessor,
             ILogger<AdminApiController> logger)
         {
-            _authService = authService;
-            _httpContextAccessor = httpContextAccessor;
-            _logger = logger;
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
+            _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
+            _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         [HttpGet("users")]
@@ -70,10 +73,14 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+                var currentUserId = _currentUserService.GetCurrentUserId();
+                if (!currentUserId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
 
                 // If trying to get self, return profile data
-                if (id == currentUserId)
+                if (id == currentUserId.Value)
                 {
                     var user = await _authService.GetUserByIdAsync(id);
                     if (user == null)
@@ -106,18 +113,30 @@ namespace PureLedger.Controllers.Api
                 var userProjects = await _authService.GetUserProjectsAsync(targetUser.UserId);
                 var controllerAccess = await _authService.GetUserControllerAccessAsync(targetUser.UserId);
                 var actionAccess = await _authService.GetUserActionAccessAsync(targetUser.UserId);
+                var hiddenCategoryIds = await _authService.GetUserHiddenCategoriesAsync(targetUser.UserId);
 
                 var accessPermissions = new List<string>();
-                accessPermissions.AddRange(controllerAccess);
-                foreach (var controllerActionPair in actionAccess)
+                accessPermissions.AddRange(controllerAccess ?? new List<string>());
+                if (actionAccess != null)
                 {
-                    foreach (var action in controllerActionPair.Value)
+                    foreach (var controllerActionPair in actionAccess)
                     {
-                        accessPermissions.Add($"{controllerActionPair.Key}|{action}");
+                        foreach (var action in controllerActionPair.Value ?? new List<string>())
+                        {
+                            accessPermissions.Add($"{controllerActionPair.Key}|{action}");
+                        }
                     }
                 }
 
-                var allProjects = await _authService.GetUserProjectsAsync(currentUserId);
+                var allProjects = await _authService.GetUserProjectsAsync(currentUserId.Value);
+                var allCategories = await _authService.GetAllCategoriesAsync();
+
+                // Materialize queries to ensure they're lists
+                var projectList = allProjects.Select(p => new { id = p.ProjectId, name = p.ProjectName }).ToList();
+                var categoryList = allCategories
+                    .Where(c => allProjects.Any(p => p.ProjectId == c.ProjectId))
+                    .Select(c => new { id = c.CategoryId, name = c.CategoryName, projectId = c.ProjectId })
+                    .ToList();
 
                 return Ok(new
                 {
@@ -131,9 +150,11 @@ namespace PureLedger.Controllers.Api
                         targetUser.IsAdmin,
                         targetUser.IsActive,
                         ProjectIds = userProjects.Select(p => p.ProjectId).ToList(),
+                        HiddenCategoryIds = hiddenCategoryIds,
                         AccessPermissions = accessPermissions
                     },
-                    projects = allProjects.Select(p => new { id = p.ProjectId, name = p.ProjectName }),
+                    projects = projectList,
+                    categories = categoryList,
                     controllerActions = _controllerActions
                 });
             }
@@ -166,6 +187,12 @@ namespace PureLedger.Controllers.Api
                     model.ProjectIds = new List<int>();
                 }
 
+                // Ensure HiddenCategoryIds is properly set (even if empty array)
+                if (model.HiddenCategoryIds == null)
+                {
+                    model.HiddenCategoryIds = new List<int>();
+                }
+
                 // For new users, password is required
                 if (model.UserId == 0 && string.IsNullOrWhiteSpace(model.Password))
                 {
@@ -190,7 +217,11 @@ namespace PureLedger.Controllers.Api
                     });
                 }
 
-                var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+                var currentUserId = _currentUserService.GetCurrentUserId();
+                if (!currentUserId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
 
                 _logger.LogInformation("Creating user with {PermissionCount} permissions and {ProjectCount} projects", 
                     model.AccessPermissions?.Count ?? 0, model.ProjectIds?.Count ?? 0);
@@ -225,10 +256,14 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, message = "User ID mismatch" });
                 }
 
-                var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+                var currentUserId = _currentUserService.GetCurrentUserId();
+                if (!currentUserId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
 
                 // Prevent self-modification of admin status
-                if (id == currentUserId)
+                if (id == currentUserId.Value)
                 {
                     model.IsAdmin = User.IsInRole("Admin"); // Preserve current admin status
                 }
@@ -260,6 +295,12 @@ namespace PureLedger.Controllers.Api
                 if (model.ProjectIds == null)
                 {
                     model.ProjectIds = new List<int>();
+                }
+
+                // Ensure HiddenCategoryIds is properly set (even if empty array)
+                if (model.HiddenCategoryIds == null)
+                {
+                    model.HiddenCategoryIds = new List<int>();
                 }
 
                 if (!ModelState.IsValid)
@@ -302,10 +343,14 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+                var currentUserId = _currentUserService.GetCurrentUserId();
+                if (!currentUserId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
 
                 // Prevent self-deletion
-                if (id == currentUserId)
+                if (id == currentUserId.Value)
                 {
                     return BadRequest(new { success = false, message = "You cannot delete your own account" });
                 }
@@ -600,18 +645,73 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
-                var projects = await _authService.GetUserProjectsAsync(currentUserId);
+                var currentUserId = _currentUserService.GetCurrentUserId();
+                if (!currentUserId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+
+                // Admin users should see all projects, regular users see only assigned projects
+                List<Project> projects;
+                if (User.IsInRole("Admin"))
+                {
+                    projects = await _authService.GetAllProjectsAsync();
+                }
+                else
+                {
+                    projects = await _authService.GetUserProjectsAsync(currentUserId.Value);
+                }
+
+                // Materialize the query to ensure it's a list
+                var projectList = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }).ToList();
+
                 return Ok(new
                 {
                     success = true,
-                    data = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName })
+                    data = projectList
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading projects");
                 return StatusCode(500, new { success = false, message = "Error loading projects" });
+            }
+        }
+
+        [HttpGet("categories")]
+        public async Task<IActionResult> GetCategories()
+        {
+            try
+            {
+                var currentUserId = _currentUserService.GetCurrentUserId();
+                if (!currentUserId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+                var projects = await _authService.GetUserProjectsAsync(currentUserId.Value);
+                var allCategories = await _authService.GetAllCategoriesAsync();
+                
+                // Filter categories to only show those from accessible projects
+                var projectIds = projects.Select(p => p.ProjectId).ToList();
+                var filteredCategories = allCategories
+                    .Where(c => projectIds.Contains(c.ProjectId))
+                    .Select(c => new { 
+                        id = c.CategoryId, 
+                        name = c.CategoryName, 
+                        projectId = c.ProjectId 
+                    })
+                    .ToList();
+                
+                return Ok(new
+                {
+                    success = true,
+                    data = filteredCategories
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading categories");
+                return StatusCode(500, new { success = false, message = "Error loading categories" });
             }
         }
 

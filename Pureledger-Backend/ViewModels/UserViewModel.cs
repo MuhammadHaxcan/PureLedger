@@ -39,6 +39,9 @@ namespace PureLedger.ViewModels
 
         public List<int> ProjectIds { get; set; } = new List<int>();
         
+        // Categories to hide from this user (blacklist approach)
+        public List<int> HiddenCategoryIds { get; set; } = new List<int>();
+        
         // Simplified access control - store controller-action pairs together
         // Format: "Controller" for controller-level access, "Controller|Action" for action-level access
         public List<string> AccessPermissions { get; set; } = new List<string>();

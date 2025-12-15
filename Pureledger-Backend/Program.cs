@@ -11,6 +11,7 @@ using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
+using PureLedger.Services.Auth;
 using ICacheInvalidationService = PureLedger.Services.ICacheInvalidationService;
 using CacheInvalidationService = PureLedger.Services.CacheInvalidationService;
 using PureLedger.Middleware;
@@ -178,9 +179,8 @@ builder.Services.AddDbContext<LedgerDbContext>(options =>
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
-builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<PureLedger.Services.Auth.IAuthService, PureLedger.Services.Auth.AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
-builder.Services.AddScoped<IJwtService, JwtService>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
@@ -229,8 +229,11 @@ app.UseCors("AllowReactApp");
 
 app.UseRouting();
 
-// Add authentication - IMPORTANT: order matters here
-app.UseAuthentication(); // Must come before UseAuthorization
+// Add authentication - IMPORTANT: Must come before SecurityMiddleware
+app.UseAuthentication(); // Validates JWT and populates context.User
+
+app.UseSecurity();
+
 app.UseAuthorization();
 
 app.MapControllers();

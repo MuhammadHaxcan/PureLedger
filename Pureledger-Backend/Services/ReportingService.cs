@@ -755,6 +755,19 @@ namespace PureLedger.Services
                     totalMargin += margin;
                 }
 
+                if (request.ExcludeNilProducts)
+                {
+                    productSummaries = productSummaries.Where(p => p.QtyBalance != 0).ToList();
+                    
+                    // Recalculate totals from filtered products
+                    totalDebit = productSummaries.Sum(p => p.TotalDebit);
+                    totalCredit = productSummaries.Sum(p => p.TotalCredit);
+                    totalDebitQty = productSummaries.Sum(p => p.TotalDebitQty);
+                    totalCreditQty = productSummaries.Sum(p => p.TotalCreditQty);
+                    totalCOGS = productSummaries.Sum(p => p.COGS);
+                    totalMargin = productSummaries.Sum(p => p.Margin);
+                }
+
                 decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
 
                 var viewModel = new ProductReportViewModel
@@ -771,10 +784,10 @@ namespace PureLedger.Services
                         TotalMargin = totalMargin,
                         MarginPercentage = totalMarginPercentage
                     },
-                    TotalRecords = totalCount,
+                    TotalRecords = request.ExcludeNilProducts ? productSummaries.Count : totalCount,
                     Page = page,
                     PageSize = pageSize,
-                    HasMoreData = (page + 1) * pageSize < totalCount
+                    HasMoreData = request.ExcludeNilProducts ? false : (page + 1) * pageSize < totalCount
                 };
 
                 return viewModel;

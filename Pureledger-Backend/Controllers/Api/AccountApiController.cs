@@ -1,7 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PureLedger.Services.Interface;
+using PureLedger.Services.Auth;
 using PureLedger.ViewModels;
+using LoginViewModel = PureLedger.ViewModels.Auth.LoginViewModel;
+using LogoutViewModel = PureLedger.ViewModels.Auth.LogoutViewModel;
+using RefreshTokenViewModel = PureLedger.ViewModels.Auth.RefreshTokenViewModel;
+using RevokeTokenViewModel = PureLedger.ViewModels.Auth.RevokeTokenViewModel;
 
 namespace PureLedger.Controllers.Api
 {
@@ -10,18 +14,15 @@ namespace PureLedger.Controllers.Api
     public class AccountApiController : ControllerBase
     {
         private readonly IAuthService _authService;
-        private readonly IJwtService _jwtService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AccountApiController> _logger;
 
         public AccountApiController(
             IAuthService authService,
-            IJwtService jwtService,
             IHttpContextAccessor httpContextAccessor,
             ILogger<AccountApiController> logger)
         {
             _authService = authService;
-            _jwtService = jwtService;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
         }
@@ -29,7 +30,7 @@ namespace PureLedger.Controllers.Api
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginViewModel model)
-        {
+         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(new { success = false, message = "Invalid input", errors = ModelState });
@@ -50,21 +51,30 @@ namespace PureLedger.Controllers.Api
                 return Unauthorized(new { success = false, message = "User not found" });
             }
 
-            // Generate JWT token
-            var token = _jwtService.GenerateToken(
+            // Generate JWT access token
+            var accessToken = _authService.GenerateToken(
                 user.UserId,
                 user.Username,
                 user.FullName,
                 user.IsAdmin,
-                user.Subroute
+                user.Subroute,
+                user.SecurityStamp
             );
+
+            // Generate refresh token
+            var refreshToken = _authService.GenerateRefreshToken();
+            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
+            // Store refresh token in database
+            await _authService.CreateRefreshTokenAsync(user.UserId, refreshToken, ipAddress);
 
             _logger.LogInformation($"User {model.Username} logged in via API");
 
             return Ok(new
             {
                 success = true,
-                token,
+                token = accessToken,
+                refreshToken = refreshToken,
                 user = new
                 {
                     userId = user.UserId,
@@ -79,11 +89,28 @@ namespace PureLedger.Controllers.Api
 
         [HttpPost("logout")]
         [Authorize]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout([FromBody] LogoutViewModel model)
         {
-            // With JWT, logout is handled client-side by removing the token
-            // But we can still log the action
-            _logger.LogInformation($"User logged out via API");
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Unauthorized(new { success = false, message = "Invalid token" });
+            }
+
+            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
+            // Revoke the specific refresh token if provided
+            if (!string.IsNullOrEmpty(model?.RefreshToken))
+            {
+                await _authService.RevokeRefreshTokenAsync(model.RefreshToken, ipAddress);
+            }
+            else
+            {
+                // Revoke all user tokens if no specific token provided
+                await _authService.RevokeAllUserTokensAsync(userId, ipAddress);
+            }
+
+            _logger.LogInformation($"User {userId} logged out via API");
             return Ok(new { success = true, message = "Logged out successfully" });
         }
 
@@ -134,6 +161,98 @@ namespace PureLedger.Controllers.Api
                 controllers,
                 actions
             });
+        }
+
+        [HttpPost("refresh-token")]
+        [AllowAnonymous]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenViewModel model)
+        {
+            if (string.IsNullOrEmpty(model?.AccessToken) || string.IsNullOrEmpty(model?.RefreshToken))
+            {
+                return BadRequest(new { success = false, message = "Invalid token request" });
+            }
+
+            // Extract claims from expired access token
+            var principal = _authService.GetPrincipalFromExpiredToken(model.AccessToken);
+            if (principal == null)
+            {
+                return Unauthorized(new { success = false, message = "Invalid access token" });
+            }
+
+            var userIdClaim = principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Unauthorized(new { success = false, message = "Invalid token claims" });
+            }
+
+            // Validate refresh token
+            var isValidRefreshToken = await _authService.ValidateRefreshTokenAsync(model.RefreshToken);
+            if (!isValidRefreshToken)
+            {
+                return Unauthorized(new { success = false, message = "Invalid or expired refresh token" });
+            }
+
+            // Get user information
+            var user = await _authService.GetUserByIdAsync(userId);
+            if (user == null || !user.IsActive)
+            {
+                return Unauthorized(new { success = false, message = "User not found or inactive" });
+            }
+
+            // Generate new access token
+            var newAccessToken = _authService.GenerateToken(
+                user.UserId,
+                user.Username,
+                user.FullName,
+                user.IsAdmin,
+                user.Subroute,
+                user.SecurityStamp
+            );
+
+            // Generate new refresh token
+            var newRefreshToken = _authService.GenerateRefreshToken();
+            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
+            // Revoke old refresh token and create new one
+            await _authService.RevokeRefreshTokenAsync(model.RefreshToken, ipAddress);
+            await _authService.CreateRefreshTokenAsync(user.UserId, newRefreshToken, ipAddress);
+
+            _logger.LogInformation($"Token refreshed for user {user.Username}");
+
+            return Ok(new
+            {
+                success = true,
+                token = newAccessToken,
+                refreshToken = newRefreshToken
+            });
+        }
+
+        [HttpPost("revoke-token")]
+        [Authorize]
+        public async Task<IActionResult> RevokeToken([FromBody] RevokeTokenViewModel model)
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Unauthorized(new { success = false, message = "Invalid token" });
+            }
+
+            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
+
+            if (!string.IsNullOrEmpty(model?.RefreshToken))
+            {
+                var result = await _authService.RevokeRefreshTokenAsync(model.RefreshToken, ipAddress);
+                if (!result)
+                {
+                    return BadRequest(new { success = false, message = "Token not found or already revoked" });
+                }
+            }
+            else
+            {
+                await _authService.RevokeAllUserTokensAsync(userId, ipAddress);
+            }
+
+            return Ok(new { success = true, message = "Token revoked successfully" });
         }
 
         [HttpGet("navigation-menu")]

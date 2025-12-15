@@ -4,9 +4,7 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Papa from 'papaparse';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 
 const AccountReport = () => {
     usePageTitle('Account Report');
@@ -17,13 +15,13 @@ const AccountReport = () => {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
+    const [exportingCsv, setExportingCsv] = useState(false);
+    const [exportingPdf, setExportingPdf] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [formData, setFormData] = useState({
         projectId: null,
         categoryId: null,
-        accountId: null,
-        startDate: '',
-        endDate: ''
+        accountId: null
     });
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
@@ -91,7 +89,6 @@ const AccountReport = () => {
                 setCategories(response.data.data || []);
             }
         } catch (err) {
-            console.error('Error loading categories:', err);
         }
     };
 
@@ -102,7 +99,6 @@ const AccountReport = () => {
                 setAccounts(response.data.data || []);
             }
         } catch (err) {
-            console.error('Error loading accounts:', err);
         }
     };
 
@@ -128,8 +124,6 @@ const AccountReport = () => {
                 projectId: formData.projectId.toString(),
                 categoryId: formData.categoryId ? formData.categoryId.toString() : null,
                 accountId: formData.accountId ? formData.accountId.toString() : null,
-                startDate: formData.startDate || null,
-                endDate: formData.endDate || null,
                 page: page,
                 pageSize: pageSize
             };
@@ -196,113 +190,77 @@ const AccountReport = () => {
         credit: acc.credit + (entry.totalCredit || 0)
     }), { debit: 0, credit: 0 });
 
-    const handleExportCsv = () => {
-        const csvData = filteredEntries.map(entry => ({
-            ID: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
-            Category: entry.categoryName || '',
-            'Account Name': entry.accountName || '',
-            Debit: (entry.totalDebit || 0).toFixed(2),
-            Credit: (entry.totalCredit || 0).toFixed(2),
-            Balance: ((entry.totalDebit || 0) - (entry.totalCredit || 0)).toFixed(2)
-        }));
-
-        if (!csvData || csvData.length === 0) {
-            alert('No data to export');
-            return;
+    const handleExportCsv = async () => {
+        setExportingCsv(true);
+        try {
+            const csvData = filteredEntries.map(entry => ({
+                ID: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
+                Category: entry.categoryName || '',
+                'Account Name': entry.accountName || '',
+                Debit: (entry.totalDebit || 0).toFixed(2),
+                Credit: (entry.totalCredit || 0).toFixed(2),
+                Balance: ((entry.totalDebit || 0) - (entry.totalCredit || 0)).toFixed(2)
+            }));
+            await exportToCsvAsync(csvData, `AccountReport_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingCsv(false);
         }
-
-        const csvContent = Papa.unparse(csvData);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `AccountReport_${new Date().toISOString().split('T')[0]}.csv`;
-        link.click();
     };
 
-    const handleExportPdf = () => {
-        const doc = new jsPDF('portrait', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
-        const selectedCategory = categories.find(c => c.id === formData.categoryId);
+    const handleExportPdf = async () => {
+        setExportingPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
+            const selectedCategory = categories.find(c => c.id === formData.categoryId);
 
-        // Header
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Account Report', 14, 20);
-
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        if (selectedCategory) {
-            doc.text(`Category: ${selectedCategory.name}`, 14, 34);
-        }
-        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, selectedCategory ? 40 : 34);
-
-        const rows = filteredEntries.map(entry => {
-            const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
-            return {
-                id: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
-                category: entry.categoryName || '-',
-                account: entry.accountName || '-',
-                debit: formatCurrency(entry.totalDebit),
-                credit: formatCurrency(entry.totalCredit),
-                balance: formatCurrency(balance)
-            };
-        });
-
-        // Add totals row
-        rows.push({
-            id: '',
-            category: '',
-            account: 'TOTAL',
-            debit: formatCurrency(totals.debit),
-            credit: formatCurrency(totals.credit),
-            balance: formatCurrency(totals.debit - totals.credit)
-        });
-
-        const columns = [
-            { header: 'ID', dataKey: 'id' },
-            { header: 'Category', dataKey: 'category' },
-            { header: 'Account', dataKey: 'account' },
-            { header: 'Debit', dataKey: 'debit' },
-            { header: 'Credit', dataKey: 'credit' },
-            { header: 'Balance', dataKey: 'balance' }
-        ];
-
-        // Split rows into chunks per page
-        const rowsPerPage = 20;
-        let startY = selectedCategory ? 46 : 40;
-
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
-
-            const chunk = rows.slice(i, i + rowsPerPage);
-
-            autoTable(doc, {
-                columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 8 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+            const rows = filteredEntries.map(entry => {
+                const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
+                return {
+                    id: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
+                    category: entry.categoryName || '-',
+                    account: entry.accountName || '-',
+                    debit: formatCurrency(entry.totalDebit),
+                    credit: formatCurrency(entry.totalCredit),
+                    balance: formatCurrency(balance)
+                };
             });
-        }
 
-        // Add page numbers to all pages
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(
-                `PureLedger - Account Report | Page ${i} of ${pageCount}`,
-                14,
-                doc.internal.pageSize.height - 10
-            );
-        }
+            rows.push({
+                id: '',
+                category: '',
+                account: 'TOTAL',
+                debit: formatCurrency(totals.debit),
+                credit: formatCurrency(totals.credit),
+                balance: formatCurrency(totals.debit - totals.credit)
+            });
 
-        doc.save(`AccountReport_${new Date().toISOString().split('T')[0]}.pdf`);
+            const columns = [
+                { header: 'ID', dataKey: 'id' },
+                { header: 'Category', dataKey: 'category' },
+                { header: 'Account', dataKey: 'account' },
+                { header: 'Debit', dataKey: 'debit' },
+                { header: 'Credit', dataKey: 'credit' },
+                { header: 'Balance', dataKey: 'balance' }
+            ];
+
+            await generatePdfAsync({
+                orientation: 'portrait',
+                format: 'a4',
+                title: 'Account Report',
+                projectName: selectedProject?.name || 'All Projects',
+                subtitle: selectedCategory ? `Category: ${selectedCategory.name}` : null,
+                generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`,
+                columns,
+                rows,
+                rowsPerPage: 20,
+                startY: selectedCategory ? 46 : 40,
+                fontSize: 8,
+                cellPadding: 2,
+                filename: `AccountReport_${new Date().toISOString().split('T')[0]}.pdf`
+            });
+        } finally {
+            setExportingPdf(false);
+        }
     };
 
     const formatCurrency = (value) => {
@@ -419,11 +377,40 @@ const AccountReport = () => {
                             )}
                             {!hasMoreData && allEntries.length > 0 && (
                                 <>
-                                    <Button variant="outline-success" size="sm" onClick={handleExportCsv} className="me-2">
-                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                    <Button 
+                                        variant="outline-success" 
+                                        size="sm" 
+                                        onClick={handleExportCsv} 
+                                        className="me-2"
+                                        disabled={exportingCsv || exportingPdf}
+                                    >
+                                        {exportingCsv ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                                            </>
+                                        )}
                                     </Button>
-                                    <Button variant="outline-danger" size="sm" onClick={handleExportPdf}>
-                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                    <Button 
+                                        variant="outline-danger" 
+                                        size="sm" 
+                                        onClick={handleExportPdf}
+                                        disabled={exportingCsv || exportingPdf}
+                                    >
+                                        {exportingPdf ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Generating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                            </>
+                                        )}
                                     </Button>
                                 </>
                             )}

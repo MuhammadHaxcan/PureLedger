@@ -40,8 +40,6 @@ const PrintOnlyVoucher = () => {
             customerBalance: response.data.customerBalance,
             previousBalance: response.data.previousBalance
           };
-          console.log('Voucher data loaded:', voucherDataWithBalance);
-          console.log('Project Image:', voucherDataWithBalance.projectImage || voucherDataWithBalance.ProjectImage);
           setVoucherData(voucherDataWithBalance);
         } else {
           setError('Failed to load voucher');

@@ -669,7 +669,7 @@ const ProcessBaseVoucher = () => {
     }
 
     return (
-        <div className="container-fluid" style={{ maxWidth: '98%', width: '98%', paddingLeft: '1rem', paddingRight: '1rem' }}>
+        <div className="container-fluid">
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>
                     <i className="fas fa-cogs me-2"></i>Process Base Voucher JV-{voucherData.baseVoucherId}

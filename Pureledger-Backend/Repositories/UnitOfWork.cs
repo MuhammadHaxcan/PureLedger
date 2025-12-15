@@ -28,6 +28,8 @@ namespace PureLedger.Repositories
         private IUserRepository? _users;
         private IUserControllerAccessRepository? _userControllerAccess;
         private IUserProjectRepository? _userProjects;
+        private IUserCategoryRepository? _userCategories;
+        private IRefreshTokenRepository? _refreshTokens;
         private IProjectCartageSettingsRepository? _projectCartageSettings;
         private IMissedEntryRepository? _missedEntries;
         private IRecipeRepository? _recipes; // Changed to same pattern
@@ -59,6 +61,8 @@ namespace PureLedger.Repositories
         public IUserRepository Users => _users ??= new UserRepository(_dbContext);
         public IUserControllerAccessRepository UserControllerAccess => _userControllerAccess ??= new UserControllerAccessRepository(_dbContext);
         public IUserProjectRepository UserProjects => _userProjects ??= new UserProjectRepository(_dbContext);
+        public IUserCategoryRepository UserCategories => _userCategories ??= new UserCategoryRepository(_dbContext);
+        public IRefreshTokenRepository RefreshTokens => _refreshTokens ??= new RefreshTokenRepository(_dbContext);
         public IProjectCartageSettingsRepository ProjectCartageSettings => _projectCartageSettings ??= new ProjectCartageSettingsRepository(_dbContext);
         public IMissedEntryRepository MissedEntries => _missedEntries ??= new MissedEntryRepository(_dbContext);
         public IRecipeRepository Recipes => _recipes ??= new RecipeRepository(_dbContext);

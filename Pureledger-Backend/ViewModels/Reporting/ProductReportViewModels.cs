@@ -24,6 +24,7 @@ namespace PureLedger.ViewModels.Reporting
         public string? CategoryId { get; set; }
         public string? AccountId { get; set; }
         public string? LocationId { get; set; }
+        public bool ExcludeNilProducts { get; set; } = false;
         public int Page { get; set; } = 0;
         public int PageSize { get; set; } = 50;
     }

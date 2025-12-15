@@ -63,7 +63,7 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("MissedEntries");
+                    b.ToTable("MissedEntries", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.Account", b =>
@@ -98,7 +98,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("CategoryId", "IsEnabled")
                         .HasDatabaseName("IX_Accounts_CategoryId_IsEnabled");
 
-                    b.ToTable("Accounts");
+                    b.ToTable("Accounts", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.AccountData", b =>
@@ -137,7 +137,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("AccountId")
                         .IsUnique();
 
-                    b.ToTable("AccountDatas");
+                    b.ToTable("AccountDatas", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.AccountGroup", b =>
@@ -155,7 +155,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("AccountGroupId");
 
-                    b.ToTable("AccountGroups");
+                    b.ToTable("AccountGroups", (string)null);
 
                     b.HasData(
                         new
@@ -185,7 +185,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("AccountTypeId");
 
-                    b.ToTable("AccountTypes");
+                    b.ToTable("AccountTypes", (string)null);
 
                     b.HasData(
                         new
@@ -236,7 +236,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("BookerName")
                         .IsUnique();
 
-                    b.ToTable("Bookers");
+                    b.ToTable("Bookers", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.Category", b =>
@@ -268,7 +268,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("CategoryName", "ProjectId")
                         .IsUnique();
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanEntry", b =>
@@ -308,7 +308,7 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("LocationId");
 
-                    b.ToTable("DeliveryChallanEntries");
+                    b.ToTable("DeliveryChallanEntries", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
@@ -336,7 +336,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("JournalVoucherId")
                         .HasDatabaseName("IX_DeliveryChallanVouchers_JournalVoucherId");
 
-                    b.ToTable("DeliveryChallanVouchers");
+                    b.ToTable("DeliveryChallanVouchers", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>
@@ -405,7 +405,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("IsProcessed", "Quantity")
                         .HasDatabaseName("IX_JournalEntries_IsProcessed_Quantity");
 
-                    b.ToTable("JournalEntries");
+                    b.ToTable("JournalEntries", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
@@ -447,7 +447,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("ProjectId", "IsCompleted")
                         .HasDatabaseName("IX_JournalVouchers_ProjectId_IsCompleted");
 
-                    b.ToTable("JournalVouchers");
+                    b.ToTable("JournalVouchers", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucherReference", b =>
@@ -475,7 +475,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("MainVoucherId", "ReferenceType")
                         .HasDatabaseName("IX_JournalVoucherReferences_MainVoucherId_ReferenceType");
 
-                    b.ToTable("JournalVoucherReferences");
+                    b.ToTable("JournalVoucherReferences", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.Location", b =>
@@ -504,7 +504,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("LocationName")
                         .IsUnique();
 
-                    b.ToTable("Locations");
+                    b.ToTable("Locations", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.ProductData", b =>
@@ -533,7 +533,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("AccountId")
                         .IsUnique();
 
-                    b.ToTable("ProductDatas");
+                    b.ToTable("ProductDatas", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.Project", b =>
@@ -554,7 +554,7 @@ namespace PureLedger.Migrations
                     b.HasIndex("ProjectName")
                         .IsUnique();
 
-                    b.ToTable("Projects");
+                    b.ToTable("Projects", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.ProjectCartageSettings", b =>
@@ -585,7 +585,7 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("ProjectCartageSettings");
+                    b.ToTable("ProjectCartageSettings", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.Recipe", b =>
@@ -608,7 +608,7 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("Recipes");
+                    b.ToTable("Recipes", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.RecipeItem", b =>
@@ -636,7 +636,59 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("RecipeId");
 
-                    b.ToTable("RecipeItems");
+                    b.ToTable("RecipeItems", (string)null);
+                });
+
+            modelBuilder.Entity("PureLedger.Models.RefreshToken", b =>
+                {
+                    b.Property<int>("RefreshTokenId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("RefreshTokenId"));
+
+                    b.Property<string>("CreatedByIp")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReplacedByToken")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("RevokedByIp")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("RevokedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RefreshTokenId");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RefreshTokens_Token");
+
+                    b.HasIndex("UserId", "IsRevoked", "ExpiryDate")
+                        .HasDatabaseName("IX_RefreshTokens_UserId_IsRevoked_ExpiryDate");
+
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.Signature", b =>
@@ -664,7 +716,7 @@ namespace PureLedger.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Signatures");
+                    b.ToTable("Signatures", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.User", b =>
@@ -701,6 +753,11 @@ namespace PureLedger.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Subroute")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -720,7 +777,7 @@ namespace PureLedger.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_Users_Username");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
 
                     b.HasData(
                         new
@@ -732,9 +789,33 @@ namespace PureLedger.Migrations
                             IsActive = true,
                             IsAdmin = true,
                             PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa",
+                            SecurityStamp = "d4ff2fc7-6913-4fe8-a501-66ddd274aa8d",
                             Subroute = "Default",
                             Username = "admin"
                         });
+                });
+
+            modelBuilder.Entity("PureLedger.Models.UserCategory", b =>
+                {
+                    b.Property<int>("UserCategoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserCategoryId"));
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserCategoryId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserCategories", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.UserControllerAccess", b =>
@@ -764,7 +845,7 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserControllerAccess");
+                    b.ToTable("UserControllerAccess", (string)null);
                 });
 
             modelBuilder.Entity("PureLedger.Models.UserProject", b =>
@@ -787,7 +868,7 @@ namespace PureLedger.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserProjects");
+                    b.ToTable("UserProjects", (string)null);
                 });
 
             modelBuilder.Entity("MissedEntry", b =>
@@ -1041,6 +1122,36 @@ namespace PureLedger.Migrations
                     b.Navigation("Recipe");
                 });
 
+            modelBuilder.Entity("PureLedger.Models.RefreshToken", b =>
+                {
+                    b.HasOne("PureLedger.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PureLedger.Models.UserCategory", b =>
+                {
+                    b.HasOne("PureLedger.Models.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("PureLedger.Models.User", "User")
+                        .WithMany("UserCategories")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PureLedger.Models.UserControllerAccess", b =>
                 {
                     b.HasOne("PureLedger.Models.User", "User")
@@ -1110,6 +1221,8 @@ namespace PureLedger.Migrations
             modelBuilder.Entity("PureLedger.Models.User", b =>
                 {
                     b.Navigation("ControllerAccess");
+
+                    b.Navigation("UserCategories");
 
                     b.Navigation("UserProjects");
                 });

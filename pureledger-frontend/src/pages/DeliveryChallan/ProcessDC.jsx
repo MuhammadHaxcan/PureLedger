@@ -3,6 +3,7 @@ import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup } from 'reac
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const ProcessDC = () => {
   usePageTitle('Delivery Challan');
@@ -12,12 +13,13 @@ const ProcessDC = () => {
   
   // State for filter form
   const [filter, setFilter] = useState({
-    sinceDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    toDate: new Date().toISOString().split('T')[0],
+    sinceDate: '',
+    toDate: '',
     projectId: null,
     categoryId: null,
     accountId: null
   });
+  const [dateFilterType, setDateFilterType] = useState('custom');
 
   // State for data
   const [projects, setProjects] = useState([]);
@@ -31,7 +33,6 @@ const ProcessDC = () => {
   // State for modals
   const [showDCModal, setShowDCModal] = useState(false);
   const [showCartageModal, setShowCartageModal] = useState(false);
-  const [currentEntry, setCurrentEntry] = useState(null);
   const [existingChallan, setExistingChallan] = useState(null);
 
   // State for DC form
@@ -119,9 +120,9 @@ const ProcessDC = () => {
     }
   };
 
-  const openDeliveryChallanPrint = (deliveryChallanId) => {
-    if (deliveryChallanId) {
-      const url = `/reporting/print-voucher?voucherId=${deliveryChallanId}&type=DC`;
+  const openDeliveryChallanPrint = (journalVoucherId) => {
+    if (journalVoucherId) {
+      const url = `/reporting/print-voucher?voucherId=${journalVoucherId}&type=DC`;
       window.open(url, '_blank');
     }
   };
@@ -200,6 +201,19 @@ const ProcessDC = () => {
     }
   };
 
+  const handleDateFilterChange = (filterType) => {
+    setDateFilterType(filterType);
+    if (filterType === 'custom') {
+      return;
+    }
+    const dateRange = getDateRange(filterType);
+    setFilter(prev => ({
+      ...prev,
+      sinceDate: dateRange.startDate,
+      toDate: dateRange.endDate
+    }));
+  };
+
   const handleSearch = async (e) => {
     e?.preventDefault();
     
@@ -215,8 +229,8 @@ const ProcessDC = () => {
       setSearchTerm('');
 
       const params = {
-        SinceDate: filter.sinceDate,
-        ToDate: filter.toDate,
+        SinceDate: filter.sinceDate || null,
+        ToDate: filter.toDate || null,
         ProjectId: filter.projectId
       };
 
@@ -240,9 +254,7 @@ const ProcessDC = () => {
   };
 
   const handleOpenDCModal = async (voucherId, entryId) => {
-    setCurrentEntry({ voucherId, entryId });
-    setDcForm({
-      ...dcForm,
+    const freshForm = {
       journalVoucherId: voucherId,
       journalEntryId: entryId,
       challanId: null,
@@ -253,7 +265,8 @@ const ProcessDC = () => {
       remarks: '',
       includeForCharges: false,
       forAmount: 0
-    });
+    };
+    setDcForm(freshForm);
     setExistingChallan(null);
     setShowDCModal(true);
 
@@ -317,7 +330,11 @@ const ProcessDC = () => {
       if (response.data.success) {
         setSuccess(response.data.message || 'Entry processed successfully.');
         setShowDCModal(false);
-        openDeliveryChallanPrint(response.data.data?.deliveryChallanId);
+        
+        const journalVoucherId = response.data.data?.journalVoucherId;
+        if (journalVoucherId) {
+          openDeliveryChallanPrint(journalVoucherId);
+        }
         await handleSearch();
       } else {
         setError(response.data.message || 'Failed to process entry.');
@@ -371,7 +388,11 @@ const ProcessDC = () => {
       if (response.data.success) {
         setSuccess(response.data.message || 'Entries processed successfully.');
         setShowDCModal(false);
-        openDeliveryChallanPrint(response.data.data?.deliveryChallanId);
+        
+        const journalVoucherId = response.data.data?.journalVoucherId;
+        if (journalVoucherId) {
+          openDeliveryChallanPrint(journalVoucherId);
+        }
         await handleSearch();
       } else {
         setError(response.data.message || 'Failed to process entries.');
@@ -447,7 +468,11 @@ const ProcessDC = () => {
         setSuccess(response.data.message || 'Cartage added and delivery challan processed successfully.');
         setShowCartageModal(false);
         setShowDCModal(false);
-        openDeliveryChallanPrint(response.data.data?.deliveryChallanId);
+        
+        const journalVoucherId = response.data.data?.journalVoucherId;
+        if (journalVoucherId) {
+          openDeliveryChallanPrint(journalVoucherId);
+        }
         await handleSearch();
       } else {
         setError(response.data.message || 'Failed to process cartage.');
@@ -542,25 +567,50 @@ const ProcessDC = () => {
         <Card.Body>
           <Form onSubmit={handleSearch}>
             <div className="row mb-3">
-              <div className="col-md-3 mb-3">
-                <Form.Label>Since</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+              <div className="col-md-2 mb-3">
+                <Form.Label className="small text-muted">Quick Filter</Form.Label>
+                <Form.Select
+                  size="sm"
+                  value={dateFilterType}
+                  onChange={(e) => handleDateFilterChange(e.target.value)}
+                  style={{ fontSize: '0.875rem' }}
+                >
+                  {dateFilterOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <div className="col-md-2 mb-3">
+                <Form.Label className="small">Since</Form.Label>
+                <InputGroup size="sm">
+                  <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                   <Form.Control
                     type="date"
+                    size="sm"
                     value={filter.sinceDate}
-                    onChange={(e) => setFilter({ ...filter, sinceDate: e.target.value })}
+                    onChange={(e) => {
+                      setFilter({ ...filter, sinceDate: e.target.value });
+                      setDateFilterType('custom');
+                    }}
+                    style={{ fontSize: '0.875rem' }}
                   />
                 </InputGroup>
               </div>
-              <div className="col-md-3 mb-3">
-                <Form.Label>To</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+              <div className="col-md-2 mb-3">
+                <Form.Label className="small">To</Form.Label>
+                <InputGroup size="sm">
+                  <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                   <Form.Control
                     type="date"
+                    size="sm"
                     value={filter.toDate}
-                    onChange={(e) => setFilter({ ...filter, toDate: e.target.value })}
+                    onChange={(e) => {
+                      setFilter({ ...filter, toDate: e.target.value });
+                      setDateFilterType('custom');
+                    }}
+                    style={{ fontSize: '0.875rem' }}
                   />
                 </InputGroup>
               </div>

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import apiClient from '../services/api';
 import { PERMISSIONS, PAGE_PERMISSIONS } from '../constants/permissions';
+import { useToast } from './ToastContext';
 
 const AuthContext = createContext(null);
 
@@ -13,12 +14,17 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
+  const { showSessionExpired, showLoginSuccess, showLogoutSuccess, showAuthError } = useToast();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userAccess, setUserAccess] = useState({ controllers: [], actions: {} });
   const [navigationMenu, setNavigationMenu] = useState([]);
   const [permissions, setPermissions] = useState([]);
+
+  // Session timeout configuration (30 minutes of inactivity)
+  const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+  const [lastActivityTime, setLastActivityTime] = useState(Date.now());
 
   // Build permissions array from userAccess
   const buildPermissions = useMemo(() => {
@@ -63,6 +69,45 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     setPermissions(buildPermissions);
   }, [buildPermissions]);
+
+  // Session timeout - check for inactivity
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const checkInactivity = () => {
+      const currentTime = Date.now();
+      const timeSinceLastActivity = currentTime - lastActivityTime;
+
+      if (timeSinceLastActivity > SESSION_TIMEOUT) {
+        console.log('Session expired due to inactivity');
+        showSessionExpired();
+        setTimeout(() => {
+          logout();
+          window.location.href = '/login?sessionExpired=true';
+        }, 2000); // Show toast for 2 seconds before redirect
+      }
+    };
+
+    // Check inactivity every minute
+    const intervalId = setInterval(checkInactivity, 60000);
+
+    // Track user activity
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    const updateActivity = () => {
+      setLastActivityTime(Date.now());
+    };
+
+    activityEvents.forEach(event => {
+      document.addEventListener(event, updateActivity);
+    });
+
+    return () => {
+      clearInterval(intervalId);
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, updateActivity);
+      });
+    };
+  }, [isAuthenticated, lastActivityTime]);
 
   // Permission checking functions
   const hasPermission = (permission) => {
@@ -179,6 +224,14 @@ export const AuthProvider = ({ children }) => {
         ],
       },
       {
+        title: 'Delivery',
+        icon: 'fas fa-truck',
+        controller: 'DeliveryChallan',
+        items: [
+          { action: 'ProcessDC', title: 'Delivery Challan', icon: 'fas fa-truck', path: '/delivery/process-dc' },
+        ],
+      },
+      {
         title: 'Reports',
         icon: 'fas fa-chart-bar',
         controller: 'Reporting',
@@ -189,14 +242,6 @@ export const AuthProvider = ({ children }) => {
           { action: 'MasterReport', title: 'Master Report', icon: 'fas fa-file-invoice', path: '/reporting/master-report' },
           { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
           { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
-        ],
-      },
-      {
-        title: 'Delivery',
-        icon: 'fas fa-truck',
-        controller: 'DeliveryChallan',
-        items: [
-          { action: 'ProcessDC', title: 'Delivery Challan', icon: 'fas fa-truck', path: '/delivery/process-dc' },
         ],
       },
     ];
@@ -280,12 +325,16 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.data.success) {
-        const { token, user: userData } = response.data;
+        const { token, refreshToken, user: userData } = response.data;
         localStorage.setItem('authToken', token);
+        localStorage.setItem('refreshToken', refreshToken);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
         setIsAuthenticated(true);
-        
+
+        // Show login success toast
+        showLoginSuccess(userData.fullName || userData.username);
+
         // Load user access and build navigation menu
         try {
           const navMenu = await fetchAccessAndMenu(userData);
@@ -297,7 +346,7 @@ export const AuthProvider = ({ children }) => {
         } catch (accessError) {
           console.error('Error loading user access:', accessError);
         }
-        
+
         return { success: true, redirectTo: '/home/entry' };
       }
       return { success: false, message: response.data.message || 'Login failed' };
@@ -309,8 +358,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+
+    // Call logout endpoint to revoke refresh token
+    try {
+      if (refreshToken) {
+        await apiClient.post('/AccountApi/logout', { refreshToken });
+      }
+    } catch (error) {
+      console.error('Error revoking token on logout:', error);
+    }
+
+    // Show logout success toast
+    showLogoutSuccess();
+
+    // Clear local storage and state
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem('userAccess');
     localStorage.removeItem('navigationMenu');

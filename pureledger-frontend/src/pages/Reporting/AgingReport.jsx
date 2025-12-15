@@ -3,9 +3,7 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Papa from 'papaparse';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 
 const AgingReport = () => {
   usePageTitle('Aging Report');
@@ -14,6 +12,8 @@ const AgingReport = () => {
   const [allEntries, setAllEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     referenceDate: new Date().toISOString().split('T')[0],
@@ -216,105 +216,71 @@ const AgingReport = () => {
   const totalCredit = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalCredit) || 0), 0);
   const totalBalance = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.netBalance) || 0), 0);
 
-  const handleExportCsv = () => {
-    const csvData = filteredEntries.map(entry => ({
-      Account: entry.accountName || entry.accountId || 'N/A',
-      'Total Debit': (entry.totalDebit || 0).toFixed(2),
-      'Total Credit': (entry.totalCredit || 0).toFixed(2),
-      'Net Balance': (entry.netBalance || 0).toFixed(2)
-    }));
-
-    if (!csvData || csvData.length === 0) {
-      alert('No data to export');
-      return;
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const csvData = filteredEntries.map(entry => ({
+        Account: entry.accountName || entry.accountId || 'N/A',
+        'Total Debit': (entry.totalDebit || 0).toFixed(2),
+        'Total Credit': (entry.totalCredit || 0).toFixed(2),
+        'Net Balance': (entry.netBalance || 0).toFixed(2)
+      }));
+      await exportToCsvAsync(csvData, `AgingReport_${formData.referenceDate || 'report'}.csv`);
+    } finally {
+      setExportingCsv(false);
     }
-
-    const csvContent = Papa.unparse(csvData);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `AgingReport_${formData.referenceDate || 'report'}.csv`;
-    link.click();
   };
 
-  const handleExportPdf = () => {
-    const doc = new jsPDF('portrait', 'mm', 'a4');
-    const selectedProject = projects.find(p => p.id === formData.projectId);
-    const selectedCategory = categories.find(c => c.id === formData.categoryId);
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const selectedProject = projects.find(p => p.id === formData.projectId);
+      const selectedCategory = categories.find(c => c.id === formData.categoryId);
 
-    // Header
-    doc.setFontSize(18);
-    doc.setTextColor(30, 64, 175);
-    doc.text('Aging Report', 14, 20);
+      const rows = filteredEntries.map(entry => ({
+        account: entry.accountName || entry.accountId || 'N/A',
+        debit: formatCurrency(entry.totalDebit),
+        credit: formatCurrency(entry.totalCredit),
+        balance: formatCurrency(entry.netBalance)
+      }));
 
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Reference Date: ${formData.referenceDate}`, 14, 28);
-    if (selectedProject) {
-      doc.text(`Project: ${selectedProject.name}`, 14, 34);
-    }
-    if (selectedCategory) {
-      doc.text(`Category: ${selectedCategory.name}`, 14, 40);
-    }
-    doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, selectedCategory ? 46 : 40);
-
-    const rows = filteredEntries.map(entry => ({
-      account: entry.accountName || entry.accountId || 'N/A',
-      debit: formatCurrency(entry.totalDebit),
-      credit: formatCurrency(entry.totalCredit),
-      balance: formatCurrency(entry.netBalance)
-    }));
-
-    // Add totals row
-    rows.push({
-      account: 'TOTAL',
-      debit: formatCurrency(totalDebit),
-      credit: formatCurrency(totalCredit),
-      balance: formatCurrency(totalBalance)
-    });
-
-    const columns = [
-      { header: 'Account', dataKey: 'account' },
-      { header: 'Total Debit', dataKey: 'debit' },
-      { header: 'Total Credit', dataKey: 'credit' },
-      { header: 'Net Balance', dataKey: 'balance' }
-    ];
-
-    // Split rows into chunks of 10 per page
-    const rowsPerPage = 20;
-    let startY = selectedCategory ? 52 : 46;
-    
-    for (let i = 0; i < rows.length; i += rowsPerPage) {
-      if (i > 0) {
-        doc.addPage();
-        startY = 20;
-      }
-      
-      const chunk = rows.slice(i, i + rowsPerPage);
-      
-      autoTable(doc, {
-        columns,
-        body: chunk,
-        startY: startY,
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+      rows.push({
+        account: 'TOTAL',
+        debit: formatCurrency(totalDebit),
+        credit: formatCurrency(totalCredit),
+        balance: formatCurrency(totalBalance)
       });
-    }
 
-    // Add page numbers to all pages
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.text(
-        `PureLedger - Aging Report | Page ${i} of ${pageCount}`,
-        14,
-        doc.internal.pageSize.height - 10
-      );
-    }
+      const columns = [
+        { header: 'Account', dataKey: 'account' },
+        { header: 'Total Debit', dataKey: 'debit' },
+        { header: 'Total Credit', dataKey: 'credit' },
+        { header: 'Net Balance', dataKey: 'balance' }
+      ];
 
-    doc.save(`AgingReport_${formData.referenceDate || new Date().toISOString().split('T')[0]}.pdf`);
+      let subtitle = `Reference Date: ${formData.referenceDate}`;
+      if (selectedCategory) {
+        subtitle += `\nCategory: ${selectedCategory.name}`;
+      }
+
+      await generatePdfAsync({
+        orientation: 'portrait',
+        format: 'a4',
+        title: 'Aging Report',
+        projectName: selectedProject?.name || null,
+        subtitle,
+        generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`,
+        columns,
+        rows,
+        rowsPerPage: 20,
+        startY: selectedCategory ? 52 : 46,
+        fontSize: 9,
+        cellPadding: 2,
+        filename: `AgingReport_${formData.referenceDate || new Date().toISOString().split('T')[0]}.pdf`
+      });
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   return (
@@ -423,11 +389,40 @@ const AgingReport = () => {
               )}
               {!hasMoreData && allEntries.length > 0 && (
                 <>
-                  <Button variant="outline-success" size="sm" onClick={handleExportCsv} className="me-2">
-                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                  <Button 
+                    variant="outline-success" 
+                    size="sm" 
+                    onClick={handleExportCsv} 
+                    className="me-2"
+                    disabled={exportingCsv || exportingPdf}
+                  >
+                    {exportingCsv ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                      </>
+                    )}
                   </Button>
-                  <Button variant="outline-danger" size="sm" onClick={handleExportPdf}>
-                    <i className="fas fa-file-pdf me-1"></i> Export PDF
+                  <Button 
+                    variant="outline-danger" 
+                    size="sm" 
+                    onClick={handleExportPdf}
+                    disabled={exportingCsv || exportingPdf}
+                  >
+                    {exportingPdf ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                      </>
+                    )}
                   </Button>
                 </>
               )}

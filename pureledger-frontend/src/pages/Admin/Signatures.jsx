@@ -157,7 +157,7 @@ const Signatures = () => {
   };
 
   return (
-    <div>
+    <div className="container-fluid">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Signature Management</h2>
         <Button variant="primary" onClick={handleAddNew} disabled={loading}>

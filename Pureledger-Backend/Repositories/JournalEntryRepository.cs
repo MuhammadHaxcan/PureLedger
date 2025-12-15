@@ -488,7 +488,8 @@ namespace PureLedger.Repositories
             int totalCount = await groupedQuery.CountAsync();
 
             var pagedResults = await groupedQuery
-                .OrderBy(g => g.AccountName)
+                .OrderBy(g => g.CategoryName)
+                .ThenBy(g => g.AccountName)
                 .Skip(page * pageSize)
                 .Take(pageSize)
                 .ToListAsync();

@@ -127,7 +127,7 @@ const Bookers = () => {
   };
 
   return (
-    <div>
+    <div className="container-fluid">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>
           <i className="fas fa-user-tie me-2"></i>Bookers

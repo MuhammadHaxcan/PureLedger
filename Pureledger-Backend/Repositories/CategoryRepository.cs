@@ -39,13 +39,6 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<Category?> GetByIdWithAccountTypeAsync(int categoryId)
-        {
-            return await _context.Categories
-                .Include(c => c.AccountType)
-                .FirstOrDefaultAsync(c => c.CategoryId == categoryId);
-        }
-
         public async Task<Category> AddAsync(Category category)
         {
             _context.Categories.Add(category);
@@ -91,19 +84,43 @@ namespace PureLedger.Repositories
                     && (!excludeId.HasValue || c.CategoryId != excludeId.Value));
         }
 
-        public async Task<bool> HasAssociatedAccountsAsync(int categoryId)
-        {
-            return await _context.Accounts
-                .AsNoTracking()
-                .AnyAsync(a => a.CategoryId == categoryId);
-        }
-
         public async Task<List<int>> GetAssociatedAccountIdsAsync(int categoryId)
         {
             return await _context.Accounts
                 .AsNoTracking()
                 .Where(a => a.CategoryId == categoryId)
                 .Select(a => a.AccountId)
+                .ToListAsync();
+        }
+
+        public async Task<List<Category>> GetByProjectIdForUserAsync(int projectId, int userId)
+        
+        {
+            // Check if user is admin
+            var user = await _context.Users.FindAsync(userId);
+            if (user?.IsAdmin == true)
+            {
+                return await GetByProjectIdAsync(projectId);
+            }
+
+            var hasProjectAccess = await _context.UserProjects
+                .AnyAsync(up => up.UserId == userId && up.ProjectId == projectId);
+
+            if (!hasProjectAccess)
+            {
+                return new List<Category>();
+            }
+
+            // Get hidden category IDs for this user
+            var hiddenCategoryIds = await _context.UserCategories
+                .Where(uc => uc.UserId == userId)
+                .Select(uc => uc.CategoryId)
+                .ToListAsync();
+
+            // Return categories from this project, excluding hidden ones
+            return await _context.Categories
+                .AsNoTracking()
+                .Where(c => c.ProjectId == projectId && !hiddenCategoryIds.Contains(c.CategoryId))
                 .ToListAsync();
         }
     }

@@ -4,9 +4,8 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Papa from 'papaparse';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const MissedEntriesReport = () => {
     usePageTitle('Missed Entries');
@@ -29,12 +28,19 @@ const MissedEntriesReport = () => {
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
     const [error, setError] = useState('');
+    const [exportingDetailsCsv, setExportingDetailsCsv] = useState(false);
+    const [exportingDetailsPdf, setExportingDetailsPdf] = useState(false);
+    const [exportingCustomerCsv, setExportingCustomerCsv] = useState(false);
+    const [exportingCustomerPdf, setExportingCustomerPdf] = useState(false);
+    const [exportingProductCsv, setExportingProductCsv] = useState(false);
+    const [exportingProductPdf, setExportingProductPdf] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
     const [formData, setFormData] = useState({
         projectId: null,
         startDate: '',
         endDate: ''
     });
+    const [dateFilterType, setDateFilterType] = useState('custom');
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -106,6 +112,19 @@ const MissedEntriesReport = () => {
             topMissedProduct: null,
             topMissedProductQuantity: 0
         });
+    };
+
+    const handleDateFilterChange = (filterType) => {
+        setDateFilterType(filterType);
+        if (filterType === 'custom') {
+            return;
+        }
+        const dateRange = getDateRange(filterType);
+        setFormData(prev => ({
+            ...prev,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -326,258 +345,196 @@ const MissedEntriesReport = () => {
         }).format(value || 0);
     };
 
-    const exportToCsv = (data, filename) => {
-        if (!data || data.length === 0) {
-            alert('No data to export');
-            return;
+    const handleExportDetails = async () => {
+        setExportingDetailsCsv(true);
+        try {
+            const csvData = allEntries.map(entry => ({
+                Date: formatDate(entry.missedDate || entry.MissedDate),
+                Project: entry.projectName || entry.ProjectName || '',
+                Customer: entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A',
+                Product: entry.productName || entry.productAccountName || entry.ProductName || 'N/A',
+                Quantity: (entry.quantity || entry.Quantity || 0).toFixed(2),
+                Rate: (entry.rate || entry.Rate || 0).toFixed(2),
+                Discount: (entry.discount || entry.Discount || 0).toFixed(2),
+                'Total Value': (entry.totalValue || entry.TotalValue || 0).toFixed(2),
+                Description: entry.description || entry.Description || ''
+            }));
+            await exportToCsvAsync(csvData, `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingDetailsCsv(false);
         }
-
-        const csvContent = Papa.unparse(data);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
     };
 
-    const handleExportDetails = () => {
-        const csvData = allEntries.map(entry => ({
-            Date: formatDate(entry.missedDate || entry.MissedDate),
-            Project: entry.projectName || entry.ProjectName || '',
-            Customer: entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A',
-            Product: entry.productName || entry.productAccountName || entry.ProductName || 'N/A',
-            Quantity: (entry.quantity || entry.Quantity || 0).toFixed(2),
-            Rate: (entry.rate || entry.Rate || 0).toFixed(2),
-            Discount: (entry.discount || entry.Discount || 0).toFixed(2),
-            'Total Value': (entry.totalValue || entry.TotalValue || 0).toFixed(2),
-            Description: entry.description || entry.Description || ''
-        }));
-        exportToCsv(csvData, `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.csv`);
-    };
+    const handleExportDetailsPdf = async () => {
+        setExportingDetailsPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
 
-    const handleExportDetailsPdf = () => {
-        const doc = new jsPDF('landscape', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
+            const rows = allEntries.map(entry => ({
+                date: formatDate(entry.missedDate || entry.MissedDate),
+                project: entry.projectName || entry.ProjectName || '',
+                customer: entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A',
+                product: entry.productName || entry.productAccountName || entry.ProductName || 'N/A',
+                quantity: formatNumber(entry.quantity || entry.Quantity || 0),
+                rate: formatCurrency(entry.rate || entry.Rate || 0),
+                discount: formatCurrency(entry.discount || entry.Discount || 0),
+                totalValue: formatCurrency(entry.totalValue || entry.TotalValue || 0)
+            }));
 
-        // Header
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Missed Entries Report', 14, 20);
+            const columns = [
+                { header: 'Date', dataKey: 'date' },
+                { header: 'Project', dataKey: 'project' },
+                { header: 'Customer', dataKey: 'customer' },
+                { header: 'Product', dataKey: 'product' },
+                { header: 'Quantity', dataKey: 'quantity' },
+                { header: 'Rate', dataKey: 'rate' },
+                { header: 'Discount', dataKey: 'discount' },
+                { header: 'Total Value', dataKey: 'totalValue' }
+            ];
 
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        if (formData.startDate) {
-            doc.text(`Date Range: ${formData.startDate} to ${formData.endDate || formData.startDate}`, 14, 34);
-        }
-        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`, 14, 40);
+            const dateRange = formData.startDate 
+                ? `${formData.startDate} to ${formData.endDate || formData.startDate}`
+                : null;
 
-        const rows = allEntries.map(entry => ({
-            date: formatDate(entry.missedDate || entry.MissedDate),
-            project: entry.projectName || entry.ProjectName || '',
-            customer: entry.customerName || entry.customerAccountName || entry.CustomerName || 'N/A',
-            product: entry.productName || entry.productAccountName || entry.ProductName || 'N/A',
-            quantity: formatNumber(entry.quantity || entry.Quantity || 0),
-            rate: formatCurrency(entry.rate || entry.Rate || 0),
-            discount: formatCurrency(entry.discount || entry.Discount || 0),
-            totalValue: formatCurrency(entry.totalValue || entry.TotalValue || 0)
-        }));
-
-        const columns = [
-            { header: 'Date', dataKey: 'date' },
-            { header: 'Project', dataKey: 'project' },
-            { header: 'Customer', dataKey: 'customer' },
-            { header: 'Product', dataKey: 'product' },
-            { header: 'Quantity', dataKey: 'quantity' },
-            { header: 'Rate', dataKey: 'rate' },
-            { header: 'Discount', dataKey: 'discount' },
-            { header: 'Total Value', dataKey: 'totalValue' }
-        ];
-
-        const rowsPerPage = 20;
-        let startY = 46;
-
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
-
-            const chunk = rows.slice(i, i + rowsPerPage);
-
-            autoTable(doc, {
+            await generatePdfAsync({
+                orientation: 'landscape',
+                format: 'a4',
+                title: 'Missed Entries Report',
+                projectName: selectedProject?.name || 'All Projects',
+                dateRange,
+                generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`,
                 columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 7, cellPadding: 1.5 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+                rows,
+                rowsPerPage: 20,
+                startY: 46,
+                fontSize: 7,
+                cellPadding: 1.5,
+                filename: `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } finally {
+            setExportingDetailsPdf(false);
         }
-
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(
-                `PureLedger - Missed Entries Report | Page ${i} of ${pageCount}`,
-                14,
-                doc.internal.pageSize.height - 10
-            );
-        }
-
-        doc.save(`MissedEntries_Details_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    const handleExportByCustomer = () => {
-        const csvData = byCustomerData.map(item => ({
-            Customer: item.customerName || 'Unknown',
-            'Entry Count': (item.entryCount || 0).toFixed(2),
-            'Total Quantity': (item.totalQuantity || 0).toFixed(2),
-            'Total Value': (item.totalValue || 0).toFixed(2),
-            'Unique Products': (item.uniqueProductCount || 0).toFixed(2),
-            'Avg Qty/Entry': (item.averageQuantityPerEntry || 0).toFixed(2)
-        }));
-        exportToCsv(csvData, `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.csv`);
+    const handleExportByCustomer = async () => {
+        setExportingCustomerCsv(true);
+        try {
+            const csvData = byCustomerData.map(item => ({
+                Customer: item.customerName || 'Unknown',
+                'Entry Count': (item.entryCount || 0).toFixed(2),
+                'Total Quantity': (item.totalQuantity || 0).toFixed(2),
+                'Total Value': (item.totalValue || 0).toFixed(2),
+                'Unique Products': (item.uniqueProductCount || 0).toFixed(2),
+                'Avg Qty/Entry': (item.averageQuantityPerEntry || 0).toFixed(2)
+            }));
+            await exportToCsvAsync(csvData, `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingCustomerCsv(false);
+        }
     };
 
-    const handleExportByCustomerPdf = () => {
-        const doc = new jsPDF('portrait', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
+    const handleExportByCustomerPdf = async () => {
+        setExportingCustomerPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
 
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Missed Entries by Customer', 14, 20);
+            const rows = byCustomerData.map(item => ({
+                customer: item.customerName || 'Unknown',
+                entryCount: formatNumber(item.entryCount || 0),
+                totalQuantity: formatNumber(item.totalQuantity || 0),
+                totalValue: formatCurrency(item.totalValue || 0),
+                uniqueProducts: formatNumber(item.uniqueProductCount || 0),
+                avgQty: formatNumber(item.averageQuantityPerEntry || 0)
+            }));
 
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+            const columns = [
+                { header: 'Customer', dataKey: 'customer' },
+                { header: 'Entry Count', dataKey: 'entryCount' },
+                { header: 'Total Qty', dataKey: 'totalQuantity' },
+                { header: 'Total Value', dataKey: 'totalValue' },
+                { header: 'Unique Products', dataKey: 'uniqueProducts' },
+                { header: 'Avg Qty/Entry', dataKey: 'avgQty' }
+            ];
 
-        const rows = byCustomerData.map(item => ({
-            customer: item.customerName || 'Unknown',
-            entryCount: formatNumber(item.entryCount || 0),
-            totalQuantity: formatNumber(item.totalQuantity || 0),
-            totalValue: formatCurrency(item.totalValue || 0),
-            uniqueProducts: formatNumber(item.uniqueProductCount || 0),
-            avgQty: formatNumber(item.averageQuantityPerEntry || 0)
-        }));
-
-        const columns = [
-            { header: 'Customer', dataKey: 'customer' },
-            { header: 'Entry Count', dataKey: 'entryCount' },
-            { header: 'Total Qty', dataKey: 'totalQuantity' },
-            { header: 'Total Value', dataKey: 'totalValue' },
-            { header: 'Unique Products', dataKey: 'uniqueProducts' },
-            { header: 'Avg Qty/Entry', dataKey: 'avgQty' }
-        ];
-
-        const rowsPerPage = 20;
-        let startY = 40;
-
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
-
-            const chunk = rows.slice(i, i + rowsPerPage);
-
-            autoTable(doc, {
+            await generatePdfAsync({
+                orientation: 'portrait',
+                format: 'a4',
+                title: 'Missed Entries by Customer',
+                projectName: selectedProject?.name || 'All Projects',
+                generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 8 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+                rows,
+                rowsPerPage: 20,
+                startY: 40,
+                fontSize: 8,
+                cellPadding: 2,
+                filename: `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } finally {
+            setExportingCustomerPdf(false);
         }
-
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
-        }
-
-        doc.save(`MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    const handleExportByProduct = () => {
-        const csvData = byProductData.map(item => ({
-            Product: item.productName || 'Unknown',
-            'Entry Count': (item.entryCount || 0).toFixed(2),
-            'Total Quantity': (item.totalQuantity || 0).toFixed(2),
-            'Total Value': (item.totalValue || 0).toFixed(2),
-            'Unique Customers': (item.uniqueCustomerCount || 0).toFixed(2),
-            'Avg Rate': (item.averageRate || 0).toFixed(2),
-            'Avg Discount': (item.averageDiscount || 0).toFixed(2)
-        }));
-        exportToCsv(csvData, `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.csv`);
+    const handleExportByProduct = async () => {
+        setExportingProductCsv(true);
+        try {
+            const csvData = byProductData.map(item => ({
+                Product: item.productName || 'Unknown',
+                'Entry Count': (item.entryCount || 0).toFixed(2),
+                'Total Quantity': (item.totalQuantity || 0).toFixed(2),
+                'Total Value': (item.totalValue || 0).toFixed(2),
+                'Unique Customers': (item.uniqueCustomerCount || 0).toFixed(2),
+                'Avg Rate': (item.averageRate || 0).toFixed(2),
+                'Avg Discount': (item.averageDiscount || 0).toFixed(2)
+            }));
+            await exportToCsvAsync(csvData, `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingProductCsv(false);
+        }
     };
 
-    const handleExportByProductPdf = () => {
-        const doc = new jsPDF('portrait', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
+    const handleExportByProductPdf = async () => {
+        setExportingProductPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
 
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Missed Entries by Product', 14, 20);
+            const rows = byProductData.map(item => ({
+                product: item.productName || 'Unknown',
+                entryCount: formatNumber(item.entryCount || 0),
+                totalQuantity: formatNumber(item.totalQuantity || 0),
+                totalValue: formatCurrency(item.totalValue || 0),
+                uniqueCustomers: formatNumber(item.uniqueCustomerCount || 0),
+                avgRate: formatCurrency(item.averageRate || 0),
+                avgDiscount: formatCurrency(item.averageDiscount || 0)
+            }));
 
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
+            const columns = [
+                { header: 'Product', dataKey: 'product' },
+                { header: 'Entry Count', dataKey: 'entryCount' },
+                { header: 'Total Qty', dataKey: 'totalQuantity' },
+                { header: 'Total Value', dataKey: 'totalValue' },
+                { header: 'Unique Customers', dataKey: 'uniqueCustomers' },
+                { header: 'Avg Rate', dataKey: 'avgRate' },
+                { header: 'Avg Discount', dataKey: 'avgDiscount' }
+            ];
 
-        const rows = byProductData.map(item => ({
-            product: item.productName || 'Unknown',
-            entryCount: formatNumber(item.entryCount || 0),
-            totalQuantity: formatNumber(item.totalQuantity || 0),
-            totalValue: formatCurrency(item.totalValue || 0),
-            uniqueCustomers: formatNumber(item.uniqueCustomerCount || 0),
-            avgRate: formatCurrency(item.averageRate || 0),
-            avgDiscount: formatCurrency(item.averageDiscount || 0)
-        }));
-
-        const columns = [
-            { header: 'Product', dataKey: 'product' },
-            { header: 'Entry Count', dataKey: 'entryCount' },
-            { header: 'Total Qty', dataKey: 'totalQuantity' },
-            { header: 'Total Value', dataKey: 'totalValue' },
-            { header: 'Unique Customers', dataKey: 'uniqueCustomers' },
-            { header: 'Avg Rate', dataKey: 'avgRate' },
-            { header: 'Avg Discount', dataKey: 'avgDiscount' }
-        ];
-
-        const rowsPerPage = 20;
-        let startY = 40;
-
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
-
-            const chunk = rows.slice(i, i + rowsPerPage);
-
-            autoTable(doc, {
+            await generatePdfAsync({
+                orientation: 'portrait',
+                format: 'a4',
+                title: 'Missed Entries by Product',
+                projectName: selectedProject?.name || 'All Projects',
+                generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 8 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+                rows,
+                rowsPerPage: 20,
+                startY: 40,
+                fontSize: 8,
+                cellPadding: 2,
+                filename: `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } finally {
+            setExportingProductPdf(false);
         }
-
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
-        }
-
-        doc.save(`MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -601,27 +558,53 @@ const MissedEntriesReport = () => {
                 <Card.Body>
                     <Form id="filterForm" onSubmit={handleSubmit}>
                         <div className="row mb-3">
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>Since</Form.Label>
-                                <InputGroup>
-                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small text-muted">Quick Filter</Form.Label>
+                                <Form.Select
+                                    size="sm"
+                                    value={dateFilterType}
+                                    onChange={(e) => handleDateFilterChange(e.target.value)}
+                                    disabled={searching || isAutoLoading}
+                                    style={{ fontSize: '0.875rem' }}
+                                >
+                                    {dateFilterOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </Form.Select>
+                            </div>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">Since</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                                     <Form.Control
                                         type="date"
+                                        size="sm"
                                         value={formData.startDate}
-                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, startDate: e.target.value });
+                                            setDateFilterType('custom');
+                                        }}
                                         disabled={searching || isAutoLoading}
+                                        style={{ fontSize: '0.875rem' }}
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>To</Form.Label>
-                                <InputGroup>
-                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">To</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                                     <Form.Control
                                         type="date"
+                                        size="sm"
                                         value={formData.endDate}
-                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, endDate: e.target.value });
+                                            setDateFilterType('custom');
+                                        }}
                                         disabled={searching || isAutoLoading}
+                                        style={{ fontSize: '0.875rem' }}
                                     />
                                 </InputGroup>
                             </div>
@@ -830,15 +813,35 @@ const MissedEntriesReport = () => {
                                                         size="sm" 
                                                         onClick={handleExportDetails}
                                                         className="me-2"
+                                                        disabled={exportingDetailsCsv || exportingDetailsPdf}
                                                     >
-                                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                        {exportingDetailsCsv ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                                Generating...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                            </>
+                                                        )}
                                                     </Button>
                                                     <Button 
                                                         variant="outline-danger" 
                                                         size="sm" 
                                                         onClick={handleExportDetailsPdf}
+                                                        disabled={exportingDetailsCsv || exportingDetailsPdf}
                                                     >
-                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                        {exportingDetailsPdf ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                                Generating...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                            </>
+                                                        )}
                                                     </Button>
                                                 </>
                                             )}
@@ -921,15 +924,35 @@ const MissedEntriesReport = () => {
                                                         size="sm" 
                                                         onClick={handleExportByCustomer}
                                                         className="me-2"
+                                                        disabled={exportingCustomerCsv || exportingCustomerPdf}
                                                     >
-                                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                        {exportingCustomerCsv ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                                Generating...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                            </>
+                                                        )}
                                                     </Button>
                                                     <Button 
                                                         variant="outline-danger" 
                                                         size="sm" 
                                                         onClick={handleExportByCustomerPdf}
+                                                        disabled={exportingCustomerCsv || exportingCustomerPdf}
                                                     >
-                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                        {exportingCustomerPdf ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                                Generating...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                            </>
+                                                        )}
                                                     </Button>
                                                 </>
                                             )}
@@ -1074,15 +1097,35 @@ const MissedEntriesReport = () => {
                                                         size="sm" 
                                                         onClick={handleExportByProduct}
                                                         className="me-2"
+                                                        disabled={exportingProductCsv || exportingProductPdf}
                                                     >
-                                                        <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                        {exportingProductCsv ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                                Generating...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                            </>
+                                                        )}
                                                     </Button>
                                                     <Button 
                                                         variant="outline-danger" 
                                                         size="sm" 
                                                         onClick={handleExportByProductPdf}
+                                                        disabled={exportingProductCsv || exportingProductPdf}
                                                     >
-                                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                        {exportingProductPdf ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                                Generating...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                            </>
+                                                        )}
                                                     </Button>
                                                 </>
                                             )}

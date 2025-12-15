@@ -14,6 +14,7 @@ const Users = () => {
   const isSubmittingRef = useRef(false);
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [controllerActions, setControllerActions] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -30,6 +31,7 @@ const Users = () => {
     isAdmin: false,
     isActive: true,
     projectIds: [],
+    hiddenCategoryIds: [],
     accessPermissions: []
   });
 
@@ -77,6 +79,18 @@ const Users = () => {
           if (response.data.projects) {
             setProjects(response.data.projects);
           }
+          // Load categories from accessible projects
+          if (response.data.categories) {
+            // API returns { id, name, projectId } - ensure all values are valid
+            const validCategories = response.data.categories
+              .filter(c => c && c.id !== undefined && c.id !== null && c.name)
+              .map(c => ({
+                id: Number(c.id),
+                name: String(c.name || ''),
+                projectId: Number(c.projectId)
+              }));
+            setCategories(validCategories);
+          }
           // Also load controller actions if available
           if (response.data.controllerActions) {
             setControllerActions(response.data.controllerActions);
@@ -84,14 +98,52 @@ const Users = () => {
         }
       } else {
         // For create, use the dedicated projects endpoint
-        const response = await apiClient.get('/AdminApi/projects');
-        if (response.data.success && response.data.data) {
-          setProjects(response.data.data);
+        const [projectsRes, categoriesRes, actionsRes] = await Promise.all([
+          apiClient.get('/AdminApi/projects'),
+          apiClient.get('/AdminApi/categories'),
+          apiClient.get('/AdminApi/controller-actions')
+        ]);
+        
+        // Load projects
+        if (projectsRes.data.success && projectsRes.data.data) {
+          // Ensure projects is an array
+          const projectsArray = Array.isArray(projectsRes.data.data) 
+            ? projectsRes.data.data 
+            : [];
+          setProjects(projectsArray);
+        } else {
+          console.warn('Failed to load projects:', projectsRes.data);
+          setProjects([]);
+        }
+        
+        // Load categories from accessible projects
+        if (categoriesRes.data.success && categoriesRes.data.data) {
+          // The API returns { id, name, projectId } - ensure all values are valid
+          const validCategories = categoriesRes.data.data
+            .filter(c => c && c.id !== undefined && c.id !== null && c.name)
+            .map(c => ({
+              id: Number(c.id),
+              name: String(c.name || ''),
+              projectId: Number(c.projectId)
+            }));
+          setCategories(validCategories);
+        } else {
+          console.warn('Failed to load categories:', categoriesRes.data);
+          setCategories([]);
+        }
+        
+        // Load controller actions
+        if (actionsRes.data.success && actionsRes.data.data) {
+          setControllerActions(actionsRes.data.data);
+        } else {
+          console.warn('Failed to load controller actions:', actionsRes.data);
         }
       }
     } catch (error) {
       console.error('Error loading projects:', error);
+      setError('Failed to load projects and categories. Please try again.');
       setProjects([]);
+      setCategories([]);
     }
   };
 
@@ -106,6 +158,7 @@ const Users = () => {
       isAdmin: false,
       isActive: true,
       projectIds: [],
+      hiddenCategoryIds: [],
       accessPermissions: []
     });
     setShowModal(true);
@@ -116,7 +169,6 @@ const Users = () => {
       setLoading(true);
       setError('');
       const response = await apiClient.get(`/AdminApi/users/${user.userId}`);
-      console.log('User edit response:', response.data); // Debug log
       if (response.data.success) {
         const userData = response.data.data;
         setEditingUser(userData);
@@ -132,6 +184,11 @@ const Users = () => {
           }
         }
         
+        // Load categories from response
+        if (response.data.categories) {
+          setCategories(response.data.categories);
+        }
+        
         // Load controller actions from response
         if (response.data.controllerActions) {
           setControllerActions(response.data.controllerActions);
@@ -143,16 +200,17 @@ const Users = () => {
           }
         }
         
-        // Ensure projectIds and accessPermissions are arrays and properly formatted
+        // Ensure projectIds, hiddenCategoryIds and accessPermissions are arrays and properly formatted
         // Note: C# serializes to camelCase, so use lowercase property names
         const projectIds = Array.isArray(userData.projectIds) 
           ? userData.projectIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
           : [];
+        const hiddenCategoryIds = Array.isArray(userData.hiddenCategoryIds) 
+          ? userData.hiddenCategoryIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+          : [];
         const accessPermissions = Array.isArray(userData.accessPermissions) 
           ? userData.accessPermissions.filter(p => p && typeof p === 'string')
           : [];
-        
-        console.log('Setting form data:', { projectIds, accessPermissions }); // Debug log
         
         setFormData({
           username: userData.username || '',
@@ -163,6 +221,7 @@ const Users = () => {
           isAdmin: userData.isAdmin || false,
           isActive: userData.isActive !== undefined ? userData.isActive : true,
           projectIds: projectIds,
+          hiddenCategoryIds: hiddenCategoryIds,
           accessPermissions: accessPermissions
         });
         setShowModal(true);
@@ -214,13 +273,14 @@ const Users = () => {
       const projectIds = Array.isArray(formData.projectIds) 
         ? formData.projectIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         : [];
+      // Ensure HiddenCategoryIds are numbers
+      const hiddenCategoryIds = Array.isArray(formData.hiddenCategoryIds) 
+        ? formData.hiddenCategoryIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        : [];
       // Ensure AccessPermissions is an array and filter out empty/null values
       const accessPermissions = Array.isArray(formData.accessPermissions) 
         ? formData.accessPermissions.filter(p => p && typeof p === 'string' && p.trim().length > 0)
         : [];
-      
-      console.log('Saving user with permissions:', accessPermissions); // Debug log
-      console.log('Saving user with projects:', projectIds); // Debug log
       
       const userData = {
         userId: editingUser?.userId || 0,
@@ -232,6 +292,7 @@ const Users = () => {
         isAdmin: formData.isAdmin || false,
         isActive: formData.isActive !== undefined ? formData.isActive : true,
         projectIds: projectIds,
+        hiddenCategoryIds: hiddenCategoryIds,
         accessPermissions: accessPermissions
       };
 
@@ -252,6 +313,7 @@ const Users = () => {
           isAdmin: false,
           isActive: true,
           projectIds: [],
+          hiddenCategoryIds: [],
           accessPermissions: []
         });
         await loadData();
@@ -320,6 +382,25 @@ const Users = () => {
   const removeProject = (projectId) => {
     const projectIds = formData.projectIds.filter(id => Number(id) !== Number(projectId));
     setFormData({ ...formData, projectIds });
+  };
+
+  // Handle category selection from SearchableSelect
+  const handleCategorySelect = (categoryId) => {
+    if (!categoryId && categoryId !== 0) return;
+    const hiddenCategoryIds = [...formData.hiddenCategoryIds];
+    const numCategoryId = Number(categoryId);
+    const index = hiddenCategoryIds.findIndex(id => Number(id) === numCategoryId);
+    if (index === -1) {
+      // Add category if not already selected
+      hiddenCategoryIds.push(numCategoryId);
+      setFormData({ ...formData, hiddenCategoryIds });
+    }
+  };
+
+  // Remove category from selection
+  const removeCategory = (categoryId) => {
+    const hiddenCategoryIds = formData.hiddenCategoryIds.filter(id => Number(id) !== Number(categoryId));
+    setFormData({ ...formData, hiddenCategoryIds });
   };
 
   // Toggle permission (controller or action)
@@ -409,7 +490,7 @@ const Users = () => {
   };
 
   return (
-    <div>
+    <div className="container-fluid">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>
           <i className="fas fa-users-cog me-2"></i>User Management
@@ -524,6 +605,7 @@ const Users = () => {
             isAdmin: false,
             isActive: true,
             projectIds: [],
+            hiddenCategoryIds: [],
             accessPermissions: []
           });
           setError('');
@@ -597,7 +679,15 @@ const Users = () => {
                 <Form.Control
                   type="password"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => {
+                    const newPassword = e.target.value;
+                    // When editing, if password is cleared, also clear confirmPassword
+                    if (editingUser && !newPassword) {
+                      setFormData({ ...formData, password: newPassword, confirmPassword: '' });
+                    } else {
+                      setFormData({ ...formData, password: newPassword });
+                    }
+                  }}
                   required={!editingUser}
                   disabled={loading}
                 />
@@ -605,14 +695,15 @@ const Users = () => {
             </div>
           </div>
 
-          {!editingUser && (
+          {/* Show Confirm Password field for new users OR when editing and password is being changed */}
+          {(!editingUser || formData.password) && (
             <Form.Group className="mb-3">
               <Form.Label>Confirm Password</Form.Label>
               <Form.Control
                 type="password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                required={!editingUser}
+                required={!editingUser || !!formData.password}
                 disabled={loading}
               />
             </Form.Group>
@@ -686,6 +777,74 @@ const Users = () => {
             />
             {projects.length === 0 && (
               <Form.Text className="text-muted">No projects available</Form.Text>
+            )}
+          </Form.Group>
+
+          {/* Hidden Categories Selection */}
+          <Form.Group className="mb-3">
+            <Form.Label>Hide Categories from User</Form.Label>
+            <Form.Text className="text-muted d-block mb-2">
+              Select categories to hide from this user. Users will see all categories from their accessible projects except those hidden here.
+            </Form.Text>
+            
+            {/* Selected Hidden Categories Display */}
+            {formData.hiddenCategoryIds.length > 0 && (
+              <div className="selected-projects mb-2">
+                {formData.hiddenCategoryIds.map((categoryId) => {
+                  const category = categories.find(c => Number(c.id) === Number(categoryId));
+                  if (!category) return null;
+                  const project = projects.find(p => Number(p.id) === Number(category.projectId));
+                  return (
+                    <Badge
+                      key={categoryId}
+                      bg="warning"
+                      className="me-2 mb-2 project-badge"
+                      style={{ fontSize: '0.875rem', padding: '0.5rem 0.75rem' }}
+                    >
+                      {category.name}
+                      {project && <span className="text-muted ms-1">({project.name})</span>}
+                      <button
+                        type="button"
+                        className="btn-close btn-close-white ms-2"
+                        style={{ fontSize: '0.6rem' }}
+                        onClick={() => removeCategory(categoryId)}
+                        disabled={loading}
+                        aria-label="Remove"
+                      ></button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Category SearchableSelect - filter out already selected categories and only show categories from accessible projects */}
+            <SearchableSelect
+              value={null}
+              onChange={handleCategorySelect}
+              options={categories
+                .filter(c => {
+                  // Filter out already selected categories
+                  const isAlreadySelected = formData.hiddenCategoryIds.some(id => Number(id) === Number(c.id));
+                  // Only show categories from selected projects (or all if no projects selected yet)
+                  const isFromSelectedProject = formData.projectIds.length === 0 || formData.projectIds.some(pid => Number(pid) === Number(c.projectId));
+                  return !isAlreadySelected && isFromSelectedProject;
+                })
+                .map(c => {
+                  const project = projects.find(p => Number(p.id) === Number(c.projectId));
+                  return { 
+                    id: Number(c.id), // Ensure id is a number
+                    name: `${c.name || 'Unknown'}${project ? ` (${project.name})` : ''}` 
+                  };
+                })}
+              placeholder="Search and select categories to hide..."
+              disabled={loading || categories.length === 0 || formData.projectIds.length === 0}
+              size="sm"
+            />
+            {categories.length === 0 && (
+              <Form.Text className="text-muted">No categories available. Please assign projects first.</Form.Text>
+            )}
+            {formData.projectIds.length === 0 && (
+              <Form.Text className="text-muted">Please assign projects first to see available categories.</Form.Text>
             )}
           </Form.Group>
 

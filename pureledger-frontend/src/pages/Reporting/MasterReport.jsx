@@ -4,9 +4,8 @@ import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Papa from 'papaparse';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 import './MasterReport.css';
 
 const buildVoucherUrl = (voucherId, type) => {
@@ -25,6 +24,12 @@ const MasterReport = () => {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
+    const [exportingMainCsv, setExportingMainCsv] = useState(false);
+    const [exportingMainPdf, setExportingMainPdf] = useState(false);
+    const [exportingAccountCsv, setExportingAccountCsv] = useState(false);
+    const [exportingAccountPdf, setExportingAccountPdf] = useState(false);
+    const [exportingCategoryCsv, setExportingCategoryCsv] = useState(false);
+    const [exportingCategoryPdf, setExportingCategoryPdf] = useState(false);
     const [allEntries, setAllEntries] = useState([]);
     const [accountSummary, setAccountSummary] = useState([]);
     const [categorySummary, setCategorySummary] = useState([]);
@@ -49,6 +54,7 @@ const MasterReport = () => {
         accountId: null,
         bookerId: null
     });
+    const [dateFilterType, setDateFilterType] = useState('custom');
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -285,6 +291,19 @@ const MasterReport = () => {
         setCategorySummary(Object.values(categoryMap));
     }, []);
 
+    const handleDateFilterChange = (filterType) => {
+        setDateFilterType(filterType);
+        if (filterType === 'custom') {
+            return;
+        }
+        const dateRange = getDateRange(filterType);
+        setFormData(prev => ({
+            ...prev,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate
+        }));
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
         generateReport(0, false);
@@ -353,277 +372,206 @@ const MasterReport = () => {
         }
     };
 
-    const exportToCsv = (data, filename) => {
-        if (!data || data.length === 0) {
-            alert('No data to export');
-            return;
+    const handleExportMainReport = async () => {
+        setExportingMainCsv(true);
+        try {
+            const csvData = filteredEntries.map(entry => ({
+                ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}`,
+                'Entry Date': formatDate(entry.transactionDate),
+                'Credit Date': formatDate(entry.creditableDate),
+                Description: entry.description || '',
+                Account: entry.accountName || '',
+                Booker: entry.bookerName || '',
+                Quantity: entry.quantity || '',
+                Debit: entry.debit || 0,
+                Credit: entry.credit || 0,
+                Balance: entry.balance || 0
+            }));
+            await exportToCsvAsync(csvData, `MasterReport_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingMainCsv(false);
         }
-
-        const csvContent = Papa.unparse(data);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
     };
 
-    const handleExportMainReport = () => {
-        const csvData = filteredEntries.map(entry => ({
-            ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}`,
-            'Entry Date': formatDate(entry.transactionDate),
-            'Credit Date': formatDate(entry.creditableDate),
-            Description: entry.description || '',
-            Account: entry.accountName || '',
-            Booker: entry.bookerName || '',
-            Quantity: entry.quantity || '',
-            Debit: entry.debit || 0,
-            Credit: entry.credit || 0,
-            Balance: entry.balance || 0
-        }));
-        exportToCsv(csvData, `MasterReport_${new Date().toISOString().split('T')[0]}.csv`);
-    };
-
-    const handleExportAccountSummary = () => {
-        const csvData = accountSummary.map(item => ({
-            ID: item.id,
-            Account: item.name,
-            Debit: item.debit,
-            Credit: item.credit,
-            Balance: item.debit - item.credit
-        }));
-        exportToCsv(csvData, `AccountSummary_${new Date().toISOString().split('T')[0]}.csv`);
-    };
-
-    const handleExportCategorySummary = () => {
-        const csvData = categorySummary.map(item => ({
-            ID: item.id,
-            Category: item.name,
-            Debit: item.debit,
-            Credit: item.credit,
-            Balance: item.debit - item.credit
-        }));
-        exportToCsv(csvData, `CategorySummary_${new Date().toISOString().split('T')[0]}.csv`);
-    };
-
-    const handleExportMainReportPdf = () => {
-        const doc = new jsPDF('landscape', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
-        
-        // Header
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Master Report', 14, 20);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        if (formData.startDate) {
-            doc.text(`Date Range: ${formatDate(formData.startDate)} to ${formatDate(formData.endDate || formData.startDate)}`, 14, 34);
+    const handleExportAccountSummary = async () => {
+        setExportingAccountCsv(true);
+        try {
+            const csvData = accountSummary.map(item => ({
+                ID: item.id,
+                Account: item.name,
+                Debit: item.debit,
+                Credit: item.credit,
+                Balance: item.debit - item.credit
+            }));
+            await exportToCsvAsync(csvData, `AccountSummary_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingAccountCsv(false);
         }
-        doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords || filteredEntries.length}`, 14, 40);
+    };
 
-        // Build columns based on visibility
-        const columns = [{ header: 'ID', dataKey: 'id' }];
-        if (visibleColumns.date) columns.push({ header: 'Entry Date', dataKey: 'date' });
-        if (visibleColumns.creditableDate) columns.push({ header: 'Credit Date', dataKey: 'creditableDate' });
-        if (visibleColumns.description) columns.push({ header: 'Description', dataKey: 'description' });
-        if (visibleColumns.account) columns.push({ header: 'Account', dataKey: 'account' });
-        if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
-        if (visibleColumns.quantity) columns.push({ header: 'Qty', dataKey: 'quantity' });
-        if (visibleColumns.debit) columns.push({ header: 'Debit', dataKey: 'debit' });
-        if (visibleColumns.credit) columns.push({ header: 'Credit', dataKey: 'credit' });
-        if (visibleColumns.balance) columns.push({ header: 'Balance', dataKey: 'balance' });
+    const handleExportCategorySummary = async () => {
+        setExportingCategoryCsv(true);
+        try {
+            const csvData = categorySummary.map(item => ({
+                ID: item.id,
+                Category: item.name,
+                Debit: item.debit,
+                Credit: item.credit,
+                Balance: item.debit - item.credit
+            }));
+            await exportToCsvAsync(csvData, `CategorySummary_${new Date().toISOString().split('T')[0]}.csv`);
+        } finally {
+            setExportingCategoryCsv(false);
+        }
+    };
 
-        const rows = filteredEntries.map(entry => {
-            const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
-            return {
-                id: isOpening ? 'OPENING' : `JV-${entry.journalVoucherId}\nEntry: ${entry.id}`,
-                date: formatDate(entry.transactionDate),
-                creditableDate: formatDate(entry.creditableDate),
-                description: entry.description || '',
-                account: entry.accountName || '',
-                booker: entry.bookerName || '',
-                quantity: entry.quantity ?? '',
-                debit: formatCurrency(entry.debit),
-                credit: formatCurrency(entry.credit),
-                balance: formatCurrency(entry.balance)
-            };
-        });
-
-        // Add totals row
-        rows.push({
-            id: 'TOTAL',
-            date: '',
-            creditableDate: '',
-            description: '',
-            account: '',
-            booker: '',
-            quantity: totals.quantity,
-            debit: formatCurrency(totals.debit),
-            credit: formatCurrency(totals.credit),
-            balance: formatCurrency(totals.debit - totals.credit)
-        });
-
-        // Split rows into chunks of 10 per page
-        const rowsPerPage = 14;
-        let startY = 46;
-        
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
+    const handleExportMainReportPdf = async () => {
+        setExportingMainPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
             
-            const chunk = rows.slice(i, i + rowsPerPage);
-            
-            autoTable(doc, {
-                columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 7, cellPadding: 2 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
-                footStyles: { fillColor: [241, 245, 249], fontStyle: 'bold' }
+            const columns = [{ header: 'ID', dataKey: 'id' }];
+            if (visibleColumns.date) columns.push({ header: 'Entry Date', dataKey: 'date' });
+            if (visibleColumns.creditableDate) columns.push({ header: 'Credit Date', dataKey: 'creditableDate' });
+            if (visibleColumns.description) columns.push({ header: 'Description', dataKey: 'description' });
+            if (visibleColumns.account) columns.push({ header: 'Account', dataKey: 'account' });
+            if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
+            if (visibleColumns.quantity) columns.push({ header: 'Qty', dataKey: 'quantity' });
+            if (visibleColumns.debit) columns.push({ header: 'Debit', dataKey: 'debit' });
+            if (visibleColumns.credit) columns.push({ header: 'Credit', dataKey: 'credit' });
+            if (visibleColumns.balance) columns.push({ header: 'Balance', dataKey: 'balance' });
+
+            const rows = filteredEntries.map(entry => {
+                const isOpening = entry.formattedId === "OPENING" || entry.description === "Opening Balance";
+                return {
+                    id: isOpening ? 'OPENING' : `JV-${entry.journalVoucherId}\nEntry: ${entry.id}`,
+                    date: formatDate(entry.transactionDate),
+                    creditableDate: formatDate(entry.creditableDate),
+                    description: entry.description || '',
+                    account: entry.accountName || '',
+                    booker: entry.bookerName || '',
+                    quantity: entry.quantity ?? '',
+                    debit: formatCurrency(entry.debit),
+                    credit: formatCurrency(entry.credit),
+                    balance: formatCurrency(entry.balance)
+                };
             });
-        }
 
-        // Add page numbers to all pages
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(
-                `PureLedger - Master Report | Page ${i} of ${pageCount}`,
-                14,
-                doc.internal.pageSize.height - 10
-            );
-        }
+            rows.push({
+                id: 'TOTAL',
+                date: '',
+                creditableDate: '',
+                description: '',
+                account: '',
+                booker: '',
+                quantity: totals.quantity,
+                debit: formatCurrency(totals.debit),
+                credit: formatCurrency(totals.credit),
+                balance: formatCurrency(totals.debit - totals.credit)
+            });
 
-        doc.save(`MasterReport_${new Date().toISOString().split('T')[0]}.pdf`);
+            const dateRange = formData.startDate 
+                ? `${formatDate(formData.startDate)} to ${formatDate(formData.endDate || formData.startDate)}`
+                : null;
+
+            await generatePdfAsync({
+                orientation: 'landscape',
+                format: 'a4',
+                title: 'Master Report',
+                projectName: selectedProject?.name || 'All Projects',
+                dateRange,
+                generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords || filteredEntries.length}`,
+                columns,
+                rows,
+                rowsPerPage: 14,
+                startY: 46,
+                fontSize: 7,
+                cellPadding: 2,
+                filename: `MasterReport_${new Date().toISOString().split('T')[0]}.pdf`
+            });
+        } finally {
+            setExportingMainPdf(false);
+        }
     };
 
-    const handleExportAccountSummaryPdf = () => {
-        const doc = new jsPDF('portrait', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
-        
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Account Summary', 14, 20);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
-
-        const rows = accountSummary.map(item => ({
-            id: item.id,
-            account: item.name,
-            debit: formatCurrency(item.debit),
-            credit: formatCurrency(item.credit),
-            balance: formatCurrency(item.debit - item.credit)
-        }));
-
-        const columns = [
-            { header: 'ID', dataKey: 'id' },
-            { header: 'Account', dataKey: 'account' },
-            { header: 'Debit', dataKey: 'debit' },
-            { header: 'Credit', dataKey: 'credit' },
-            { header: 'Balance', dataKey: 'balance' }
-        ];
-
-        // Split rows into chunks of 10 per page
-        const rowsPerPage = 10;
-        let startY = 40;
-        
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
+    const handleExportAccountSummaryPdf = async () => {
+        setExportingAccountPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
             
-            const chunk = rows.slice(i, i + rowsPerPage);
-            
-            autoTable(doc, {
+            const rows = accountSummary.map(item => ({
+                id: item.id,
+                account: item.name,
+                debit: formatCurrency(item.debit),
+                credit: formatCurrency(item.credit),
+                balance: formatCurrency(item.debit - item.credit)
+            }));
+
+            const columns = [
+                { header: 'ID', dataKey: 'id' },
+                { header: 'Account', dataKey: 'account' },
+                { header: 'Debit', dataKey: 'debit' },
+                { header: 'Credit', dataKey: 'credit' },
+                { header: 'Balance', dataKey: 'balance' }
+            ];
+
+            await generatePdfAsync({
+                orientation: 'portrait',
+                format: 'a4',
+                title: 'Account Summary',
+                projectName: selectedProject?.name || 'All Projects',
+                generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 9 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+                rows,
+                rowsPerPage: 10,
+                startY: 40,
+                fontSize: 9,
+                cellPadding: 2,
+                filename: `AccountSummary_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } finally {
+            setExportingAccountPdf(false);
         }
-
-        // Add page numbers
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
-        }
-
-        doc.save(`AccountSummary_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
-    const handleExportCategorySummaryPdf = () => {
-        const doc = new jsPDF('portrait', 'mm', 'a4');
-        const selectedProject = projects.find(p => p.id === formData.projectId);
-        
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175);
-        doc.text('Category Summary', 14, 20);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Project: ${selectedProject?.name || 'All Projects'}`, 14, 28);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 34);
-
-        const rows = categorySummary.map(item => ({
-            id: item.id,
-            category: item.name,
-            debit: formatCurrency(item.debit),
-            credit: formatCurrency(item.credit),
-            balance: formatCurrency(item.debit - item.credit)
-        }));
-
-        const columns = [
-            { header: 'ID', dataKey: 'id' },
-            { header: 'Category', dataKey: 'category' },
-            { header: 'Debit', dataKey: 'debit' },
-            { header: 'Credit', dataKey: 'credit' },
-            { header: 'Balance', dataKey: 'balance' }
-        ];
-
-        // Split rows into chunks of 10 per page
-        const rowsPerPage = 10;
-        let startY = 40;
-        
-        for (let i = 0; i < rows.length; i += rowsPerPage) {
-            if (i > 0) {
-                doc.addPage();
-                startY = 20;
-            }
+    const handleExportCategorySummaryPdf = async () => {
+        setExportingCategoryPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
             
-            const chunk = rows.slice(i, i + rowsPerPage);
-            
-            autoTable(doc, {
+            const rows = categorySummary.map(item => ({
+                id: item.id,
+                category: item.name,
+                debit: formatCurrency(item.debit),
+                credit: formatCurrency(item.credit),
+                balance: formatCurrency(item.debit - item.credit)
+            }));
+
+            const columns = [
+                { header: 'ID', dataKey: 'id' },
+                { header: 'Category', dataKey: 'category' },
+                { header: 'Debit', dataKey: 'debit' },
+                { header: 'Credit', dataKey: 'credit' },
+                { header: 'Balance', dataKey: 'balance' }
+            ];
+
+            await generatePdfAsync({
+                orientation: 'portrait',
+                format: 'a4',
+                title: 'Category Summary',
+                projectName: selectedProject?.name || 'All Projects',
+                generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
-                body: chunk,
-                startY: startY,
-                styles: { fontSize: 9 },
-                headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
+                rows,
+                rowsPerPage: 10,
+                startY: 40,
+                fontSize: 9,
+                cellPadding: 2,
+                filename: `CategorySummary_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } finally {
+            setExportingCategoryPdf(false);
         }
-
-        // Add page numbers
-        const pageCount = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(`Page ${i} of ${pageCount}`, 14, doc.internal.pageSize.height - 10);
-        }
-
-        doc.save(`CategorySummary_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     if (loading) {
@@ -631,7 +579,7 @@ const MasterReport = () => {
     }
 
     return (
-        <div className="container-fluid" style={{ maxWidth: '100%', width: '100%', paddingLeft: '1rem', paddingRight: '1rem' }}>
+        <div className="container-fluid">
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2><i className="fas fa-file-alt me-2"></i>Master Report</h2>
             </div>
@@ -651,25 +599,53 @@ const MasterReport = () => {
                 <Card.Body>
                     <Form onSubmit={handleSubmit}>
                         <div className="row mb-3">
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>Since</Form.Label>
-                                <InputGroup>
-                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small text-muted">Quick Filter</Form.Label>
+                                <Form.Select
+                                    size="sm"
+                                    value={dateFilterType}
+                                    onChange={(e) => handleDateFilterChange(e.target.value)}
+                                    disabled={generating}
+                                    style={{ fontSize: '0.875rem' }}
+                                >
+                                    {dateFilterOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </Form.Select>
+                            </div>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">Since</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                                     <Form.Control
                                         type="date"
+                                        size="sm"
                                         value={formData.startDate}
-                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, startDate: e.target.value });
+                                            setDateFilterType('custom');
+                                        }}
+                                        disabled={generating}
+                                        style={{ fontSize: '0.875rem' }}
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>To</Form.Label>
-                                <InputGroup>
-                                    <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">To</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                                     <Form.Control
                                         type="date"
+                                        size="sm"
                                         value={formData.endDate}
-                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, endDate: e.target.value });
+                                            setDateFilterType('custom');
+                                        }}
+                                        disabled={generating}
+                                        style={{ fontSize: '0.875rem' }}
                                     />
                                 </InputGroup>
                             </div>
@@ -810,15 +786,35 @@ const MasterReport = () => {
                                             size="sm" 
                                             onClick={handleExportMainReport} 
                                             className="me-2"
+                                            disabled={exportingMainCsv || exportingMainPdf}
                                         >
-                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                            {exportingMainCsv ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                </>
+                                            )}
                                         </Button>
                                         <Button 
                                             variant="outline-danger" 
                                             size="sm" 
                                             onClick={handleExportMainReportPdf}
+                                            disabled={exportingMainCsv || exportingMainPdf}
                                         >
-                                            <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                            {exportingMainPdf ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                </>
+                                            )}
                                         </Button>
                                     </>
                                 )}
@@ -847,7 +843,7 @@ const MasterReport = () => {
                                             <th className="id-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>
                                             {visibleColumns.date && <th className="date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Entry Date</th>}
                                             {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Credit Date</th>}
-                                            {visibleColumns.description && <th className="description-column" style={{ minWidth: '200px' }}>Description</th>}
+                                            {visibleColumns.description && <th className="description-column" style={{ minWidth: '170px' }}>Description</th>}
                                             {visibleColumns.account && <th className="account-column" style={{ minWidth: '85px', maxWidth: '120px' }}>Account</th>}
                                             {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '100px', maxWidth: '140px' }}>Booker</th>}
                                             {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Quantity</th>}
@@ -957,15 +953,35 @@ const MasterReport = () => {
                                             size="sm"
                                             onClick={handleExportAccountSummary}
                                             className="me-2"
+                                            disabled={exportingAccountCsv || exportingAccountPdf}
                                         >
-                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                            {exportingAccountCsv ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                </>
+                                            )}
                                         </Button>
                                         <Button 
                                             variant="outline-danger" 
                                             size="sm" 
                                             onClick={handleExportAccountSummaryPdf}
+                                            disabled={exportingAccountCsv || exportingAccountPdf}
                                         >
-                                            <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                            {exportingAccountPdf ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                </>
+                                            )}
                                         </Button>
                                     </>
                                 )}
@@ -1023,15 +1039,35 @@ const MasterReport = () => {
                                             size="sm"
                                             onClick={handleExportCategorySummary}
                                             className="me-2"
+                                            disabled={exportingCategoryCsv || exportingCategoryPdf}
                                         >
-                                            <i className="fas fa-file-csv me-1"></i> Export CSV
+                                            {exportingCategoryCsv ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-csv me-1"></i> Export CSV
+                                                </>
+                                            )}
                                         </Button>
                                         <Button 
                                             variant="outline-danger" 
                                             size="sm" 
                                             onClick={handleExportCategorySummaryPdf}
+                                            disabled={exportingCategoryCsv || exportingCategoryPdf}
                                         >
-                                            <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                            {exportingCategoryPdf ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Generating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-pdf me-1"></i> Export PDF
+                                                </>
+                                            )}
                                         </Button>
                                     </>
                                 )}

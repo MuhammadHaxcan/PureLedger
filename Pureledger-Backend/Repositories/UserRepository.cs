@@ -43,6 +43,7 @@ namespace PureLedger.Repositories
             return await _context.Users
                 .Include(u => u.UserProjects)
                 .Include(u => u.ControllerAccess)
+                .Include(u => u.UserCategories)
                 .FirstOrDefaultAsync(u => u.UserId == id);
         }
 

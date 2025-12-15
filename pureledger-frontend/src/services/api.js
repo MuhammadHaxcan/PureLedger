@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 /**
  * API Base URL Configuration
@@ -20,6 +21,21 @@ const apiClient = axios.create({
   timeout: 30000, // 30 seconds timeout
 });
 
+// Flag to prevent multiple simultaneous refresh requests
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+// Helper to add requests to queue during token refresh
+const subscribeTokenRefresh = (callback) => {
+  refreshSubscribers.push(callback);
+};
+
+// Helper to notify all queued requests when refresh completes
+const onTokenRefreshed = (newToken) => {
+  refreshSubscribers.forEach((callback) => callback(newToken));
+  refreshSubscribers = [];
+};
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
@@ -27,12 +43,12 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
+
     // Don't override Content-Type for FormData (file uploads)
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];
     }
-    
+
     return config;
   },
   (error) => {
@@ -49,7 +65,7 @@ apiClient.interceptors.response.use(
     // Extract error information from response
     const errorData = error.response?.data || {};
     const statusCode = error.response?.status;
-    
+
     // Build standardized error object
     const standardizedError = {
       ...error,
@@ -64,23 +80,120 @@ apiClient.interceptors.response.use(
     // Handle 401 Unauthorized - Token expired or invalid
     if (statusCode === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
-      // Clear auth data
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+
+      // Try to refresh token
+      const refreshToken = localStorage.getItem('refreshToken');
+      const accessToken = localStorage.getItem('authToken');
+
+      if (refreshToken && accessToken) {
+        if (isRefreshing) {
+          // If already refreshing, queue this request
+          return new Promise((resolve) => {
+            subscribeTokenRefresh((newToken) => {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              resolve(apiClient(originalRequest));
+            });
+          });
+        }
+
+        isRefreshing = true;
+
+        try {
+          const response = await axios.post(
+            `${API_BASE_URL}/AccountApi/refresh-token`,
+            {
+              accessToken: accessToken,
+              refreshToken: refreshToken,
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          if (response.data.success) {
+            const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
+
+            // Update stored tokens
+            localStorage.setItem('authToken', newAccessToken);
+            localStorage.setItem('refreshToken', newRefreshToken);
+
+            // Update authorization header for original request
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
+            // Notify queued requests
+            onTokenRefreshed(newAccessToken);
+            isRefreshing = false;
+
+            // Retry original request
+            return apiClient(originalRequest);
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          isRefreshing = false;
+          refreshSubscribers = [];
+
+          // Show auth error toast
+          toast.error('Your session has expired. Please log in again.', {
+            position: "top-right",
+            autoClose: 8000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+            toastId: 'session-expired',
+          });
+
+          // Clear auth data
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          localStorage.removeItem('userAccess');
+          localStorage.removeItem('navigationMenu');
+
+          // Redirect to login after a short delay to show the toast
+          setTimeout(() => {
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+          }, 2000);
+
+          return Promise.reject(standardizedError);
+        }
+      } else {
+        // No refresh token available, clear auth and redirect
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('userAccess');
+        localStorage.removeItem('navigationMenu');
+
+        // Redirect to login if not already there
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+
+        return Promise.reject(standardizedError);
       }
-      
-      return Promise.reject(standardizedError);
     }
 
     // Handle 403 Forbidden - Access denied
-    // Don't auto-redirect - let components handle 403 errors gracefully
     if (statusCode === 403) {
-      standardizedError.message = errorData.message || 'You do not have permission to access this resource.';
+      const accessMessage = errorData.message || 'You do not have permission to access this resource.';
+      standardizedError.message = accessMessage;
+
+      // Show access denied toast
+      toast.warning(accessMessage, {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        toastId: 'access-denied',
+      });
+
       return Promise.reject(standardizedError);
     }
 
