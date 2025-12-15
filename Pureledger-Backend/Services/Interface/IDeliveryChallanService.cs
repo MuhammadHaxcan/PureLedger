@@ -28,7 +28,8 @@ namespace PureLedger.Services.Interface
             DateOnly? toDate,
             int? projectId = null,
             int? categoryId = null,
-            int? accountId = null);
+            int? accountId = null,
+            int? userId = null);
         #endregion
 
         #region DeliveryChallan Operations - Standalone
@@ -98,6 +99,7 @@ namespace PureLedger.Services.Interface
         #region Lookup Operations
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
+        Task<IEnumerable<Category>> GetCategoriesByProjectForUserAsync(int projectId, int userId);
         Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
         #endregion
 

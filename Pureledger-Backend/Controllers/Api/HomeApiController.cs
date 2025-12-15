@@ -827,26 +827,23 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var cacheKey = CacheKeys.CategoriesByProject(projectId);
-
-                if (!_cache.TryGetValue(cacheKey, out object? cachedResult))
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue)
                 {
-                    var categories = await _journalService.GetCategoriesByProjectAsync(projectId);
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+
+                // Categories are now user-specific, so we don't cache them
+                var categories = await _journalService.GetCategoriesByProjectForUserAsync(projectId, userId.Value);
+                
                 if (categories == null || !categories.Any())
                 {
                     return Ok(new { success = true, data = Array.Empty<object>() });
                 }
 
-                    cachedResult = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }).ToList();
-                    
-                    // Cache indefinitely - will be invalidated manually on CRUD operations
-                    _cache.Set(cacheKey, cachedResult);
-                    CacheInvalidationService.RegisterCategoryKey(cacheKey);
-                    
-                    _logger.LogDebug("Cached categories for project {ProjectId}", projectId);
-                }
+                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }).ToList();
 
-                return Ok(new { success = true, data = cachedResult });
+                return Ok(new { success = true, data = result });
             }
             catch (Exception ex)
             {

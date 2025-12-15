@@ -68,8 +68,10 @@ namespace PureLedger.Controllers.Api
                         filter.ToDate = toDate;
                 }
 
+                var userId = _currentUserService.GetCurrentUserId();
+                
                 var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
-                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId);
+                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId, userId);
 
                 return Ok(new { success = true, data = result });
             }
@@ -152,7 +154,13 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var categories = await _deliveryChallanService.GetCategoriesByProjectAsync(projectId);
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+
+                var categories = await _deliveryChallanService.GetCategoriesByProjectForUserAsync(projectId, userId.Value);
 
                 if (categories == null || !categories.Any())
                 {

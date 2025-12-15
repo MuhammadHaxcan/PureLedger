@@ -110,6 +110,19 @@ namespace PureLedger.Services
             }
         }
 
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectForUserAsync(int projectId, int userId)
+        {
+            try
+            {
+                return await _unitOfWork.Categories.GetByProjectIdForUserAsync(projectId, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve categories for project {ProjectId} and user {UserId}", projectId, userId);
+                throw;
+            }
+        }
+
         public Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId) =>
             _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(projectId);
 
@@ -122,7 +135,8 @@ namespace PureLedger.Services
             DateOnly? toDate,
             int? projectId = null,
             int? categoryId = null,
-            int? accountId = null)
+            int? accountId = null,
+            int? userId = null)
         {
             var result = new DeliveryChallanFilterViewModel
             {
@@ -136,6 +150,14 @@ namespace PureLedger.Services
 
             try
             {
+                // Get hidden category IDs for the user
+                List<int> hiddenCategoryIds = new List<int>();
+                if (userId.HasValue)
+                {
+                    var userCategories = await _unitOfWork.UserCategories.GetByUserIdAsync(userId.Value);
+                    hiddenCategoryIds = userCategories.Select(uc => uc.CategoryId).ToList();
+                }
+
                 var includeEntries = !accountId.HasValue && !categoryId.HasValue;
                 var vouchers = await _unitOfWork.JournalVouchers.GetFilteredVouchersAsync(sinceDate, toDate, projectId, includeEntries);
                 var unprocessedVouchers = vouchers.Where(v => !v.IsCompleted && !v.IsBaseVoucher).ToList();
@@ -148,9 +170,28 @@ namespace PureLedger.Services
                     var voucherViewModel = MapToJournalVoucherViewModel(voucher);
                     var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucher.JournalVoucherId, categoryId, accountId);
 
-                    var processableEntries = entries
-                        .Where(e => !e.IsProcessed && e.Account.AccountGroupId != 1)
-                        .Select(MapToJournalEntryDetailViewModel);
+                    // Filter out entries with hidden categories
+                    var filteredEntries = entries
+                        .Where(e => !e.IsProcessed && e.Account.AccountGroupId != 1);
+
+                    // If userId is provided, exclude entries with hidden categories
+                    if (userId.HasValue && hiddenCategoryIds.Any())
+                    {
+                        filteredEntries = filteredEntries.Where(e => !hiddenCategoryIds.Contains(e.CategoryId));
+                    }
+
+                    var processableEntries = filteredEntries.Select(MapToJournalEntryDetailViewModel);
+
+                    // If userId is provided and voucher has ANY entry with hidden category, exclude the entire voucher
+                    if (userId.HasValue && hiddenCategoryIds.Any())
+                    {
+                        var hasHiddenCategoryEntry = entries.Any(e => hiddenCategoryIds.Contains(e.CategoryId));
+                        if (hasHiddenCategoryEntry)
+                        {
+                            // Exclude this voucher entirely
+                            continue;
+                        }
+                    }
 
                     voucherViewModel.Entries.AddRange(processableEntries);
 
