@@ -24,7 +24,7 @@ namespace PureLedger.Controllers.Api
         {
             ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" },
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations", "Bookers" },
-            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport", "MissedEntriesReport" },
+            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport" },
             ["DeliveryChallan"] = new() { "ProcessDC" }
         };
 

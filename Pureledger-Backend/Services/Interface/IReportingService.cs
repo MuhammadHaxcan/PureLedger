@@ -13,8 +13,11 @@ namespace PureLedger.Services.Interface
         Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId);
         Task<decimal> GetAccountBalanceBeforeVoucherAsync(int journalVoucherId);
         Task<MasterReportViewModels> GetMasterReportAsync(MasterReportRequest request);
+        Task<UserReportViewModels> GetUserReportAsync(UserReportRequest request, int userId);
+        Task<object> GetUserReportInitAsync(int userId);
         Task<IEnumerable<Account>> GetAccountsByCategoryAsync(int categoryId);
         Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId);
+        Task<IEnumerable<Category>> GetCategoriesByProjectForUserAsync(int projectId, int userId);
         Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type);
         Task<ProductReportViewModel> GetProductReportAsync(ProductReportRequest request);
         Task<List<Location>> GetAllLocationsAsync();

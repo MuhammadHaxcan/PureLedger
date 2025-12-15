@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
         'MetaData': [PERMISSIONS.METADATA_PROJECTS, PERMISSIONS.METADATA_CATEGORIES, PERMISSIONS.METADATA_ACCOUNTS,
                      PERMISSIONS.METADATA_LOCATIONS, PERMISSIONS.METADATA_BOOKERS],
         'Reporting': [PERMISSIONS.REPORTING_SINGLE_DOC, PERMISSIONS.REPORTING_AGING_REPORT, PERMISSIONS.REPORTING_ACCOUNT_REPORT,
-                      PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES],
+                      PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_USER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES],
         'DeliveryChallan': [PERMISSIONS.DELIVERY_PROCESS_DC],
       };
       
@@ -240,6 +240,7 @@ export const AuthProvider = ({ children }) => {
           { action: 'AgingReport', title: 'Aging Report', icon: 'fas fa-calendar-alt', path: '/reporting/aging-report' },
           { action: 'AccountReport', title: 'Account Report', icon: 'fas fa-user-circle', path: '/reporting/account-report' },
           { action: 'MasterReport', title: 'Master Report', icon: 'fas fa-file-invoice', path: '/reporting/master-report' },
+          { action: 'UserReport', title: 'User Report', icon: 'fas fa-file-alt', path: '/reporting/user-report' },
           { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
           { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
         ],
@@ -304,6 +305,7 @@ export const AuthProvider = ({ children }) => {
       if (actions.Reporting?.includes('AgingReport')) return '/reporting/aging-report';
       if (actions.Reporting?.includes('AccountReport')) return '/reporting/account-report';
       if (actions.Reporting?.includes('MasterReport')) return '/reporting/master-report';
+      if (actions.Reporting?.includes('UserReport')) return '/reporting/user-report';
       if (actions.Reporting?.includes('ProductReport')) return '/reporting/product-report';
       if (actions.Reporting?.includes('MissedEntriesReport')) return '/reporting/missed-entries';
       return '/reporting/single-doc';

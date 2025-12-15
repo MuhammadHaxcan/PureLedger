@@ -472,6 +472,97 @@ namespace PureLedger.Controllers.Api
 
         #endregion
 
+        #region User Report
+
+        [HttpGet("user-report-init")]
+        public async Task<IActionResult> GetUserReportInit()
+        {
+            try
+            {
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+
+                var result = await _reportingService.GetUserReportInitAsync(userId.Value);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading user report init data");
+                return StatusCode(500, new { success = false, message = "Error loading data" });
+            }
+        }
+
+        [HttpGet("user-report-categories-by-project/{projectId}")]
+        public async Task<IActionResult> GetUserReportCategoriesByProject(int projectId)
+        {
+            try
+            {
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+
+                var categories = await _reportingService.GetCategoriesByProjectForUserAsync(projectId, userId.Value);
+                if (categories == null || !categories.Any())
+                {
+                    return Ok(new { success = true, data = Array.Empty<object>() });
+                }
+
+                var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading categories for project {ProjectId}", projectId);
+                return StatusCode(500, new { success = false, message = $"Error loading categories: {ex.Message}" });
+            }
+        }
+
+        [HttpGet("user-report")]
+        public async Task<IActionResult> GetUserReport([FromQuery] UserReportRequest request)
+        {
+            try
+            {
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue)
+                {
+                    return Unauthorized(new { success = false, message = "User not authenticated" });
+                }
+
+                if (!ModelState.IsValid)
+                {
+                    var errors = ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage);
+                    return BadRequest(new { success = false, errors });
+                }
+
+                var report = await _reportingService.GetUserReportAsync(request, userId.Value);
+                return Ok(new { success = true, data = report });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid argument for user report");
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning(ex, "Unauthorized access attempt for user report");
+                return Forbid();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating user report");
+                return StatusCode(500, new { success = false, message = $"Error generating report: {ex.Message}" });
+            }
+        }
+
+        #endregion
+
         #region Lookup APIs
 
         [HttpGet("categories-by-project/{projectId}")]

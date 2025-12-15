@@ -99,6 +99,10 @@ namespace PureLedger.Attributes
                 // MasterReport action
                 ["master-report"] = "MasterReport",
                 ["master-report-init"] = "MasterReport",
+                // UserReport action
+                ["user-report"] = "UserReport",
+                ["user-report-init"] = "UserReport",
+                ["user-report-categories-by-project"] = "UserReport",
                 // ProductReport action
                 ["product-report"] = "ProductReport",
                 ["product-report-init"] = "ProductReport",

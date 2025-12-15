@@ -22,6 +22,7 @@ import SingleDoc from './pages/Reporting/SingleDoc';
 import AgingReport from './pages/Reporting/AgingReport';
 import AccountReport from './pages/Reporting/AccountReport';
 import MasterReport from './pages/Reporting/MasterReport';
+import UserReport from './pages/Reporting/UserReport';
 import ProductReport from './pages/Reporting/ProductReport';
 import MissedEntriesReport from './pages/Reporting/MissedEntriesReport';
 import PrintOnlyVoucher from './pages/Reporting/PrintOnlyVoucher';
@@ -67,6 +68,7 @@ function App() {
             <Route path="/reporting/aging-report" element={<ProtectedRoute><AgingReport /></ProtectedRoute>} />
             <Route path="/reporting/account-report" element={<ProtectedRoute><AccountReport /></ProtectedRoute>} />
             <Route path="/reporting/master-report" element={<ProtectedRoute><MasterReport /></ProtectedRoute>} />
+            <Route path="/reporting/user-report" element={<ProtectedRoute><UserReport /></ProtectedRoute>} />
             <Route path="/reporting/product-report" element={<ProtectedRoute><ProductReport /></ProtectedRoute>} />
             <Route path="/reporting/missed-entries" element={<ProtectedRoute><MissedEntriesReport /></ProtectedRoute>} />
             {/* Delivery Challan Routes */}

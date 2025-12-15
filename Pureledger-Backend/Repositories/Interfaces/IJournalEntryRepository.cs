@@ -28,11 +28,31 @@ namespace PureLedger.Repositories.Interfaces
             int page,
             int pageSize);
 
+        Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForUserReportAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? projectId,
+            int categoryId,
+            int? accountId,
+            int? bookerId,
+            int page,
+            int pageSize);
+
         Task<decimal> GetPreviousEntriesBalanceAsync(
             DateOnly startDate,
             DateOnly endDate,
             int? projectId,
             int? categoryId,
+            int? accountId,
+            int? bookerId,
+            int page,
+            int pageSize);
+
+        Task<decimal> GetPreviousEntriesBalanceForUserReportAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? projectId,
+            int categoryId,
             int? accountId,
             int? bookerId,
             int page,
@@ -51,6 +71,12 @@ namespace PureLedger.Repositories.Interfaces
             DateOnly startDate,
             int? projectId,
             int? categoryId,
+            int? accountId);
+
+        Task<(decimal Debit, decimal Credit)> GetOpeningBalanceForUserReportAsync(
+            DateOnly startDate,
+            int? projectId,
+            int categoryId,
             int? accountId);
 
         Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(

@@ -538,6 +538,146 @@ namespace PureLedger.Services
             });
         }
 
+        public async Task<object> GetUserReportInitAsync(int userId)
+        {
+            var projects = await GetAllProjectsForUserAsync(userId);
+            return new
+            {
+                success = true,
+                projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }),
+                categories = Array.Empty<object>()
+            };
+        }
+
+        public async Task<UserReportViewModels> GetUserReportAsync(UserReportRequest request, int userId)
+        {
+            var result = new UserReportViewModels();
+
+            // Validate CategoryId is provided (required field)
+            if (string.IsNullOrWhiteSpace(request.CategoryId))
+            {
+                throw new ArgumentException("CategoryId is required for User Report");
+            }
+
+            if (!int.TryParse(request.CategoryId, out int categoryId))
+            {
+                throw new ArgumentException("Invalid CategoryId format");
+            }
+
+            // Get user's hidden category IDs
+            var userCategories = await _unitOfWork.UserCategories.GetByUserIdAsync(userId);
+            var hiddenCategoryIds = userCategories.Select(uc => uc.CategoryId).ToList();
+
+            // Validate that selected CategoryId is NOT in hidden categories
+            if (hiddenCategoryIds.Contains(categoryId))
+            {
+                throw new UnauthorizedAccessException("You do not have access to the selected category");
+            }
+
+            DateOnly startDate = request.StartDate ?? DateOnly.MinValue;
+            DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
+
+            int? projectId = ParseNullableInt(request.ProjectId);
+            int? accountId = ParseNullableInt(request.AccountId);
+            int? bookerId = ParseNullableInt(request.BookerId);
+
+            int page = Math.Max(0, request.Page);
+            int pageSize = Math.Clamp(request.PageSize, 1, 500);
+
+            return await ExecuteInTransactionAsync(async () =>
+            {
+                var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceForUserReportAsync(
+                    startDate, projectId, categoryId, accountId);
+
+                decimal openingBalance = openingDebit - openingCredit;
+
+                decimal previousBalance = openingBalance;
+                if (page > 0)
+                {
+                    var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceForUserReportAsync(
+                        startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
+
+                    previousBalance = openingBalance + previousEntriesBalance;
+                }
+
+                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForUserReportAsync(
+                    startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
+
+                // Filter out any entries with hidden categories (double-check)
+                var filteredEntries = entries.Where(e => !hiddenCategoryIds.Contains(e.CategoryId)).ToList();
+                var filteredCount = totalCount - (entries.Count - filteredEntries.Count);
+
+                result.Entries = new List<UserReportEntryViewModel>();
+                result.PreviousBalance = previousBalance;
+
+                decimal runningBalance = previousBalance;
+
+                bool includeOpening = (page == 0);
+                if (includeOpening)
+                {
+                    result.Entries.Add(new UserReportEntryViewModel
+                    {
+                        Id = 0,
+                        JournalVoucherId = 0,
+                        FormattedId = "OPENING",
+                        TransactionDate = startDate,
+                        CreditableDate = startDate,
+                        Description = "Opening Balance",
+                        AccountName = accountId.HasValue ? filteredEntries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
+                        AccountId = accountId ?? 0,
+                        Debit = openingDebit,
+                        Credit = openingCredit,
+                        Balance = openingBalance,
+                        ProjectName = "",
+                        ProjectId = projectId ?? 0,
+                        CategoryName = "",
+                        CategoryId = categoryId
+                    });
+                }
+
+                foreach (var entry in filteredEntries)
+                {
+                    decimal entryImpact = entry.Debit - entry.Credit;
+                    runningBalance += entryImpact;
+
+                    string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
+
+                    result.Entries.Add(new UserReportEntryViewModel
+                    {
+                        Id = entry.JournalEntryId,
+                        JournalVoucherId = entry.JournalVoucherId,
+                        FormattedId = formattedId,
+                        TransactionDate = entry.JournalVoucher.EntryDate,
+                        CreditableDate = entry.JournalVoucher.CreditableDate,
+                        Description = entry.Description,
+                        AccountName = entry.Account?.AccountName ?? string.Empty,
+                        AccountId = entry.AccountId,
+                        Debit = entry.Debit,
+                        Credit = entry.Credit,
+                        Balance = runningBalance,
+                        ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
+                        ProjectId = entry.JournalVoucher.ProjectId,
+                        CategoryName = entry.Category?.CategoryName ?? string.Empty,
+                        CategoryId = entry.CategoryId,
+                        Quantity = entry.Quantity,
+                        BookerId = entry.JournalVoucher.BookerId,
+                        BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
+                    });
+                }
+
+                result.TotalDebit = 0;
+                result.TotalCredit = 0;
+                result.NetBalance = runningBalance;
+
+                result.TotalRecords = filteredCount + (includeOpening ? 1 : 0);
+                result.Page = page;
+                result.PageSize = pageSize;
+                result.HasMoreData = (page + 1) * pageSize < filteredCount;
+
+                return result;
+            });
+        }
+
         public async Task<List<Project>> GetAllProjectsForUserAsync(int userId)
         {
             return await _unitOfWork.Projects.GetAllForUserAsync(userId);
@@ -563,6 +703,11 @@ namespace PureLedger.Services
         public async Task<IEnumerable<Category>> GetCategoriesByProjectAsync(int projectId)
         {
             return await _unitOfWork.Categories.GetByProjectIdAsync(projectId);
+        }
+
+        public async Task<IEnumerable<Category>> GetCategoriesByProjectForUserAsync(int projectId, int userId)
+        {
+            return await _unitOfWork.Categories.GetByProjectIdForUserAsync(projectId, userId);
         }
 
         public async Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type)

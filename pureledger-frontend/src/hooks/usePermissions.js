@@ -94,6 +94,7 @@ export function usePermissions() {
     const canAccessAgingReport = hasPermission(PERMISSIONS.REPORTING_AGING_REPORT);
     const canAccessAccountReport = hasPermission(PERMISSIONS.REPORTING_ACCOUNT_REPORT);
     const canAccessMasterReport = hasPermission(PERMISSIONS.REPORTING_MASTER_REPORT);
+    const canAccessUserReport = hasPermission(PERMISSIONS.REPORTING_USER_REPORT);
     const canAccessProductReport = hasPermission(PERMISSIONS.REPORTING_PRODUCT_REPORT);
     const canAccessMissedEntries = hasPermission(PERMISSIONS.REPORTING_MISSED_ENTRIES);
 
@@ -111,7 +112,7 @@ export function usePermissions() {
     const canAccessMetaData = canAccessProjects || canAccessCategories || canAccessAccounts || 
                              canAccessLocations || canAccessBookers;
     const canAccessReporting = canAccessSingleDoc || canAccessAgingReport || canAccessAccountReport || 
-                              canAccessMasterReport || canAccessProductReport || canAccessMissedEntries;
+                              canAccessMasterReport || canAccessUserReport || canAccessProductReport || canAccessMissedEntries;
     const canAccessAdmin = canAccessUsers || canAccessCartageSettings || canAccessEditProfile;
 
     return {
@@ -149,6 +150,7 @@ export function usePermissions() {
         canAccessAgingReport,
         canAccessAccountReport,
         canAccessMasterReport,
+        canAccessUserReport,
         canAccessProductReport,
         canAccessMissedEntries,
         

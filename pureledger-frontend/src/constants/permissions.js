@@ -21,6 +21,7 @@ export const PERMISSIONS = {
     REPORTING_AGING_REPORT: 'Reporting.AgingReport',
     REPORTING_ACCOUNT_REPORT: 'Reporting.AccountReport',
     REPORTING_MASTER_REPORT: 'Reporting.MasterReport',
+    REPORTING_USER_REPORT: 'Reporting.UserReport',
     REPORTING_PRODUCT_REPORT: 'Reporting.ProductReport',
     REPORTING_MISSED_ENTRIES: 'Reporting.MissedEntriesReport',
     
@@ -54,6 +55,7 @@ export const PAGE_PERMISSIONS = {
     '/reporting/aging-report': [PERMISSIONS.REPORTING_AGING_REPORT],
     '/reporting/account-report': [PERMISSIONS.REPORTING_ACCOUNT_REPORT],
     '/reporting/master-report': [PERMISSIONS.REPORTING_MASTER_REPORT],
+    '/reporting/user-report': [PERMISSIONS.REPORTING_USER_REPORT],
     '/reporting/product-report': [PERMISSIONS.REPORTING_PRODUCT_REPORT],
     '/reporting/missed-entries': [PERMISSIONS.REPORTING_MISSED_ENTRIES],
     
