@@ -371,6 +371,88 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        [HttpGet("pending-for-charges")]
+        public async Task<IActionResult> GetPendingForCharges([FromQuery] DeliveryChallanFilterViewModel filter)
+        {
+            try
+            {
+                if (!IsValidProjectSelection(filter.ProjectId))
+                {
+                    return Ok(new { success = true, vouchers = new List<object>() });
+                }
+
+                if (filter.SinceDate == null && !string.IsNullOrEmpty(Request.Query["SinceDate"].ToString()))
+                {
+                    if (DateOnly.TryParse(Request.Query["SinceDate"], out DateOnly sinceDate))
+                        filter.SinceDate = sinceDate;
+                }
+
+                if (filter.ToDate == null && !string.IsNullOrEmpty(Request.Query["ToDate"].ToString()))
+                {
+                    if (DateOnly.TryParse(Request.Query["ToDate"], out DateOnly toDate))
+                        filter.ToDate = toDate;
+                }
+
+                var userId = _currentUserService.GetCurrentUserId();
+                
+                var result = await _deliveryChallanService.GetPendingForChargesVouchersAsync(
+                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId, userId);
+
+                return Ok(new { success = true, data = result });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve pending FOR charges vouchers");
+                return StatusCode(500, new { success = false, message = "Failed to retrieve pending FOR charges vouchers" });
+            }
+        }
+
+        [HttpPost("process-pending-for-charges")]
+        public async Task<IActionResult> ProcessPendingForCharges([FromBody] ProcessPendingForChargesViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { success = false, message = "Invalid data submitted", errors = ModelState });
+            }
+
+            try
+            {
+                // Use the existing ProcessForChargesAsync method which handles all the category/account logic
+                var forJV = await _deliveryChallanService.ProcessForChargesAsync(
+                    model.JournalVoucherId,
+                    null, // entryId is null for entire voucher processing
+                    model.ForAmount,
+                    model.DcDate);
+
+                if(forJV != null)
+                {
+                    await _deliveryChallanService.MarkJournalVoucherAsCompletedAsync(forJV.JournalVoucherId);
+
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "FOR charges processed successfully",
+                    data = new
+                    {
+                        forChargesVoucherId = forJV.JournalVoucherId,
+                        journalVoucherId = model.JournalVoucherId
+                    }
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid operation for processing pending FOR charges for voucher {VoucherId}", model.JournalVoucherId);
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process pending FOR charges for voucher {VoucherId}", model.JournalVoucherId);
+                return StatusCode(500, new { success = false, message = "Failed to process FOR charges" });
+            }
+        }
+
         #region Helper Methods
 
         private async Task<List<Project>> GetUserProjectsAsync()

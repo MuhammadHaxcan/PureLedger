@@ -20,6 +20,7 @@ namespace PureLedger.ViewModels.DeliveryChallan
         public string ProjectName { get; set; }
         public DateOnly EntryDate { get; set; }
         public bool IsProcessed { get; set; }
+        public string CustomerName { get; set; } = "";
         public List<JournalEntryDetailViewModel> Entries { get; set; } = new List<JournalEntryDetailViewModel>();
     }
 
@@ -33,5 +34,7 @@ namespace PureLedger.ViewModels.DeliveryChallan
         public int Quantity { get; set; }
         public decimal Rate { get; set; }
         public bool IsProcessed { get; set; }
+        public decimal? Pkg { get; set; }
+        public decimal? DiscountPercent { get; set; }
     }
 }

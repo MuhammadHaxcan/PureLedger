@@ -27,6 +27,9 @@ namespace PureLedger.Models
         
         // New property to identify base vouchers
         public bool IsBaseVoucher { get; set; } = false;
+        
+        // Property to track if FOR charges are pending
+        public bool PendingForCharges { get; set; } = false;
 
         [NotMapped]
         public decimal TotalDebit => JournalEntries?.Sum(e => e.Debit) ?? 0;

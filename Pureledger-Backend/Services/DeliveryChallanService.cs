@@ -209,6 +209,94 @@ namespace PureLedger.Services
             return result;
         }
 
+        public async Task<DeliveryChallanFilterViewModel> GetPendingForChargesVouchersAsync(
+            DateOnly? sinceDate,
+            DateOnly? toDate,
+            int? projectId = null,
+            int? categoryId = null,
+            int? accountId = null,
+            int? userId = null)
+        {
+            var result = new DeliveryChallanFilterViewModel
+            {
+                SinceDate = sinceDate,
+                ToDate = toDate,
+                ProjectId = projectId,
+                CategoryId = categoryId,
+                AccountId = accountId,
+                Vouchers = new List<JournalVoucherViewModel>()
+            };
+
+            try
+            {
+                // Get hidden category IDs for the user
+                List<int> hiddenCategoryIds = new List<int>();
+                if (userId.HasValue)
+                {
+                    var userCategories = await _unitOfWork.UserCategories.GetByUserIdAsync(userId.Value);
+                    hiddenCategoryIds = userCategories.Select(uc => uc.CategoryId).ToList();
+                }
+
+                var includeEntries = !accountId.HasValue && !categoryId.HasValue;
+                var vouchers = await _unitOfWork.JournalVouchers.GetFilteredVouchersAsync(sinceDate, toDate, projectId, includeEntries);
+                
+                // Filter: IsCompleted == true && PendingForCharges == 1
+                var pendingForChargesVouchers = vouchers.Where(v => v.IsCompleted && v.PendingForCharges).ToList();
+
+                _logger.LogInformation("Found {PendingCount} pending FOR charges vouchers out of {TotalCount} total vouchers",
+                    pendingForChargesVouchers.Count, vouchers.Count);
+
+                foreach (var voucher in pendingForChargesVouchers)
+                {
+                    var voucherViewModel = MapToJournalVoucherViewModel(voucher);
+                    var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucher.JournalVoucherId, categoryId, accountId);
+
+                    // Get customer name (AccountGroupId == 1)
+                    var customerEntry = entries.FirstOrDefault(e => e.Account?.AccountGroupId == 1);
+                    if (customerEntry != null)
+                    {
+                        voucherViewModel.CustomerName = customerEntry.Account?.AccountName ?? "";
+                    }
+
+                    // Filter product entries (AccountGroupId == 2)
+                    var productEntries = entries
+                        .Where(e => e.Account?.AccountGroupId == 2);
+
+                    // If userId is provided, exclude entries with hidden categories
+                    if (userId.HasValue && hiddenCategoryIds.Any())
+                    {
+                        productEntries = productEntries.Where(e => !hiddenCategoryIds.Contains(e.CategoryId));
+                    }
+
+                    var processableEntries = productEntries.Select(MapToJournalEntryDetailViewModel);
+
+                    // If userId is provided and voucher has ANY entry with hidden category, exclude the entire voucher
+                    if (userId.HasValue && hiddenCategoryIds.Any())
+                    {
+                        var hasHiddenCategoryEntry = entries.Any(e => hiddenCategoryIds.Contains(e.CategoryId));
+                        if (hasHiddenCategoryEntry)
+                        {
+                            // Exclude this voucher entirely
+                            continue;
+                        }
+                    }
+
+                    voucherViewModel.Entries.AddRange(processableEntries);
+
+                    if (voucherViewModel.Entries.Any())
+                    {
+                        result.Vouchers.Add(voucherViewModel);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve pending FOR charges vouchers");
+            }
+
+            return result;
+        }
+
         #endregion
 
         #region Create & Update Operations - WITH TRANSACTIONS
@@ -613,6 +701,33 @@ namespace PureLedger.Services
             }
         }
 
+        public async Task MarkJournalVoucherAsCompletedAsync(int journalVoucherId)
+        {
+            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+                if (voucher == null)
+                {
+                    throw new ArgumentException($"Journal voucher {journalVoucherId} not found");
+                }
+
+                if (!voucher.IsCompleted)
+                {
+                    voucher.IsCompleted = true;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
         private async Task<Dictionary<int, int>> BuildAccountGroupMappingAsync(ICollection<JournalEntry> entries)
         {
             var accountIds = entries.Select(e => e.AccountId).Distinct();
@@ -956,6 +1071,10 @@ namespace PureLedger.Services
                 await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountId, forCategoryId,
                     customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
 
+                // Update PendingForCharges to 0 after processing FOR charges
+                originalJV.PendingForCharges = false;
+                await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
+
                 // No SaveChanges here - caller manages transaction
 
                 _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount}", forJV.JournalVoucherId, amount);
@@ -987,6 +1106,10 @@ namespace PureLedger.Services
                 await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountId, forCategoryId,
                     customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
 
+                // Update PendingForCharges to 0 after processing FOR charges
+                originalJV.PendingForCharges = false;
+                await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
+                
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -1247,7 +1370,9 @@ namespace PureLedger.Services
                 Description = entry.Description ?? "",
                 Quantity = entry.Quantity,
                 Rate = entry.Rate,
-                IsProcessed = entry.IsProcessed
+                IsProcessed = entry.IsProcessed,
+                Pkg = entry.Account?.ProductData?.Pkg,
+                DiscountPercent = entry.DiscountPercent
             };
         }
 

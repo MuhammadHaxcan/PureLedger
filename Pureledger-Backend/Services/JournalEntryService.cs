@@ -163,6 +163,7 @@ namespace PureLedger.Services
                     EntryDate = model.EntryDate,
                     IsCompleted = false,
                     IsBaseVoucher = model.IsBaseVoucher,
+                    PendingForCharges = model.IsBaseVoucher ? true : false,
                     CreditableDate = model.EntryDate.AddDays(model.CreditDays),
                     BookerId = model.BookerId ?? 0
                 };
@@ -206,6 +207,12 @@ namespace PureLedger.Services
                     // Check if voucher has references (derived vouchers exist)
                     var hasReferences = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAsync(voucherId);
                     existingVoucher.IsBaseVoucher = hasReferences.Any() ? wasBaseVoucher : model.IsBaseVoucher;
+                    
+                    // Update PendingForCharges when IsBaseVoucher changes
+                    if (existingVoucher.IsBaseVoucher != wasBaseVoucher)
+                    {
+                        existingVoucher.PendingForCharges = existingVoucher.IsBaseVoucher ? true : false;
+                    }
 
                     // Process entries: match existing, add new, delete orphaned
                     var existingEntries = existingVoucher.JournalEntries.ToList();
@@ -477,6 +484,8 @@ namespace PureLedger.Services
                     if (baseVoucher != null)
                     {
                         baseVoucher.IsBaseVoucher = false;
+                        // Keep PendingForCharges = 1 when base voucher is converted to regular
+                        baseVoucher.PendingForCharges = true;
                         // Update booker if provided (don't use existing voucher's booker)
                         if (bookerId.HasValue)
                         {
@@ -502,6 +511,7 @@ namespace PureLedger.Services
                     EntryDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     CreditableDate = creditableDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
                     IsCompleted = false,
+                    PendingForCharges = true,
                     BookerId = bookerId ?? 0
                 };
 

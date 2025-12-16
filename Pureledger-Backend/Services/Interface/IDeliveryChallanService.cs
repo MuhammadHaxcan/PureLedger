@@ -30,6 +30,14 @@ namespace PureLedger.Services.Interface
             int? categoryId = null,
             int? accountId = null,
             int? userId = null);
+
+        Task<DeliveryChallanFilterViewModel> GetPendingForChargesVouchersAsync(
+            DateOnly? sinceDate,
+            DateOnly? toDate,
+            int? projectId = null,
+            int? categoryId = null,
+            int? accountId = null,
+            int? userId = null);
         #endregion
 
         #region DeliveryChallan Operations - Standalone
@@ -94,6 +102,7 @@ namespace PureLedger.Services.Interface
         Task<DeliveryChallanVoucher> UpdateDeliveryChallanVoucherAsync(DeliveryChallanVoucher voucher);
         Task<bool> CompleteDeliveryChallanAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
         Task UpdateJournalVoucherProcessedStatusAsync(int journalVoucherId);
+        Task MarkJournalVoucherAsCompletedAsync(int journalVoucherId);
         #endregion
 
         #region Lookup Operations

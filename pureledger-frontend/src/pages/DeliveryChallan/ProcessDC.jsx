@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup } from 'react-bootstrap';
+import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup, Nav, Tab } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -64,6 +64,19 @@ const ProcessDC = () => {
   const [success, setSuccess] = useState('');
   const [forChargesAvailable, setForChargesAvailable] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState('process-dc');
+
+  // State for pending FOR charges
+  const [pendingForChargesVouchers, setPendingForChargesVouchers] = useState([]);
+  const [showForChargesModal, setShowForChargesModal] = useState(false);
+  const [showProductsModal, setShowProductsModal] = useState(false);
+  const [selectedVoucherForForCharges, setSelectedVoucherForForCharges] = useState(null);
+  const [selectedVoucherForProducts, setSelectedVoucherForProducts] = useState(null);
+  const [forChargesForm, setForChargesForm] = useState({
+    forAmount: '',
+    dcDate: new Date().toISOString().split('T')[0]
+  });
+  const [loadingPendingForCharges, setLoadingPendingForCharges] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -537,6 +550,104 @@ const ProcessDC = () => {
     return entries;
   }, [filteredVouchers]);
 
+  // Load pending FOR charges vouchers
+  const loadPendingForChargesVouchers = async () => {
+    if (!filter.projectId) {
+      setError('Please select a project to generate the report.');
+      return;
+    }
+
+    try {
+      setLoadingPendingForCharges(true);
+      setError('');
+      setSuccess('');
+
+      const params = {
+        SinceDate: filter.sinceDate || null,
+        ToDate: filter.toDate || null,
+        ProjectId: filter.projectId
+      };
+
+      if (filter.categoryId) params.CategoryId = filter.categoryId;
+      if (filter.accountId) params.AccountId = filter.accountId;
+
+      const response = await apiClient.get('/DeliveryChallanApi/pending-for-charges', { params });
+
+      if (response.data.success) {
+        setPendingForChargesVouchers(response.data.data?.vouchers || []);
+        if (response.data.data?.vouchers?.length === 0) {
+          setSuccess('No pending FOR charges vouchers found.');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading pending FOR charges vouchers:', error);
+      setError('Failed to load pending FOR charges vouchers. Please try again.');
+    } finally {
+      setLoadingPendingForCharges(false);
+    }
+  };
+
+  // Handle opening FOR charges modal
+  const handleOpenForChargesModal = (voucher) => {
+    setSelectedVoucherForForCharges(voucher);
+    setForChargesForm({
+      forAmount: '',
+      dcDate: new Date().toISOString().split('T')[0]
+    });
+    setShowForChargesModal(true);
+  };
+
+  // Handle opening products modal
+  const handleOpenProductsModal = (voucher) => {
+    setSelectedVoucherForProducts(voucher);
+    setShowProductsModal(true);
+  };
+
+  // Handle processing pending FOR charges
+  const handleProcessPendingForCharges = async () => {
+    if (!selectedVoucherForForCharges) {
+      setError('No voucher selected.');
+      return;
+    }
+
+    if (!forChargesForm.forAmount || parseFloat(forChargesForm.forAmount) <= 0) {
+      setError('Please enter a valid FOR charges amount greater than zero.');
+      return;
+    }
+
+    // Prevent duplicate submissions
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
+    try {
+      setProcessing(true);
+      setError('');
+      setSuccess('');
+
+      const data = {
+        JournalVoucherId: selectedVoucherForForCharges.jvId,
+        ForAmount: parseFloat(forChargesForm.forAmount),
+        DcDate: forChargesForm.dcDate
+      };
+
+      const response = await apiClient.post('/DeliveryChallanApi/process-pending-for-charges', data);
+
+      if (response.data.success) {
+        setSuccess(response.data.message || 'FOR charges processed successfully.');
+        setShowForChargesModal(false);
+        await loadPendingForChargesVouchers();
+      } else {
+        setError(response.data.message || 'Failed to process FOR charges.');
+      }
+    } catch (error) {
+      console.error('Error processing FOR charges:', error);
+      setError(error.response?.data?.message || 'Failed to process FOR charges. Please try again.');
+    } finally {
+      setProcessing(false);
+      isSubmittingRef.current = false;
+    }
+  };
+
   return (
     <div className="container-fluid">
       {/* Header */}
@@ -557,7 +668,25 @@ const ProcessDC = () => {
         </Alert>
       )}
 
-      {/* Filter Card */}
+      {/* Tabs */}
+      <Tab.Container activeKey={activeTab} onSelect={(k) => setActiveTab(k || 'process-dc')}>
+        <Nav variant="tabs" className="mb-3">
+          <Nav.Item>
+            <Nav.Link eventKey="process-dc">
+              <i className="fas fa-truck me-2"></i>Process Delivery Challan
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="pending-for-charges">
+              <i className="fas fa-money-bill-wave me-2"></i>Pending FOR Charges
+            </Nav.Link>
+          </Nav.Item>
+        </Nav>
+
+        <Tab.Content>
+          {/* Process Delivery Challan Tab */}
+          <Tab.Pane eventKey="process-dc">
+            {/* Filter Card */}
       <Card className="shadow mb-4">
         <Card.Header className="py-3 d-flex justify-content-between align-items-center">
           <h6 className="m-0 font-weight-bold text-primary">
@@ -758,6 +887,165 @@ const ProcessDC = () => {
           </Card.Body>
         </Card>
       )}
+          </Tab.Pane>
+
+          {/* Pending FOR Charges Tab */}
+          <Tab.Pane eventKey="pending-for-charges">
+            {/* Filter Card */}
+            <Card className="shadow mb-4">
+              <Card.Header className="py-3 d-flex justify-content-between align-items-center">
+                <h6 className="m-0 font-weight-bold text-primary">
+                  <i className="fas fa-filter me-2"></i>Filter Parameters
+                </h6>
+              </Card.Header>
+              <Card.Body>
+                <Form onSubmit={(e) => { e.preventDefault(); loadPendingForChargesVouchers(); }}>
+                  <div className="row mb-3">
+                    <div className="col-md-2 mb-3">
+                      <Form.Label className="small text-muted">Quick Filter</Form.Label>
+                      <Form.Select
+                        size="sm"
+                        value={dateFilterType}
+                        onChange={(e) => handleDateFilterChange(e.target.value)}
+                        style={{ fontSize: '0.875rem' }}
+                      >
+                        {dateFilterOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Form.Select>
+                    </div>
+                    <div className="col-md-2 mb-3">
+                      <Form.Label className="small">Since</Form.Label>
+                      <InputGroup size="sm">
+                        <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                        <Form.Control
+                          type="date"
+                          size="sm"
+                          value={filter.sinceDate}
+                          onChange={(e) => {
+                            setFilter({ ...filter, sinceDate: e.target.value });
+                            setDateFilterType('custom');
+                          }}
+                          style={{ fontSize: '0.875rem' }}
+                        />
+                      </InputGroup>
+                    </div>
+                    <div className="col-md-2 mb-3">
+                      <Form.Label className="small">To</Form.Label>
+                      <InputGroup size="sm">
+                        <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                        <Form.Control
+                          type="date"
+                          size="sm"
+                          value={filter.toDate}
+                          onChange={(e) => {
+                            setFilter({ ...filter, toDate: e.target.value });
+                            setDateFilterType('custom');
+                          }}
+                          style={{ fontSize: '0.875rem' }}
+                        />
+                      </InputGroup>
+                    </div>
+                    <div className="col-md-3 mb-3">
+                      <Form.Label>Project <span className="text-danger">*</span></Form.Label>
+                      <InputGroup>
+                        <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
+                        <SearchableSelect
+                          value={filter.projectId}
+                          onChange={(value) => setFilter({ 
+                            ...filter, 
+                            projectId: value ?? null, 
+                            categoryId: null, 
+                            accountId: null 
+                          })}
+                          options={projects.map(p => ({ id: p.id, name: p.name }))}
+                          placeholder="Select Project"
+                          required
+                        />
+                      </InputGroup>
+                    </div>
+                    <div className="col-md-3 mb-3">
+                      <Form.Label>&nbsp;</Form.Label>
+                      <div className="d-grid">
+                        <Button type="submit" variant="primary" disabled={loadingPendingForCharges || !filter.projectId}>
+                          {loadingPendingForCharges ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              <i className="fas fa-search me-1"></i> Generate Report
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Form>
+              </Card.Body>
+            </Card>
+
+            {/* Results Card */}
+            {pendingForChargesVouchers.length > 0 && (
+              <Card className="shadow mb-4">
+                <Card.Header className="py-3 d-flex justify-content-between align-items-center">
+                  <h6 className="m-0 font-weight-bold text-primary">
+                    <i className="fas fa-money-bill-wave me-2"></i>Pending FOR Charges Vouchers
+                  </h6>
+                </Card.Header>
+                <Card.Body>
+                  <div className="table-responsive">
+                    <Table bordered striped hover>
+                      <thead className="table-light">
+                        <tr>
+                          <th>JV ID</th>
+                          <th>Date</th>
+                          <th>Customer</th>
+                          <th className="text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingForChargesVouchers.map((voucher) => (
+                          <tr key={voucher.jvId}>
+                            <td>
+                              <Badge bg="secondary">JV-{voucher.jvId}</Badge>
+                            </td>
+                            <td>{new Date(voucher.entryDate).toLocaleDateString()}</td>
+                            <td>{voucher.customerName || '-'}</td>
+                            <td className="text-center">
+                              <div className="d-flex gap-2 justify-content-center">
+                                <Button
+                                  variant="info"
+                                  size="sm"
+                                  onClick={() => handleOpenProductsModal(voucher)}
+                                  disabled={processing}
+                                >
+                                  <i className="fas fa-list me-1"></i> View Products
+                                </Button>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleOpenForChargesModal(voucher)}
+                                  disabled={processing}
+                                >
+                                  <i className="fas fa-money-bill-wave me-1"></i> Add FOR Charges
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                </Card.Body>
+              </Card>
+            )}
+          </Tab.Pane>
+        </Tab.Content>
+      </Tab.Container>
 
       {/* Delivery Challan Modal */}
       <Modal show={showDCModal} onHide={() => setShowDCModal(false)} size="lg">
@@ -1005,6 +1293,139 @@ const ProcessDC = () => {
             ) : (
               <>
                 <i className="fas fa-plus me-1"></i> Add Cartage & Process
+              </>
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Products List Modal */}
+      <Modal show={showProductsModal} onHide={() => setShowProductsModal(false)} size="lg">
+        <Modal.Header closeButton className="bg-info text-white">
+          <Modal.Title>
+            <i className="fas fa-list me-2"></i>Product Entries
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedVoucherForProducts && (
+            <>
+              <Alert variant="info" className="mb-3">
+                <strong>JV-{selectedVoucherForProducts.jvId}</strong><br />
+                Customer: {selectedVoucherForProducts.customerName || 'N/A'}<br />
+                Date: {new Date(selectedVoucherForProducts.entryDate).toLocaleDateString()}
+              </Alert>
+
+              {selectedVoucherForProducts.entries && selectedVoucherForProducts.entries.length > 0 ? (
+                <div className="table-responsive">
+                  <Table bordered striped hover>
+                    <thead className="table-light">
+                      <tr>
+                        <th>Account Name</th>
+                        <th>Description</th>
+                        <th className="text-end">PKG</th>
+                        <th className="text-end">Quantity</th>
+                        <th className="text-end">Rate</th>
+                        <th className="text-end">Discount %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedVoucherForProducts.entries.map((entry) => (
+                        <tr key={entry.entryId}>
+                          <td>{entry.accountName || '-'}</td>
+                          <td>{entry.description || '-'}</td>
+                          <td className="text-end">{entry.pkg != null ? parseFloat(entry.pkg) : '-'}</td>
+                          <td className="text-end">{entry.quantity || 0}</td>
+                          <td className="text-end">{entry.rate ? parseFloat(entry.rate).toFixed(4) : '-'}</td>
+                          <td className="text-end">{entry.discountPercent != null ? parseFloat(entry.discountPercent).toFixed(2) + '%' : '0.00%'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              ) : (
+                <Alert variant="warning" className="mb-0">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  No product entries found for this voucher.
+                </Alert>
+              )}
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowProductsModal(false)}>
+            <i className="fas fa-times me-1"></i> Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* FOR Charges Modal */}
+      <Modal show={showForChargesModal} onHide={() => setShowForChargesModal(false)}>
+        <Modal.Header closeButton className="bg-success text-white">
+          <Modal.Title>
+            <i className="fas fa-money-bill-wave me-2"></i>Add FOR Charges
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            {selectedVoucherForForCharges && (
+              <Alert variant="info" className="mb-3">
+                <strong>JV-{selectedVoucherForForCharges.jvId}</strong><br />
+                Customer: {selectedVoucherForForCharges.customerName || 'N/A'}<br />
+                Date: {new Date(selectedVoucherForForCharges.entryDate).toLocaleDateString()}
+              </Alert>
+            )}
+
+            <Form.Group className="mb-3">
+              <Form.Label>
+                FOR Charges Amount <span className="text-danger">*</span>
+              </Form.Label>
+              <InputGroup>
+                <InputGroup.Text><i className="fas fa-money-bill-wave"></i></InputGroup.Text>
+                <Form.Control
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Enter FOR charges amount"
+                  value={forChargesForm.forAmount}
+                  onChange={(e) => setForChargesForm({ ...forChargesForm, forAmount: e.target.value })}
+                  required
+                />
+              </InputGroup>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>
+                Date <span className="text-danger">*</span>
+              </Form.Label>
+              <InputGroup>
+                <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                <Form.Control
+                  type="date"
+                  value={forChargesForm.dcDate}
+                  onChange={(e) => setForChargesForm({ ...forChargesForm, dcDate: e.target.value })}
+                  required
+                />
+              </InputGroup>
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowForChargesModal(false)} disabled={processing}>
+            <i className="fas fa-times me-1"></i> Cancel
+          </Button>
+          <Button
+            variant="success"
+            onClick={handleProcessPendingForCharges}
+            disabled={processing || !forChargesForm.forAmount || parseFloat(forChargesForm.forAmount) <= 0}
+          >
+            {processing ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                Processing...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-check me-1"></i> Process FOR Charges
               </>
             )}
           </Button>
