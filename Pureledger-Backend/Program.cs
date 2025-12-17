@@ -181,6 +181,7 @@ builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<PureLedger.Services.Auth.IAuthService, PureLedger.Services.Auth.AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ISharedProcessingService, SharedProcessingService>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();

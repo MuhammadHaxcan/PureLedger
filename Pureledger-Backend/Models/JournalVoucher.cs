@@ -31,6 +31,10 @@ namespace PureLedger.Models
         // Property to track if FOR charges are pending
         public bool PendingForCharges { get; set; } = false;
 
+        // Optimistic concurrency token for race condition prevention
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         [NotMapped]
         public decimal TotalDebit => JournalEntries?.Sum(e => e.Debit) ?? 0;
 

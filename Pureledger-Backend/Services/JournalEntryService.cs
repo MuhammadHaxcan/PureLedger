@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.Services.Interface;
 using PureLedger.ViewModels.Home;
 using PureLedger.ViewModels;
 namespace PureLedger.Services
@@ -9,13 +10,16 @@ namespace PureLedger.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<JournalEntryService> _logger;
+        private readonly ISharedProcessingService _sharedProcessingService;
 
         public JournalEntryService(
             IUnitOfWork unitOfWork,
-            ILogger<JournalEntryService> logger)
+            ILogger<JournalEntryService> logger,
+            ISharedProcessingService sharedProcessingService)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _sharedProcessingService = sharedProcessingService ?? throw new ArgumentNullException(nameof(sharedProcessingService));
         }
 
         #region Project & Booker Retrieval
@@ -171,6 +175,7 @@ namespace PureLedger.Services
                 journalVoucher = await _unitOfWork.JournalVouchers.AddAsync(journalVoucher);
                 await CreateJournalEntriesAsync(journalVoucher.JournalVoucherId, model.Entries);
                 await UpdateVoucherCompletionStatusAsync(journalVoucher.JournalVoucherId);
+                // Single SaveChanges at end of transaction
                 await _unitOfWork.SaveChangesAsync();
 
                 await transaction.CommitAsync();
@@ -249,6 +254,7 @@ namespace PureLedger.Services
                     await UpdateVoucherCompletionStatusAsync(existingVoucher.JournalVoucherId);
 
                     await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
+                    // Single SaveChanges at end of transaction
                     await _unitOfWork.SaveChangesAsync();
                     await transaction.CommitAsync();
 
@@ -299,10 +305,14 @@ namespace PureLedger.Services
                 // Load all locations if delivery challan exists
                 allLocations = await _unitOfWork.Locations.GetAllAsync();
             }
-            else if (accountGroupId == 2)
+            else
             {
-                // For inventory items without delivery challan yet, still load locations
-                allLocations = await _unitOfWork.Locations.GetAllAsync();
+                const int ACCOUNT_GROUP_PRODUCT = 2;
+                // For product entries without delivery challan yet, still load locations
+                if (accountGroupId == ACCOUNT_GROUP_PRODUCT)
+                {
+                    allLocations = await _unitOfWork.Locations.GetAllAsync();
+                }
             }
 
             return new JournalEntryUpdateViewModel
@@ -335,10 +345,32 @@ namespace PureLedger.Services
                 if (entry == null)
                     return false;
 
-                UpdateEntryFromViewModel(entry, model);
-                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                var voucherId = entry.JournalVoucherId;
+                var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+                if (voucher == null)
+                {
+                    _logger.LogWarning("Voucher {VoucherId} not found for entry {EntryId}", voucherId, model.EntryId);
+                    return false;
+                }
 
-                // Update delivery challan location if applicable (for any entry with delivery challan)
+                var wasCompleted = voucher.IsCompleted;
+
+                // Capture old state before update
+                var oldAccount = await _unitOfWork.Accounts.GetByIdAsync(entry.AccountId);
+                var oldAccountGroupId = oldAccount?.AccountGroupId ?? 0;
+                var oldQuantity = entry.Quantity;
+
+                // Update entry properties
+                UpdateEntryFromViewModel(entry, model);
+
+                // Get new account group
+                var newAccount = await _unitOfWork.Accounts.GetByIdAsync(entry.AccountId);
+                var newAccountGroupId = newAccount?.AccountGroupId ?? 0;
+
+                // Handle entry update based on changes
+                await HandleEntryUpdateAsync(entry, voucherId, voucher, wasCompleted, oldAccountGroupId, newAccountGroupId, oldQuantity);
+
+                // Update delivery challan location if applicable
                 if (model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
                 {
                     await UpdateDeliveryChallanEntryLocationAsync(model.DeliveryChallanEntryId.Value, model.LocationId.Value);
@@ -354,6 +386,102 @@ namespace PureLedger.Services
                 _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
                 return false;
             }
+        }
+
+        private async Task HandleEntryUpdateAsync(
+            JournalEntry entry,
+            int voucherId,
+            JournalVoucher voucher,
+            bool wasCompleted,
+            int oldAccountGroupId,
+            int newAccountGroupId,
+            int oldQuantity)
+        {
+            const int ACCOUNT_GROUP_ACCOUNT = 1;
+            const int ACCOUNT_GROUP_PRODUCT = 2;
+
+            // Product → Account: Delete DC entry, mark processed
+            if (oldAccountGroupId == ACCOUNT_GROUP_PRODUCT && newAccountGroupId == ACCOUNT_GROUP_ACCOUNT)
+            {
+                await _sharedProcessingService.DeleteLinkedDCEntryAsync(entry.JournalEntryId);
+                entry.IsProcessed = true;
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
+                return;
+            }
+
+            // Account → Product: Determine processing state, handle reopening if needed
+            if (oldAccountGroupId == ACCOUNT_GROUP_ACCOUNT && newAccountGroupId == ACCOUNT_GROUP_PRODUCT)
+            {
+                entry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(entry);
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+
+                if (wasCompleted && !entry.IsProcessed)
+                {
+                    voucher.IsCompleted = false;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                    await _sharedProcessingService.ReopenReferenceVouchersAsync(voucherId);
+                }
+                else
+                {
+                    await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
+                }
+                return;
+            }
+
+            // Product quantity change
+            if (oldAccountGroupId == ACCOUNT_GROUP_PRODUCT && newAccountGroupId == ACCOUNT_GROUP_PRODUCT)
+            {
+                await HandleProductQuantityChangeAsync(entry, voucherId, voucher, wasCompleted, oldQuantity);
+                return;
+            }
+
+            // Other cases: Just recalculate processing state
+            entry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(entry);
+            await _unitOfWork.JournalEntries.UpdateAsync(entry);
+            await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
+        }
+
+        private async Task HandleProductQuantityChangeAsync(
+            JournalEntry entry,
+            int voucherId,
+            JournalVoucher voucher,
+            bool wasCompleted,
+            int oldQuantity)
+        {
+            // Quantity > 0 → <= 0: Delete DC entry, mark processed
+            if (oldQuantity > 0 && entry.Quantity <= 0)
+            {
+                await _sharedProcessingService.DeleteLinkedDCEntryAsync(entry.JournalEntryId);
+                entry.IsProcessed = true;
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
+                return;
+            }
+
+            // Quantity <= 0 → > 0: Mark unprocessed, reopen if needed
+            if (oldQuantity <= 0 && entry.Quantity > 0)
+            {
+                entry.IsProcessed = false;
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+
+                if (wasCompleted)
+                {
+                    voucher.IsCompleted = false;
+                    await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+                    await _sharedProcessingService.ReopenReferenceVouchersAsync(voucherId);
+                }
+                else
+                {
+                    await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
+                }
+                return;
+            }
+
+            // Quantity changed but didn't cross zero: Recalculate state
+            entry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(entry);
+            await _unitOfWork.JournalEntries.UpdateAsync(entry);
+            await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
         }
 
         public async Task<bool> DeleteJournalEntryAsync(int entryId)
@@ -392,19 +520,27 @@ namespace PureLedger.Services
                     return false;
 
                 var voucherId = entry.JournalVoucherId;
-                var entries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
 
-                if (entries.Count == 1)
+                // Step 1: Delete linked DC entry if exists (per spec Section 7.1)
+                await _sharedProcessingService.DeleteLinkedDCEntryAsync(entryId);
+
+                // Step 2: Delete the entry
+                await _unitOfWork.JournalEntries.DeleteAsync(entryId);
+
+                // Step 3: Check if voucher is now empty (after deletion)
+                var remainingEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
+
+                if (remainingEntries.Count == 0)
                 {
-                    // Delete entire voucher if this is the last entry
-                    await DeleteVoucherWithLastEntryAsync(entryId, voucherId);
+                    // All entries deleted - trigger full cleanup (per spec Section 7.2)
+                    // This is handled via RecalculateVoucherCompletionAsync which detects empty voucher
+                    await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
                 }
                 else
                 {
-                    // Delete only the entry
-                    await _unitOfWork.JournalEntries.DeleteAsync(entryId);
-                    await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
-                    await UpdateVoucherCompletionStatusAsync(voucherId);
+                    // Recalculate completion (voucher will REMAIN completed if all remaining entries are processed)
+                    // This will handle reference vouchers if state changes (per spec Section 7.1)
+                    await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
                 }
 
                 return true;
@@ -516,15 +652,12 @@ namespace PureLedger.Services
                 };
 
                 derivedVoucher = await _unitOfWork.JournalVouchers.AddAsync(derivedVoucher);
-                await _unitOfWork.SaveChangesAsync();
 
-                // Create reference between base and derived voucher
-                await _unitOfWork.JournalVoucherReferences.AddAsync(new JournalVoucherReference
-                {
-                    MainVoucherId = baseVoucherId,
-                    ReferencedVoucherId = derivedVoucher.JournalVoucherId,
-                    ReferenceType = "DerivedVoucher"
-                });
+                // Create reference between base and derived voucher using shared service
+                await _sharedProcessingService.CreateJournalVoucherReferenceAsync(
+                    baseVoucherId,
+                    derivedVoucher.JournalVoucherId,
+                    "DerivedVoucher");
 
                 // Process entries
                 await ProcessDerivedVoucherEntriesAsync(
@@ -534,6 +667,11 @@ namespace PureLedger.Services
                     accountEntryAmount,
                     accountEntryIsDebit);
 
+                // Recalculate completion for both base and derived vouchers
+                await _sharedProcessingService.RecalculateVoucherCompletionAsync(baseVoucherId);
+                await _sharedProcessingService.RecalculateVoucherCompletionAsync(derivedVoucher.JournalVoucherId);
+
+                // Single SaveChanges at end of transaction
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -563,8 +701,9 @@ namespace PureLedger.Services
                 if (customerAccount == null)
                     throw new InvalidOperationException("No customer account found in voucher");
 
+                const int ACCOUNT_GROUP_PRODUCT = 2;
                 var unprocessedEntries = voucher.JournalEntries
-                    .Where(e => !e.IsProcessed && e.Quantity > 0 && e.Account.AccountGroupId == 2)
+                    .Where(e => !e.IsProcessed && e.Quantity > 0 && e.Account.AccountGroupId == ACCOUNT_GROUP_PRODUCT)
                     .ToList();
 
                 foreach (var entry in unprocessedEntries)
@@ -784,58 +923,39 @@ namespace PureLedger.Services
         {
             foreach (var entryModel in entryModels)
             {
-                try
-                {
-                    _logger.LogInformation("Creating journal entry with AccountId={AccountId}", entryModel.AccountId);
+                var journalEntry = CreateJournalEntryFromRowModel(journalVoucherId, entryModel);
+                journalEntry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(journalEntry);
 
-                    int quantity = entryModel.Qty ?? 0;
-                    var journalEntry = new JournalEntry
-                    {
-                        JournalVoucherId = journalVoucherId,
-                        AccountId = entryModel.AccountId ?? 0,
-                        CategoryId = entryModel.CategoryId ?? 0,
-                        Description = entryModel.Des,
-                        Quantity = quantity,
-                        Rate = entryModel.Rate ?? 0,
-                        DiscountPercent = entryModel.Percent,
-                        Discount = entryModel.Disc ?? 0,
-                        Debit = entryModel.Debit ?? 0,
-                        Credit = entryModel.Credit ?? 0,
-                        Rbp = entryModel.Rbp ?? "Y",
-                        IsProcessed = quantity == 0 // <-- Set processed if quantity is 0
-                    };
-
-                    await _unitOfWork.JournalEntries.AddAsync(journalEntry);
-                    await _unitOfWork.SaveChangesAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error creating journal entry for account {AccountId}", entryModel.AccountId);
-                    throw;
-                }
+                await _unitOfWork.JournalEntries.AddAsync(journalEntry);
+                // Don't call SaveChanges here - let caller control transaction
             }
+        }
+
+        private static JournalEntry CreateJournalEntryFromRowModel(int journalVoucherId, JournalEntryRowModel model)
+        {
+            return new JournalEntry
+            {
+                JournalVoucherId = journalVoucherId,
+                AccountId = model.AccountId ?? 0,
+                CategoryId = model.CategoryId ?? 0,
+                Description = model.Des,
+                Quantity = model.Qty ?? 0,
+                Rate = model.Rate ?? 0,
+                DiscountPercent = model.Percent,
+                Discount = model.Disc ?? 0,
+                Debit = model.Debit ?? 0,
+                Credit = model.Credit ?? 0,
+                Rbp = model.Rbp ?? "Y",
+                IsProcessed = false // Will be determined by shared service
+            };
         }
 
         private async Task CreateNewEntry(int voucherId, JournalEntryRowModel entryModel)
         {
-            int quantity = entryModel.Qty ?? 0;
-            var newEntry = new JournalEntry
-            {
-                JournalVoucherId = voucherId,
-                AccountId = entryModel.AccountId ?? 0,
-                CategoryId = entryModel.CategoryId ?? 0,
-                Description = entryModel.Des,
-                Quantity = quantity,
-                Rate = entryModel.Rate ?? 0,
-                DiscountPercent = entryModel.Percent,
-                Discount = entryModel.Disc ?? 0,
-                Debit = entryModel.Debit ?? 0,
-                Credit = entryModel.Credit ?? 0,
-                Rbp = entryModel.Rbp ?? "Y",
-                IsProcessed = quantity == 0, // <-- Set processed if quantity is 0
-                IsEdited = true,
-                ModifiedDateTime = DateOnly.FromDateTime(DateTime.UtcNow)
-            };
+            var newEntry = CreateJournalEntryFromRowModel(voucherId, entryModel);
+            newEntry.IsEdited = true;
+            newEntry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.UtcNow);
+            newEntry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(newEntry);
 
             await _unitOfWork.JournalEntries.AddAsync(newEntry);
         }
@@ -891,97 +1011,9 @@ namespace PureLedger.Services
 
         private async Task UpdateVoucherCompletionStatusAsync(int journalVoucherId)
         {
-            var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
-            if (voucher == null || !voucher.JournalEntries.Any())
-                return;
-
-            try
-            {
-                // Get all unique account IDs and fetch accounts in batch
-                var accountIds = voucher.JournalEntries.Select(e => e.AccountId).Distinct().ToList();
-                var accountsDict = new Dictionary<int, Account>();
-
-                foreach (var accountId in accountIds)
-                {
-                    var account = await _unitOfWork.Accounts.GetByIdAsync(accountId);
-                    if (account != null)
-                        accountsDict[accountId] = account;
-                }
-
-                var unprocessedEntries = voucher.JournalEntries.Where(e => !e.IsProcessed).ToList();
-
-                // If there are no unprocessed entries, the voucher is completed
-                if (!unprocessedEntries.Any())
-                {
-                    voucher.IsCompleted = true;
-                }
-                else
-                {
-                    bool allUnprocessedAreAccounts = unprocessedEntries.All(e =>
-                        accountsDict.ContainsKey(e.AccountId) &&
-                        accountsDict[e.AccountId].AccountGroupId == 1);
-
-                    if (allUnprocessedAreAccounts)
-                    {
-                        _logger.LogInformation("All unprocessed entries in voucher {VoucherId} are Accounts, marking as processed", journalVoucherId);
-
-                        foreach (var entry in unprocessedEntries)
-                        {
-                            entry.IsProcessed = true;
-                            await _unitOfWork.JournalEntries.UpdateAsync(entry);
-                        }
-
-                        voucher.IsCompleted = true;
-                    }
-                    else
-                    {
-                        voucher.IsCompleted = false;
-                    }
-                }
-
-                await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
-                await _unitOfWork.SaveChangesAsync();
-
-                _logger.LogInformation(
-                    "Voucher {VoucherId} completion status updated. IsCompleted: {IsCompleted}",
-                    journalVoucherId,
-                    voucher.IsCompleted);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating completion status for voucher {VoucherId}", journalVoucherId);
-                throw;
-            }
-        }
-
-        private async Task DeleteVoucherWithLastEntryAsync(int entryId, int voucherId)
-        {
-            await _unitOfWork.JournalEntries.DeleteAsync(entryId);
-            await DeleteRelatedDeliveryChallanEntriesAsync(voucherId, entryId);
-
-            // Clean up any references where this voucher is either the main or referenced voucher
-            await _unitOfWork.JournalVoucherReferences.DeleteByVoucherIdAsync(voucherId);
-
-            var deliveryChallanVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(voucherId);
-            if (deliveryChallanVoucher != null)
-            {
-                await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(deliveryChallanVoucher.DeliveryChallanVoucherId);
-            }
-
-            await _unitOfWork.JournalVouchers.DeleteAsync(voucherId);
-        }
-
-        private async Task DeleteRelatedDeliveryChallanEntriesAsync(int voucherId, int entryId)
-        {
-            var deliveryChallanEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(voucherId);
-            if (deliveryChallanEntries != null && deliveryChallanEntries.Any())
-            {
-                var entriesToDelete = deliveryChallanEntries.Where(e => e.JournalEntryId == entryId).ToList();
-                foreach (var dcEntry in entriesToDelete)
-                {
-                    await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
-                }
-            }
+            // Use shared service for voucher completion recalculation
+            // Caller is responsible for SaveChangesAsync
+            await _sharedProcessingService.RecalculateVoucherCompletionAsync(journalVoucherId);
         }
 
         private async Task<bool> ShouldProcessAsFullVoucherAsync(
@@ -1034,7 +1066,8 @@ namespace PureLedger.Services
                     continue;
 
                 var account = await _unitOfWork.Accounts.GetByIdAsync(baseEntry.AccountId);
-                bool isAccountEntry = account?.AccountGroupId == 1;
+                const int ACCOUNT_GROUP_ACCOUNT = 1;
+                bool isAccountEntry = account?.AccountGroupId == ACCOUNT_GROUP_ACCOUNT;
 
                 // Validate regular entry quantities
                 if (!isAccountEntry && (entryToProcess.ProcessQuantity <= 0 ||
@@ -1065,10 +1098,10 @@ namespace PureLedger.Services
 
                     // Update base entry quantity
                     baseEntry.Quantity -= entryToProcess.ProcessQuantity;
-                    if (baseEntry.Quantity <= 0)
-                    {
-                        baseEntry.IsProcessed = true;
-                    }
+                    
+                    // Determine new processing state based on updated quantity
+                    baseEntry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(baseEntry);
+                    
                     await _unitOfWork.JournalEntries.UpdateAsync(baseEntry);
                 }
             }
@@ -1104,15 +1137,22 @@ namespace PureLedger.Services
             JournalEntry baseEntry,
             BaseVoucherEntryViewModel entryToProcess)
         {
-
             decimal calculatedDebit = entryToProcess.CalculatedDebit;
             decimal calculatedCredit = entryToProcess.CalculatedCredit;
-            
+
+            // Fallback calculation if frontend didn't provide calculated values
             if (calculatedDebit == 0 && calculatedCredit == 0)
             {
-                decimal quantityRatio = (decimal)entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity;
-                calculatedDebit = baseEntry.Debit > 0 ? baseEntry.Debit * quantityRatio : 0m;
-                calculatedCredit = baseEntry.Credit > 0 ? baseEntry.Credit * quantityRatio : 0m;
+                // Use decimal arithmetic to avoid precision loss
+                decimal processQty = entryToProcess.ProcessQuantity;
+                decimal baseQty = baseEntry.Quantity;
+
+                if (baseQty > 0)
+                {
+                    decimal quantityRatio = processQty / baseQty;
+                    calculatedDebit = baseEntry.Debit > 0 ? Math.Round(baseEntry.Debit * quantityRatio, 2, MidpointRounding.AwayFromZero) : 0m;
+                    calculatedCredit = baseEntry.Credit > 0 ? Math.Round(baseEntry.Credit * quantityRatio, 2, MidpointRounding.AwayFromZero) : 0m;
+                }
             }
 
             decimal discount = 0m;
@@ -1120,8 +1160,8 @@ namespace PureLedger.Services
             {
                 bool rbp = (entryToProcess.Rbp ?? "Y").Equals("Y", StringComparison.OrdinalIgnoreCase);
                 decimal pkg = entryToProcess.Pkg;
-                decimal totalAmount = 0m;
-                
+                decimal totalAmount;
+
                 if (rbp && pkg > 0)
                 {
                     totalAmount = pkg * entryToProcess.ProcessQuantity * entryToProcess.Rate;
@@ -1130,14 +1170,21 @@ namespace PureLedger.Services
                 {
                     totalAmount = entryToProcess.ProcessQuantity * entryToProcess.Rate;
                 }
-                
-                discount = Math.Round((totalAmount * entryToProcess.Percent / 100m) * 100m) / 100m;
+
+                // Use proper rounding with MidpointRounding to avoid precision issues
+                discount = Math.Round(totalAmount * entryToProcess.Percent / 100m, 2, MidpointRounding.AwayFromZero);
             }
             else
             {
                 // Fall back to ratio-based discount if percent is 0
-                decimal quantityRatio = (decimal)entryToProcess.ProcessQuantity / (decimal)baseEntry.Quantity;
-                discount = baseEntry.Discount * quantityRatio;
+                decimal processQty = entryToProcess.ProcessQuantity;
+                decimal baseQty = baseEntry.Quantity;
+
+                if (baseQty > 0)
+                {
+                    decimal quantityRatio = processQty / baseQty;
+                    discount = Math.Round(baseEntry.Discount * quantityRatio, 2, MidpointRounding.AwayFromZero);
+                }
             }
 
             var newEntry = new JournalEntry
@@ -1153,18 +1200,22 @@ namespace PureLedger.Services
                 Debit = calculatedDebit,
                 Credit = calculatedCredit,
                 Rbp = entryToProcess.Rbp ?? baseEntry.Rbp,
-                IsProcessed = false
+                IsProcessed = false // Will be determined by shared service
             };
+
+            // Determine processing state based on account group and quantity
+            newEntry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(newEntry);
 
             await _unitOfWork.JournalEntries.AddAsync(newEntry);
         }
 
         private async Task<Account?> GetCustomerAccountFromEntriesAsync(IEnumerable<JournalEntry> entries)
         {
+            const int ACCOUNT_GROUP_ACCOUNT = 1;
             foreach (var entry in entries)
             {
                 var account = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(entry.AccountId);
-                if (account?.AccountGroupId == 1)
+                if (account?.AccountGroupId == ACCOUNT_GROUP_ACCOUNT)
                     return account;
             }
             return null;

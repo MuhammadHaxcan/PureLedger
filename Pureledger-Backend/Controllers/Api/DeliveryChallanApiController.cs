@@ -16,15 +16,18 @@ namespace PureLedger.Controllers.Api
         private readonly IDeliveryChallanService _deliveryChallanService;
         private readonly ICurrentUserService _currentUserService;
         private readonly ILogger<DeliveryChallanApiController> _logger;
+        private readonly ISharedProcessingService _sharedProcessingService;
 
         public DeliveryChallanApiController(
             IDeliveryChallanService deliveryChallanService,
             ICurrentUserService currentUserService,
-            ILogger<DeliveryChallanApiController> logger)
+            ILogger<DeliveryChallanApiController> logger,
+            ISharedProcessingService sharedProcessingService)
         {
             _deliveryChallanService = deliveryChallanService ?? throw new ArgumentNullException(nameof(deliveryChallanService));
             _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _sharedProcessingService = sharedProcessingService ?? throw new ArgumentNullException(nameof(sharedProcessingService));
         }
 
         [HttpGet("process-dc-data")]
@@ -417,18 +420,12 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                // Use the existing ProcessForChargesAsync method which handles all the category/account logic
+                // ProcessForChargesAsync already handles voucher completion via RecalculateVoucherCompletionAsync
                 var forJV = await _deliveryChallanService.ProcessForChargesAsync(
                     model.JournalVoucherId,
                     null, // entryId is null for entire voucher processing
                     model.ForAmount,
                     model.DcDate);
-
-                if(forJV != null)
-                {
-                    await _deliveryChallanService.MarkJournalVoucherAsCompletedAsync(forJV.JournalVoucherId);
-
-                }
 
                 return Ok(new
                 {

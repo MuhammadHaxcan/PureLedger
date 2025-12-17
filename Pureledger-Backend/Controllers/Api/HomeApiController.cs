@@ -20,17 +20,20 @@ namespace PureLedger.Controllers.Api
         private readonly JournalEntryService _journalService;
         private readonly ICurrentUserService _currentUserService;
         private readonly IMemoryCache _cache;
+        private readonly ISharedProcessingService _sharedProcessingService;
 
         public HomeApiController(
             JournalEntryService journalService,
             ICurrentUserService currentUserService,
             IMemoryCache cache,
-            ILogger<HomeApiController> logger)
+            ILogger<HomeApiController> logger,
+            ISharedProcessingService sharedProcessingService)
         {
             _journalService = journalService;
             _currentUserService = currentUserService;
             _cache = cache;
             _logger = logger;
+            _sharedProcessingService = sharedProcessingService;
         }
 
         #region Journal Entry Management

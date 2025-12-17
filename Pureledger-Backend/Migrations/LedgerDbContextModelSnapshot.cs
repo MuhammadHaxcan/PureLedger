@@ -437,6 +437,11 @@ namespace PureLedger.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("integer");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("bytea");
+
                     b.HasKey("JournalVoucherId");
 
                     b.HasIndex("BookerId");
@@ -791,7 +796,7 @@ namespace PureLedger.Migrations
                             FullName = "System Administrator",
                             IsActive = true,
                             IsAdmin = true,
-                            PasswordHash = "$2a$11$s7AG4CSDFAkbkR9NAogKTeGdBsW8/6E0DQuGe8/V.ePYHuXyHxhoa",
+                            PasswordHash = "$2a$12$tkQ3qsmkPXxL/fDUCdNFKepp1QfMI48CbnXlpd1ZCuEqas62okDkS",
                             SecurityStamp = "d4ff2fc7-6913-4fe8-a501-66ddd274aa8d",
                             Subroute = "Default",
                             Username = "admin"
