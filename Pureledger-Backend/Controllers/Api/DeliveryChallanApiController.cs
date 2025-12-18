@@ -13,10 +13,11 @@ namespace PureLedger.Controllers.Api
     [ControllerAccess]
     public class DeliveryChallanApiController : ControllerBase
     {
-        private readonly IDeliveryChallanService _deliveryChallanService;
+        #region Fields and Constructor
+
+        private readonly IDeliveryChallanService _dcService;
         private readonly ICurrentUserService _currentUserService;
         private readonly ILogger<DeliveryChallanApiController> _logger;
-        private readonly ISharedProcessingService _sharedProcessingService;
 
         public DeliveryChallanApiController(
             IDeliveryChallanService deliveryChallanService,
@@ -24,11 +25,14 @@ namespace PureLedger.Controllers.Api
             ILogger<DeliveryChallanApiController> logger,
             ISharedProcessingService sharedProcessingService)
         {
-            _deliveryChallanService = deliveryChallanService ?? throw new ArgumentNullException(nameof(deliveryChallanService));
+            _dcService = deliveryChallanService ?? throw new ArgumentNullException(nameof(deliveryChallanService));
             _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _sharedProcessingService = sharedProcessingService ?? throw new ArgumentNullException(nameof(sharedProcessingService));
         }
+
+        #endregion
+
+        #region Initialization and Filtered Data
 
         [HttpGet("process-dc-data")]
         public async Task<IActionResult> GetProcessDCData()
@@ -54,27 +58,12 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                if (!IsValidProjectSelection(filter.ProjectId))
-                {
+                if (!IsValidProject(filter.ProjectId))
                     return Ok(new { success = true, vouchers = new List<object>() });
-                }
 
-                if (filter.SinceDate == null && !string.IsNullOrEmpty(Request.Query["SinceDate"].ToString()))
-                {
-                    if (DateOnly.TryParse(Request.Query["SinceDate"], out DateOnly sinceDate))
-                        filter.SinceDate = sinceDate;
-                }
-
-                if (filter.ToDate == null && !string.IsNullOrEmpty(Request.Query["ToDate"].ToString()))
-                {
-                    if (DateOnly.TryParse(Request.Query["ToDate"], out DateOnly toDate))
-                        filter.ToDate = toDate;
-                }
-
+                ParseDateFilters(filter);
                 var userId = _currentUserService.GetCurrentUserId();
-                
-                var result = await _deliveryChallanService.GetFilteredEntriesForDeliveryChallanAsync(
-                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId, userId);
+                var result = await _dcService.GetFilteredEntriesAsync(filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId, userId);
 
                 return Ok(new { success = true, data = result });
             }
@@ -85,12 +74,16 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        #endregion
+
+        #region Reference Data
+
         [HttpGet("locations")]
         public async Task<IActionResult> GetLocations()
         {
             try
             {
-                var locations = await _deliveryChallanService.GetAllLocationsAsync();
+                var locations = await _dcService.GetLocationsAsync();
                 return Ok(new
                 {
                     success = true,
@@ -109,7 +102,7 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var entries = await _deliveryChallanService.GetEntriesByVoucherIdAsync(voucherId);
+                var entries = await _dcService.GetVoucherEntriesAsync(voucherId);
                 return Ok(new { success = true, data = entries });
             }
             catch (Exception ex)
@@ -124,8 +117,7 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var deliveryChallan = await _deliveryChallanService.GetDeliveryChallanVoucherByJournalVoucherIdAsync(voucherId);
-
+                var deliveryChallan = await _dcService.GetDCByJournalVoucherIdAsync(voucherId);
                 if (deliveryChallan != null)
                 {
                     var firstEntry = deliveryChallan.Entries.FirstOrDefault();
@@ -159,16 +151,11 @@ namespace PureLedger.Controllers.Api
             {
                 var userId = _currentUserService.GetCurrentUserId();
                 if (!userId.HasValue)
-                {
                     return Unauthorized(new { success = false, message = "User not authenticated" });
-                }
 
-                var categories = await _deliveryChallanService.GetCategoriesByProjectForUserAsync(projectId, userId.Value);
-
+                var categories = await _dcService.GetCategoriesForUserAsync(projectId, userId.Value);
                 if (categories == null || !categories.Any())
-                {
                     return Ok(new { success = true, data = Array.Empty<object>() });
-                }
 
                 var result = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName });
                 return Ok(new { success = true, data = result });
@@ -185,7 +172,7 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
-                var accounts = await _deliveryChallanService.GetAccountsByCategoryAsync(categoryId);
+                var accounts = await _dcService.GetAccountsAsync(categoryId);
                 var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
                 return Ok(new { success = true, data = result });
             }
@@ -202,10 +189,9 @@ namespace PureLedger.Controllers.Api
             try
             {
                 int? transporterCategoryId = null;
-
                 if (projectId.HasValue)
                 {
-                    var settings = await _deliveryChallanService.GetProjectCartageSettingsAsync(projectId.Value);
+                    var settings = await _dcService.GetCartageSettingsAsync(projectId.Value);
                     transporterCategoryId = settings?.CartageTransporterCategoryId;
                 }
 
@@ -224,11 +210,9 @@ namespace PureLedger.Controllers.Api
             try
             {
                 if (!projectId.HasValue)
-                {
                     return Ok(new { success = true, available = false });
-                }
 
-                var settings = await _deliveryChallanService.GetProjectCartageSettingsAsync(projectId.Value);
+                var settings = await _dcService.GetCartageSettingsAsync(projectId.Value);
                 var isAvailable = settings?.ForExpenseAccountId > 0;
 
                 return Ok(new { success = true, available = isAvailable });
@@ -240,24 +224,19 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        #endregion
+
+        #region Delivery Challan Processing
+
         [HttpPost("single-entry")]
         public async Task<IActionResult> PostSingleEntry([FromBody] CreateDeliveryChallanEntryViewModel model)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(new { success = false, message = "Invalid data submitted", errors = ModelState });
-            }
 
             try
             {
-                var dcEntry = await _deliveryChallanService.CreateSingleDeliveryChallanAsync(
-                    model.JournalEntryId,
-                    model.DCDate,
-                    model.OtherReference,
-                    model.LocationId,
-                    model.Remarks,
-                    model.IncludeForCharges,
-                    model.ForAmount);
+                var dcEntry = await _dcService.CreateSingleDCAsync(model.JournalEntryId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount);
 
                 return Ok(new
                 {
@@ -287,23 +266,13 @@ namespace PureLedger.Controllers.Api
         public async Task<IActionResult> ProcessAll([FromBody] DeliveryChallanBatchViewModel model)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(new { success = false, message = "Invalid data submitted", errors = ModelState });
-            }
 
             try
             {
-                var (deliveryChallanId, results) = await _deliveryChallanService.ProcessBatchDeliveryChallanAsync(
-                    model.JournalVoucherId,
-                    model.DCDate,
-                    model.OtherReference,
-                    model.LocationId,
-                    model.Remarks,
-                    model.IncludeForCharges,
-                    model.ForAmount);
+                var (deliveryChallanId, results) = await _dcService.ProcessBatchDCAsync(model.JournalVoucherId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount);
 
                 var successCount = results.Count(r => r.Success);
-                var failedEntries = results.Where(r => !r.Success).ToList();
 
                 return Ok(new
                 {
@@ -313,12 +282,7 @@ namespace PureLedger.Controllers.Api
                     {
                         deliveryChallanId,
                         journalVoucherId = model.JournalVoucherId,
-                        results = results.Select(r => new
-                        {
-                            r.EntryId,
-                            r.Success,
-                            r.Message
-                        })
+                        results = results.Select(r => new { r.EntryId, r.Success, r.Message })
                     }
                 });
             }
@@ -338,13 +302,11 @@ namespace PureLedger.Controllers.Api
         public async Task<IActionResult> AddCartage([FromBody] CartageViewModel model)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(new { success = false, message = "Invalid data submitted", errors = ModelState });
-            }
 
             try
             {
-                var deliveryChallan = await _deliveryChallanService.ProcessCartageAndDeliveryAsync(model);
+                var deliveryChallan = await _dcService.ProcessCartageAsync(model);
 
                 return Ok(new
                 {
@@ -374,32 +336,21 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        #endregion
+
+        #region FOR Charges Operations
+
         [HttpGet("pending-for-charges")]
         public async Task<IActionResult> GetPendingForCharges([FromQuery] DeliveryChallanFilterViewModel filter)
         {
             try
             {
-                if (!IsValidProjectSelection(filter.ProjectId))
-                {
+                if (!IsValidProject(filter.ProjectId))
                     return Ok(new { success = true, vouchers = new List<object>() });
-                }
 
-                if (filter.SinceDate == null && !string.IsNullOrEmpty(Request.Query["SinceDate"].ToString()))
-                {
-                    if (DateOnly.TryParse(Request.Query["SinceDate"], out DateOnly sinceDate))
-                        filter.SinceDate = sinceDate;
-                }
-
-                if (filter.ToDate == null && !string.IsNullOrEmpty(Request.Query["ToDate"].ToString()))
-                {
-                    if (DateOnly.TryParse(Request.Query["ToDate"], out DateOnly toDate))
-                        filter.ToDate = toDate;
-                }
-
+                ParseDateFilters(filter);
                 var userId = _currentUserService.GetCurrentUserId();
-                
-                var result = await _deliveryChallanService.GetPendingForChargesVouchersAsync(
-                    filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId, userId);
+                var result = await _dcService.GetPendingForChargesAsync(filter.SinceDate, filter.ToDate, filter.ProjectId, filter.CategoryId, filter.AccountId, userId);
 
                 return Ok(new { success = true, data = result });
             }
@@ -414,18 +365,11 @@ namespace PureLedger.Controllers.Api
         public async Task<IActionResult> ProcessPendingForCharges([FromBody] ProcessPendingForChargesViewModel model)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(new { success = false, message = "Invalid data submitted", errors = ModelState });
-            }
 
             try
             {
-                // ProcessForChargesAsync already handles voucher completion via RecalculateVoucherCompletionAsync
-                var forJV = await _deliveryChallanService.ProcessForChargesAsync(
-                    model.JournalVoucherId,
-                    null, // entryId is null for entire voucher processing
-                    model.ForAmount,
-                    model.DcDate);
+                var forJV = await _dcService.ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DcDate);
 
                 return Ok(new
                 {
@@ -450,22 +394,35 @@ namespace PureLedger.Controllers.Api
             }
         }
 
-        #region Helper Methods
+        #endregion
+
+        #region Private Helper Methods
 
         private async Task<List<Project>> GetUserProjectsAsync()
         {
             var userId = _currentUserService.GetCurrentUserId();
             return userId.HasValue
-                ? await _deliveryChallanService.GetAllProjectsForUserAsync(userId.Value)
+                ? await _dcService.GetUserProjectsAsync(userId.Value)
                 : new List<Project>();
         }
 
-        private static bool IsValidProjectSelection(int? projectId)
+        private static bool IsValidProject(int? projectId) => projectId.HasValue && projectId.Value > 0;
+
+        private void ParseDateFilters(DeliveryChallanFilterViewModel filter)
         {
-            return projectId.HasValue && projectId.Value > 0;
+            if (filter.SinceDate == null && !string.IsNullOrEmpty(Request.Query["SinceDate"].ToString()))
+            {
+                if (DateOnly.TryParse(Request.Query["SinceDate"], out DateOnly sinceDate))
+                    filter.SinceDate = sinceDate;
+            }
+
+            if (filter.ToDate == null && !string.IsNullOrEmpty(Request.Query["ToDate"].ToString()))
+            {
+                if (DateOnly.TryParse(Request.Query["ToDate"], out DateOnly toDate))
+                    filter.ToDate = toDate;
+            }
         }
 
         #endregion
     }
 }
-

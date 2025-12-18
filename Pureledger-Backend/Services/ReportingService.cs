@@ -397,34 +397,49 @@ namespace PureLedger.Services
 
             decimal currentTransactionAmount = customerEntry.Debit - customerEntry.Credit;
 
-            decimal forChargesImpact = 0;
-            var forReferences = await _unitOfWork.JournalVoucherReferences
+            // OPTIMIZED: Batch fetch all referenced voucher IDs in parallel instead of N+1 queries
+            var forReferencesTask = _unitOfWork.JournalVoucherReferences
                 .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "ForCharges");
+            var cartageReferencesTask = _unitOfWork.JournalVoucherReferences
+                .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "Cartage");
 
+            await Task.WhenAll(forReferencesTask, cartageReferencesTask);
+
+            var forReferences = await forReferencesTask;
+            var cartageReferences = await cartageReferencesTask;
+
+            // Collect all referenced voucher IDs
+            var allReferencedVoucherIds = forReferences.Select(r => r.ReferencedVoucherId)
+                .Concat(cartageReferences.Select(r => r.ReferencedVoucherId))
+                .Distinct()
+                .ToList();
+
+            // Single batch query to fetch all entries for all referenced vouchers
+            var allEntries = await _unitOfWork.JournalEntries
+                .GetEntriesByVoucherIdsAndAccountAsync(allReferencedVoucherIds, customerAccountId);
+
+            // Create lookup for fast access
+            var entriesByVoucher = allEntries
+                .GroupBy(e => e.JournalVoucherId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Calculate FOR charges impact from pre-fetched data
+            decimal forChargesImpact = 0;
             foreach (var reference in forReferences)
             {
-
-                var customerForEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                    reference.ReferencedVoucherId, null, customerAccountId);
-
-                foreach (var entry in customerForEntries)
+                if (entriesByVoucher.TryGetValue(reference.ReferencedVoucherId, out var entries))
                 {
-                    forChargesImpact += entry.Debit - entry.Credit;
+                    forChargesImpact += entries.Sum(e => e.Debit - e.Credit);
                 }
             }
 
+            // Calculate cartage impact from pre-fetched data
             decimal cartageImpact = 0;
-            var cartageReferences = await _unitOfWork.JournalVoucherReferences
-                .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "Cartage");
-
             foreach (var reference in cartageReferences)
             {
-                var customerCartageEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                    reference.ReferencedVoucherId, null, customerAccountId);
-
-                foreach (var entry in customerCartageEntries)
+                if (entriesByVoucher.TryGetValue(reference.ReferencedVoucherId, out var entries))
                 {
-                    cartageImpact += entry.Debit - entry.Credit;
+                    cartageImpact += entries.Sum(e => e.Debit - e.Credit);
                 }
             }
 
@@ -779,164 +794,119 @@ namespace PureLedger.Services
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 500);
 
-            return await ExecuteInTransactionAsync(async () =>
+            // Get paginated product IDs
+            var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
+                startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
+
+            if (!productIds.Any())
             {
-                // Get paginated product IDs
-                var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
-                    startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
-
-                if (!productIds.Any())
+                return new ProductReportViewModel
                 {
-                    return new ProductReportViewModel
-                    {
-                        TotalRecords = 0,
-                        Page = page,
-                        PageSize = pageSize,
-                        HasMoreData = false
-                    };
-                }
-
-                // Get all historical entries for the paginated products
-                var allHistoricalEntries = await _unitOfWork.JournalEntries.GetAllEntriesForProductReportAsync(
-                    DateOnly.MinValue, endDate, projectId, categoryId, null, locationId);
-
-                // Filter to only include the paginated product IDs
-                var productGroups = allHistoricalEntries
-                    .Where(x => productIds.Contains(x.Entry.AccountId))
-                    .GroupBy(x => x.Entry.AccountId)
-                    .ToDictionary(g => g.Key, g => g.ToList());
-
-                var productSummaries = new List<ProductSummaryViewModel>();
-
-                decimal totalDebit = 0;
-                decimal totalCredit = 0;
-                int totalDebitQty = 0;
-                int totalCreditQty = 0;
-                decimal totalCOGS = 0;
-                decimal totalMargin = 0;
-
-                foreach (var productId in productIds)
-                {
-                    if (!productGroups.ContainsKey(productId))
-                        continue;
-
-                    var productEntries = productGroups[productId];
-
-                    if (!productEntries.Any())
-                        continue;
-
-                    var productName = productEntries.First().Entry.Account?.AccountName ?? "Unknown Product";
-
-                    var entriesBeforeStartDate = productEntries
-                        .Where(x => x.Entry.JournalVoucher.EntryDate < startDate)
-                        .ToList();
-
-                    var entriesInDateRange = productEntries
-                        .Where(x => x.Entry.JournalVoucher.EntryDate >= startDate &&
-                                   x.Entry.JournalVoucher.EntryDate <= endDate)
-                        .ToList();
-
-                    var prevDebitEntries = entriesBeforeStartDate.Where(x => x.Entry.Debit > 0).ToList();
-                    var prevCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
-
-                    int prevDebitQty = prevDebitEntries.Sum(x => x.Entry.Quantity);
-                    int prevCreditQty = prevCreditEntries.Sum(x => x.Entry.Quantity);
-                    int prevQtyBalance = prevDebitQty - prevCreditQty;
-
-                    decimal prevTotalDebit = prevDebitEntries.Sum(x => x.Entry.Debit);
-                    decimal prevTotalCredit = prevCreditEntries.Sum(x => x.Entry.Credit);
-                    decimal prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
-
-                    var currentDebitEntries = entriesInDateRange.Where(x => x.Entry.Debit > 0).ToList();
-                    var currentCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
-
-                    int currentDebitQty = currentDebitEntries.Sum(x => x.Entry.Quantity);
-                    int currentCreditQty = currentCreditEntries.Sum(x => x.Entry.Quantity);
-
-                    decimal currentDebit = currentDebitEntries.Sum(x => x.Entry.Debit);
-                    decimal currentCredit = currentCreditEntries.Sum(x => x.Entry.Credit);
-
-                    int totalProductDebitQty = prevDebitQty + currentDebitQty;
-                    int totalProductCreditQty = prevCreditQty + currentCreditQty;
-                    int qtyBalance = totalProductDebitQty - totalProductCreditQty;
-
-                    decimal averageRate = totalProductDebitQty > 0 ?
-                        (prevTotalDebit + currentDebit) / totalProductDebitQty :
-                        prevAvgRate;
-
-                    decimal cogs = averageRate * currentCreditQty;
-                    decimal margin = currentCredit - cogs;
-                    decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
-
-                    var summary = new ProductSummaryViewModel
-                    {
-                        ProductId = productId,
-                        ProductName = productName,
-                        PreviousDebitQty = prevDebitQty,
-                        PreviousCreditQty = prevCreditQty,
-                        PreviousBalance = prevQtyBalance,
-                        PreviousDebit = prevTotalDebit,
-                        PreviousCredit = prevTotalCredit,
-                        PreviousAvgRate = prevAvgRate,
-                        TotalDebitQty = currentDebitQty,
-                        TotalCreditQty = currentCreditQty,
-                        QtyBalance = qtyBalance,
-                        AverageRate = averageRate,
-                        TotalDebit = currentDebit,
-                        TotalCredit = currentCredit,
-                        COGS = cogs,
-                        Margin = margin,
-                        MarginPercentage = marginPercentage,
-                        HasPreviousBalance = prevDebitQty > 0 || prevCreditQty > 0
-                    };
-
-                    productSummaries.Add(summary);
-
-                    totalDebit += currentDebit;
-                    totalCredit += currentCredit;
-                    totalDebitQty += currentDebitQty;
-                    totalCreditQty += currentCreditQty;
-                    totalCOGS += cogs;
-                    totalMargin += margin;
-                }
-
-                if (request.ExcludeNilProducts)
-                {
-                    productSummaries = productSummaries.Where(p => p.QtyBalance != 0).ToList();
-                    
-                    // Recalculate totals from filtered products
-                    totalDebit = productSummaries.Sum(p => p.TotalDebit);
-                    totalCredit = productSummaries.Sum(p => p.TotalCredit);
-                    totalDebitQty = productSummaries.Sum(p => p.TotalDebitQty);
-                    totalCreditQty = productSummaries.Sum(p => p.TotalCreditQty);
-                    totalCOGS = productSummaries.Sum(p => p.COGS);
-                    totalMargin = productSummaries.Sum(p => p.Margin);
-                }
-
-                decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
-
-                var viewModel = new ProductReportViewModel
-                {
-                    ProductSummaries = productSummaries.OrderBy(p => p.ProductName).ToList(),
-                    Totals = new ProductReportTotalsViewModel
-                    {
-                        TotalDebit = totalDebit,
-                        TotalCredit = totalCredit,
-                        TotalDebitQty = totalDebitQty,
-                        TotalCreditQty = totalCreditQty,
-                        NetQuantity = totalDebitQty - totalCreditQty,
-                        TotalCOGS = totalCOGS,
-                        TotalMargin = totalMargin,
-                        MarginPercentage = totalMarginPercentage
-                    },
-                    TotalRecords = request.ExcludeNilProducts ? productSummaries.Count : totalCount,
+                    TotalRecords = 0,
                     Page = page,
                     PageSize = pageSize,
-                    HasMoreData = request.ExcludeNilProducts ? false : (page + 1) * pageSize < totalCount
+                    HasMoreData = false
+                };
+            }
+
+            // OPTIMIZED: Use database-side aggregation instead of loading all entries into memory
+            var productAggregates = await _unitOfWork.JournalEntries.GetProductAggregatesAsync(
+                productIds, startDate, endDate, projectId, categoryId, locationId);
+
+            var productSummaries = new List<ProductSummaryViewModel>();
+
+            decimal totalDebit = 0;
+            decimal totalCredit = 0;
+            int totalDebitQty = 0;
+            int totalCreditQty = 0;
+            decimal totalCOGS = 0;
+            decimal totalMargin = 0;
+
+            foreach (var agg in productAggregates)
+            {
+                int prevQtyBalance = agg.PrevDebitQty - agg.PrevCreditQty;
+                decimal prevAvgRate = agg.PrevDebitQty > 0 ? agg.PrevDebit / agg.PrevDebitQty : 0;
+
+                int totalProductDebitQty = agg.PrevDebitQty + agg.CurrentDebitQty;
+                int totalProductCreditQty = agg.PrevCreditQty + agg.CurrentCreditQty;
+                int qtyBalance = totalProductDebitQty - totalProductCreditQty;
+
+                decimal averageRate = totalProductDebitQty > 0
+                    ? (agg.PrevDebit + agg.CurrentDebit) / totalProductDebitQty
+                    : prevAvgRate;
+
+                decimal cogs = averageRate * agg.CurrentCreditQty;
+                decimal margin = agg.CurrentCredit - cogs;
+                decimal marginPercentage = agg.CurrentCredit > 0 ? (margin / agg.CurrentCredit) * 100 : 0;
+
+                var summary = new ProductSummaryViewModel
+                {
+                    ProductId = agg.ProductId,
+                    ProductName = agg.ProductName,
+                    PreviousDebitQty = agg.PrevDebitQty,
+                    PreviousCreditQty = agg.PrevCreditQty,
+                    PreviousBalance = prevQtyBalance,
+                    PreviousDebit = agg.PrevDebit,
+                    PreviousCredit = agg.PrevCredit,
+                    PreviousAvgRate = prevAvgRate,
+                    TotalDebitQty = agg.CurrentDebitQty,
+                    TotalCreditQty = agg.CurrentCreditQty,
+                    QtyBalance = qtyBalance,
+                    AverageRate = averageRate,
+                    TotalDebit = agg.CurrentDebit,
+                    TotalCredit = agg.CurrentCredit,
+                    COGS = cogs,
+                    Margin = margin,
+                    MarginPercentage = marginPercentage,
+                    HasPreviousBalance = agg.PrevDebitQty > 0 || agg.PrevCreditQty > 0
                 };
 
-                return viewModel;
-            });
+                productSummaries.Add(summary);
+
+                totalDebit += agg.CurrentDebit;
+                totalCredit += agg.CurrentCredit;
+                totalDebitQty += agg.CurrentDebitQty;
+                totalCreditQty += agg.CurrentCreditQty;
+                totalCOGS += cogs;
+                totalMargin += margin;
+            }
+
+            if (request.ExcludeNilProducts)
+            {
+                productSummaries = productSummaries.Where(p => p.QtyBalance != 0).ToList();
+
+                // Recalculate totals from filtered products
+                totalDebit = productSummaries.Sum(p => p.TotalDebit);
+                totalCredit = productSummaries.Sum(p => p.TotalCredit);
+                totalDebitQty = productSummaries.Sum(p => p.TotalDebitQty);
+                totalCreditQty = productSummaries.Sum(p => p.TotalCreditQty);
+                totalCOGS = productSummaries.Sum(p => p.COGS);
+                totalMargin = productSummaries.Sum(p => p.Margin);
+            }
+
+            decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
+
+            var viewModel = new ProductReportViewModel
+            {
+                ProductSummaries = productSummaries.OrderBy(p => p.ProductName).ToList(),
+                Totals = new ProductReportTotalsViewModel
+                {
+                    TotalDebit = totalDebit,
+                    TotalCredit = totalCredit,
+                    TotalDebitQty = totalDebitQty,
+                    TotalCreditQty = totalCreditQty,
+                    NetQuantity = totalDebitQty - totalCreditQty,
+                    TotalCOGS = totalCOGS,
+                    TotalMargin = totalMargin,
+                    MarginPercentage = totalMarginPercentage
+                },
+                TotalRecords = request.ExcludeNilProducts ? productSummaries.Count : totalCount,
+                Page = page,
+                PageSize = pageSize,
+                HasMoreData = request.ExcludeNilProducts ? false : (page + 1) * pageSize < totalCount
+            };
+
+            return viewModel;
         }
 
         public async Task<List<Location>> GetAllLocationsAsync()

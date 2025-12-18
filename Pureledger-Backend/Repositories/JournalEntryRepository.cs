@@ -758,5 +758,141 @@ namespace PureLedger.Repositories
 
     return (pagedProductIds, totalCount);
 }
+
+        /// <summary>
+        /// Batch fetch entries for multiple voucher IDs and a specific account - fixes N+1 query issue
+        /// </summary>
+        public async Task<List<JournalEntry>> GetEntriesByVoucherIdsAndAccountAsync(
+            List<int> voucherIds,
+            int accountId)
+        {
+            if (voucherIds == null || !voucherIds.Any())
+                return new List<JournalEntry>();
+
+            return await _context.JournalEntries
+                .AsNoTracking()
+                .Where(je => voucherIds.Contains(je.JournalVoucherId) && je.AccountId == accountId)
+                .ToListAsync();
+        }
+
+        /// <summary>
+        /// Get aggregated product data for the product report - avoids loading all entries into memory
+        /// Uses two queries: one for previous period, one for current period, then combines in memory
+        /// </summary>
+        public async Task<List<ProductAggregateDto>> GetProductAggregatesAsync(
+            List<int> productIds,
+            DateOnly startDate,
+            DateOnly endDate,
+            int projectId,
+            int? categoryId,
+            int? locationId)
+        {
+            if (productIds == null || !productIds.Any())
+                return new List<ProductAggregateDto>();
+
+            // Base query builder for product entries
+            IQueryable<JournalEntry> BuildBaseQuery(DateOnly? fromDate, DateOnly toDate)
+            {
+                var query = _context.JournalEntries
+                    .AsNoTracking()
+                    .Include(je => je.Account)
+                    .Where(je =>
+                        productIds.Contains(je.AccountId) &&
+                        je.JournalVoucher.ProjectId == projectId &&
+                        je.JournalVoucher.IsCompleted &&
+                        je.IsProcessed &&
+                        je.Quantity > 0 &&
+                        je.Account.AccountGroupId == 2 &&
+                        je.JournalVoucher.EntryDate <= toDate);
+
+                if (fromDate.HasValue)
+                {
+                    query = query.Where(je => je.JournalVoucher.EntryDate >= fromDate.Value);
+                }
+
+                if (categoryId.HasValue)
+                {
+                    query = query.Where(je => je.CategoryId == categoryId.Value);
+                }
+
+                // Location filter using subquery instead of loading IDs into memory
+                if (locationId.HasValue)
+                {
+                    query = query.Where(je => _context.DeliveryChallanEntries
+                        .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                }
+
+                return query;
+            }
+
+            // Query 1: Get aggregates for entries BEFORE start date (previous balance)
+            var prevQuery = BuildBaseQuery(null, startDate.AddDays(-1));
+            var prevAggregates = await prevQuery
+                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
+                .Select(g => new
+                {
+                    ProductId = g.Key.AccountId,
+                    ProductName = g.Key.AccountName ?? "",
+                    DebitQty = g.Where(je => je.Debit > 0).Sum(je => je.Quantity),
+                    CreditQty = g.Where(je => je.Credit > 0).Sum(je => je.Quantity),
+                    Debit = g.Sum(je => je.Debit),
+                    Credit = g.Sum(je => je.Credit)
+                })
+                .ToListAsync();
+
+            // Query 2: Get aggregates for entries IN date range (current period)
+            var currentQuery = BuildBaseQuery(startDate, endDate);
+            var currentAggregates = await currentQuery
+                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
+                .Select(g => new
+                {
+                    ProductId = g.Key.AccountId,
+                    ProductName = g.Key.AccountName ?? "",
+                    DebitQty = g.Where(je => je.Debit > 0).Sum(je => je.Quantity),
+                    CreditQty = g.Where(je => je.Credit > 0).Sum(je => je.Quantity),
+                    Debit = g.Sum(je => je.Debit),
+                    Credit = g.Sum(je => je.Credit)
+                })
+                .ToListAsync();
+
+            // Get product names for products that might not have any entries in either period
+            var productNames = await _context.Accounts
+                .AsNoTracking()
+                .Where(a => productIds.Contains(a.AccountId))
+                .Select(a => new { a.AccountId, a.AccountName })
+                .ToDictionaryAsync(a => a.AccountId, a => a.AccountName ?? "Unknown");
+
+            // Combine results
+            var prevDict = prevAggregates.ToDictionary(p => p.ProductId);
+            var currentDict = currentAggregates.ToDictionary(c => c.ProductId);
+
+            var results = new List<ProductAggregateDto>();
+
+            foreach (var productId in productIds)
+            {
+                var prev = prevDict.GetValueOrDefault(productId);
+                var current = currentDict.GetValueOrDefault(productId);
+
+                // Skip products with no data at all
+                if (prev == null && current == null)
+                    continue;
+
+                results.Add(new ProductAggregateDto
+                {
+                    ProductId = productId,
+                    ProductName = prev?.ProductName ?? current?.ProductName ?? productNames.GetValueOrDefault(productId, "Unknown"),
+                    PrevDebitQty = prev?.DebitQty ?? 0,
+                    PrevCreditQty = prev?.CreditQty ?? 0,
+                    PrevDebit = prev?.Debit ?? 0,
+                    PrevCredit = prev?.Credit ?? 0,
+                    CurrentDebitQty = current?.DebitQty ?? 0,
+                    CurrentCreditQty = current?.CreditQty ?? 0,
+                    CurrentDebit = current?.Debit ?? 0,
+                    CurrentCredit = current?.Credit ?? 0
+                });
+            }
+
+            return results;
+        }
     }
 }

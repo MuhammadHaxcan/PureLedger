@@ -30,7 +30,7 @@ namespace PureLedger.Controllers.Api
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginViewModel model)
-         {
+        {
             if (!ModelState.IsValid)
             {
                 return BadRequest(new { success = false, message = "Invalid input", errors = ModelState });
