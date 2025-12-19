@@ -61,6 +61,7 @@ const HomeEntry = () => {
 
     const persistedSuccessRef = useRef(null);
     const [focusedFields, setFocusedFields] = useState({});
+    const [hoveredDescIndex, setHoveredDescIndex] = useState(null);
 
     useEffect(() => {
         loadEntryData();
@@ -122,6 +123,7 @@ const HomeEntry = () => {
             setDueDate(date.toISOString().split('T')[0]);
         }
     }, [entryDate, creditDays]);
+
 
     const loadEntryData = async () => {
         try {
@@ -720,6 +722,8 @@ const HomeEntry = () => {
                 }
 
                 setLoading(false);
+                isSubmittingRef.current = false;
+                setIsSubmitting(false);
 
                 setTimeout(() => {
                     if (isEditMode) {
@@ -978,19 +982,36 @@ const HomeEntry = () => {
                                                     </Form.Select>
                                                 </td>
                                                 <td>
-                                                    <Form.Control
-                                                        size="sm"
-                                                        type="text"
-                                                        value={entry.des || ''}
-                                                        onChange={(e) => {
-                                                            setEntries(prev => {
-                                                                const updated = [...prev];
-                                                                updated[index].des = e.target.value;
-                                                                return updated;
-                                                            });
+                                                    <div 
+                                                        className="desc-input-wrapper"
+                                                        onMouseEnter={() => {
+                                                            if (entry.des && entry.des.trim()) {
+                                                                setHoveredDescIndex(index);
+                                                            }
                                                         }}
-                                                        placeholder="Description"
-                                                    />
+                                                        onMouseLeave={() => {
+                                                            setHoveredDescIndex(null);
+                                                        }}
+                                                    >
+                                                        <Form.Control
+                                                            size="sm"
+                                                            type="text"
+                                                            value={entry.des || ''}
+                                                            onChange={(e) => {
+                                                                setEntries(prev => {
+                                                                    const updated = [...prev];
+                                                                    updated[index].des = e.target.value;
+                                                                    return updated;
+                                                                });
+                                                            }}
+                                                            placeholder="Description"
+                                                        />
+                                                        {hoveredDescIndex === index && entry.des && entry.des.trim() && (
+                                                            <div className="desc-tooltip-3d">
+                                                                {entry.des}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td>
                                                     <Form.Control

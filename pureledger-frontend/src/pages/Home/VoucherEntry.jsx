@@ -322,10 +322,6 @@ const VoucherEntry = () => {
                                         value={voucherId}
                                         onChange={(e) => {
                                             setVoucherId(e.target.value);
-                                            setHasSearched(false);
-                                            setVoucher(null);
-                                            setError('');
-                                            setSuccess('');
                                         }}
                                     />
                                 </InputGroup>

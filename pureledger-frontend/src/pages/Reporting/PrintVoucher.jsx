@@ -435,26 +435,25 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
               <table className="table table-bordered table-striped" style={{ fontSize: '12px' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '30%' }}>Product</th>
-                    <th style={{ width: '8%', textAlign: 'right' }}>Qty</th>
-                    <th style={{ width: '10%', textAlign: 'right' }}>Rate</th>
-                    <th style={{ width: '11%', textAlign: 'right' }}>Amount</th>
+                    <th style={{ width: '50%', textAlign: 'left' }}>Product</th>
+                    <th style={{ width: '25%', textAlign: 'right' }}>PKG</th>
+                    <th style={{ width: '25%', textAlign: 'right' }}>Qty</th>
                   </tr>
                 </thead>
                 <tbody>
                   {voucherData.entries?.map((entry, index) => (
                     <tr key={index}>
                       <td>{entry.accountName || entry.productName || ''}</td>
+                      <td style={{ textAlign: 'right' }}>{entry.pkg || entry.PKG || 1}</td>
                       <td style={{ textAlign: 'right' }}>{entry.quantity || ''}</td>
-                      <td style={{ textAlign: 'right' }}>{entry.rate || ''}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(entry.debit || entry.amount || 0)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="table-active">
-                    <th colSpan="3" style={{ textAlign: 'right' }}>Total</th>
-                    <th style={{ textAlign: 'right' }}>{formatCurrency(voucherData.totalAmount1 || voucherData.totalDebit || 0)}</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ textAlign: 'right' }}></th>
+                    <th style={{ textAlign: 'right' }}>{voucherData.totalQuantity || 0}</th>
                   </tr>
                 </tfoot>
               </table>

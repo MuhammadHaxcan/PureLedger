@@ -246,6 +246,13 @@ const ProcessBaseVoucher = () => {
         }
     }, [voucherData, calculateEntryAmounts, updateAccountEntries]);
 
+    // Set creditable date from base voucher when voucher data loads
+    useEffect(() => {
+        if (voucherData && voucherData.creditableDate) {
+            setCreditableDate(voucherData.creditableDate);
+        }
+    }, [voucherData]);
+
     // Load data on mount
     useEffect(() => {
         if (id) {
@@ -254,9 +261,9 @@ const ProcessBaseVoucher = () => {
         loadBookers();
     }, [id]);
 
-    // Set default creditable date
+    // Set default creditable date (fallback if voucher data not available)
     useEffect(() => {
-        if (!creditableDate) {
+        if (!creditableDate && !voucherData) {
             const today = new Date();
             setCreditableDate(today.toISOString().split('T')[0]);
         }
@@ -835,74 +842,76 @@ const ProcessBaseVoucher = () => {
                     </Card.Body>
                 </Card>
 
-                <div className="row mb-3">
-                    <div className="col-md-4">
-                        <Form.Label htmlFor="CreditableDate">Creditable Date</Form.Label>
-                        <InputGroup>
-                            <InputGroup.Text 
-                                className="calendar-icon"
-                                style={{ cursor: 'pointer' }}
-                                onClick={() => {
-                                    const dateInput = document.getElementById('CreditableDate');
-                                    if (dateInput && !dateInput.disabled) {
-                                        dateInput.showPicker();
-                                    }
-                                }}
-                            >
-                                <i className="fas fa-calendar-alt"></i>
-                            </InputGroup.Text>
-                            <Form.Control
-                                id="CreditableDate"
-                                name="CreditableDate"
-                                type="date"
-                                value={creditableDate}
-                                onChange={(e) => setCreditableDate(e.target.value)}
-                                required
-                            />
-                        </InputGroup>
-                    </div>
-                    {bookers.length > 0 && (
-                        <div className="col-md-4">
-                            <Form.Label htmlFor="BookerId">Booker <span className="text-danger">*</span></Form.Label>
-                            <Form.Select
-                                id="BookerId"
-                                name="BookerId"
-                                value={bookerId || ''}
-                                onChange={(e) => setBookerId(e.target.value ? parseInt(e.target.value) : null)}
-                                required
-                            >
-                                {bookers.map(booker => (
-                                    <option key={booker.id} value={booker.id}>
-                                        {booker.name}
-                                    </option>
-                                ))}
-                            </Form.Select>
-                        </div>
-                    )}
-                </div>
-
-                <div className="d-flex justify-content-between">
-                    <div>
-                        <span className="fw-bold me-2">Selected Items:</span>
+                <div className="mb-3">
+                    <div className="d-flex align-items-end gap-3 mb-2">
+                        <span className="fw-bold">Selected Items:</span>
                         <span id="selectedCount" className="badge bg-primary">{selectedCount}</span>
                     </div>
-                    <Button 
-                        type="submit" 
-                        variant="success" 
-                        id="submitBtn"
-                        disabled={generating || isSubmitting || selectedCount === 0 || hasSubmitted}
-                    >
-                        {generating ? (
-                            <>
-                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                Processing...
-                            </>
-                        ) : (
-                            <>
-                                <i className="fas fa-share-alt me-1"></i> Create Derived Voucher
-                            </>
+                    <div className="row">
+                        <div className="col-md-4">
+                            <Form.Label htmlFor="CreditableDate">Creditable Date</Form.Label>
+                            <InputGroup>
+                                <InputGroup.Text 
+                                    className="calendar-icon"
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => {
+                                        const dateInput = document.getElementById('CreditableDate');
+                                        if (dateInput && !dateInput.disabled) {
+                                            dateInput.showPicker();
+                                        }
+                                    }}
+                                >
+                                    <i className="fas fa-calendar-alt"></i>
+                                </InputGroup.Text>
+                                <Form.Control
+                                    id="CreditableDate"
+                                    name="CreditableDate"
+                                    type="date"
+                                    value={creditableDate}
+                                    onChange={(e) => setCreditableDate(e.target.value)}
+                                    required
+                                />
+                            </InputGroup>
+                        </div>
+                        {bookers.length > 0 && (
+                            <div className="col-md-4">
+                                <Form.Label htmlFor="BookerId">Booker <span className="text-danger">*</span></Form.Label>
+                                <Form.Select
+                                    id="BookerId"
+                                    name="BookerId"
+                                    value={bookerId || ''}
+                                    onChange={(e) => setBookerId(e.target.value ? parseInt(e.target.value) : null)}
+                                    required
+                                >
+                                    {bookers.map(booker => (
+                                        <option key={booker.id} value={booker.id}>
+                                            {booker.name}
+                                        </option>
+                                    ))}
+                                </Form.Select>
+                            </div>
                         )}
-                    </Button>
+                        <div className="col-md-4 d-flex align-items-end">
+                            <Button 
+                                type="submit" 
+                                variant="success" 
+                                id="submitBtn"
+                                className="w-100"
+                                disabled={generating || isSubmitting || selectedCount === 0 || hasSubmitted}
+                            >
+                                {generating ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        Processing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-share-alt me-1"></i> Create Derived Voucher
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </Form>
         </div>
