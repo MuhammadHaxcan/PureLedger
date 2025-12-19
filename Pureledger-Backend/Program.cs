@@ -17,6 +17,7 @@ using CacheInvalidationService = PureLedger.Services.CacheInvalidationService;
 using PureLedger.Middleware;
 using System.Linq;
 using System.Text;
+using AspNetCoreRateLimit;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,22 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add Memory Cache
 builder.Services.AddMemoryCache();
+
+// Configure Rate Limiting
+builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+builder.Services.Configure<IpRateLimitPolicies>(builder.Configuration.GetSection("IpRateLimitPolicies"));
+builder.Services.AddInMemoryRateLimiting();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+
+// Configure Antiforgery for CSRF protection
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-XSRF-TOKEN";
+    options.Cookie.Name = "XSRF-TOKEN";
+    options.Cookie.HttpOnly = false; // JavaScript must read this cookie
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+});
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -151,6 +168,9 @@ var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]!;
 var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
 var jwtAudience = builder.Configuration["Jwt:Audience"]!;
 
+// Get cookie settings from configuration
+var accessTokenCookieName = builder.Configuration["Security:CookieSettings:AccessTokenCookieName"] ?? "accessToken";
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -168,6 +188,21 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
+    };
+
+    // Configure JWT to read from HttpOnly cookie as primary source
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // First, try to get token from the cookie
+            if (context.Request.Cookies.TryGetValue(accessTokenCookieName, out var cookieToken))
+            {
+                context.Token = cookieToken;
+            }
+            // If no cookie, fall back to Authorization header (handled by default)
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -227,6 +262,9 @@ if (!app.Environment.IsDevelopment())
 
 // Add CORS - must be before UseRouting and UseAuthentication to handle preflight requests
 app.UseCors("AllowReactApp");
+
+// Add Rate Limiting - must be after CORS to allow preflight requests
+app.UseIpRateLimiting();
 
 app.UseRouting();
 

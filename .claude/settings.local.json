@@ -4,7 +4,10 @@
       "Bash(dotnet ef migrations:*)",
       "Bash(dotnet build:*)",
       "Bash(dotnet tool:*)",
-      "Bash(dotnet ef database update:*)"
+      "Bash(dotnet ef database update:*)",
+      "Bash(dir \"C:\\\\Users\\\\Haxcan\\\\Desktop\\\\PureLedger\\\\Pureledger-Frontend\" /b)",
+      "Bash(dotnet add:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

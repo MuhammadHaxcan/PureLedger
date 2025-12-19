@@ -44,18 +44,21 @@ namespace PureLedger.Middleware
         {
             context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
             context.Response.Headers.Add("X-Frame-Options", "DENY");
-            context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+            context.Response.Headers.Add("X-XSS-Protection", "0"); // Disable legacy XSS filter, rely on CSP
             context.Response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
             context.Response.Headers.Add("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
 
-            // Content Security Policy
+            // Strict Content Security Policy - removed unsafe-inline and unsafe-eval for XSS protection
             context.Response.Headers.Add("Content-Security-Policy",
                 "default-src 'self'; " +
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-                "style-src 'self' 'unsafe-inline'; " +
+                "script-src 'self'; " +  // Removed unsafe-inline and unsafe-eval
+                "style-src 'self'; " +   // Removed unsafe-inline
                 "img-src 'self' data: https:; " +
                 "font-src 'self' data:; " +
-                "connect-src 'self'");
+                "connect-src 'self'; " +
+                "frame-ancestors 'none'; " +  // Prevent clickjacking
+                "base-uri 'self'; " +         // Prevent base tag hijacking
+                "form-action 'self'");        // Restrict form submissions
         }
 
         /// <summary>

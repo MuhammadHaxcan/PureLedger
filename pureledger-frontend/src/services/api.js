@@ -3,14 +3,44 @@ import { toast } from 'react-toastify';
 
 /**
  * API Base URL Configuration
- * 
+ *
  * Development: Uses VITE_API_BASE_URL from .env.development or falls back to http://localhost:5221/api
  * Production: Should be set to /api in .env.production for Nginx reverse proxy
- * 
+ *
  * The environment variable VITE_API_BASE_URL is injected at build time by Vite.
  * For production builds, ensure .env.production has: VITE_API_BASE_URL=/api
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5221/api';
+
+// XSRF Token storage (in memory, not localStorage for security)
+let xsrfToken = null;
+
+/**
+ * Set XSRF token (called after login or refresh)
+ */
+export const setXsrfToken = (token) => {
+  xsrfToken = token;
+};
+
+/**
+ * Get current XSRF token
+ */
+export const getXsrfToken = () => xsrfToken;
+
+/**
+ * Clear XSRF token (called on logout)
+ */
+export const clearXsrfToken = () => {
+  xsrfToken = null;
+};
+
+/**
+ * Helper to get XSRF token from cookie (fallback)
+ */
+const getXsrfTokenFromCookie = () => {
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+};
 
 // Create axios instance with default configuration
 const apiClient = axios.create({
@@ -18,6 +48,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Send cookies with requests (HttpOnly cookies for auth)
   timeout: 30000, // 30 seconds timeout
 });
 
@@ -36,12 +67,17 @@ const onTokenRefreshed = (newToken) => {
   refreshSubscribers = [];
 };
 
-// Request interceptor to add auth token
+// Request interceptor to add XSRF token for CSRF protection
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Add XSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
+    const stateMutatingMethods = ['post', 'put', 'delete', 'patch'];
+    if (stateMutatingMethods.includes(config.method?.toLowerCase())) {
+      // Try in-memory token first, then cookie fallback
+      const token = xsrfToken || getXsrfTokenFromCookie();
+      if (token) {
+        config.headers['X-XSRF-TOKEN'] = token;
+      }
     }
 
     // Don't override Content-Type for FormData (file uploads)
@@ -81,98 +117,74 @@ apiClient.interceptors.response.use(
     if (statusCode === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      // Try to refresh token
-      const refreshToken = localStorage.getItem('refreshToken');
-      const accessToken = localStorage.getItem('authToken');
-
-      if (refreshToken && accessToken) {
-        if (isRefreshing) {
-          // If already refreshing, queue this request
-          return new Promise((resolve) => {
-            subscribeTokenRefresh((newToken) => {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`;
-              resolve(apiClient(originalRequest));
-            });
+      // Try to refresh token using cookies (tokens are in HttpOnly cookies)
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve) => {
+          subscribeTokenRefresh(() => {
+            resolve(apiClient(originalRequest));
           });
-        }
+        });
+      }
 
-        isRefreshing = true;
+      isRefreshing = true;
 
-        try {
-          const response = await axios.post(
-            `${API_BASE_URL}/AccountApi/refresh-token`,
-            {
-              accessToken: accessToken,
-              refreshToken: refreshToken,
+      try {
+        // Refresh endpoint reads tokens from cookies, no body needed
+        const response = await axios.post(
+          `${API_BASE_URL}/AccountApi/refresh-token`,
+          {},
+          {
+            withCredentials: true, // Send cookies
+            headers: {
+              'Content-Type': 'application/json',
             },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-
-          if (response.data.success) {
-            const { token: newAccessToken, refreshToken: newRefreshToken } = response.data;
-
-            // Update stored tokens
-            localStorage.setItem('authToken', newAccessToken);
-            localStorage.setItem('refreshToken', newRefreshToken);
-
-            // Update authorization header for original request
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-
-            // Notify queued requests
-            onTokenRefreshed(newAccessToken);
-            isRefreshing = false;
-
-            // Retry original request
-            return apiClient(originalRequest);
           }
-        } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
+        );
+
+        if (response.data.success) {
+          // Update XSRF token
+          if (response.data.xsrfToken) {
+            setXsrfToken(response.data.xsrfToken);
+          }
+
+          // Notify queued requests
+          onTokenRefreshed();
           isRefreshing = false;
-          refreshSubscribers = [];
 
-          // Show auth error toast
-          toast.error('Your session has expired. Please log in again.', {
-            position: "top-right",
-            autoClose: 8000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            toastId: 'session-expired',
-          });
-
-          // Clear auth data
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
-          localStorage.removeItem('userAccess');
-          localStorage.removeItem('navigationMenu');
-
-          // Redirect to login after a short delay to show the toast
-          setTimeout(() => {
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login';
-            }
-          }, 2000);
-
-          return Promise.reject(standardizedError);
+          // Retry original request (cookies are automatically included)
+          return apiClient(originalRequest);
         }
-      } else {
-        // No refresh token available, clear auth and redirect
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        isRefreshing = false;
+        refreshSubscribers = [];
+
+        // Clear XSRF token
+        clearXsrfToken();
+
+        // Show auth error toast
+        toast.error('Your session has expired. Please log in again.', {
+          position: "top-right",
+          autoClose: 8000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          toastId: 'session-expired',
+        });
+
+        // Clear non-sensitive auth data from localStorage
         localStorage.removeItem('user');
         localStorage.removeItem('userAccess');
         localStorage.removeItem('navigationMenu');
 
-        // Redirect to login if not already there
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
+        // Redirect to login after a short delay to show the toast
+        setTimeout(() => {
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+        }, 2000);
 
         return Promise.reject(standardizedError);
       }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Antiforgery;
 using PureLedger.Services.Auth;
 using PureLedger.ViewModels;
 using LoginViewModel = PureLedger.ViewModels.Auth.LoginViewModel;
@@ -16,15 +17,78 @@ namespace PureLedger.Controllers.Api
         private readonly IAuthService _authService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AccountApiController> _logger;
+        private readonly IConfiguration _configuration;
+        private readonly IAntiforgery _antiforgery;
+
+        // Cookie names from configuration
+        private string AccessTokenCookieName => _configuration["Security:CookieSettings:AccessTokenCookieName"] ?? "accessToken";
+        private string RefreshTokenCookieName => _configuration["Security:CookieSettings:RefreshTokenCookieName"] ?? "refreshToken";
 
         public AccountApiController(
             IAuthService authService,
             IHttpContextAccessor httpContextAccessor,
-            ILogger<AccountApiController> logger)
+            ILogger<AccountApiController> logger,
+            IConfiguration configuration,
+            IAntiforgery antiforgery)
         {
             _authService = authService;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
+            _configuration = configuration;
+            _antiforgery = antiforgery;
+        }
+
+        /// <summary>
+        /// Sets authentication cookies (HttpOnly for security)
+        /// </summary>
+        private void SetAuthCookies(string accessToken, string refreshToken)
+        {
+            var accessTokenExpiryMinutes = int.Parse(_configuration["Security:CookieSettings:AccessTokenExpiryMinutes"] ?? "30");
+            var refreshTokenExpiryDays = int.Parse(_configuration["Security:CookieSettings:RefreshTokenExpiryDays"] ?? "7");
+
+            // Access token cookie - HttpOnly to prevent XSS
+            Response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = false, // HTTP allowed per user preference
+                SameSite = SameSiteMode.Lax,
+                Path = "/api",
+                Expires = DateTimeOffset.UtcNow.AddMinutes(accessTokenExpiryMinutes),
+                IsEssential = true
+            });
+
+            // Refresh token cookie - HttpOnly to prevent XSS
+            Response.Cookies.Append(RefreshTokenCookieName, refreshToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = false, // HTTP allowed per user preference
+                SameSite = SameSiteMode.Lax,
+                Path = "/api",
+                Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenExpiryDays),
+                IsEssential = true
+            });
+        }
+
+        /// <summary>
+        /// Clears authentication cookies on logout
+        /// </summary>
+        private void ClearAuthCookies()
+        {
+            Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = false,
+                SameSite = SameSiteMode.Lax,
+                Path = "/api"
+            });
+
+            Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = false,
+                SameSite = SameSiteMode.Lax,
+                Path = "/api"
+            });
         }
 
         [HttpPost("login")]
@@ -68,13 +132,19 @@ namespace PureLedger.Controllers.Api
             // Store refresh token in database
             await _authService.CreateRefreshTokenAsync(user.UserId, refreshToken, ipAddress);
 
+            // Set tokens in HttpOnly cookies (XSS-safe)
+            SetAuthCookies(accessToken, refreshToken);
+
+            // Generate XSRF token for CSRF protection
+            var xsrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
+
             _logger.LogInformation($"User {model.Username} logged in via API");
 
+            // Return user info without tokens (tokens are in HttpOnly cookies)
             return Ok(new
             {
                 success = true,
-                token = accessToken,
-                refreshToken = refreshToken,
+                xsrfToken = xsrfTokens.RequestToken, // Frontend stores this for CSRF protection
                 user = new
                 {
                     userId = user.UserId,
@@ -89,7 +159,7 @@ namespace PureLedger.Controllers.Api
 
         [HttpPost("logout")]
         [Authorize]
-        public async Task<IActionResult> Logout([FromBody] LogoutViewModel model)
+        public async Task<IActionResult> Logout([FromBody] LogoutViewModel? model = null)
         {
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
             if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
@@ -99,16 +169,22 @@ namespace PureLedger.Controllers.Api
 
             var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
 
+            // Try to get refresh token from cookie first, then from body
+            var refreshToken = Request.Cookies[RefreshTokenCookieName] ?? model?.RefreshToken;
+
             // Revoke the specific refresh token if provided
-            if (!string.IsNullOrEmpty(model?.RefreshToken))
+            if (!string.IsNullOrEmpty(refreshToken))
             {
-                await _authService.RevokeRefreshTokenAsync(model.RefreshToken, ipAddress);
+                await _authService.RevokeRefreshTokenAsync(refreshToken, ipAddress);
             }
             else
             {
                 // Revoke all user tokens if no specific token provided
                 await _authService.RevokeAllUserTokensAsync(userId, ipAddress);
             }
+
+            // Clear authentication cookies
+            ClearAuthCookies();
 
             _logger.LogInformation($"User {userId} logged out via API");
             return Ok(new { success = true, message = "Logged out successfully" });
@@ -165,15 +241,19 @@ namespace PureLedger.Controllers.Api
 
         [HttpPost("refresh-token")]
         [AllowAnonymous]
-        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenViewModel model)
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenViewModel? model = null)
         {
-            if (string.IsNullOrEmpty(model?.AccessToken) || string.IsNullOrEmpty(model?.RefreshToken))
+            // Try to get tokens from cookies first, then from body (for backward compatibility)
+            var accessToken = Request.Cookies[AccessTokenCookieName] ?? model?.AccessToken;
+            var refreshToken = Request.Cookies[RefreshTokenCookieName] ?? model?.RefreshToken;
+
+            if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
             {
                 return BadRequest(new { success = false, message = "Invalid token request" });
             }
 
             // Extract claims from expired access token
-            var principal = _authService.GetPrincipalFromExpiredToken(model.AccessToken);
+            var principal = _authService.GetPrincipalFromExpiredToken(accessToken);
             if (principal == null)
             {
                 return Unauthorized(new { success = false, message = "Invalid access token" });
@@ -186,9 +266,11 @@ namespace PureLedger.Controllers.Api
             }
 
             // Validate refresh token
-            var isValidRefreshToken = await _authService.ValidateRefreshTokenAsync(model.RefreshToken);
+            var isValidRefreshToken = await _authService.ValidateRefreshTokenAsync(refreshToken);
             if (!isValidRefreshToken)
             {
+                // Clear invalid cookies
+                ClearAuthCookies();
                 return Unauthorized(new { success = false, message = "Invalid or expired refresh token" });
             }
 
@@ -196,6 +278,7 @@ namespace PureLedger.Controllers.Api
             var user = await _authService.GetUserByIdAsync(userId);
             if (user == null || !user.IsActive)
             {
+                ClearAuthCookies();
                 return Unauthorized(new { success = false, message = "User not found or inactive" });
             }
 
@@ -214,16 +297,21 @@ namespace PureLedger.Controllers.Api
             var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
 
             // Revoke old refresh token and create new one
-            await _authService.RevokeRefreshTokenAsync(model.RefreshToken, ipAddress);
+            await _authService.RevokeRefreshTokenAsync(refreshToken, ipAddress);
             await _authService.CreateRefreshTokenAsync(user.UserId, newRefreshToken, ipAddress);
+
+            // Set new tokens in HttpOnly cookies
+            SetAuthCookies(newAccessToken, newRefreshToken);
+
+            // Generate new XSRF token
+            var xsrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
 
             _logger.LogInformation($"Token refreshed for user {user.Username}");
 
             return Ok(new
             {
                 success = true,
-                token = newAccessToken,
-                refreshToken = newRefreshToken
+                xsrfToken = xsrfTokens.RequestToken // Return new XSRF token
             });
         }
 
@@ -352,6 +440,39 @@ namespace PureLedger.Controllers.Api
                 isAdmin,
                 accessibleProjects = accessibleProjects.Select(p => p.ProjectId).ToList()
             });
+        }
+
+        /// <summary>
+        /// Get XSRF token for CSRF protection.
+        /// Call this endpoint to get a fresh XSRF token when needed.
+        /// </summary>
+        [HttpGet("xsrf-token")]
+        [Authorize]
+        public IActionResult GetXsrfToken()
+        {
+            var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+            return Ok(new
+            {
+                success = true,
+                xsrfToken = tokens.RequestToken
+            });
+        }
+
+        /// <summary>
+        /// Check if user is authenticated (has valid cookies).
+        /// Useful for frontend to verify auth state on page load.
+        /// </summary>
+        [HttpGet("check-auth")]
+        [Authorize]
+        public IActionResult CheckAuth()
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+            {
+                return Unauthorized(new { success = false, isAuthenticated = false });
+            }
+
+            return Ok(new { success = true, isAuthenticated = true });
         }
 
         private string GetActionIcon(string controller, string action)
