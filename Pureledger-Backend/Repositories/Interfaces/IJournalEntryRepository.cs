@@ -158,18 +158,4 @@ namespace PureLedger.Repositories.Interfaces
 
         #endregion
     }
-
-    public class ProductAggregateDto
-    {
-        public int ProductId { get; set; }
-        public string ProductName { get; set; } = string.Empty;
-        public int PrevDebitQty { get; set; }
-        public int PrevCreditQty { get; set; }
-        public decimal PrevDebit { get; set; }
-        public decimal PrevCredit { get; set; }
-        public int CurrentDebitQty { get; set; }
-        public int CurrentCreditQty { get; set; }
-        public decimal CurrentDebit { get; set; }
-        public decimal CurrentCredit { get; set; }
-    }
 }

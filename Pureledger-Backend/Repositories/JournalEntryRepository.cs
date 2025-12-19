@@ -729,16 +729,11 @@ namespace PureLedger.Repositories
         query = query.Where(je => je.AccountId == accountId.Value);
     }
 
-    // Apply location filter if needed
+    // Apply location filter using SQL subquery instead of loading IDs into memory
     if (locationId.HasValue)
     {
-        var validEntryIds = await _context.DeliveryChallanEntries
-            .AsNoTracking()
-            .Where(dce => dce.LocationId == locationId.Value)
-            .Select(dce => dce.JournalEntryId)
-            .ToListAsync();
-
-        query = query.Where(je => validEntryIds.Contains(je.JournalEntryId));
+        query = query.Where(je => _context.DeliveryChallanEntries
+            .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
     }
 
     // Get distinct product IDs

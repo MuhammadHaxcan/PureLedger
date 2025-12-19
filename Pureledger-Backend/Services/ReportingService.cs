@@ -175,20 +175,21 @@ namespace PureLedger.Services {
         }
 
         private async Task<(decimal TotalAmount, List<JournalVoucherEntryReportModel> Entries)> GetForChargesDataAsync(int journalVoucherId) {
-
             var references = await _unitOfWork.JournalVoucherReferences
                 .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "ForCharges");
+
+            if (!references.Any())
+                return (0, new List<JournalVoucherEntryReportModel>());
+
+            // Batch fetch all vouchers in a single query instead of N+1
+            var voucherIds = references.Select(r => r.ReferencedVoucherId).ToList();
+            var vouchers = await _unitOfWork.JournalVouchers.GetByIdsWithEntriesAsync(voucherIds);
 
             decimal totalAmount = 0;
             var forChargesEntries = new List<JournalVoucherEntryReportModel>();
 
-            foreach (var reference in references) {
-                var forVoucher = await _unitOfWork.JournalVouchers
-                    .GetWithEntriesAsync(reference.ReferencedVoucherId);
-
-                if (forVoucher == null) continue;
-
-                var debitEntry = forVoucher.JournalEntries.FirstOrDefault(e => e.Debit > 0);
+            foreach (var voucher in vouchers) {
+                var debitEntry = voucher.JournalEntries.FirstOrDefault(e => e.Debit > 0);
                 if (debitEntry != null) {
                     totalAmount += debitEntry.Debit;
                     forChargesEntries.Add(MapToEntryReportModel(debitEntry));
@@ -199,20 +200,21 @@ namespace PureLedger.Services {
         }
 
         private async Task<(decimal TotalAmount, List<JournalVoucherEntryReportModel> Entries)> GetCartageDataAsync(int journalVoucherId) {
-
             var references = await _unitOfWork.JournalVoucherReferences
                 .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "Cartage");
+
+            if (!references.Any())
+                return (0, new List<JournalVoucherEntryReportModel>());
+
+            // Batch fetch all vouchers in a single query instead of N+1
+            var voucherIds = references.Select(r => r.ReferencedVoucherId).ToList();
+            var vouchers = await _unitOfWork.JournalVouchers.GetByIdsWithEntriesAsync(voucherIds);
 
             decimal totalAmount = 0;
             var cartageEntries = new List<JournalVoucherEntryReportModel>();
 
-            foreach (var reference in references) {
-                var cartageVoucher = await _unitOfWork.JournalVouchers
-                    .GetWithEntriesAsync(reference.ReferencedVoucherId);
-
-                if (cartageVoucher == null) continue;
-
-                var creditEntry = cartageVoucher.JournalEntries.FirstOrDefault(e => e.Credit > 0);
+            foreach (var voucher in vouchers) {
+                var creditEntry = voucher.JournalEntries.FirstOrDefault(e => e.Credit > 0);
                 if (creditEntry != null) {
                     totalAmount += creditEntry.Credit;
                     cartageEntries.Add(MapToEntryReportModel(creditEntry));
@@ -262,29 +264,27 @@ namespace PureLedger.Services {
 
             int? projectId = ParseNullableInt(request.ProjectId);
 
-            return await ExecuteInTransactionAsync(async () => {
-                var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
-                if (accounts.Count == 0)
-                    return new AgingReportResponseViewModel();
+            var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
+            if (accounts.Count == 0)
+                return new AgingReportResponseViewModel();
 
-                var accountIds = accounts.Select(a => a.AccountId).ToList();
+            var accountIds = accounts.Select(a => a.AccountId).ToList();
 
-                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForAgingReportAsync(
-                    accountIds,
-                    categoryId,
-                    projectId,
-                    request.ReferenceDate,
-                    request.Page,
-                    request.PageSize);
+            var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForAgingReportAsync(
+                accountIds,
+                categoryId,
+                projectId,
+                request.ReferenceDate,
+                request.Page,
+                request.PageSize);
 
-                return new AgingReportResponseViewModel {
-                    Entries = entries,
-                    TotalRecords = totalCount,
-                    Page = request.Page,
-                    PageSize = request.PageSize,
-                    HasMoreData = (request.Page + 1) * request.PageSize < totalCount
-                };
-            });
+            return new AgingReportResponseViewModel {
+                Entries = entries,
+                TotalRecords = totalCount,
+                Page = request.Page,
+                PageSize = request.PageSize,
+                HasMoreData = (request.Page + 1) * request.PageSize < totalCount
+            };
         }
 
         public async Task<AccountReportResponseViewModel> GetAccountReportAsync(AccountReportRequestViewModel request) {
@@ -299,22 +299,20 @@ namespace PureLedger.Services {
                 return new AccountReportResponseViewModel();
             }
 
-            return await ExecuteInTransactionAsync(async () => {
-                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForAccountReportAsync(
-                    projectId,
-                    categoryId,
-                    accountId,
-                    request.Page,
-                    request.PageSize);
+            var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForAccountReportAsync(
+                projectId,
+                categoryId,
+                accountId,
+                request.Page,
+                request.PageSize);
 
-                return new AccountReportResponseViewModel {
-                    Entries = entries,
-                    TotalRecords = totalCount,
-                    Page = request.Page,
-                    PageSize = request.PageSize,
-                    HasMoreData = (request.Page + 1) * request.PageSize < totalCount
-                };
-            });
+            return new AccountReportResponseViewModel {
+                Entries = entries,
+                TotalRecords = totalCount,
+                Page = request.Page,
+                PageSize = request.PageSize,
+                HasMoreData = (request.Page + 1) * request.PageSize < totalCount
+            };
         }
 
         private async Task<List<Account>> GetFilteredAccountsAsync(int? accountId, int? categoryId, int projectId) {
@@ -353,35 +351,27 @@ namespace PureLedger.Services {
 
             decimal currentTransactionAmount = customerEntry.Debit - customerEntry.Credit;
 
-            decimal forChargesImpact = 0;
-            var forReferences = await _unitOfWork.JournalVoucherReferences
-                .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "ForCharges");
+            // Get all references at once instead of two separate calls
+            var allReferences = await _unitOfWork.JournalVoucherReferences
+                .GetByMainVoucherIdAsync(journalVoucherId);
 
-            foreach (var reference in forReferences) {
+            // Collect all referenced voucher IDs for both ForCharges and Cartage
+            var referencedVoucherIds = allReferences
+                .Where(r => r.ReferenceType == "ForCharges" || r.ReferenceType == "Cartage")
+                .Select(r => r.ReferencedVoucherId)
+                .ToList();
 
-                var customerForEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                    reference.ReferencedVoucherId, null, customerAccountId);
-
-                foreach (var entry in customerForEntries) {
-                    forChargesImpact += entry.Debit - entry.Credit;
-                }
+            if (!referencedVoucherIds.Any()) {
+                return baseBalance + currentTransactionAmount;
             }
 
-            decimal cartageImpact = 0;
-            var cartageReferences = await _unitOfWork.JournalVoucherReferences
-                .GetByMainVoucherIdAndTypeAsync(journalVoucherId, "Cartage");
+            // Batch fetch all entries for the customer account across all referenced vouchers
+            var allReferencedEntries = await _unitOfWork.JournalEntries
+                .GetEntriesByVoucherIdsAndAccountAsync(referencedVoucherIds, customerAccountId);
 
-            foreach (var reference in cartageReferences) {
-                var customerCartageEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(
-                    reference.ReferencedVoucherId, null, customerAccountId);
+            decimal totalImpact = allReferencedEntries.Sum(e => e.Debit - e.Credit);
 
-                foreach (var entry in customerCartageEntries) {
-                    cartageImpact += entry.Debit - entry.Credit;
-                }
-            }
-
-            decimal finalBalance = baseBalance + currentTransactionAmount + forChargesImpact + cartageImpact;
-            return finalBalance;
+            return baseBalance + currentTransactionAmount + totalImpact;
         }
 
         public async Task<MasterReportViewModels> GetMasterReportAsync(MasterReportRequest request) {
@@ -398,89 +388,86 @@ namespace PureLedger.Services {
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 500);
 
-            return await ExecuteInTransactionAsync(async () => {
+            var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceAsync(
+                startDate, projectId, categoryId, accountId);
 
-                var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceAsync(
-                    startDate, projectId, categoryId, accountId);
+            decimal openingBalance = openingDebit - openingCredit;
 
-                decimal openingBalance = openingDebit - openingCredit;
-
-                decimal previousBalance = openingBalance;
-                if (page > 0) {
-                    var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceAsync(
-                        startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
-
-                    previousBalance = openingBalance + previousEntriesBalance;
-                }
-
-                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
+            decimal previousBalance = openingBalance;
+            if (page > 0) {
+                var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceAsync(
                     startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
-                result.Entries = new List<MasterReportEntryViewModel>();
-                result.PreviousBalance = previousBalance;
+                previousBalance = openingBalance + previousEntriesBalance;
+            }
 
-                decimal runningBalance = previousBalance;
+            var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
+                startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
-                bool includeOpening = (page == 0);
-                if (includeOpening) {
-                    result.Entries.Add(new MasterReportEntryViewModel {
-                        Id = 0,
-                        JournalVoucherId = 0,
-                        FormattedId = "OPENING",
-                        TransactionDate = startDate,
-                        CreditableDate = startDate,
-                        Description = "Opening Balance",
-                        AccountName = accountId.HasValue ? entries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
-                        AccountId = accountId ?? 0,
-                        Debit = openingDebit,
-                        Credit = openingCredit,
-                        Balance = openingBalance,
-                        ProjectName = "",
-                        ProjectId = projectId ?? 0,
-                        CategoryName = "",
-                        CategoryId = categoryId ?? 0
-                    });
-                }
+            result.Entries = new List<MasterReportEntryViewModel>();
+            result.PreviousBalance = previousBalance;
 
-                foreach (var entry in entries) {
-                    decimal entryImpact = entry.Debit - entry.Credit;
-                    runningBalance += entryImpact;
+            decimal runningBalance = previousBalance;
 
-                    string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
+            bool includeOpening = (page == 0);
+            if (includeOpening) {
+                result.Entries.Add(new MasterReportEntryViewModel {
+                    Id = 0,
+                    JournalVoucherId = 0,
+                    FormattedId = "OPENING",
+                    TransactionDate = startDate,
+                    CreditableDate = startDate,
+                    Description = "Opening Balance",
+                    AccountName = accountId.HasValue ? entries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
+                    AccountId = accountId ?? 0,
+                    Debit = openingDebit,
+                    Credit = openingCredit,
+                    Balance = openingBalance,
+                    ProjectName = "",
+                    ProjectId = projectId ?? 0,
+                    CategoryName = "",
+                    CategoryId = categoryId ?? 0
+                });
+            }
 
-                    result.Entries.Add(new MasterReportEntryViewModel {
-                        Id = entry.JournalEntryId,
-                        JournalVoucherId = entry.JournalVoucherId,
-                        FormattedId = formattedId,
-                        TransactionDate = entry.JournalVoucher.EntryDate,
-                        CreditableDate = entry.JournalVoucher.CreditableDate,
-                        Description = entry.Description,
-                        AccountName = entry.Account?.AccountName ?? string.Empty,
-                        AccountId = entry.AccountId,
-                        Debit = entry.Debit,
-                        Credit = entry.Credit,
-                        Balance = runningBalance,
-                        ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
-                        ProjectId = entry.JournalVoucher.ProjectId,
-                        CategoryName = entry.Category?.CategoryName ?? string.Empty,
-                        CategoryId = entry.CategoryId,
-                        Quantity = entry.Quantity,
-                        BookerId = entry.JournalVoucher.BookerId,
-                        BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
-                    });
-                }
+            foreach (var entry in entries) {
+                decimal entryImpact = entry.Debit - entry.Credit;
+                runningBalance += entryImpact;
 
-                result.TotalDebit = 0;
-                result.TotalCredit = 0;
-                result.NetBalance = runningBalance;
+                string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
-                result.TotalRecords = totalCount + (includeOpening ? 1 : 0);
-                result.Page = page;
-                result.PageSize = pageSize;
-                result.HasMoreData = (page + 1) * pageSize < totalCount;
+                result.Entries.Add(new MasterReportEntryViewModel {
+                    Id = entry.JournalEntryId,
+                    JournalVoucherId = entry.JournalVoucherId,
+                    FormattedId = formattedId,
+                    TransactionDate = entry.JournalVoucher.EntryDate,
+                    CreditableDate = entry.JournalVoucher.CreditableDate,
+                    Description = entry.Description,
+                    AccountName = entry.Account?.AccountName ?? string.Empty,
+                    AccountId = entry.AccountId,
+                    Debit = entry.Debit,
+                    Credit = entry.Credit,
+                    Balance = runningBalance,
+                    ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
+                    ProjectId = entry.JournalVoucher.ProjectId,
+                    CategoryName = entry.Category?.CategoryName ?? string.Empty,
+                    CategoryId = entry.CategoryId,
+                    Quantity = entry.Quantity,
+                    BookerId = entry.JournalVoucher.BookerId,
+                    BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
+                });
+            }
 
-                return result;
-            });
+            result.TotalDebit = 0;
+            result.TotalCredit = 0;
+            result.NetBalance = runningBalance;
+
+            result.TotalRecords = totalCount + (includeOpening ? 1 : 0);
+            result.Page = page;
+            result.PageSize = pageSize;
+            result.HasMoreData = (page + 1) * pageSize < totalCount;
+
+            return result;
         }
 
         public async Task<object> GetUserReportInitAsync(int userId) {
@@ -523,92 +510,90 @@ namespace PureLedger.Services {
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 500);
 
-            return await ExecuteInTransactionAsync(async () => {
-                var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceForUserReportAsync(
-                    startDate, projectId, categoryId, accountId);
+            var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceForUserReportAsync(
+                startDate, projectId, categoryId, accountId);
 
-                decimal openingBalance = openingDebit - openingCredit;
+            decimal openingBalance = openingDebit - openingCredit;
 
-                decimal previousBalance = openingBalance;
-                if (page > 0) {
-                    var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceForUserReportAsync(
-                        startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
-
-                    previousBalance = openingBalance + previousEntriesBalance;
-                }
-
-                var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForUserReportAsync(
+            decimal previousBalance = openingBalance;
+            if (page > 0) {
+                var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceForUserReportAsync(
                     startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
-                // Filter out any entries with hidden categories (double-check)
-                var filteredEntries = entries.Where(e => !hiddenCategoryIds.Contains(e.CategoryId)).ToList();
-                var filteredCount = totalCount - (entries.Count - filteredEntries.Count);
+                previousBalance = openingBalance + previousEntriesBalance;
+            }
 
-                result.Entries = new List<UserReportEntryViewModel>();
-                result.PreviousBalance = previousBalance;
+            var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForUserReportAsync(
+                startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
-                decimal runningBalance = previousBalance;
+            // Filter out any entries with hidden categories (double-check)
+            var filteredEntries = entries.Where(e => !hiddenCategoryIds.Contains(e.CategoryId)).ToList();
+            var filteredCount = totalCount - (entries.Count - filteredEntries.Count);
 
-                bool includeOpening = (page == 0);
-                if (includeOpening) {
-                    result.Entries.Add(new UserReportEntryViewModel {
-                        Id = 0,
-                        JournalVoucherId = 0,
-                        FormattedId = "OPENING",
-                        TransactionDate = startDate,
-                        CreditableDate = startDate,
-                        Description = "Opening Balance",
-                        AccountName = accountId.HasValue ? filteredEntries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
-                        AccountId = accountId ?? 0,
-                        Debit = openingDebit,
-                        Credit = openingCredit,
-                        Balance = openingBalance,
-                        ProjectName = "",
-                        ProjectId = projectId ?? 0,
-                        CategoryName = "",
-                        CategoryId = categoryId
-                    });
-                }
+            result.Entries = new List<UserReportEntryViewModel>();
+            result.PreviousBalance = previousBalance;
 
-                foreach (var entry in filteredEntries) {
-                    decimal entryImpact = entry.Debit - entry.Credit;
-                    runningBalance += entryImpact;
+            decimal runningBalance = previousBalance;
 
-                    string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
+            bool includeOpening = (page == 0);
+            if (includeOpening) {
+                result.Entries.Add(new UserReportEntryViewModel {
+                    Id = 0,
+                    JournalVoucherId = 0,
+                    FormattedId = "OPENING",
+                    TransactionDate = startDate,
+                    CreditableDate = startDate,
+                    Description = "Opening Balance",
+                    AccountName = accountId.HasValue ? filteredEntries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
+                    AccountId = accountId ?? 0,
+                    Debit = openingDebit,
+                    Credit = openingCredit,
+                    Balance = openingBalance,
+                    ProjectName = "",
+                    ProjectId = projectId ?? 0,
+                    CategoryName = "",
+                    CategoryId = categoryId
+                });
+            }
 
-                    result.Entries.Add(new UserReportEntryViewModel {
-                        Id = entry.JournalEntryId,
-                        JournalVoucherId = entry.JournalVoucherId,
-                        FormattedId = formattedId,
-                        TransactionDate = entry.JournalVoucher.EntryDate,
-                        CreditableDate = entry.JournalVoucher.CreditableDate,
-                        Description = entry.Description,
-                        AccountName = entry.Account?.AccountName ?? string.Empty,
-                        AccountId = entry.AccountId,
-                        Debit = entry.Debit,
-                        Credit = entry.Credit,
-                        Balance = runningBalance,
-                        ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
-                        ProjectId = entry.JournalVoucher.ProjectId,
-                        CategoryName = entry.Category?.CategoryName ?? string.Empty,
-                        CategoryId = entry.CategoryId,
-                        Quantity = entry.Quantity,
-                        BookerId = entry.JournalVoucher.BookerId,
-                        BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
-                    });
-                }
+            foreach (var entry in filteredEntries) {
+                decimal entryImpact = entry.Debit - entry.Credit;
+                runningBalance += entryImpact;
 
-                result.TotalDebit = 0;
-                result.TotalCredit = 0;
-                result.NetBalance = runningBalance;
+                string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
-                result.TotalRecords = filteredCount + (includeOpening ? 1 : 0);
-                result.Page = page;
-                result.PageSize = pageSize;
-                result.HasMoreData = (page + 1) * pageSize < filteredCount;
+                result.Entries.Add(new UserReportEntryViewModel {
+                    Id = entry.JournalEntryId,
+                    JournalVoucherId = entry.JournalVoucherId,
+                    FormattedId = formattedId,
+                    TransactionDate = entry.JournalVoucher.EntryDate,
+                    CreditableDate = entry.JournalVoucher.CreditableDate,
+                    Description = entry.Description,
+                    AccountName = entry.Account?.AccountName ?? string.Empty,
+                    AccountId = entry.AccountId,
+                    Debit = entry.Debit,
+                    Credit = entry.Credit,
+                    Balance = runningBalance,
+                    ProjectName = entry.JournalVoucher.Project?.ProjectName ?? string.Empty,
+                    ProjectId = entry.JournalVoucher.ProjectId,
+                    CategoryName = entry.Category?.CategoryName ?? string.Empty,
+                    CategoryId = entry.CategoryId,
+                    Quantity = entry.Quantity,
+                    BookerId = entry.JournalVoucher.BookerId,
+                    BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
+                });
+            }
 
-                return result;
-            });
+            result.TotalDebit = 0;
+            result.TotalCredit = 0;
+            result.NetBalance = runningBalance;
+
+            result.TotalRecords = filteredCount + (includeOpening ? 1 : 0);
+            result.Page = page;
+            result.PageSize = pageSize;
+            result.HasMoreData = (page + 1) * pageSize < filteredCount;
+
+            return result;
         }
 
         public async Task<List<Project>> GetAllProjectsForUserAsync(int userId) {
@@ -697,156 +682,152 @@ namespace PureLedger.Services {
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 500);
 
-            return await ExecuteInTransactionAsync(async () => {
-                // Get paginated product IDs
-                var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
-                    startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
+            // Get paginated product IDs
+            var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
+                startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
 
-                if (!productIds.Any()) {
-                    return new ProductReportViewModel {
-                        TotalRecords = 0,
-                        Page = page,
-                        PageSize = pageSize,
-                        HasMoreData = false
-                    };
-                }
-
-                // Get all historical entries for the paginated products
-                var allHistoricalEntries = await _unitOfWork.JournalEntries.GetAllEntriesForProductReportAsync(
-                    DateOnly.MinValue, endDate, projectId, categoryId, null, locationId);
-
-                // Filter to only include the paginated product IDs
-                var productGroups = allHistoricalEntries
-                    .Where(x => productIds.Contains(x.Entry.AccountId))
-                    .GroupBy(x => x.Entry.AccountId)
-                    .ToDictionary(g => g.Key, g => g.ToList());
-
-                var productSummaries = new List<ProductSummaryViewModel>();
-
-                decimal totalDebit = 0;
-                decimal totalCredit = 0;
-                int totalDebitQty = 0;
-                int totalCreditQty = 0;
-                decimal totalCOGS = 0;
-                decimal totalMargin = 0;
-
-                foreach (var productId in productIds) {
-                    if (!productGroups.ContainsKey(productId))
-                        continue;
-
-                    var productEntries = productGroups[productId];
-
-                    if (!productEntries.Any())
-                        continue;
-
-                    var productName = productEntries.First().Entry.Account?.AccountName ?? "Unknown Product";
-
-                    var entriesBeforeStartDate = productEntries
-                        .Where(x => x.Entry.JournalVoucher.EntryDate < startDate)
-                        .ToList();
-
-                    var entriesInDateRange = productEntries
-                        .Where(x => x.Entry.JournalVoucher.EntryDate >= startDate &&
-                                   x.Entry.JournalVoucher.EntryDate <= endDate)
-                        .ToList();
-
-                    var prevDebitEntries = entriesBeforeStartDate.Where(x => x.Entry.Debit > 0).ToList();
-                    var prevCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
-
-                    int prevDebitQty = prevDebitEntries.Sum(x => x.Entry.Quantity);
-                    int prevCreditQty = prevCreditEntries.Sum(x => x.Entry.Quantity);
-                    int prevQtyBalance = prevDebitQty - prevCreditQty;
-
-                    decimal prevTotalDebit = prevDebitEntries.Sum(x => x.Entry.Debit);
-                    decimal prevTotalCredit = prevCreditEntries.Sum(x => x.Entry.Credit);
-                    decimal prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
-
-                    var currentDebitEntries = entriesInDateRange.Where(x => x.Entry.Debit > 0).ToList();
-                    var currentCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
-
-                    int currentDebitQty = currentDebitEntries.Sum(x => x.Entry.Quantity);
-                    int currentCreditQty = currentCreditEntries.Sum(x => x.Entry.Quantity);
-
-                    decimal currentDebit = currentDebitEntries.Sum(x => x.Entry.Debit);
-                    decimal currentCredit = currentCreditEntries.Sum(x => x.Entry.Credit);
-
-                    int totalProductDebitQty = prevDebitQty + currentDebitQty;
-                    int totalProductCreditQty = prevCreditQty + currentCreditQty;
-                    int qtyBalance = totalProductDebitQty - totalProductCreditQty;
-
-                    decimal averageRate = totalProductDebitQty > 0 ?
-                        (prevTotalDebit + currentDebit) / totalProductDebitQty :
-                        prevAvgRate;
-
-                    decimal cogs = averageRate * currentCreditQty;
-                    decimal margin = currentCredit - cogs;
-                    decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
-
-                    var summary = new ProductSummaryViewModel {
-                        ProductId = productId,
-                        ProductName = productName,
-                        PreviousDebitQty = prevDebitQty,
-                        PreviousCreditQty = prevCreditQty,
-                        PreviousBalance = prevQtyBalance,
-                        PreviousDebit = prevTotalDebit,
-                        PreviousCredit = prevTotalCredit,
-                        PreviousAvgRate = prevAvgRate,
-                        TotalDebitQty = currentDebitQty,
-                        TotalCreditQty = currentCreditQty,
-                        QtyBalance = qtyBalance,
-                        AverageRate = averageRate,
-                        TotalDebit = currentDebit,
-                        TotalCredit = currentCredit,
-                        COGS = cogs,
-                        Margin = margin,
-                        MarginPercentage = marginPercentage,
-                        HasPreviousBalance = prevDebitQty > 0 || prevCreditQty > 0
-                    };
-
-                    productSummaries.Add(summary);
-
-                    totalDebit += currentDebit;
-                    totalCredit += currentCredit;
-                    totalDebitQty += currentDebitQty;
-                    totalCreditQty += currentCreditQty;
-                    totalCOGS += cogs;
-                    totalMargin += margin;
-                }
-
-                if (request.ExcludeNilProducts) {
-                    productSummaries = productSummaries.Where(p => p.QtyBalance != 0).ToList();
-
-                    // Recalculate totals from filtered products
-                    totalDebit = productSummaries.Sum(p => p.TotalDebit);
-                    totalCredit = productSummaries.Sum(p => p.TotalCredit);
-                    totalDebitQty = productSummaries.Sum(p => p.TotalDebitQty);
-                    totalCreditQty = productSummaries.Sum(p => p.TotalCreditQty);
-                    totalCOGS = productSummaries.Sum(p => p.COGS);
-                    totalMargin = productSummaries.Sum(p => p.Margin);
-                }
-
-                decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
-
-                var viewModel = new ProductReportViewModel {
-                    ProductSummaries = productSummaries.OrderBy(p => p.ProductName).ToList(),
-                    Totals = new ProductReportTotalsViewModel {
-                        TotalDebit = totalDebit,
-                        TotalCredit = totalCredit,
-                        TotalDebitQty = totalDebitQty,
-                        TotalCreditQty = totalCreditQty,
-                        NetQuantity = totalDebitQty - totalCreditQty,
-                        TotalCOGS = totalCOGS,
-                        TotalMargin = totalMargin,
-                        MarginPercentage = totalMarginPercentage
-                    },
-                    TotalRecords = request.ExcludeNilProducts ? productSummaries.Count : totalCount,
+            if (!productIds.Any()) {
+                return new ProductReportViewModel {
+                    TotalRecords = 0,
                     Page = page,
                     PageSize = pageSize,
-                    HasMoreData = request.ExcludeNilProducts ? false : (page + 1) * pageSize < totalCount
+                    HasMoreData = false
+                };
+            }
+
+            // Get all historical entries for the paginated products
+            var allHistoricalEntries = await _unitOfWork.JournalEntries.GetAllEntriesForProductReportAsync(
+                DateOnly.MinValue, endDate, projectId, categoryId, null, locationId);
+
+            // Filter to only include the paginated product IDs
+            var productGroups = allHistoricalEntries
+                .Where(x => productIds.Contains(x.Entry.AccountId))
+                .GroupBy(x => x.Entry.AccountId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var productSummaries = new List<ProductSummaryViewModel>();
+
+            decimal totalDebit = 0;
+            decimal totalCredit = 0;
+            int totalDebitQty = 0;
+            int totalCreditQty = 0;
+            decimal totalCOGS = 0;
+            decimal totalMargin = 0;
+
+            foreach (var productId in productIds) {
+                if (!productGroups.ContainsKey(productId))
+                    continue;
+
+                var productEntries = productGroups[productId];
+
+                if (!productEntries.Any())
+                    continue;
+
+                var productName = productEntries.First().Entry.Account?.AccountName ?? "Unknown Product";
+
+                var entriesBeforeStartDate = productEntries
+                    .Where(x => x.Entry.JournalVoucher.EntryDate < startDate)
+                    .ToList();
+
+                var entriesInDateRange = productEntries
+                    .Where(x => x.Entry.JournalVoucher.EntryDate >= startDate &&
+                               x.Entry.JournalVoucher.EntryDate <= endDate)
+                    .ToList();
+
+                var prevDebitEntries = entriesBeforeStartDate.Where(x => x.Entry.Debit > 0).ToList();
+                var prevCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
+
+                int prevDebitQty = prevDebitEntries.Sum(x => x.Entry.Quantity);
+                int prevCreditQty = prevCreditEntries.Sum(x => x.Entry.Quantity);
+                int prevQtyBalance = prevDebitQty - prevCreditQty;
+
+                decimal prevTotalDebit = prevDebitEntries.Sum(x => x.Entry.Debit);
+                decimal prevTotalCredit = prevCreditEntries.Sum(x => x.Entry.Credit);
+                decimal prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
+
+                var currentDebitEntries = entriesInDateRange.Where(x => x.Entry.Debit > 0).ToList();
+                var currentCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
+
+                int currentDebitQty = currentDebitEntries.Sum(x => x.Entry.Quantity);
+                int currentCreditQty = currentCreditEntries.Sum(x => x.Entry.Quantity);
+
+                decimal currentDebit = currentDebitEntries.Sum(x => x.Entry.Debit);
+                decimal currentCredit = currentCreditEntries.Sum(x => x.Entry.Credit);
+
+                int totalProductDebitQty = prevDebitQty + currentDebitQty;
+                int totalProductCreditQty = prevCreditQty + currentCreditQty;
+                int qtyBalance = totalProductDebitQty - totalProductCreditQty;
+
+                decimal averageRate = totalProductDebitQty > 0 ?
+                    (prevTotalDebit + currentDebit) / totalProductDebitQty :
+                    prevAvgRate;
+
+                decimal cogs = averageRate * currentCreditQty;
+                decimal margin = currentCredit - cogs;
+                decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
+
+                var summary = new ProductSummaryViewModel {
+                    ProductId = productId,
+                    ProductName = productName,
+                    PreviousDebitQty = prevDebitQty,
+                    PreviousCreditQty = prevCreditQty,
+                    PreviousBalance = prevQtyBalance,
+                    PreviousDebit = prevTotalDebit,
+                    PreviousCredit = prevTotalCredit,
+                    PreviousAvgRate = prevAvgRate,
+                    TotalDebitQty = currentDebitQty,
+                    TotalCreditQty = currentCreditQty,
+                    QtyBalance = qtyBalance,
+                    AverageRate = averageRate,
+                    TotalDebit = currentDebit,
+                    TotalCredit = currentCredit,
+                    COGS = cogs,
+                    Margin = margin,
+                    MarginPercentage = marginPercentage,
+                    HasPreviousBalance = prevDebitQty > 0 || prevCreditQty > 0
                 };
 
-                return viewModel;
-            });
+                productSummaries.Add(summary);
+
+                totalDebit += currentDebit;
+                totalCredit += currentCredit;
+                totalDebitQty += currentDebitQty;
+                totalCreditQty += currentCreditQty;
+                totalCOGS += cogs;
+                totalMargin += margin;
+            }
+
+            if (request.ExcludeNilProducts) {
+                productSummaries = productSummaries.Where(p => p.QtyBalance != 0).ToList();
+
+                // Recalculate totals from filtered products
+                totalDebit = productSummaries.Sum(p => p.TotalDebit);
+                totalCredit = productSummaries.Sum(p => p.TotalCredit);
+                totalDebitQty = productSummaries.Sum(p => p.TotalDebitQty);
+                totalCreditQty = productSummaries.Sum(p => p.TotalCreditQty);
+                totalCOGS = productSummaries.Sum(p => p.COGS);
+                totalMargin = productSummaries.Sum(p => p.Margin);
+            }
+
+            decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
+
+            return new ProductReportViewModel {
+                ProductSummaries = productSummaries.OrderBy(p => p.ProductName).ToList(),
+                Totals = new ProductReportTotalsViewModel {
+                    TotalDebit = totalDebit,
+                    TotalCredit = totalCredit,
+                    TotalDebitQty = totalDebitQty,
+                    TotalCreditQty = totalCreditQty,
+                    NetQuantity = totalDebitQty - totalCreditQty,
+                    TotalCOGS = totalCOGS,
+                    TotalMargin = totalMargin,
+                    MarginPercentage = totalMarginPercentage
+                },
+                TotalRecords = request.ExcludeNilProducts ? productSummaries.Count : totalCount,
+                Page = page,
+                PageSize = pageSize,
+                HasMoreData = request.ExcludeNilProducts ? false : (page + 1) * pageSize < totalCount
+            };
         }
 
         public async Task<List<Location>> GetAllLocationsAsync() {

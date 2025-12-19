@@ -201,7 +201,7 @@ namespace PureLedger.Services
                 var hiddenCategoryIds = await GetHiddenCategoryIdsAsync(userId);
                 var includeEntries = !accountId.HasValue && !categoryId.HasValue;
                 var vouchers = await _unitOfWork.JournalVouchers.GetFilteredVouchersAsync(sinceDate, toDate, projectId, includeEntries);
-                var pendingForChargesVouchers = vouchers.Where(v => v.IsCompleted && v.PendingForCharges).ToList();
+                var pendingForChargesVouchers = vouchers.Where(v => v.IsCompleted && v.PendingForCharges && !v.IsBaseVoucher).ToList();
 
                 _logger.LogInformation("Found {PendingCount} pending FOR charges vouchers out of {TotalCount} total vouchers", pendingForChargesVouchers.Count, vouchers.Count);
 

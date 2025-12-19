@@ -19,5 +19,10 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<JournalVoucher>> GetAllBaseVouchersAsync();
         Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, int page, int pageSize);
         Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id);
+
+        /// <summary>
+        /// Batch fetch multiple vouchers with their entries - eliminates N+1 query pattern
+        /// </summary>
+        Task<List<JournalVoucher>> GetByIdsWithEntriesAsync(List<int> voucherIds);
     }
 }

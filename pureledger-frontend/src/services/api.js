@@ -35,12 +35,12 @@ export const clearXsrfToken = () => {
 };
 
 /**
- * Helper to get XSRF token from cookie (fallback)
+ * Note: We intentionally do NOT read the XSRF token from the cookie.
+ * The XSRF-TOKEN cookie contains the "cookie token" which is different from
+ * the "request token" returned by the login/refresh endpoints.
+ * The request token (stored in memory via setXsrfToken) is what must be sent
+ * in the X-XSRF-TOKEN header for validation to succeed.
  */
-const getXsrfTokenFromCookie = () => {
-  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-};
 
 // Create axios instance with default configuration
 const apiClient = axios.create({
@@ -73,10 +73,9 @@ apiClient.interceptors.request.use(
     // Add XSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
     const stateMutatingMethods = ['post', 'put', 'delete', 'patch'];
     if (stateMutatingMethods.includes(config.method?.toLowerCase())) {
-      // Try in-memory token first, then cookie fallback
-      const token = xsrfToken || getXsrfTokenFromCookie();
-      if (token) {
-        config.headers['X-XSRF-TOKEN'] = token;
+      // Use the request token from memory (set during login/refresh)
+      if (xsrfToken) {
+        config.headers['X-XSRF-TOKEN'] = xsrfToken;
       }
     }
 
@@ -112,6 +111,20 @@ apiClient.interceptors.response.use(
       isServerError: statusCode >= 500,
       isClientError: statusCode >= 400 && statusCode < 500,
     };
+
+    // Handle XSRF token refresh scenario (400 with needsRefresh flag)
+    if (statusCode === 400 && errorData.needsRefresh && !originalRequest._xsrfRetry) {
+      originalRequest._xsrfRetry = true;
+
+      // Update XSRF token if provided in error response
+      if (errorData.xsrfToken) {
+        setXsrfToken(errorData.xsrfToken);
+        console.log('XSRF token refreshed from error response, retrying request...');
+      }
+
+      // Retry the original request with the new token
+      return apiClient(originalRequest);
+    }
 
     // Handle 401 Unauthorized - Token expired or invalid
     if (statusCode === 401 && !originalRequest._retry) {

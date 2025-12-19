@@ -187,5 +187,24 @@ namespace PureLedger.Repositories
                     .ThenInclude(e => e.Category)
                 .FirstOrDefaultAsync();
         }
+
+        /// <summary>
+        /// Batch fetch multiple vouchers with their entries - eliminates N+1 query pattern
+        /// </summary>
+        public async Task<List<JournalVoucher>> GetByIdsWithEntriesAsync(List<int> voucherIds)
+        {
+            if (voucherIds == null || !voucherIds.Any())
+                return new List<JournalVoucher>();
+
+            return await _context.JournalVouchers
+                .AsNoTracking()
+                .AsSplitQuery()
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.Category)
+                .Where(jv => voucherIds.Contains(jv.JournalVoucherId))
+                .ToListAsync();
+        }
     }
 }

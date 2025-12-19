@@ -29,22 +29,68 @@ namespace PureLedger.Filters
             }
 
             var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
+            var logger = context.HttpContext.RequestServices.GetService<ILogger<ValidateXsrfTokenAttribute>>();
+
+            // Check if we have the required tokens before validation
+            var hasXsrfCookie = context.HttpContext.Request.Cookies.ContainsKey("XSRF-TOKEN");
+            var hasXsrfHeader = context.HttpContext.Request.Headers.ContainsKey("X-XSRF-TOKEN");
+
+            if (!hasXsrfCookie || !hasXsrfHeader)
+            {
+                logger?.LogWarning(
+                    "XSRF validation skipped - missing tokens. Cookie: {HasCookie}, Header: {HasHeader}, Path: {Path}",
+                    hasXsrfCookie, hasXsrfHeader, context.HttpContext.Request.Path);
+
+                // If missing tokens, generate new ones and return error asking to retry
+                // This handles the edge case of first request after login
+                if (!hasXsrfCookie)
+                {
+                    // Generate new tokens to set the cookie
+                    var tokens = antiforgery.GetAndStoreTokens(context.HttpContext);
+                    context.Result = new ObjectResult(new
+                    {
+                        success = false,
+                        message = "XSRF token cookie missing. Please refresh and try again.",
+                        xsrfToken = tokens.RequestToken,
+                        needsRefresh = true
+                    })
+                    {
+                        StatusCode = 400
+                    };
+                    return;
+                }
+
+                context.Result = new UnauthorizedObjectResult(new
+                {
+                    success = false,
+                    message = "Invalid or missing XSRF token header"
+                });
+                return;
+            }
 
             try
             {
                 await antiforgery.ValidateRequestAsync(context.HttpContext);
             }
-            catch (AntiforgeryValidationException)
+            catch (AntiforgeryValidationException ex)
             {
-                var logger = context.HttpContext.RequestServices.GetService<ILogger<ValidateXsrfTokenAttribute>>();
-                logger?.LogWarning("XSRF token validation failed for {Method} {Path}",
-                    method, context.HttpContext.Request.Path);
+                logger?.LogWarning(
+                    "XSRF token validation failed for {Method} {Path}. Error: {Error}",
+                    method, context.HttpContext.Request.Path, ex.Message);
 
-                context.Result = new UnauthorizedObjectResult(new
+                // Generate new tokens for the response to help recovery
+                var tokens = antiforgery.GetAndStoreTokens(context.HttpContext);
+
+                context.Result = new ObjectResult(new
                 {
                     success = false,
-                    message = "Invalid or missing XSRF token"
-                });
+                    message = "Invalid XSRF token. Please try again.",
+                    xsrfToken = tokens.RequestToken,
+                    needsRefresh = true
+                })
+                {
+                    StatusCode = 400
+                };
                 return;
             }
 

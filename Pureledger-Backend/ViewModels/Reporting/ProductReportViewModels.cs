@@ -78,4 +78,21 @@ namespace PureLedger.ViewModels.Reporting
         public decimal Margin { get; set; }
         public decimal MarginPercentage { get; set; }
     }
+
+    /// <summary>
+    /// DTO for database-level product aggregation - eliminates loading all entries into memory
+    /// </summary>
+    public class ProductAggregateDto
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public int PrevDebitQty { get; set; }
+        public int PrevCreditQty { get; set; }
+        public decimal PrevDebit { get; set; }
+        public decimal PrevCredit { get; set; }
+        public int CurrentDebitQty { get; set; }
+        public int CurrentCreditQty { get; set; }
+        public decimal CurrentDebit { get; set; }
+        public decimal CurrentCredit { get; set; }
+    }
 }

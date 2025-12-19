@@ -328,6 +328,39 @@ namespace PureLedger.Data
                 .HasIndex(r => new { r.MainVoucherId, r.ReferenceType })
                 .HasDatabaseName("IX_JournalVoucherReferences_MainVoucherId_ReferenceType");
 
+            // ========================================
+            // Performance Covering Indexes (with INCLUDE columns)
+            // ========================================
+
+            // Master/User Report optimization - covers common report query patterns
+            modelBuilder.Entity<JournalEntry>()
+                .HasIndex(je => new { je.CategoryId, je.JournalVoucherId, je.JournalEntryId })
+                .HasAnnotation("Npgsql:IndexInclude", new[] { "AccountId", "Debit", "Credit", "Quantity", "Description" })
+                .HasDatabaseName("IX_JournalEntries_MasterReport");
+
+            // Date range queries on JournalVouchers with common included columns
+            modelBuilder.Entity<JournalVoucher>()
+                .HasIndex(jv => new { jv.ProjectId, jv.EntryDate, jv.IsCompleted })
+                .HasAnnotation("Npgsql:IndexInclude", new[] { "CreditableDate", "BookerId" })
+                .HasDatabaseName("IX_JournalVouchers_DateRange");
+
+            // Account balance calculation - optimized for balance queries
+            modelBuilder.Entity<JournalEntry>()
+                .HasIndex(je => new { je.AccountId, je.JournalVoucherId })
+                .HasAnnotation("Npgsql:IndexInclude", new[] { "Debit", "Credit" })
+                .HasDatabaseName("IX_JournalEntries_AccountBalance");
+
+            // Reference lookup optimization - covers reference type queries
+            modelBuilder.Entity<JournalVoucherReference>()
+                .HasIndex(r => new { r.MainVoucherId, r.ReferenceType })
+                .HasAnnotation("Npgsql:IndexInclude", new[] { "ReferencedVoucherId" })
+                .HasDatabaseName("IX_JournalVoucherReferences_Lookup");
+
+            // DeliveryChallan location filter - composite for location-based queries
+            modelBuilder.Entity<DeliveryChallanEntry>()
+                .HasIndex(dce => new { dce.LocationId, dce.JournalEntryId })
+                .HasDatabaseName("IX_DeliveryChallanEntries_Location");
+
             // RefreshToken indexes
             modelBuilder.Entity<RefreshToken>()
                 .HasIndex(rt => rt.Token)

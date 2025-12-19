@@ -45,9 +45,11 @@ builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-XSRF-TOKEN";
     options.Cookie.Name = "XSRF-TOKEN";
-    options.Cookie.HttpOnly = false; // JavaScript must read this cookie
+    options.Cookie.HttpOnly = false; // Must be false so browser sends it with requests
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.Path = "/"; // Use root path to ensure cookie is always sent
+    options.Cookie.IsEssential = true; // Ensure cookie is always set even without consent
 });
 
 // Add services to the container.
@@ -215,7 +217,7 @@ builder.Services.AddDbContext<LedgerDbContext>(options =>
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
-builder.Services.AddScoped<PureLedger.Services.Auth.IAuthService, PureLedger.Services.Auth.AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ISharedProcessingService, SharedProcessingService>();
 
