@@ -62,8 +62,8 @@ const subscribeTokenRefresh = (callback) => {
 };
 
 // Helper to notify all queued requests when refresh completes
-const onTokenRefreshed = (newToken) => {
-  refreshSubscribers.forEach((callback) => callback(newToken));
+const onTokenRefreshed = () => {
+  refreshSubscribers.forEach((callback) => callback());
   refreshSubscribers = [];
 };
 
@@ -115,6 +115,21 @@ apiClient.interceptors.response.use(
 
     // Handle 401 Unauthorized - Token expired or invalid
     if (statusCode === 401 && !originalRequest._retry) {
+      // Don't retry refresh for auth-related endpoints to prevent loops
+      const noRefreshEndpoints = [
+        '/AccountApi/login',
+        '/AccountApi/refresh-token',
+        '/AccountApi/check-auth',
+        '/AccountApi/logout',
+      ];
+      const isAuthEndpoint = noRefreshEndpoints.some((endpoint) =>
+        originalRequest.url?.includes(endpoint)
+      );
+
+      if (isAuthEndpoint) {
+        return Promise.reject(standardizedError);
+      }
+
       originalRequest._retry = true;
 
       // Try to refresh token using cookies (tokens are in HttpOnly cookies)
@@ -154,6 +169,9 @@ apiClient.interceptors.response.use(
 
           // Retry original request (cookies are automatically included)
           return apiClient(originalRequest);
+        } else {
+          // Refresh returned success=false, treat as failure
+          throw new Error(response.data.message || 'Token refresh failed');
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);

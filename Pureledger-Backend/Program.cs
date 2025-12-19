@@ -15,6 +15,7 @@ using PureLedger.Services.Auth;
 using ICacheInvalidationService = PureLedger.Services.ICacheInvalidationService;
 using CacheInvalidationService = PureLedger.Services.CacheInvalidationService;
 using PureLedger.Middleware;
+using PureLedger.Filters;
 using System.Linq;
 using System.Text;
 using AspNetCoreRateLimit;
@@ -237,10 +238,13 @@ builder.Services.Configure<MvcOptions>(options =>
     var policy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
-        
+
     // Global authorization filter applied to all API controllers
     // Individual controllers/actions can override with [AllowAnonymous]
     options.Filters.Add(new AuthorizeFilter(policy));
+
+    // Add XSRF token validation for authenticated state-changing requests
+    options.Filters.Add(new ValidateXsrfTokenAttribute());
 });
 
 builder.Services.AddScoped<IProjectCartageSettingsRepository, ProjectCartageSettingsRepository>();
