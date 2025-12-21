@@ -203,7 +203,10 @@ namespace PureLedger.Repositories
                     .ThenInclude(e => e.Account)
                 .Include(jv => jv.JournalEntries)
                     .ThenInclude(e => e.Category)
-                .Where(jv => voucherIds.Contains(jv.JournalVoucherId))
+                .Where(jv => 
+                    voucherIds.Contains(jv.JournalVoucherId) &&
+                    jv.IsCompleted &&
+                    !jv.IsBaseVoucher)
                 .ToListAsync();
         }
 

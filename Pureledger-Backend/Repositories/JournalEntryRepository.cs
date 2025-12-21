@@ -88,6 +88,7 @@ namespace PureLedger.Repositories
                     accountIds.Contains(je.AccountId) &&
                     je.CategoryId == categoryId &&
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.CreditableDate <= referenceDate);
 
             if (projectId.HasValue)
@@ -106,6 +107,7 @@ namespace PureLedger.Repositories
                 .Where(je =>
                     je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucherId < maxVoucherId
                 )
                 .GroupBy(je => 1)
@@ -138,6 +140,7 @@ namespace PureLedger.Repositories
                 .AsNoTracking()
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.EntryDate >= startDate &&
                     je.JournalVoucher.EntryDate <= endDate &&
                     je.CategoryId == categoryId);
@@ -184,6 +187,7 @@ namespace PureLedger.Repositories
                 .Where(je =>
                     je.AccountId == accountId &&
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucherId <= maxVoucherId)
                 .GroupBy(je => 1)
                 .Select(g => new
@@ -216,6 +220,7 @@ namespace PureLedger.Repositories
                 .Include(je => je.Category)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.EntryDate >= startDate &&
                     je.JournalVoucher.EntryDate <= endDate);
 
@@ -272,6 +277,7 @@ namespace PureLedger.Repositories
                 .Include(je => je.Category)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.EntryDate >= startDate &&
                     je.JournalVoucher.EntryDate <= endDate &&
                     je.CategoryId == categoryId);
@@ -319,7 +325,13 @@ namespace PureLedger.Repositories
             // Single query to fetch all cartage entries instead of looping
             return await _context.JournalEntries
                 .AsNoTracking()
-                .Where(e => referencedVoucherIds.Contains(e.JournalVoucherId) && e.Debit == 0 && e.Credit > 0)
+                .Include(e => e.JournalVoucher)
+                .Where(e => 
+                    referencedVoucherIds.Contains(e.JournalVoucherId) && 
+                    e.Debit == 0 && 
+                    e.Credit > 0 &&
+                    e.JournalVoucher.IsCompleted &&
+                    !e.JournalVoucher.IsBaseVoucher)
                 .ToListAsync();
         }
 
@@ -342,6 +354,7 @@ namespace PureLedger.Repositories
                 .AsNoTracking()
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.EntryDate >= startDate &&
                     je.JournalVoucher.EntryDate <= endDate);
 
@@ -401,7 +414,8 @@ namespace PureLedger.Repositories
                 .Include(je => je.Account)
                 .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted &&  
+                    je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.IsProcessed &&                 
                     je.Quantity > 0 &&
                     je.Account.AccountGroupId == 2 &&
@@ -459,6 +473,7 @@ namespace PureLedger.Repositories
                 .AsNoTracking()
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.EntryDate < startDate);
 
             if (projectId.HasValue)
@@ -493,6 +508,7 @@ namespace PureLedger.Repositories
                 .AsNoTracking()
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.JournalVoucher.EntryDate < startDate &&
                     je.CategoryId == categoryId);
 
@@ -531,7 +547,8 @@ namespace PureLedger.Repositories
                 .Include(je => je.Category)
                 .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted &&  
+                    je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
                     je.IsProcessed &&                 
                     je.Quantity > 0 &&
                     je.Account.AccountGroupId == 2 &&
@@ -593,7 +610,8 @@ namespace PureLedger.Repositories
                 .Include(je => je.JournalVoucher)
                 .Where(je =>
                     je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted);
+                    je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher);
 
             if (categoryId.HasValue)
             {
@@ -748,7 +766,8 @@ namespace PureLedger.Repositories
         .Include(je => je.Account)
         .Where(je =>
             je.JournalVoucher.ProjectId == projectId &&
-            je.JournalVoucher.IsCompleted &&  
+            je.JournalVoucher.IsCompleted &&
+            !je.JournalVoucher.IsBaseVoucher &&
             je.IsProcessed &&                 
             je.Quantity > 0 &&
             je.Account.AccountGroupId == 2 &&
@@ -806,7 +825,12 @@ namespace PureLedger.Repositories
 
             return await _context.JournalEntries
                 .AsNoTracking()
-                .Where(je => voucherIds.Contains(je.JournalVoucherId) && je.AccountId == accountId)
+                .Include(je => je.JournalVoucher)
+                .Where(je => 
+                    voucherIds.Contains(je.JournalVoucherId) && 
+                    je.AccountId == accountId &&
+                    je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher)
                 .ToListAsync();
         }
 
@@ -835,6 +859,7 @@ namespace PureLedger.Repositories
                         productIds.Contains(je.AccountId) &&
                         je.JournalVoucher.ProjectId == projectId &&
                         je.JournalVoucher.IsCompleted &&
+                        !je.JournalVoucher.IsBaseVoucher &&
                         je.IsProcessed &&
                         je.Quantity > 0 &&
                         je.Account.AccountGroupId == 2 &&
