@@ -206,5 +206,33 @@ namespace PureLedger.Repositories
                 .Where(jv => voucherIds.Contains(jv.JournalVoucherId))
                 .ToListAsync();
         }
+
+        /// <summary>
+        /// Get all base vouchers with entries for summary statistics calculation
+        /// </summary>
+        public async Task<List<JournalVoucher>> GetBaseVouchersSummaryDataAsync(int? projectId)
+        {
+            IQueryable<JournalVoucher> baseQuery = _context.JournalVouchers
+                .AsNoTracking()
+                .Where(v => v.IsBaseVoucher);
+
+            if (projectId.HasValue)
+            {
+                baseQuery = baseQuery.Where(v => v.ProjectId == projectId.Value);
+            }
+
+            var query = baseQuery
+                .AsSplitQuery()
+                .Include(v => v.Project)
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Account)
+                .Include(v => v.JournalEntries)
+                    .ThenInclude(e => e.Category);
+
+            return await query
+                .OrderByDescending(v => v.EntryDate)
+                .ThenByDescending(v => v.JournalVoucherId)
+                .ToListAsync();
+        }
     }
 }

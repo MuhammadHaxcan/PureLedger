@@ -15,13 +15,11 @@ const CartageSettings = () => {
   
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [forExpenseAccounts, setForExpenseAccounts] = useState([]);
   
   const [formData, setFormData] = useState({
     id: null,
     projectId: null,
     forExpenseCategoryId: null,
-    forExpenseAccountId: null,
     cartageTransporterCategoryId: null,
     projectImage: null
   });
@@ -46,7 +44,7 @@ const CartageSettings = () => {
           setFormData({
             id: response.data.data.id || null,
             projectId: response.data.data.projectId,
-            forExpenseAccountId: response.data.data.forExpenseAccountId || null,
+            forExpenseCategoryId: response.data.data.forExpenseCategoryId || null,
             cartageTransporterCategoryId: response.data.data.cartageTransporterCategoryId || null,
             projectImage: response.data.data.projectImage || null
           });
@@ -54,11 +52,6 @@ const CartageSettings = () => {
           // Load image preview if exists (now as base64)
           if (response.data.data.projectImage) {
             setImagePreview(response.data.data.projectImage);
-          }
-          
-          // Load accounts if FOR expense account is set
-          if (response.data.data.forExpenseAccountId) {
-            await loadCategoryForAccount(response.data.data.forExpenseAccountId);
           }
         }
       }
@@ -76,10 +69,8 @@ const CartageSettings = () => {
         ...prev,
         projectId: null,
         forExpenseCategoryId: null,
-        forExpenseAccountId: null,
         cartageTransporterCategoryId: null
       }));
-      setForExpenseAccounts([]);
       setImagePreview(null);
       return;
     }
@@ -101,7 +92,7 @@ const CartageSettings = () => {
           ...prev,
           id: settings.id || null,
           projectId: settings.projectId,
-          forExpenseAccountId: settings.forExpenseAccountId || null,
+          forExpenseCategoryId: settings.forExpenseCategoryId || null,
           cartageTransporterCategoryId: settings.cartageTransporterCategoryId || null,
           projectImage: settings.projectImage || null // Now stores base64 string
         }));
@@ -112,61 +103,23 @@ const CartageSettings = () => {
         } else {
           setImagePreview(null);
         }
-        
-        // Load accounts if FOR expense account is set
-        if (settings.forExpenseAccountId) {
-          await loadCategoryForAccount(settings.forExpenseAccountId);
-        }
       } else {
         // No existing settings, reset form
         setFormData(prev => ({
           ...prev,
           id: null,
           projectId: projectId,
-          forExpenseAccountId: null,
+          forExpenseCategoryId: null,
           cartageTransporterCategoryId: null,
           projectImage: null
         }));
         setImagePreview(null);
-        setForExpenseAccounts([]);
       }
     } catch (error) {
       console.error('Error loading project data:', error);
       setError('Failed to load project data');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCategoryForAccount = async (accountId) => {
-    try {
-      const response = await apiClient.get(`/AdminApi/category-for-account/${accountId}`);
-      if (response.data.success && response.data.categoryId) {
-        await loadAccountsByCategory(response.data.categoryId);
-        setFormData(prev => ({
-          ...prev,
-          forExpenseCategoryId: response.data.categoryId
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading category for account:', error);
-    }
-  };
-
-  const loadAccountsByCategory = async (categoryId) => {
-    if (!categoryId) {
-      setForExpenseAccounts([]);
-      return;
-    }
-
-    try {
-      const response = await apiClient.get(`/AdminApi/accounts-by-category/${categoryId}`);
-      if (response.data.success) {
-        setForExpenseAccounts(response.data.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading accounts:', error);
-      setError('Failed to load accounts');
     }
   };
 
@@ -177,10 +130,8 @@ const CartageSettings = () => {
   const handleForExpenseCategoryChange = (categoryId) => {
     setFormData(prev => ({
       ...prev,
-      forExpenseCategoryId: categoryId,
-      forExpenseAccountId: null // Clear account when category changes
+      forExpenseCategoryId: categoryId
     }));
-    loadAccountsByCategory(categoryId);
   };
 
   const handleImageChange = async (e) => {
@@ -248,11 +199,11 @@ const CartageSettings = () => {
         return isNaN(num) ? null : num;
       };
       
-      const forExpenseAccountId = toNumberOrNull(formData.forExpenseAccountId);
+      const forExpenseCategoryId = toNumberOrNull(formData.forExpenseCategoryId);
       const cartageTransporterCategoryId = toNumberOrNull(formData.cartageTransporterCategoryId);
       
-      if (forExpenseAccountId === null && cartageTransporterCategoryId === null) {
-        setError('At least one of FOR Expense Account or Cartage Transporter Category must be selected.');
+      if (forExpenseCategoryId === null && cartageTransporterCategoryId === null) {
+        setError('At least one of FOR Expense Category or Cartage Transporter Category must be selected.');
         setLoading(false);
         isSubmittingRef.current = false;
         return;
@@ -261,7 +212,7 @@ const CartageSettings = () => {
       const submitData = {
         id: formData.id ?? 0,
         projectId: Number(formData.projectId),
-        forExpenseAccountId: forExpenseAccountId,
+        forExpenseCategoryId: forExpenseCategoryId,
         cartageTransporterCategoryId: cartageTransporterCategoryId,
         projectImageBase64: projectImageBase64 ?? null
       };
@@ -359,24 +310,8 @@ const CartageSettings = () => {
                   placeholder="Select Category"
                   disabled={!formData.projectId || loading}
                   onClear={() => {
-                    setFormData(prev => ({ ...prev, forExpenseCategoryId: null, forExpenseAccountId: null }));
-                    setForExpenseAccounts([]);
+                    setFormData(prev => ({ ...prev, forExpenseCategoryId: null }));
                   }}
-                />
-              </div>
-            </div>
-
-            <div className="mb-3">
-              <Form.Label>FOR Expense Account</Form.Label>
-              <div className="input-group">
-                <span className="input-group-text"><i className="fas fa-file-invoice"></i></span>
-                <SearchableSelect
-                  value={formData.forExpenseAccountId}
-                  onChange={(value) => setFormData(prev => ({ ...prev, forExpenseAccountId: value }))}
-                  options={forExpenseAccounts.map(a => ({ id: a.id || a.accountId, name: a.name || a.accountName }))}
-                  placeholder="Select Account"
-                  disabled={!formData.forExpenseCategoryId || loading}
-                  onClear={() => setFormData(prev => ({ ...prev, forExpenseAccountId: null }))}
                 />
               </div>
             </div>

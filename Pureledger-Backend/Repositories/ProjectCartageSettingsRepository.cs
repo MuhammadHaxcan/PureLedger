@@ -16,7 +16,7 @@ public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepositor
     {
         return await _dbContext.ProjectCartageSettings
             .Include(x => x.Project)
-            .Include(x => x.ForExpenseAccount)
+            .Include(x => x.ForExpenseCategory)
             .Include(x => x.CartageTransporterCategory)
             .FirstOrDefaultAsync(x => x.ProjectId == projectId);
     }
@@ -29,7 +29,7 @@ public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepositor
         if (existing != null)
         {
             // Update existing record with all properties including ProjectImage
-            existing.ForExpenseAccountId = settings.ForExpenseAccountId;
+            existing.ForExpenseCategoryId = settings.ForExpenseCategoryId;
             existing.CartageTransporterCategoryId = settings.CartageTransporterCategoryId;
 
             // Update the image if a new one is provided (base64 string)
@@ -55,7 +55,7 @@ public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepositor
     {
         return await _dbContext.ProjectCartageSettings
             .Include(x => x.Project)
-            .Include(x => x.ForExpenseAccount)
+            .Include(x => x.ForExpenseCategory)
             .Include(x => x.CartageTransporterCategory)
             .ToListAsync();
     }

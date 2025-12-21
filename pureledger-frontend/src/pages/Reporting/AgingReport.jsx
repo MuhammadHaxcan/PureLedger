@@ -206,24 +206,21 @@ const AgingReport = () => {
     return (
       (entry.accountName || '').toLowerCase().includes(search) ||
       entry.accountId?.toString().includes(search) ||
-      (entry.totalDebit?.toString() || '').includes(search) ||
-      (entry.totalCredit?.toString() || '').includes(search) ||
-      (entry.netBalance?.toString() || '').includes(search)
+      (entry.dueTillDate?.toString() || '').includes(search) ||
+      (entry.totalDue?.toString() || '').includes(search)
     );
   });
 
-  const totalDebit = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalDebit) || 0), 0);
-  const totalCredit = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalCredit) || 0), 0);
-  const totalBalance = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.netBalance) || 0), 0);
+  const totalDueTillDate = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.dueTillDate) || 0), 0);
+  const totalTotalDue = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalDue) || 0), 0);
 
   const handleExportCsv = async () => {
     setExportingCsv(true);
     try {
       const csvData = filteredEntries.map(entry => ({
         Account: entry.accountName || entry.accountId || 'N/A',
-        'Total Debit': (entry.totalDebit || 0).toFixed(2),
-        'Total Credit': (entry.totalCredit || 0).toFixed(2),
-        'Net Balance': (entry.netBalance || 0).toFixed(2)
+        'Due Till Date': (entry.dueTillDate || 0).toFixed(2),
+        'Total Due': (entry.totalDue || 0).toFixed(2)
       }));
       await exportToCsvAsync(csvData, `AgingReport_${formData.referenceDate || 'report'}.csv`);
     } finally {
@@ -239,23 +236,20 @@ const AgingReport = () => {
 
       const rows = filteredEntries.map(entry => ({
         account: entry.accountName || entry.accountId || 'N/A',
-        debit: formatCurrency(entry.totalDebit),
-        credit: formatCurrency(entry.totalCredit),
-        balance: formatCurrency(entry.netBalance)
+        dueTillDate: formatCurrency(entry.dueTillDate),
+        totalDue: formatCurrency(entry.totalDue)
       }));
 
       rows.push({
         account: 'TOTAL',
-        debit: formatCurrency(totalDebit),
-        credit: formatCurrency(totalCredit),
-        balance: formatCurrency(totalBalance)
+        dueTillDate: formatCurrency(totalDueTillDate),
+        totalDue: formatCurrency(totalTotalDue)
       });
 
       const columns = [
         { header: 'Account', dataKey: 'account' },
-        { header: 'Total Debit', dataKey: 'debit' },
-        { header: 'Total Credit', dataKey: 'credit' },
-        { header: 'Net Balance', dataKey: 'balance' }
+        { header: 'Due Till Date', dataKey: 'dueTillDate' },
+        { header: 'Total Due', dataKey: 'totalDue' }
       ];
 
       let subtitle = `Reference Date: ${formData.referenceDate}`;
@@ -448,21 +442,20 @@ const AgingReport = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Account</th>
-                    <th className="text-end">Total Debit</th>
-                    <th className="text-end">Total Credit</th>
-                    <th className="text-end">Net Balance</th>
+                    <th className="text-end">Due Till Date</th>
+                    <th className="text-end">Total Due</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredEntries.length === 0 && allEntries.length > 0 ? (
                     <tr>
-                      <td colSpan="4" className="text-center text-muted py-4">
+                      <td colSpan="3" className="text-center text-muted py-4">
                         {searchTerm ? 'No results found for your search' : 'No data available'}
                       </td>
                     </tr>
                   ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="text-center text-muted py-4">
+                      <td colSpan="3" className="text-center text-muted py-4">
                         No data available
                       </td>
                     </tr>
@@ -470,10 +463,11 @@ const AgingReport = () => {
                     filteredEntries.map((row, index) => (
                       <tr key={index}>
                         <td>{row.accountName || row.accountId || 'N/A'}</td>
-                        <td className="text-end">{formatCurrency(row.totalDebit)}</td>
-                        <td className="text-end">{formatCurrency(row.totalCredit)}</td>
-                        <td className={`text-end ${(row.netBalance || 0) < 0 ? 'text-danger' : ''}`}>
-                          {formatCurrency(row.netBalance)}
+                        <td className={`text-end ${(row.dueTillDate || 0) < 0 ? 'text-danger' : ''}`}>
+                          {formatCurrency(row.dueTillDate)}
+                        </td>
+                        <td className={`text-end ${(row.totalDue || 0) < 0 ? 'text-danger' : ''}`}>
+                          {formatCurrency(row.totalDue)}
                         </td>
                       </tr>
                     ))
@@ -482,9 +476,8 @@ const AgingReport = () => {
                 <tfoot className="table-secondary">
                   <tr className="fw-bold">
                     <td>TOTAL</td>
-                    <td className="text-end">{formatCurrency(totalDebit)}</td>
-                    <td className="text-end">{formatCurrency(totalCredit)}</td>
-                    <td className="text-end">{formatCurrency(totalBalance)}</td>
+                    <td className="text-end">{formatCurrency(totalDueTillDate)}</td>
+                    <td className="text-end">{formatCurrency(totalTotalDue)}</td>
                   </tr>
                 </tfoot>
               </Table>

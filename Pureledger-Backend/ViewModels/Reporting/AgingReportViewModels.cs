@@ -6,9 +6,8 @@ namespace PureLedger.ViewModels.Reporting
     {
         public string AccountId { get; set; } = string.Empty;
         public string AccountName { get; set; } = string.Empty;
-        public decimal TotalDebit { get; set; }
-        public decimal TotalCredit { get; set; }
-        public decimal NetBalance { get; set; }
+        public decimal DueTillDate { get; set; }
+        public decimal TotalDue { get; set; }
     }
 
     public class AgingReportRequest

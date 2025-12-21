@@ -28,6 +28,9 @@ const BaseVouchers = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [showMissedModal, setShowMissedModal] = useState(false);
     const [selectedVoucher, setSelectedVoucher] = useState(null);
+    const [summaryStats, setSummaryStats] = useState(null);
+    const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+    const [loadingSummary, setLoadingSummary] = useState(false);
     const pageSize = 250;
 
     useEffect(() => {
@@ -37,12 +40,14 @@ const BaseVouchers = () => {
     useEffect(() => {
         if (projectId !== null) {
             loadBaseVouchers(0, false);
+            loadSummaryStats(projectId);
         } else {
             setVouchers([]);
             setLoadingVouchers(false);
             setCurrentPage(0);
             setHasMoreData(false);
             setTotalRecords(0);
+            setSummaryStats(null);
         }
     }, [projectId]);
 
@@ -76,6 +81,26 @@ const BaseVouchers = () => {
             setError(err.response?.data?.message || 'Failed to load initial data');
         } finally {
             setLoadingProjects(false);
+        }
+    };
+
+    const loadSummaryStats = async (currentProjectId) => {
+        if (currentProjectId === null) {
+            setSummaryStats(null);
+            return;
+        }
+        setLoadingSummary(true);
+        try {
+            const response = await apiClient.get(`/HomeApi/base-vouchers-summary?projectId=${currentProjectId}`);
+            if (response.data.success) {
+                setSummaryStats(response.data.data);
+            } else {
+                setError(response.data.message || 'Failed to load summary data');
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to load summary data');
+        } finally {
+            setLoadingSummary(false);
         }
     };
 
@@ -192,6 +217,17 @@ const BaseVouchers = () => {
         }
     };
 
+    const formatNumber = (value) => {
+        return new Intl.NumberFormat('en-PK').format(value || 0);
+    };
+
+    const formatCurrency = (value) => {
+        return new Intl.NumberFormat('en-PK', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value || 0);
+    };
+
     const filteredVouchers = vouchers.filter(voucher => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
@@ -258,6 +294,159 @@ const BaseVouchers = () => {
                     </Form>
                 </Card.Body>
             </Card>
+
+            {projectId !== null && (
+                <Card className="shadow mb-4">
+                    <Card.Header
+                        className="py-3 d-flex justify-content-between align-items-center"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setSummaryCollapsed(!summaryCollapsed)}
+                    >
+                        <h6 className="m-0 font-weight-bold text-primary">
+                            <i className="fas fa-chart-pie me-2"></i>Summary Statistics
+                        </h6>
+                        <i className={`fas fa-chevron-${summaryCollapsed ? 'down' : 'up'} text-muted`}></i>
+                    </Card.Header>
+                    {!summaryCollapsed && (
+                        <Card.Body>
+                            {loadingSummary ? (
+                                <div className="text-center py-4">
+                                    <div className="spinner-border text-primary" role="status">
+                                        <span className="visually-hidden">Loading Summary...</span>
+                                    </div>
+                                </div>
+                            ) : summaryStats ? (
+                                <>
+                                    <div className="row mb-4">
+                                        <div className="col-md-3 mb-3">
+                                            <div className="card bg-primary text-white">
+                                                <div className="card-body">
+                                                    <h6 className="card-subtitle mb-2">Total Base Vouchers</h6>
+                                                    <h3 className="card-title mb-0">{formatNumber(summaryStats.totalBaseVouchers)}</h3>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-3 mb-3">
+                                            <div className="card bg-warning text-white">
+                                                <div className="card-body">
+                                                    <h6 className="card-subtitle mb-2">Unprocessed Entries</h6>
+                                                    <h3 className="card-title mb-0">{formatNumber(summaryStats.totalUnprocessedEntries)}</h3>
+                                                    <small className="text-white-50">{formatNumber(summaryStats.totalUnprocessedQuantity)} qty</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-3 mb-3">
+                                            <div className="card bg-success text-white">
+                                                <div className="card-body">
+                                                    <h6 className="card-subtitle mb-2">Processed Entries</h6>
+                                                    <h3 className="card-title mb-0">{formatNumber(summaryStats.totalProcessedEntries)}</h3>
+                                                    <small className="text-white-50">{formatNumber(summaryStats.totalProcessedQuantity)} qty</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="col-md-3 mb-3">
+                                            <div className="card bg-info text-white">
+                                                <div className="card-body">
+                                                    <h6 className="card-subtitle mb-2">Processing Rate</h6>
+                                                    <h3 className="card-title mb-0">{formatNumber(summaryStats.processingRate)}%</h3>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="row">
+                                        <div className="col-md-6 mb-3">
+                                            <h6 className="mb-3"><i className="fas fa-shopping-cart me-2"></i>Most Ordered Products</h6>
+                                            {summaryStats.mostOrderedProducts && summaryStats.mostOrderedProducts.length > 0 ? (
+                                                <div className="table-responsive">
+                                                    <table className="table table-sm table-bordered">
+                                                        <thead className="table-light">
+                                                            <tr>
+                                                                <th>Product</th>
+                                                                <th className="text-end">Total Quantity</th>
+                                                                <th className="text-end">Entries</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {summaryStats.mostOrderedProducts.slice(0, 5).map((product, idx) => (
+                                                                <tr key={idx}>
+                                                                    <td>{product.productName}</td>
+                                                                    <td className="text-end">{formatNumber(product.totalQuantity)}</td>
+                                                                    <td className="text-end">{formatNumber(product.entryCount)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <p className="text-muted">No ordered products data available</p>
+                                            )}
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            <h6 className="mb-3"><i className="fas fa-clock me-2"></i>Most Pending Products</h6>
+                                            {summaryStats.mostPendingProducts && summaryStats.mostPendingProducts.length > 0 ? (
+                                                <div className="table-responsive">
+                                                    <table className="table table-sm table-bordered">
+                                                        <thead className="table-light">
+                                                            <tr>
+                                                                <th>Product</th>
+                                                                <th className="text-end">Unprocessed Qty</th>
+                                                                <th className="text-end">Processed Qty</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {summaryStats.mostPendingProducts.slice(0, 5).map((product, idx) => (
+                                                                <tr key={idx}>
+                                                                    <td>{product.productName}</td>
+                                                                    <td className="text-end text-warning">{formatNumber(product.unprocessedQuantity)}</td>
+                                                                    <td className="text-end text-success">{formatNumber(product.processedQuantity)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <p className="text-muted">No pending products data available</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="row mt-3">
+                                        <div className="col-md-6 mb-3">
+                                            {summaryStats.topCustomer && (
+                                                <div className="card">
+                                                    <div className="card-body">
+                                                        <h6 className="card-title"><i className="fas fa-user-tie me-2"></i>Top Customer</h6>
+                                                        <p className="mb-1"><strong>{summaryStats.topCustomer.customerName}</strong></p>
+                                                        <p className="mb-0 text-muted">
+                                                            {formatNumber(summaryStats.topCustomer.voucherCount)} vouchers | {formatNumber(summaryStats.topCustomer.totalEntries)} entries
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="col-md-6 mb-3">
+                                            {summaryStats.oldestPendingVoucher && (
+                                                <div className="card">
+                                                    <div className="card-body">
+                                                        <h6 className="card-title"><i className="fas fa-calendar-times me-2"></i>Oldest Pending Voucher</h6>
+                                                        <p className="mb-1"><strong>JV-{summaryStats.oldestPendingVoucher.voucherId}</strong></p>
+                                                        <p className="mb-0 text-muted">
+                                                            {formatDate(summaryStats.oldestPendingVoucher.entryDate)} | {formatNumber(summaryStats.oldestPendingVoucher.daysPending)} days pending | {formatNumber(summaryStats.oldestPendingVoucher.unprocessedCount)} unprocessed
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center py-4 text-muted">No summary data available for this project.</div>
+                            )}
+                        </Card.Body>
+                    )}
+                </Card>
+            )}
 
             <Card className="shadow-sm">
                 <Card.Header className="d-flex justify-content-between align-items-center">

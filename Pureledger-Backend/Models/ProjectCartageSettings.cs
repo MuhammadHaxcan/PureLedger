@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace PureLedger.Models
-{
-    public class ProjectCartageSettings : IValidatableObject
-    {
+namespace PureLedger.Models {
+    public class ProjectCartageSettings : IValidatableObject {
         [Key]
         public int Id { get; set; }
 
@@ -15,11 +13,11 @@ namespace PureLedger.Models
         // Make navigation properties nullable if they are optional
         public virtual Project? Project { get; set; }
 
-        [ForeignKey("Account")]
-        public int? ForExpenseAccountId { get; set; }
+        [ForeignKey("Category")]
+        public int? ForExpenseCategoryId { get; set; }
 
         // Mark as nullable
-        public virtual Account? ForExpenseAccount { get; set; }
+        public virtual Category? ForExpenseCategory { get; set; }
 
         [ForeignKey("Category")]
         public int? CartageTransporterCategoryId { get; set; }
@@ -31,14 +29,12 @@ namespace PureLedger.Models
         [Column(TypeName = "text")]
         public string? ProjectImage { get; set; }
 
-        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        {
-            // At least one of ForExpenseAccountId or CartageTransporterCategoryId must be set
-            if (!ForExpenseAccountId.HasValue && !CartageTransporterCategoryId.HasValue)
-            {
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) {
+            // At least one of ForExpenseCategoryId or CartageTransporterCategoryId must be set
+            if (!ForExpenseCategoryId.HasValue && !CartageTransporterCategoryId.HasValue) {
                 yield return new ValidationResult(
-                    "At least one of FOR Expense Account or Cartage Transporter Category must be selected.",
-                    new[] { nameof(ForExpenseAccountId), nameof(CartageTransporterCategoryId) }
+                    "At least one of FOR Expense Category or Cartage Transporter Category must be selected.",
+                    new[] { nameof(ForExpenseCategoryId), nameof(CartageTransporterCategoryId) }
                 );
             }
         }

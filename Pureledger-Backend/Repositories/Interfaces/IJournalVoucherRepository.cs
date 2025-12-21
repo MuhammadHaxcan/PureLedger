@@ -24,5 +24,10 @@ namespace PureLedger.Repositories.Interfaces
         /// Batch fetch multiple vouchers with their entries - eliminates N+1 query pattern
         /// </summary>
         Task<List<JournalVoucher>> GetByIdsWithEntriesAsync(List<int> voucherIds);
+
+        /// <summary>
+        /// Get all base vouchers with entries for summary statistics calculation
+        /// </summary>
+        Task<List<JournalVoucher>> GetBaseVouchersSummaryDataAsync(int? projectId);
     }
 }

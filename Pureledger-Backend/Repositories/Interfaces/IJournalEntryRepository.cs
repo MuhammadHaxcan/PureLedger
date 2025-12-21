@@ -157,5 +157,15 @@ namespace PureLedger.Repositories.Interfaces
             int pageSize);
 
         #endregion
+
+        #region Base Vouchers Summary Queries
+
+        /// <summary>
+        /// Get aggregated product quantities from derived vouchers for base vouchers summary
+        /// Efficiently calculates most ordered products by aggregating at database level
+        /// </summary>
+        Task<List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>> GetDerivedVoucherProductQuantitiesAsync(int? projectId);
+
+        #endregion
     }
 }

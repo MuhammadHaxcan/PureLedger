@@ -46,7 +46,8 @@ const ProcessDC = () => {
     otherRef: '',
     remarks: '',
     includeForCharges: false,
-    forAmount: 0
+    forAmount: 0,
+    selectedForAccountId: null
   });
 
   // State for cartage form
@@ -63,6 +64,8 @@ const ProcessDC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [forChargesAvailable, setForChargesAvailable] = useState(false);
+  const [forChargesCategory, setForChargesCategory] = useState(null);
+  const [forAccounts, setForAccounts] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState('process-dc');
 
@@ -74,7 +77,8 @@ const ProcessDC = () => {
   const [selectedVoucherForProducts, setSelectedVoucherForProducts] = useState(null);
   const [forChargesForm, setForChargesForm] = useState({
     forAmount: '',
-    dcDate: new Date().toISOString().split('T')[0]
+    dcDate: new Date().toISOString().split('T')[0],
+    selectedForAccountId: null
   });
   const [loadingPendingForCharges, setLoadingPendingForCharges] = useState(false);
 
@@ -202,15 +206,87 @@ const ProcessDC = () => {
 
   const checkForChargesAvailability = async (projectId) => {
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:209',message:'checkForChargesAvailability called',data:{projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
       const response = await apiClient.get('/DeliveryChallanApi/check-for-charges-available', {
         params: { projectId }
       });
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:216',message:'checkForChargesAvailability response received',data:{success:response.data.success,available:response.data.available,categoryId:response.data.categoryId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
       if (response.data.success) {
         setForChargesAvailable(response.data.available || false);
+        if (response.data.categoryId) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:221',message:'CategoryId found, calling loadForAccounts',data:{categoryId:response.data.categoryId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          
+          setForChargesCategory(response.data.categoryId);
+          await loadForAccounts(response.data.categoryId);
+        } else {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:227',message:'No categoryId in response',data:{responseData:response.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          
+          setForChargesCategory(null);
+          setForAccounts([]);
+        }
+      } else {
+        setForChargesAvailable(false);
+        setForChargesCategory(null);
+        setForAccounts([]);
       }
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:235',message:'Error in checkForChargesAvailability',data:{error:error.message,response:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
       console.error('Error checking FOR charges:', error);
       setForChargesAvailable(false);
+      setForChargesCategory(null);
+      setForAccounts([]);
+    }
+  };
+
+  const loadForAccounts = async (categoryId) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:234',message:'loadForAccounts called',data:{categoryId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
+    if (!categoryId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:236',message:'loadForAccounts: no categoryId, returning empty',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
+      setForAccounts([]);
+      return;
+    }
+    try {
+      const response = await apiClient.get(`/DeliveryChallanApi/accounts-by-category/${categoryId}`);
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:242',message:'loadForAccounts response received',data:{success:response.data.success,accountCount:response.data.data?.length,accounts:response.data.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
+      if (response.data.success) {
+        const accounts = response.data.data || [];
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:246',message:'Setting forAccounts state',data:{accountCount:accounts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        
+        setForAccounts(accounts);
+      }
+    } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:252',message:'Error in loadForAccounts',data:{error:error.message,response:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      
+      console.error('Error loading FOR accounts:', error);
+      setForAccounts([]);
     }
   };
 
@@ -277,11 +353,17 @@ const ProcessDC = () => {
       otherRef: '',
       remarks: '',
       includeForCharges: false,
-      forAmount: 0
+      forAmount: 0,
+      selectedForAccountId: null
     };
     setDcForm(freshForm);
     setExistingChallan(null);
     setShowDCModal(true);
+
+    // Load FOR accounts if category is configured but accounts not loaded
+    if (forChargesCategory && forAccounts.length === 0) {
+      await loadForAccounts(forChargesCategory);
+    }
 
     // Check for existing challan
     try {
@@ -335,7 +417,8 @@ const ProcessDC = () => {
         Remarks: dcForm.remarks,
         OtherReference: dcForm.otherRef,
         IncludeForCharges: dcForm.includeForCharges && forChargesAvailable,
-        ForAmount: dcForm.includeForCharges ? dcForm.forAmount : 0
+        ForAmount: dcForm.includeForCharges ? dcForm.forAmount : 0,
+        ForAccountId: dcForm.includeForCharges ? dcForm.selectedForAccountId : null
       };
 
       const response = await apiClient.post('/DeliveryChallanApi/single-entry', data);
@@ -393,7 +476,8 @@ const ProcessDC = () => {
         Remarks: dcForm.remarks,
         OtherReference: dcForm.otherRef,
         IncludeForCharges: dcForm.includeForCharges && forChargesAvailable,
-        ForAmount: dcForm.includeForCharges ? dcForm.forAmount : 0
+        ForAmount: dcForm.includeForCharges ? dcForm.forAmount : 0,
+        ForAccountId: dcForm.includeForCharges ? dcForm.selectedForAccountId : null
       };
 
       const response = await apiClient.post('/DeliveryChallanApi/process-all', data);
@@ -472,7 +556,8 @@ const ProcessDC = () => {
         dcOtherRef: dcForm.otherRef,
         dcLocation: dcForm.locationId,
         includeForCharges: dcForm.includeForCharges && forChargesAvailable,
-        forAmount: dcForm.includeForCharges ? dcForm.forAmount : 0
+        forAmount: dcForm.includeForCharges ? dcForm.forAmount : 0,
+        forAccountId: dcForm.includeForCharges ? dcForm.selectedForAccountId : null
       };
 
       const response = await apiClient.post('/DeliveryChallanApi/add-cartage', data);
@@ -588,12 +673,17 @@ const ProcessDC = () => {
   };
 
   // Handle opening FOR charges modal
-  const handleOpenForChargesModal = (voucher) => {
+  const handleOpenForChargesModal = async (voucher) => {
     setSelectedVoucherForForCharges(voucher);
     setForChargesForm({
       forAmount: '',
-      dcDate: new Date().toISOString().split('T')[0]
+      dcDate: new Date().toISOString().split('T')[0],
+      selectedForAccountId: null
     });
+    // Load FOR accounts if not already loaded
+    if (forChargesCategory && forAccounts.length === 0) {
+      await loadForAccounts(forChargesCategory);
+    }
     setShowForChargesModal(true);
   };
 
@@ -627,7 +717,8 @@ const ProcessDC = () => {
       const data = {
         JournalVoucherId: selectedVoucherForForCharges.jvId,
         ForAmount: parseFloat(forChargesForm.forAmount),
-        DcDate: forChargesForm.dcDate
+        DcDate: forChargesForm.dcDate,
+        ForAccountId: forChargesForm.selectedForAccountId
       };
 
       const response = await apiClient.post('/DeliveryChallanApi/process-pending-for-charges', data);
@@ -1150,19 +1241,46 @@ const ProcessDC = () => {
                   disabled={!forChargesAvailable}
                 />
                 {dcForm.includeForCharges && (
-                  <div className="mt-2">
-                    <Form.Label>FOR Charges Amount</Form.Label>
-                    <InputGroup>
-                      <InputGroup.Text><i className="fas fa-money-bill-alt"></i></InputGroup.Text>
-                      <Form.Control
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={dcForm.forAmount}
-                        onChange={(e) => setDcForm({ ...dcForm, forAmount: parseFloat(e.target.value) || 0 })}
-                      />
-                    </InputGroup>
-                  </div>
+                  <>
+                    <div className="mt-2">
+                      <Form.Label>FOR Expense Account</Form.Label>
+                      <InputGroup>
+                        <InputGroup.Text><i className="fas fa-file-invoice"></i></InputGroup.Text>
+                        <SearchableSelect
+                          value={dcForm.selectedForAccountId}
+                          onChange={(value) => {
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:1207',message:'FOR account selected',data:{selectedAccountId:value,forAccountsCount:forAccounts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                            // #endregion
+                            
+                            setDcForm({ ...dcForm, selectedForAccountId: value ? parseInt(value) : null });
+                          }}
+                          options={forAccounts.map(a => ({ id: a.id || a.accountId, name: a.name || a.accountName }))}
+                          placeholder="Select FOR Account"
+                          disabled={forAccounts.length === 0}
+                        />
+                      </InputGroup>
+                      {/* #region agent log */}
+                      {(() => {
+                        fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:1217',message:'FOR account dropdown render',data:{forAccountsCount:forAccounts.length,forChargesCategory,forChargesAvailable,accounts:forAccounts},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                        return null;
+                      })()}
+                      {/* #endregion */}
+                    </div>
+                    <div className="mt-2">
+                      <Form.Label>FOR Charges Amount</Form.Label>
+                      <InputGroup>
+                        <InputGroup.Text><i className="fas fa-money-bill-alt"></i></InputGroup.Text>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={dcForm.forAmount}
+                          onChange={(e) => setDcForm({ ...dcForm, forAmount: parseFloat(e.target.value) || 0 })}
+                        />
+                      </InputGroup>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1374,6 +1492,22 @@ const ProcessDC = () => {
                 Date: {new Date(selectedVoucherForForCharges.entryDate).toLocaleDateString()}
               </Alert>
             )}
+
+            <Form.Group className="mb-3">
+              <Form.Label>
+                FOR Expense Account
+              </Form.Label>
+              <InputGroup>
+                <InputGroup.Text><i className="fas fa-file-invoice"></i></InputGroup.Text>
+                <SearchableSelect
+                  value={forChargesForm.selectedForAccountId}
+                  onChange={(value) => setForChargesForm({ ...forChargesForm, selectedForAccountId: value ? parseInt(value) : null })}
+                  options={forAccounts.map(a => ({ id: a.id || a.accountId, name: a.name || a.accountName }))}
+                  placeholder={forAccounts.length === 0 ? "No accounts available" : "Select FOR Account"}
+                  disabled={forAccounts.length === 0}
+                />
+              </InputGroup>
+            </Form.Group>
 
             <Form.Group className="mb-3">
               <Form.Label>

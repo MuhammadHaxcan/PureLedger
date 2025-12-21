@@ -173,7 +173,7 @@ namespace PureLedger.Controllers.Api
             try
             {
                 var accounts = await _dcService.GetAccountsAsync(categoryId);
-                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName });
+                var result = accounts.Select(a => new { id = a.AccountId, name = a.AccountName }).ToList();
                 return Ok(new { success = true, data = result });
             }
             catch (Exception ex)
@@ -204,6 +204,26 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        [HttpGet("for-charges-category-id")]
+        public async Task<IActionResult> GetForChargesCategoryId([FromQuery] int? projectId)
+        {
+            try
+            {
+                int? forCategoryId = null;
+                if (projectId.HasValue)
+                {
+                    forCategoryId = await _dcService.GetForChargesCategoryIdAsync(projectId.Value);
+                }
+
+                return Ok(new { success = true, value = forCategoryId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve FOR charges category ID for project {ProjectId}", projectId);
+                return StatusCode(500, new { success = false, message = "Failed to retrieve FOR charges category" });
+            }
+        }
+
         [HttpGet("check-for-charges-available")]
         public async Task<IActionResult> CheckForChargesAvailable([FromQuery] int? projectId)
         {
@@ -212,10 +232,10 @@ namespace PureLedger.Controllers.Api
                 if (!projectId.HasValue)
                     return Ok(new { success = true, available = false });
 
-                var settings = await _dcService.GetCartageSettingsAsync(projectId.Value);
-                var isAvailable = settings?.ForExpenseAccountId > 0;
+                var forCategoryId = await _dcService.GetForChargesCategoryIdAsync(projectId.Value);
+                var isAvailable = forCategoryId.HasValue;
 
-                return Ok(new { success = true, available = isAvailable });
+                return Ok(new { success = true, available = isAvailable, categoryId = forCategoryId });
             }
             catch (Exception ex)
             {
@@ -236,7 +256,7 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                var dcEntry = await _dcService.CreateSingleDCAsync(model.JournalEntryId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount);
+                var dcEntry = await _dcService.CreateSingleDCAsync(model.JournalEntryId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount, model.ForAccountId);
 
                 return Ok(new
                 {
@@ -270,7 +290,7 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                var (deliveryChallanId, results) = await _dcService.ProcessBatchDCAsync(model.JournalVoucherId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount);
+                var (deliveryChallanId, results) = await _dcService.ProcessBatchDCAsync(model.JournalVoucherId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount, model.ForAccountId);
 
                 var successCount = results.Count(r => r.Success);
 
@@ -369,7 +389,7 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                var forJV = await _dcService.ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DcDate);
+                var forJV = await _dcService.ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DcDate, model.ForAccountId);
 
                 return Ok(new
                 {

@@ -413,6 +413,21 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        [HttpGet("base-vouchers-summary")]
+        public async Task<IActionResult> GetBaseVouchersSummary(int? projectId = null)
+        {
+            try
+            {
+                var summary = await _journalService.GetBaseVouchersSummaryAsync(projectId);
+                return Ok(new { success = true, data = summary });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving base vouchers summary for project {ProjectId}", projectId);
+                return StatusCode(500, new { success = false, message = "Error loading base vouchers summary" });
+            }
+        }
+
         [HttpGet("process-base-voucher/{id}")]
         public async Task<IActionResult> GetBaseVoucherForProcessing(int id)
         {

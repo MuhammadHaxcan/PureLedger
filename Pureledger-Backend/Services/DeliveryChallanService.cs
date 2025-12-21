@@ -242,7 +242,7 @@ namespace PureLedger.Services
 
         public async Task<DeliveryChallanEntry> CreateSingleDCAsync(
             int journalEntryId, DateOnly dcDate, string? otherReference,
-            int locationId, string? remarks, bool includeForCharges, int forAmount)
+            int locationId, string? remarks, bool includeForCharges, int forAmount, int? forAccountId = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -255,7 +255,7 @@ namespace PureLedger.Services
                 var dcEntry = await CreateDCEntryInternalAsync(deliveryChallan.DeliveryChallanVoucherId, journalEntryId, locationId, remarks, otherReference, dcDate);
 
                 if (includeForCharges && forAmount > 0)
-                    await ProcessForChargesInternalAsync(journalEntry.JournalVoucherId, journalEntryId, forAmount, dcDate);
+                    _ = await ProcessForChargesInternalAsync(journalEntry.JournalVoucherId, journalEntryId, forAmount, dcDate, forAccountId);
 
                 await RecalculateVoucherCompletionAsync(journalEntry.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
@@ -274,7 +274,7 @@ namespace PureLedger.Services
 
         public async Task<(int deliveryChallanId, List<EntryProcessResult> results)> ProcessBatchDCAsync(
             int journalVoucherId, DateOnly dcDate, string? otherReference,
-            int locationId, string? remarks, bool includeForCharges, int forAmount)
+            int locationId, string? remarks, bool includeForCharges, int forAmount, int? forAccountId = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -293,7 +293,7 @@ namespace PureLedger.Services
                 }
 
                 if (includeForCharges && forAmount > 0)
-                    await ProcessForChargesInternalAsync(journalVoucherId, null, forAmount, dcDate);
+                    _ = await ProcessForChargesInternalAsync(journalVoucherId, null, forAmount, dcDate, forAccountId);
 
                 await RecalculateVoucherCompletionAsync(journalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
@@ -327,7 +327,7 @@ namespace PureLedger.Services
                     model.DcStation, model.DcOtherRef, model.DcLocation);
 
                 if (model.IncludeForCharges && model.ForAmount > 0)
-                    await ProcessForChargesInternalAsync(model.JournalVoucherId, model.EntryId, model.ForAmount, model.DcDate);
+                    _ = await ProcessForChargesInternalAsync(model.JournalVoucherId, model.EntryId, model.ForAmount, model.DcDate, model.ForAccountId);
 
                 await RecalculateVoucherCompletionAsync(model.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
@@ -348,27 +348,16 @@ namespace PureLedger.Services
 
         #region FOR Charges Processing
 
-        public async Task<JournalVoucher> ProcessForChargesAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate)
+        public async Task<JournalVoucher> ProcessForChargesAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate, int? forAccountId = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var originalJV = await GetValidatedJournalVoucherAsync(journalVoucherId);
-                var (forAccountId, forCategoryId) = await GetForChargesAccountAsync(originalJV.ProjectId);
-                var (customerAccountId, customerCategoryId) = await GetCustomerAccountFromVoucherAsync(originalJV);
-
-                var forJV = await CreateForChargesVoucherAsync(originalJV.ProjectId, dcDate);
-                await _sharedProcessingService.CreateVoucherReferenceAsync(journalVoucherId, forJV.JournalVoucherId, "ForCharges");
-                await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountId, forCategoryId, customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
-
-                originalJV.PendingForCharges = false;
-                await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
-                await _sharedProcessingService.RecalculateVoucherCompletionAsync(forJV.JournalVoucherId);
-
+                var forJV = await ProcessForChargesInternalAsync(journalVoucherId, entryId, amount, dcDate, forAccountId);
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount}", forJV.JournalVoucherId, amount);
+                _logger.LogInformation("Processed FOR charges for journal voucher {JvId}", journalVoucherId);
                 return forJV;
             }
             catch (Exception ex)
@@ -767,23 +756,57 @@ namespace PureLedger.Services
 
         #region Private Helper Methods - FOR Charges
 
-        private async Task ProcessForChargesInternalAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate)
+        private async Task<JournalVoucher> ProcessForChargesInternalAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate, int? forAccountId = null)
         {
             try
             {
                 var originalJV = await GetValidatedJournalVoucherAsync(journalVoucherId);
-                var (forAccountId, forCategoryId) = await GetForChargesAccountAsync(originalJV.ProjectId);
                 var (customerAccountId, customerCategoryId) = await GetCustomerAccountFromVoucherAsync(originalJV);
+
+                // Get FOR category ID
+                var forCategoryId = await GetForChargesCategoryIdAsync(originalJV.ProjectId);
+                if (!forCategoryId.HasValue)
+                    throw new InvalidOperationException($"FOR expense category not configured for project {originalJV.ProjectId}");
+
+                // Always use a single FOR account - get accounts from the category
+                var forAccounts = await GetAccountsAsync(forCategoryId.Value);
+                if (!forAccounts.Any())
+                    throw new InvalidOperationException($"No FOR expense accounts found in category {forCategoryId.Value}");
+
+                // Determine which account to use: provided account (if valid) or first account from category
+                int forAccountIdToUse;
+                if (forAccountId.HasValue)
+                {
+                    // Validate that the provided account belongs to the FOR category
+                    var validAccountIds = forAccounts.Select(a => a.AccountId).ToList();
+                    if (!validAccountIds.Contains(forAccountId.Value))
+                        throw new InvalidOperationException($"Invalid FOR account ID: {forAccountId.Value}. Account must belong to FOR expense category {forCategoryId.Value}");
+                    forAccountIdToUse = forAccountId.Value;
+                }
+                else
+                {
+                    // Default to first account from the category
+                    forAccountIdToUse = forAccounts.First().AccountId;
+                    _logger.LogInformation("No FOR account specified, using first account {AccountId} from category {CategoryId}", forAccountIdToUse, forCategoryId.Value);
+                }
+
+                // Get account details
+                var forAccount = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(forAccountIdToUse);
+                if (forAccount == null)
+                    throw new InvalidOperationException($"FOR account {forAccountIdToUse} not found");
 
                 var forJV = await CreateForChargesVoucherAsync(originalJV.ProjectId, dcDate);
                 await _sharedProcessingService.CreateVoucherReferenceAsync(journalVoucherId, forJV.JournalVoucherId, "ForCharges");
-                await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountId, forCategoryId, customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
+                
+                // Create FOR charges entries for the single selected account
+                await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountIdToUse, forAccount.CategoryId, customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
 
                 originalJV.PendingForCharges = false;
                 await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
                 await _sharedProcessingService.RecalculateVoucherCompletionAsync(forJV.JournalVoucherId);
 
-                _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount}", forJV.JournalVoucherId, amount);
+                _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount} using single FOR account {AccountId}", forJV.JournalVoucherId, amount, forAccountIdToUse);
+                return forJV;
             }
             catch (Exception ex)
             {
@@ -805,17 +828,10 @@ namespace PureLedger.Services
             return await _unitOfWork.JournalVouchers.AddAsync(forJV);
         }
 
-        private async Task<(int accountId, int categoryId)> GetForChargesAccountAsync(int projectId)
+        public async Task<int?> GetForChargesCategoryIdAsync(int projectId)
         {
             var projectSettings = await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(projectId);
-            if (projectSettings?.ForExpenseAccountId == null)
-                throw new InvalidOperationException($"FOR expense account not configured for project {projectId}");
-
-            var forAccount = await _unitOfWork.Accounts.GetByIdWithDetailsAsync(projectSettings.ForExpenseAccountId.Value);
-            if (forAccount == null)
-                throw new InvalidOperationException($"FOR account {projectSettings.ForExpenseAccountId.Value} not found");
-
-            return (forAccount.AccountId, forAccount.CategoryId);
+            return projectSettings?.ForExpenseCategoryId;
         }
 
         private async Task<(int accountId, int categoryId)> GetCustomerAccountFromVoucherAsync(JournalVoucher voucher)

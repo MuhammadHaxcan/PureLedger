@@ -36,4 +36,6 @@ public class CartageViewModel
 
     [Range(0, int.MaxValue, ErrorMessage = "FOR charges amount must be zero or greater")]
     public int ForAmount { get; set; }
+    
+    public int? ForAccountId { get; set; }
 }

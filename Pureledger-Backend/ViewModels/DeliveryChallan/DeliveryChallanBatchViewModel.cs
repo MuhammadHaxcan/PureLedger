@@ -25,5 +25,7 @@ namespace PureLedger.ViewModels.DeliveryChallan
         
         [Range(0, int.MaxValue)]
         public int ForAmount { get; set; }
+        
+        public int? ForAccountId { get; set; }
     }
 }

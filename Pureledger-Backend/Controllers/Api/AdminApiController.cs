@@ -480,7 +480,7 @@ namespace PureLedger.Controllers.Api
                     {
                         id = settings.Id,
                         projectId = settings.ProjectId,
-                        forExpenseAccountId = settings.ForExpenseAccountId ?? (int?)null,
+                        forExpenseCategoryId = settings.ForExpenseCategoryId ?? (int?)null,
                         cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
                         projectImage = settings.ProjectImage // Already base64 string
                     };
@@ -520,7 +520,7 @@ namespace PureLedger.Controllers.Api
                 {
                     Id = viewModel.Id,
                     ProjectId = viewModel.ProjectId,
-                    ForExpenseAccountId = viewModel.ForExpenseAccountId,
+                    ForExpenseCategoryId = viewModel.ForExpenseCategoryId,
                     CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId,
                     ProjectImage = viewModel.ProjectImageBase64
                 };
@@ -621,7 +621,7 @@ namespace PureLedger.Controllers.Api
                     {
                         id = settings.Id,
                         projectId = settings.ProjectId,
-                        forExpenseAccountId = settings.ForExpenseAccountId ?? (int?)null,
+                        forExpenseCategoryId = settings.ForExpenseCategoryId ?? (int?)null,
                         cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
                         projectImage = settings.ProjectImage // Already base64 string
                     }

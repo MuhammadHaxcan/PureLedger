@@ -207,9 +207,9 @@ namespace PureLedger.Data
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<ProjectCartageSettings>()
-                .HasOne(pcs => pcs.ForExpenseAccount)
+                .HasOne(pcs => pcs.ForExpenseCategory)
                 .WithMany()
-                .HasForeignKey(pcs => pcs.ForExpenseAccountId)
+                .HasForeignKey(pcs => pcs.ForExpenseCategoryId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<ProjectCartageSettings>()

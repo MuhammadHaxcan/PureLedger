@@ -646,47 +646,87 @@ namespace PureLedger.Repositories
             int page,
             int pageSize)
         {
-
-            var query = _context.JournalEntries
-                .AsNoTracking()
-                .Include(je => je.JournalVoucher)
-                .Include(je => je.Account)
-                .Where(je =>
-                    accountIds.Contains(je.AccountId) &&
-                    je.CategoryId == categoryId &&
-                    je.JournalVoucher.IsCompleted &&
-                    je.JournalVoucher.CreditableDate <= referenceDate);
-
-            if (projectId.HasValue)
+            // Base query conditions (common to both queries)
+            IQueryable<JournalEntry> BuildBaseQuery(bool includeCreditableDateFilter)
             {
-                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+                var baseQuery = _context.JournalEntries
+                    .AsNoTracking()
+                    .Include(je => je.JournalVoucher)
+                    .Include(je => je.Account)
+                    .Where(je =>
+                        accountIds.Contains(je.AccountId) &&
+                        je.CategoryId == categoryId &&
+                        je.JournalVoucher.IsCompleted &&
+                        !je.JournalVoucher.IsBaseVoucher);
+
+                if (includeCreditableDateFilter)
+                {
+                    baseQuery = baseQuery.Where(je => je.JournalVoucher.CreditableDate <= referenceDate);
+                }
+
+                if (projectId.HasValue)
+                {
+                    baseQuery = baseQuery.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+                }
+
+                return baseQuery;
             }
 
-            var groupedQuery = query
+            // Query 1: Due Till Date - filtered by CreditableDate <= referenceDate
+            var dueTillDateQuery = BuildBaseQuery(includeCreditableDateFilter: true)
                 .GroupBy(je => new { je.AccountId, je.Account.AccountName })
                 .Select(g => new
                 {
                     AccountId = g.Key.AccountId,
                     AccountName = g.Key.AccountName,
-                    TotalDebit = g.Sum(je => je.Debit),
-                    TotalCredit = g.Sum(je => je.Credit)
+                    NetBalance = g.Sum(je => je.Debit) - g.Sum(je => je.Credit)
                 });
 
-            int totalCount = await groupedQuery.CountAsync();
+            // Query 2: Total Due - NO CreditableDate filter
+            var totalDueQuery = BuildBaseQuery(includeCreditableDateFilter: false)
+                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
+                .Select(g => new
+                {
+                    AccountId = g.Key.AccountId,
+                    AccountName = g.Key.AccountName,
+                    NetBalance = g.Sum(je => je.Debit) - g.Sum(je => je.Credit)
+                });
 
-            var pagedResults = await groupedQuery
+            // Get all accounts for pagination (use the filtered query for count)
+            var allAccountsQuery = dueTillDateQuery.Select(g => new { g.AccountId, g.AccountName });
+            int totalCount = await allAccountsQuery.CountAsync();
+
+            // Get paginated account list
+            var pagedAccountList = await allAccountsQuery
                 .OrderBy(g => g.AccountName)
                 .Skip(page * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            var agingReportEntries = pagedResults.Select(result => new AgingReportViewModels
+            if (!pagedAccountList.Any())
             {
-                AccountId = result.AccountId.ToString(),
-                AccountName = result.AccountName ?? "Unknown Account",
-                TotalDebit = result.TotalDebit,
-                TotalCredit = result.TotalCredit,
-                NetBalance = result.TotalDebit - result.TotalCredit
+                return (new List<AgingReportViewModels>(), totalCount);
+            }
+
+            var accountIdsForPage = pagedAccountList.Select(a => a.AccountId).ToList();
+
+            // Get Due Till Date results for paginated accounts
+            var dueTillDateResults = await dueTillDateQuery
+                .Where(g => accountIdsForPage.Contains(g.AccountId))
+                .ToDictionaryAsync(g => g.AccountId, g => g.NetBalance);
+
+            // Get Total Due results for paginated accounts
+            var totalDueResults = await totalDueQuery
+                .Where(g => accountIdsForPage.Contains(g.AccountId))
+                .ToDictionaryAsync(g => g.AccountId, g => g.NetBalance);
+
+            // Join results and create ViewModels
+            var agingReportEntries = pagedAccountList.Select(account => new AgingReportViewModels
+            {
+                AccountId = account.AccountId.ToString(),
+                AccountName = account.AccountName ?? "Unknown Account",
+                DueTillDate = dueTillDateResults.GetValueOrDefault(account.AccountId, 0),
+                TotalDue = totalDueResults.GetValueOrDefault(account.AccountId, 0)
             }).ToList();
 
             return (agingReportEntries, totalCount);
@@ -888,6 +928,64 @@ namespace PureLedger.Repositories
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Get aggregated product quantities from derived vouchers for base vouchers summary
+        /// Efficiently calculates most ordered products by aggregating at database level
+        /// </summary>
+        public async Task<List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>> GetDerivedVoucherProductQuantitiesAsync(int? projectId)
+        {
+            // Step 1: Get base voucher IDs filtered by project
+            var baseVoucherQuery = _context.JournalVouchers
+                .AsNoTracking()
+                .Where(v => v.IsBaseVoucher);
+
+            if (projectId.HasValue)
+            {
+                baseVoucherQuery = baseVoucherQuery.Where(v => v.ProjectId == projectId.Value);
+            }
+
+            var baseVoucherIds = await baseVoucherQuery.Select(v => v.JournalVoucherId).ToListAsync();
+
+            if (!baseVoucherIds.Any())
+            {
+                return new List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>();
+            }
+
+            // Step 2: Get derived voucher IDs from references
+            var derivedVoucherIds = await _context.JournalVoucherReferences
+                .AsNoTracking()
+                .Where(r => r.ReferenceType == "DerivedVoucher" && baseVoucherIds.Contains(r.MainVoucherId))
+                .Select(r => r.ReferencedVoucherId)
+                .Distinct()
+                .ToListAsync();
+
+            if (!derivedVoucherIds.Any())
+            {
+                return new List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>();
+            }
+
+            // Step 3: Get product entries from derived vouchers and aggregate
+            var aggregated = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(e => derivedVoucherIds.Contains(e.JournalVoucherId))
+                .Join(_context.Accounts,
+                    entry => entry.AccountId,
+                    account => account.AccountId,
+                    (entry, account) => new { Entry = entry, Account = account })
+                .Where(x => x.Account.AccountGroupId == 2) // Product accounts only
+                .GroupBy(x => new { x.Entry.AccountId, x.Account.AccountName })
+                .Select(g => new
+                {
+                    ProductId = g.Key.AccountId,
+                    ProductName = g.Key.AccountName ?? "Unknown",
+                    TotalQuantity = (decimal)g.Sum(x => x.Entry.Quantity),
+                    EntryCount = g.Count()
+                })
+                .ToListAsync();
+
+            return aggregated.Select(x => (x.ProductId, x.ProductName, x.TotalQuantity, x.EntryCount)).ToList();
         }
     }
 }
