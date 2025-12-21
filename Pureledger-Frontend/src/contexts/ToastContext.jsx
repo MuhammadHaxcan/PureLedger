@@ -71,7 +71,7 @@ export const ToastProvider = ({ children }) => {
   const showSessionExpired = () => {
     showWarning("Your session has expired due to inactivity. Please log in again.", {
       autoClose: 8000,
-      toastId: 'session-expired',
+      toastId: 'session-expired', //session has been expired.
     });
   };
 
