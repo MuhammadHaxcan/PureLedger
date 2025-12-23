@@ -12,35 +12,37 @@ import { toast } from 'react-toastify';
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5221/api';
 
-// XSRF Token storage (in memory, not localStorage for security)
-let xsrfToken = null;
-
 /**
- * Set XSRF token (called after login or refresh)
+ * Read XSRF token directly from cookie.
+ * This ensures the header always matches what the browser sends as the cookie.
  */
-export const setXsrfToken = (token) => {
-    xsrfToken = token;
+const getXsrfTokenFromCookie = () => {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
 };
 
 /**
- * Get current XSRF token
+ * Set XSRF token (for backwards compatibility - now also sets cookie)
  */
-export const getXsrfToken = () => xsrfToken;
+export const setXsrfToken = (token) => {
+    // Set cookie directly to ensure consistency
+    if (token) {
+        document.cookie = `XSRF-TOKEN=${encodeURIComponent(token)}; path=/; samesite=lax`;
+    }
+};
+
+/**
+ * Get current XSRF token (reads from cookie)
+ */
+export const getXsrfToken = () => getXsrfTokenFromCookie();
 
 /**
  * Clear XSRF token (called on logout)
  */
 export const clearXsrfToken = () => {
-    xsrfToken = null;
+    // Delete the cookie by setting it to expire in the past
+    document.cookie = 'XSRF-TOKEN=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 };
-
-/**
- * Note: We intentionally do NOT read the XSRF token from the cookie.
- * The XSRF-TOKEN cookie contains the "cookie token" which is different from
- * the "request token" returned by the login/refresh endpoints.
- * The request token (stored in memory via setXsrfToken) is what must be sent
- * in the X-XSRF-TOKEN header for validation to succeed.
- */
 
 // Create axios instance with default configuration
 const apiClient = axios.create({
@@ -73,9 +75,10 @@ apiClient.interceptors.request.use(
         // Add XSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
         const stateMutatingMethods = ['post', 'put', 'delete', 'patch'];
         if (stateMutatingMethods.includes(config.method?.toLowerCase())) {
-            // Use the request token from memory (set during login/refresh)
-            if (xsrfToken) {
-                config.headers['X-XSRF-TOKEN'] = xsrfToken;
+            // Always read fresh from cookie to ensure consistency
+            const token = getXsrfTokenFromCookie();
+            if (token) {
+                config.headers['X-XSRF-TOKEN'] = token;
             }
         }
 
@@ -118,9 +121,15 @@ apiClient.interceptors.response.use(
 
             // Update XSRF token if provided in error response
             if (errorData.xsrfToken) {
+                // Set the cookie with the new token
                 setXsrfToken(errorData.xsrfToken);
+                // Also update the header on the original request for the retry
+                originalRequest.headers['X-XSRF-TOKEN'] = errorData.xsrfToken;
                 console.log('XSRF token refreshed from error response, retrying request...');
             }
+
+            // Small delay to ensure cookie is set before retry
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             // Retry the original request with the new token
             return apiClient(originalRequest);

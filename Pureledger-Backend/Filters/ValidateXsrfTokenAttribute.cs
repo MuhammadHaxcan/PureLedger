@@ -1,14 +1,18 @@
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System.Security.Cryptography;
 
 namespace PureLedger.Filters {
     /// <summary>
-    /// Action filter that validates XSRF tokens for authenticated requests.
-    /// Skips validation for anonymous endpoints.
+    /// Action filter that validates XSRF tokens using simple double-submit cookie pattern.
+    /// Compares the cookie value with the header value directly (no cryptographic linking).
+    /// This is simpler and more reliable than the built-in antiforgery system.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
     public class ValidateXsrfTokenAttribute : Attribute, IAsyncActionFilter {
+        private const string CookieName = "XSRF-TOKEN";
+        private const string HeaderName = "X-XSRF-TOKEN";
+
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next) {
             // Skip validation for unauthenticated requests
             if (context.HttpContext.User?.Identity?.IsAuthenticated != true) {
@@ -30,55 +34,24 @@ namespace PureLedger.Filters {
                 return;
             }
 
-            var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
             var logger = context.HttpContext.RequestServices.GetService<ILogger<ValidateXsrfTokenAttribute>>();
 
-            // Check if we have the required tokens before validation
-            var hasXsrfCookie = context.HttpContext.Request.Cookies.ContainsKey("XSRF-TOKEN");
-            var hasXsrfHeader = context.HttpContext.Request.Headers.ContainsKey("X-XSRF-TOKEN");
+            // Get cookie and header values
+            var cookieValue = context.HttpContext.Request.Cookies[CookieName];
+            var headerValue = context.HttpContext.Request.Headers[HeaderName].FirstOrDefault();
 
-            if (!hasXsrfCookie || !hasXsrfHeader) {
-                logger?.LogWarning(
-                    "XSRF validation skipped - missing tokens. Cookie: {HasCookie}, Header: {HasHeader}, Path: {Path}",
-                    hasXsrfCookie, hasXsrfHeader, context.HttpContext.Request.Path);
+            // Check if we have both tokens
+            if (string.IsNullOrEmpty(cookieValue)) {
+                logger?.LogWarning("XSRF validation failed - missing cookie. Path: {Path}", context.HttpContext.Request.Path);
 
-                // If missing tokens, generate new ones and return error asking to retry
-                // This handles the edge case of first request after login
-                if (!hasXsrfCookie) {
-                    // Generate new tokens to set the cookie
-                    var tokens = antiforgery.GetAndStoreTokens(context.HttpContext);
-                    context.Result = new ObjectResult(new {
-                        success = false,
-                        message = "XSRF token cookie missing. Please refresh and try again.",
-                        xsrfToken = tokens.RequestToken,
-                        needsRefresh = true
-                    }) {
-                        StatusCode = 400
-                    };
-                    return;
-                }
-
-                context.Result = new UnauthorizedObjectResult(new {
-                    success = false,
-                    message = "Invalid or missing XSRF token header"
-                });
-                return;
-            }
-
-            try {
-                await antiforgery.ValidateRequestAsync(context.HttpContext);
-            } catch (AntiforgeryValidationException ex) {
-                logger?.LogWarning(
-                    "XSRF token validation failed for {Method} {Path}. Error: {Error}",
-                    method, context.HttpContext.Request.Path, ex.Message);
-
-                // Generate new tokens for the response to help recovery
-                var tokens = antiforgery.GetAndStoreTokens(context.HttpContext);
+                // Generate new token and set cookie
+                var newToken = GenerateToken();
+                SetXsrfCookie(context.HttpContext, newToken);
 
                 context.Result = new ObjectResult(new {
                     success = false,
-                    message = "Invalid XSRF token. Please try again.",
-                    xsrfToken = tokens.RequestToken,
+                    message = "XSRF token cookie missing. Please try again.",
+                    xsrfToken = newToken,
                     needsRefresh = true
                 }) {
                     StatusCode = 400
@@ -86,7 +59,67 @@ namespace PureLedger.Filters {
                 return;
             }
 
+            if (string.IsNullOrEmpty(headerValue)) {
+                logger?.LogWarning("XSRF validation failed - missing header. Path: {Path}", context.HttpContext.Request.Path);
+
+                context.Result = new ObjectResult(new {
+                    success = false,
+                    message = "XSRF token header missing.",
+                    xsrfToken = cookieValue,
+                    needsRefresh = true
+                }) {
+                    StatusCode = 400
+                };
+                return;
+            }
+
+            // Simple comparison - cookie and header must match exactly
+            if (!string.Equals(cookieValue, headerValue, StringComparison.Ordinal)) {
+                logger?.LogWarning(
+                    "XSRF token mismatch for {Method} {Path}. Cookie length: {CookieLen}, Header length: {HeaderLen}",
+                    method, context.HttpContext.Request.Path, cookieValue.Length, headerValue.Length);
+
+                // Generate new token for retry
+                var newToken = GenerateToken();
+                SetXsrfCookie(context.HttpContext, newToken);
+
+                context.Result = new ObjectResult(new {
+                    success = false,
+                    message = "Invalid XSRF token. Please try again.",
+                    xsrfToken = newToken,
+                    needsRefresh = true
+                }) {
+                    StatusCode = 400
+                };
+                return;
+            }
+
+            // Validation passed
             await next();
+        }
+
+        /// <summary>
+        /// Generate a cryptographically secure random token
+        /// </summary>
+        public static string GenerateToken() {
+            var bytes = new byte[32];
+            using (var rng = RandomNumberGenerator.Create()) {
+                rng.GetBytes(bytes);
+            }
+            return Convert.ToBase64String(bytes).Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        }
+
+        /// <summary>
+        /// Set the XSRF cookie on the response
+        /// </summary>
+        public static void SetXsrfCookie(HttpContext context, string token) {
+            context.Response.Cookies.Append(CookieName, token, new CookieOptions {
+                HttpOnly = false, // Must be readable by JavaScript
+                Secure = false,   // Allow HTTP
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                IsEssential = true
+            });
         }
     }
 }

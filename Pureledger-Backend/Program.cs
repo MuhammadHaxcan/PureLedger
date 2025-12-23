@@ -49,6 +49,8 @@ builder.Services.AddAntiforgery(options => {
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.Path = "/"; // Use root path to ensure cookie is always sent
     options.Cookie.IsEssential = true; // Ensure cookie is always set even without consent
+    // Domain is intentionally not set - it will default to the request host
+    // This works correctly with nginx proxy as long as Host header is forwarded
 });
 
 // Add services to the container.

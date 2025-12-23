@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Antiforgery;
 using PureLedger.Services.Auth;
 using PureLedger.ViewModels;
+using PureLedger.Filters;
 using LoginViewModel = PureLedger.ViewModels.Auth.LoginViewModel;
 using LogoutViewModel = PureLedger.ViewModels.Auth.LogoutViewModel;
 using RefreshTokenViewModel = PureLedger.ViewModels.Auth.RefreshTokenViewModel;
@@ -15,7 +15,6 @@ namespace PureLedger.Controllers.Api {
         private readonly IAuthService _authService;
         private readonly ILogger<AccountApiController> _logger;
         private readonly IConfiguration _configuration;
-        private readonly IAntiforgery _antiforgery;
 
         // Cookie names from configuration
         private string AccessTokenCookieName => _configuration["Security:CookieSettings:AccessTokenCookieName"] ?? "accessToken";
@@ -24,12 +23,10 @@ namespace PureLedger.Controllers.Api {
         public AccountApiController(
             IAuthService authService,
             ILogger<AccountApiController> logger,
-            IConfiguration configuration,
-            IAntiforgery antiforgery) {
+            IConfiguration configuration) {
             _authService = authService;
             _logger = logger;
             _configuration = configuration;
-            _antiforgery = antiforgery;
         }
 
         /// <summary>
@@ -127,15 +124,16 @@ namespace PureLedger.Controllers.Api {
             // Set tokens in HttpOnly cookies (XSS-safe)
             SetAuthCookies(accessToken, refreshToken);
 
-            // Generate XSRF token for CSRF protection
-            var xsrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
+            // Generate simple XSRF token for CSRF protection
+            var xsrfToken = ValidateXsrfTokenAttribute.GenerateToken();
+            ValidateXsrfTokenAttribute.SetXsrfCookie(HttpContext, xsrfToken);
 
             _logger.LogInformation($"User {model.Username} logged in via API");
 
             // Return user info without tokens (tokens are in HttpOnly cookies)
             return Ok(new {
                 success = true,
-                xsrfToken = xsrfTokens.RequestToken, // Frontend stores this for CSRF protection
+                xsrfToken = xsrfToken, // Frontend stores this for CSRF protection
                 user = new {
                     userId = user.UserId,
                     username = user.Username,
@@ -273,14 +271,15 @@ namespace PureLedger.Controllers.Api {
             // Set new tokens in HttpOnly cookies
             SetAuthCookies(newAccessToken, newRefreshToken);
 
-            // Generate new XSRF token
-            var xsrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
+            // Generate new simple XSRF token
+            var xsrfToken = ValidateXsrfTokenAttribute.GenerateToken();
+            ValidateXsrfTokenAttribute.SetXsrfCookie(HttpContext, xsrfToken);
 
             _logger.LogInformation($"Token refreshed for user {user.Username}");
 
             return Ok(new {
                 success = true,
-                xsrfToken = xsrfTokens.RequestToken // Return new XSRF token
+                xsrfToken = xsrfToken // Return new XSRF token
             });
         }
 
@@ -394,10 +393,22 @@ namespace PureLedger.Controllers.Api {
         [HttpGet("xsrf-token")]
         [Authorize]
         public IActionResult GetXsrfToken() {
-            var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+            // Check if there's already a valid XSRF cookie
+            var existingToken = Request.Cookies["XSRF-TOKEN"];
+            if (!string.IsNullOrEmpty(existingToken)) {
+                // Return the existing token to maintain consistency
+                return Ok(new {
+                    success = true,
+                    xsrfToken = existingToken
+                });
+            }
+
+            // Generate new token if none exists
+            var xsrfToken = ValidateXsrfTokenAttribute.GenerateToken();
+            ValidateXsrfTokenAttribute.SetXsrfCookie(HttpContext, xsrfToken);
             return Ok(new {
                 success = true,
-                xsrfToken = tokens.RequestToken
+                xsrfToken = xsrfToken
             });
         }
 
