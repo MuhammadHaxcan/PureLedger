@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql.EntityFrameworkCore;
@@ -40,13 +41,32 @@ builder.Services.Configure<IpRateLimitPolicies>(builder.Configuration.GetSection
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
+// Configure Forwarded Headers for reverse proxy (nginx)
+// This allows the app to correctly detect HTTPS when behind nginx
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    // Trust all proxies (nginx is on same server)
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Get cookie security settings from configuration
+var cookieSecurePolicy = builder.Configuration["Security:CookieSettings:SecurePolicy"];
+var securePolicyEnum = cookieSecurePolicy switch
+{
+    "Always" => CookieSecurePolicy.Always,
+    "None" => CookieSecurePolicy.None,
+    _ => CookieSecurePolicy.SameAsRequest // Default: auto-detect based on request
+};
+
 // Configure Antiforgery for CSRF protection
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-XSRF-TOKEN";
     options.Cookie.Name = "XSRF-TOKEN";
-    options.Cookie.HttpOnly = false; // Must be false so browser sends it with requests
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.HttpOnly = false; // Must be false so JS can read cookie value
+    options.Cookie.SecurePolicy = securePolicyEnum;
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.Path = "/"; // Use root path to ensure cookie is always sent
     options.Cookie.IsEssential = true; // Ensure cookie is always set even without consent
@@ -254,6 +274,10 @@ builder.Services.AddScoped<IProjectCartageSettingsRepository, ProjectCartageSett
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// CRITICAL: UseForwardedHeaders MUST be first to detect HTTPS behind nginx
+// This sets HttpContext.Request.Scheme = "https" based on X-Forwarded-Proto header
+app.UseForwardedHeaders();
 
 // Add global exception handling middleware - must be early in the pipeline
 app.UseMiddleware<GlobalExceptionHandlerMiddleware>();

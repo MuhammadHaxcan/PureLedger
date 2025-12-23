@@ -46,13 +46,22 @@ namespace PureLedger.Controllers.Api
             var accessTokenExpiryMinutes = int.Parse(_configuration["Security:CookieSettings:AccessTokenExpiryMinutes"] ?? "30");
             var refreshTokenExpiryDays = int.Parse(_configuration["Security:CookieSettings:RefreshTokenExpiryDays"] ?? "7");
 
+            // Get secure policy from config (must match XSRF cookie settings)
+            var securePolicySetting = _configuration["Security:CookieSettings:SecurePolicy"];
+            var isSecure = securePolicySetting switch
+            {
+                "Always" => true,
+                "None" => false,
+                _ => HttpContext.Request.IsHttps // SameAsRequest
+            };
+
             // Access token cookie - HttpOnly to prevent XSS
             Response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions
             {
                 HttpOnly = true,
-                Secure = false, // HTTP allowed per user preference
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
-                Path = "/api",
+                Path = "/", // Must match XSRF cookie path for consistent behavior
                 Expires = DateTimeOffset.UtcNow.AddMinutes(accessTokenExpiryMinutes),
                 IsEssential = true
             });
@@ -61,9 +70,9 @@ namespace PureLedger.Controllers.Api
             Response.Cookies.Append(RefreshTokenCookieName, refreshToken, new CookieOptions
             {
                 HttpOnly = true,
-                Secure = false, // HTTP allowed per user preference
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
-                Path = "/api",
+                Path = "/", // Must match XSRF cookie path for consistent behavior
                 Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenExpiryDays),
                 IsEssential = true
             });
@@ -74,20 +83,29 @@ namespace PureLedger.Controllers.Api
         /// </summary>
         private void ClearAuthCookies()
         {
+            // Get secure policy from config (must match how cookies were set)
+            var securePolicySetting = _configuration["Security:CookieSettings:SecurePolicy"];
+            var isSecure = securePolicySetting switch
+            {
+                "Always" => true,
+                "None" => false,
+                _ => HttpContext.Request.IsHttps // SameAsRequest
+            };
+
             Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions
             {
                 HttpOnly = true,
-                Secure = false,
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
-                Path = "/api"
+                Path = "/" // Must match how cookies were set
             });
 
             Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions
             {
                 HttpOnly = true,
-                Secure = false,
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
-                Path = "/api"
+                Path = "/" // Must match how cookies were set
             });
         }
 

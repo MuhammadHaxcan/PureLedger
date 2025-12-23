@@ -120,6 +120,27 @@ apiClient.interceptors.response.use(
       if (errorData.xsrfToken) {
         setXsrfToken(errorData.xsrfToken);
         console.log('XSRF token refreshed from error response, retrying request...');
+
+        // Update the header in the original request config
+        if (originalRequest.headers) {
+          originalRequest.headers['X-XSRF-TOKEN'] = errorData.xsrfToken;
+        }
+      } else {
+        // If no token in response, try to fetch a fresh one
+        try {
+          const tokenResponse = await axios.get(`${API_BASE_URL}/AccountApi/xsrf-token`, {
+            withCredentials: true
+          });
+          if (tokenResponse.data.success && tokenResponse.data.xsrfToken) {
+            setXsrfToken(tokenResponse.data.xsrfToken);
+            if (originalRequest.headers) {
+              originalRequest.headers['X-XSRF-TOKEN'] = tokenResponse.data.xsrfToken;
+            }
+            console.log('XSRF token fetched from server, retrying request...');
+          }
+        } catch (tokenError) {
+          console.error('Failed to fetch XSRF token:', tokenError);
+        }
       }
 
       // Retry the original request with the new token
