@@ -25,15 +25,6 @@ namespace PureLedger.Models
 
         public DateTime? RevokedDate { get; set; }
 
-        [StringLength(200)]
-        public string? ReplacedByToken { get; set; }
-
-        [StringLength(50)]
-        public string? CreatedByIp { get; set; }
-
-        [StringLength(50)]
-        public string? RevokedByIp { get; set; }
-
         // Navigation property
         public virtual User User { get; set; } = null!;
 

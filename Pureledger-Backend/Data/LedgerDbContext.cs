@@ -189,7 +189,6 @@ namespace PureLedger.Data
                     UserId = 1,
                     Username = "admin",
                     PasswordHash = "$2a$12$tkQ3qsmkPXxL/fDUCdNFKepp1QfMI48CbnXlpd1ZCuEqas62okDkS", // Pre-generated hash for "admin123"
-                    SecurityStamp = "d4ff2fc7-6913-4fe8-a501-66ddd274aa8d", // Fixed GUID for seed data
                     FullName = "System Administrator",
                     Email = "admin@example.com",
                     IsAdmin = true,

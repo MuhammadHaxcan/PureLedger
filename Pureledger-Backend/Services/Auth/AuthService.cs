@@ -86,7 +86,7 @@ namespace PureLedger.Services.Auth
 
         #region JWT Token Generation and Validation
 
-        public string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute, string securityStamp)
+        public string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute)
         {
             var secretKey = _configuration["Jwt:SecretKey"] ?? "YourSuperSecretKeyThatShouldBeAtLeast32CharactersLong!";
             var issuer = _configuration["Jwt:Issuer"] ?? "PureLedger";
@@ -102,8 +102,7 @@ namespace PureLedger.Services.Auth
                 new Claim(ClaimTypes.Name, username),
                 new Claim(ClaimTypes.GivenName, fullName),
                 new Claim("Subroute", subroute),
-                new Claim(ClaimTypes.Role, isAdmin ? "Admin" : "User"),
-                new Claim("SecurityStamp", securityStamp)
+                new Claim(ClaimTypes.Role, isAdmin ? "Admin" : "User")
             };
 
             var token = new JwtSecurityToken(
@@ -202,7 +201,7 @@ namespace PureLedger.Services.Auth
 
         #region Refresh Token Management
 
-        public async Task<RefreshToken> CreateRefreshTokenAsync(int userId, string token, string? ipAddress = null)
+        public async Task<RefreshToken> CreateRefreshTokenAsync(int userId, string token)
         {
             var refreshTokenExpiryDays = int.Parse(_configuration["Jwt:RefreshTokenExpiryDays"] ?? "7");
 
@@ -212,7 +211,6 @@ namespace PureLedger.Services.Auth
                 Token = token,
                 ExpiryDate = DateTime.UtcNow.AddDays(refreshTokenExpiryDays),
                 CreatedDate = DateTime.UtcNow,
-                CreatedByIp = ipAddress,
                 IsRevoked = false
             };
 
@@ -258,14 +256,14 @@ namespace PureLedger.Services.Auth
             return storedRefreshToken;
         }
 
-        public async Task<bool> RevokeRefreshTokenAsync(string token, string? ipAddress = null)
+        public async Task<bool> RevokeRefreshTokenAsync(string token)
         {
-            return await _unitOfWork.RefreshTokens.RevokeTokenAsync(token, ipAddress);
+            return await _unitOfWork.RefreshTokens.RevokeTokenAsync(token);
         }
 
-        public async Task<bool> RevokeAllUserTokensAsync(int userId, string? ipAddress = null)
+        public async Task<bool> RevokeAllUserTokensAsync(int userId)
         {
-            return await _unitOfWork.RefreshTokens.RevokeAllUserTokensAsync(userId, ipAddress);
+            return await _unitOfWork.RefreshTokens.RevokeAllUserTokensAsync(userId);
         }
 
         #endregion
@@ -333,7 +331,6 @@ namespace PureLedger.Services.Auth
             {
                 Username = model.Username.Trim(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password),
-                SecurityStamp = Guid.NewGuid().ToString(),
                 FullName = model.FullName.Trim(),
                 Email = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim(),
                 IsAdmin = model.IsAdmin,
@@ -535,17 +532,14 @@ namespace PureLedger.Services.Auth
                 }
             }
 
-            // SECURITY: If any security-relevant changes occurred, invalidate all tokens
+            // SECURITY: If any security-relevant changes occurred, invalidate all refresh tokens
             if (shouldInvalidateTokens)
             {
-                // Update SecurityStamp to invalidate all existing JWT tokens
-                user.SecurityStamp = Guid.NewGuid().ToString();
-
                 // Revoke all existing refresh tokens for this user
                 await _unitOfWork.RefreshTokens.RevokeAllUserTokensAsync(user.UserId);
 
                 _logger.LogInformation(
-                    "User {UserId} ({Username}) tokens invalidated. Reasons: {Reasons}",
+                    "User {UserId} ({Username}) refresh tokens revoked. Reasons: {Reasons}",
                     user.UserId,
                     user.Username,
                     string.Join(", ", invalidationReasons));

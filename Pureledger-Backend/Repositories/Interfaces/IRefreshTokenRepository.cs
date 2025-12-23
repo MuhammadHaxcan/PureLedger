@@ -9,8 +9,8 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<RefreshToken>> GetAllActiveTokensByUserIdAsync(int userId);
         Task<RefreshToken> AddAsync(RefreshToken refreshToken);
         Task<RefreshToken> UpdateAsync(RefreshToken refreshToken);
-        Task<bool> RevokeTokenAsync(string token, string? revokedByIp = null);
-        Task<bool> RevokeAllUserTokensAsync(int userId, string? revokedByIp = null);
+        Task<bool> RevokeTokenAsync(string token);
+        Task<bool> RevokeAllUserTokensAsync(int userId);
         Task DeleteExpiredTokensAsync();
     }
 }

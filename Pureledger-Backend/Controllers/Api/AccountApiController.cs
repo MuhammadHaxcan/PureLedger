@@ -13,7 +13,6 @@ namespace PureLedger.Controllers.Api {
     [Route("api/[controller]")]
     public class AccountApiController : ControllerBase {
         private readonly IAuthService _authService;
-        private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AccountApiController> _logger;
         private readonly IConfiguration _configuration;
         private readonly IAntiforgery _antiforgery;
@@ -24,12 +23,10 @@ namespace PureLedger.Controllers.Api {
 
         public AccountApiController(
             IAuthService authService,
-            IHttpContextAccessor httpContextAccessor,
             ILogger<AccountApiController> logger,
             IConfiguration configuration,
             IAntiforgery antiforgery) {
             _authService = authService;
-            _httpContextAccessor = httpContextAccessor;
             _logger = logger;
             _configuration = configuration;
             _antiforgery = antiforgery;
@@ -64,9 +61,10 @@ namespace PureLedger.Controllers.Api {
         }
 
         /// <summary>
-        /// Clears authentication cookies on logout
+        /// Clears all authentication and XSRF cookies on logout
         /// </summary>
         private void ClearAuthCookies() {
+            // Clear access token cookie
             Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions {
                 HttpOnly = true,
                 Secure = false,
@@ -74,11 +72,20 @@ namespace PureLedger.Controllers.Api {
                 Path = "/api"
             });
 
+            // Clear refresh token cookie
             Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions {
                 HttpOnly = true,
                 Secure = false,
                 SameSite = SameSiteMode.Lax,
                 Path = "/api"
+            });
+
+            // Clear XSRF token cookie (set by antiforgery system)
+            Response.Cookies.Delete("XSRF-TOKEN", new CookieOptions {
+                HttpOnly = false,
+                Secure = false,
+                SameSite = SameSiteMode.Lax,
+                Path = "/"
             });
         }
 
@@ -108,16 +115,14 @@ namespace PureLedger.Controllers.Api {
                 user.Username,
                 user.FullName,
                 user.IsAdmin,
-                user.Subroute,
-                user.SecurityStamp
+                user.Subroute
             );
 
             // Generate refresh token
             var refreshToken = _authService.GenerateRefreshToken();
-            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
 
             // Store refresh token in database
-            await _authService.CreateRefreshTokenAsync(user.UserId, refreshToken, ipAddress);
+            await _authService.CreateRefreshTokenAsync(user.UserId, refreshToken);
 
             // Set tokens in HttpOnly cookies (XSS-safe)
             SetAuthCookies(accessToken, refreshToken);
@@ -150,17 +155,15 @@ namespace PureLedger.Controllers.Api {
                 return Unauthorized(new { success = false, message = "Invalid token" });
             }
 
-            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
-
             // Try to get refresh token from cookie first, then from body
             var refreshToken = Request.Cookies[RefreshTokenCookieName] ?? model?.RefreshToken;
 
             // Revoke the specific refresh token if provided
             if (!string.IsNullOrEmpty(refreshToken)) {
-                await _authService.RevokeRefreshTokenAsync(refreshToken, ipAddress);
+                await _authService.RevokeRefreshTokenAsync(refreshToken);
             } else {
                 // Revoke all user tokens if no specific token provided
-                await _authService.RevokeAllUserTokensAsync(userId, ipAddress);
+                await _authService.RevokeAllUserTokensAsync(userId);
             }
 
             // Clear authentication cookies
@@ -257,17 +260,15 @@ namespace PureLedger.Controllers.Api {
                 user.Username,
                 user.FullName,
                 user.IsAdmin,
-                user.Subroute,
-                user.SecurityStamp
+                user.Subroute
             );
 
             // Generate new refresh token
             var newRefreshToken = _authService.GenerateRefreshToken();
-            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
 
             // Revoke old refresh token and create new one
-            await _authService.RevokeRefreshTokenAsync(refreshToken, ipAddress);
-            await _authService.CreateRefreshTokenAsync(user.UserId, newRefreshToken, ipAddress);
+            await _authService.RevokeRefreshTokenAsync(refreshToken);
+            await _authService.CreateRefreshTokenAsync(user.UserId, newRefreshToken);
 
             // Set new tokens in HttpOnly cookies
             SetAuthCookies(newAccessToken, newRefreshToken);
@@ -291,15 +292,13 @@ namespace PureLedger.Controllers.Api {
                 return Unauthorized(new { success = false, message = "Invalid token" });
             }
 
-            var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
-
             if (!string.IsNullOrEmpty(model?.RefreshToken)) {
-                var result = await _authService.RevokeRefreshTokenAsync(model.RefreshToken, ipAddress);
+                var result = await _authService.RevokeRefreshTokenAsync(model.RefreshToken);
                 if (!result) {
                     return BadRequest(new { success = false, message = "Token not found or already revoked" });
                 }
             } else {
-                await _authService.RevokeAllUserTokensAsync(userId, ipAddress);
+                await _authService.RevokeAllUserTokensAsync(userId);
             }
 
             return Ok(new { success = true, message = "Token revoked successfully" });

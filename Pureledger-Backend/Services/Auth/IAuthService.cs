@@ -25,18 +25,18 @@ namespace PureLedger.Services.Auth
         Task UpdateLastLoginAsync(User user);
 
         // JWT Token Generation and Validation
-        string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute, string securityStamp);
+        string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute);
         string GenerateRefreshToken();
         ClaimsPrincipal? ValidateToken(string token);
         ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 
         // Refresh Token Management
-        Task<RefreshToken> CreateRefreshTokenAsync(int userId, string token, string? ipAddress = null);
+        Task<RefreshToken> CreateRefreshTokenAsync(int userId, string token);
         Task<RefreshToken?> GetRefreshTokenAsync(string token);
         Task<bool> ValidateRefreshTokenAsync(string token);
         Task<RefreshToken?> RefreshAccessTokenAsync(string accessToken, string refreshToken);
-        Task<bool> RevokeRefreshTokenAsync(string token, string? ipAddress = null);
-        Task<bool> RevokeAllUserTokensAsync(int userId, string? ipAddress = null);
+        Task<bool> RevokeRefreshTokenAsync(string token);
+        Task<bool> RevokeAllUserTokensAsync(int userId);
 
         // User Access Management
         Task<bool> HasProjectAccessAsync(int userId, int projectId);

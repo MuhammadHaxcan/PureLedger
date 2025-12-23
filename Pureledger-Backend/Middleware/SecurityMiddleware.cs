@@ -3,9 +3,9 @@ using PureLedger.Services.Auth;
 
 namespace PureLedger.Middleware {
     /// <summary>
-    /// Consolidated security middleware that:
+    /// Security middleware that:
     /// 1. Adds security headers to all responses
-    /// 2. Validates SecurityStamp in JWT tokens to ensure tokens are invalidated when passwords change
+    /// 2. Validates user is still active for authenticated requests
     /// </summary>
     public class SecurityMiddleware {
         private readonly RequestDelegate _next;
@@ -20,9 +20,9 @@ namespace PureLedger.Middleware {
             // 1. Add security headers to all responses
             AddSecurityHeaders(context);
 
-            // 2. Validate SecurityStamp for authenticated requests
+            // 2. Validate user is still active for authenticated requests
             if (context.User.Identity?.IsAuthenticated == true) {
-                var validationResult = await ValidateSecurityStampAsync(context, authService);
+                var validationResult = await ValidateUserAsync(context, authService);
                 if (!validationResult) {
                     return; // Response already set in validation method
                 }
@@ -41,27 +41,25 @@ namespace PureLedger.Middleware {
             context.Response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
             context.Response.Headers.Add("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
 
-            // Strict Content Security Policy - removed unsafe-inline and unsafe-eval for XSS protection
+            // Content Security Policy for HTTP - allows inline styles for React
             context.Response.Headers.Add("Content-Security-Policy",
                 "default-src 'self'; " +
-                "script-src 'self'; " +  // Removed unsafe-inline and unsafe-eval
-                "style-src 'self'; " +   // Removed unsafe-inline
-                "img-src 'self' data: https:; " +
+                "script-src 'self' 'unsafe-inline'; " +
+                "style-src 'self' 'unsafe-inline'; " +
+                "img-src 'self' data: http:; " +
                 "font-src 'self' data:; " +
                 "connect-src 'self'; " +
-                "frame-ancestors 'none'; " +  // Prevent clickjacking
-                "base-uri 'self'; " +         // Prevent base tag hijacking
-                "form-action 'self'");        // Restrict form submissions
+                "frame-ancestors 'none'; " +
+                "base-uri 'self'; " +
+                "form-action 'self'");
         }
 
         /// <summary>
-        /// Validates that the SecurityStamp in the JWT token matches the current user's SecurityStamp.
-        /// This ensures that when a user's password is changed, all existing JWT tokens become invalid.
+        /// Validates that the user still exists and is active.
         /// </summary>
         /// <returns>True if validation passes, False if validation fails</returns>
-        private async Task<bool> ValidateSecurityStampAsync(HttpContext context, IAuthService authService) {
+        private async Task<bool> ValidateUserAsync(HttpContext context, IAuthService authService) {
             var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
-            var securityStampClaim = context.User.FindFirst("SecurityStamp");
 
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId)) {
                 // Get the current user from database
@@ -72,15 +70,6 @@ namespace PureLedger.Middleware {
                     _logger.LogWarning("Token validation failed: User {UserId} not found", userId);
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     await context.Response.WriteAsJsonAsync(new { success = false, message = "Your account has been deleted or is no longer available. Please contact an administrator." });
-                    return false;
-                }
-
-                // Validate SecurityStamp
-                if (securityStampClaim == null || securityStampClaim.Value != user.SecurityStamp) {
-                    // SecurityStamp mismatch - token is no longer valid
-                    _logger.LogWarning("Token validation failed: SecurityStamp mismatch for user {UserId}", userId);
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    await context.Response.WriteAsJsonAsync(new { success = false, message = "Your session has expired due to security changes. Please log in again." });
                     return false;
                 }
 

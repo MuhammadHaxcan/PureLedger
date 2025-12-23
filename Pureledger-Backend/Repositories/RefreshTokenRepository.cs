@@ -55,7 +55,7 @@ namespace PureLedger.Repositories
             return refreshToken;
         }
 
-        public async Task<bool> RevokeTokenAsync(string token, string? revokedByIp = null)
+        public async Task<bool> RevokeTokenAsync(string token)
         {
             var refreshToken = await GetByTokenAsync(token);
             if (refreshToken == null || refreshToken.IsRevoked)
@@ -63,13 +63,12 @@ namespace PureLedger.Repositories
 
             refreshToken.IsRevoked = true;
             refreshToken.RevokedDate = DateTime.UtcNow;
-            refreshToken.RevokedByIp = revokedByIp;
 
             await UpdateAsync(refreshToken);
             return true;
         }
 
-        public async Task<bool> RevokeAllUserTokensAsync(int userId, string? revokedByIp = null)
+        public async Task<bool> RevokeAllUserTokensAsync(int userId)
         {
             var activeTokens = await GetAllActiveTokensByUserIdAsync(userId);
 
@@ -80,7 +79,6 @@ namespace PureLedger.Repositories
             {
                 token.IsRevoked = true;
                 token.RevokedDate = DateTime.UtcNow;
-                token.RevokedByIp = revokedByIp;
             }
 
             await _context.SaveChangesAsync();

@@ -40,12 +40,12 @@ builder.Services.Configure<IpRateLimitPolicies>(builder.Configuration.GetSection
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
-// Configure Antiforgery for CSRF protection
+// Configure Antiforgery for CSRF protection (HTTP compatible)
 builder.Services.AddAntiforgery(options => {
     options.HeaderName = "X-XSRF-TOKEN";
     options.Cookie.Name = "XSRF-TOKEN";
-    options.Cookie.HttpOnly = false; // Must be false so browser sends it with requests
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.HttpOnly = false; // Must be false so JavaScript can read and send it
+    options.Cookie.SecurePolicy = CookieSecurePolicy.None; // Allow HTTP
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.Path = "/"; // Use root path to ensure cookie is always sent
     options.Cookie.IsEssential = true; // Ensure cookie is always set even without consent

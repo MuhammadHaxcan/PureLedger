@@ -439,20 +439,8 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
-        // Call logout endpoint to revoke refresh token and clear cookies
-        try {
-            await apiClient.post('/AccountApi/logout', {});
-        } catch (error) {
-            console.error('Error revoking token on logout:', error);
-        }
-
-        // Show logout success toast
-        showLogoutSuccess();
-
-        // Clear XSRF token
+        // Always clear local state first (before API call in case it fails)
         clearXsrfToken();
-
-        // Clear non-sensitive data from local storage and state
         localStorage.removeItem('user');
         localStorage.removeItem('userAccess');
         localStorage.removeItem('navigationMenu');
@@ -461,6 +449,17 @@ export const AuthProvider = ({ children }) => {
         setUserAccess({ controllers: [], actions: {} });
         setNavigationMenu([]);
         setPermissions([]);
+
+        // Call logout endpoint to revoke refresh token and clear server-side cookies
+        try {
+            await apiClient.post('/AccountApi/logout', {});
+        } catch (error) {
+            // Ignore errors - we've already cleared local state
+            console.log('Logout API call completed (may have failed, but local state is cleared)');
+        }
+
+        // Show logout success toast
+        showLogoutSuccess();
     };
 
     const getCurrentUser = async () => {

@@ -23,6 +23,13 @@ namespace PureLedger.Filters {
                 return;
             }
 
+            // Skip validation for logout - allow logout even with invalid/missing XSRF token
+            var path = context.HttpContext.Request.Path.Value?.ToLowerInvariant() ?? "";
+            if (path.EndsWith("/accountapi/logout")) {
+                await next();
+                return;
+            }
+
             var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
             var logger = context.HttpContext.RequestServices.GetService<ILogger<ValidateXsrfTokenAttribute>>();
 
