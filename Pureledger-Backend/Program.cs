@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql.EntityFrameworkCore;
@@ -36,56 +34,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Add Memory Cache
 builder.Services.AddMemoryCache();
 
-// Configure Data Protection - CRITICAL for XSRF tokens to persist across app restarts
-// Keys are stored in a directory that survives restarts
-// Use explicit path from config in production, or ContentRootPath/keys in development
-var keysDirectory = builder.Configuration["DataProtection:KeysDirectory"]
-    ?? Path.Combine(builder.Environment.ContentRootPath, "keys");
-
-// Ensure keys directory exists
-if (!Directory.Exists(keysDirectory))
-{
-    Directory.CreateDirectory(keysDirectory);
-}
-
-Console.WriteLine($"[DataProtection] Keys directory: {keysDirectory}");
-
-builder.Services.AddDataProtection()
-    .SetApplicationName("PureLedger")
-    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory));
-
 // Configure Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
 builder.Services.Configure<IpRateLimitPolicies>(builder.Configuration.GetSection("IpRateLimitPolicies"));
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
-// Configure Forwarded Headers for reverse proxy (nginx)
-// This allows the app to correctly detect HTTPS when behind nginx
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
-    // Trust all proxies (nginx is on same server)
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
-});
-
-// Get cookie security settings from configuration
-var cookieSecurePolicy = builder.Configuration["Security:CookieSettings:SecurePolicy"];
-var securePolicyEnum = cookieSecurePolicy switch
-{
-    "Always" => CookieSecurePolicy.Always,
-    "None" => CookieSecurePolicy.None,
-    _ => CookieSecurePolicy.SameAsRequest // Default: auto-detect based on request
-};
-
 // Configure Antiforgery for CSRF protection
-builder.Services.AddAntiforgery(options =>
-{
+builder.Services.AddAntiforgery(options => {
     options.HeaderName = "X-XSRF-TOKEN";
     options.Cookie.Name = "XSRF-TOKEN";
-    options.Cookie.HttpOnly = false; // Must be false so JS can read cookie value
-    options.Cookie.SecurePolicy = securePolicyEnum;
+    options.Cookie.HttpOnly = false; // Must be false so browser sends it with requests
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.Path = "/"; // Use root path to ensure cookie is always sent
     options.Cookie.IsEssential = true; // Ensure cookie is always set even without consent
@@ -93,27 +53,23 @@ builder.Services.AddAntiforgery(options =>
 
 // Add services to the container.
 builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
+    .AddJsonOptions(options => {
         // Configure JSON serialization to handle both camelCase and PascalCase
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         // Handle circular references
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     })
-    .ConfigureApiBehaviorOptions(options =>
-    {
+    .ConfigureApiBehaviorOptions(options => {
         // Customize the response for invalid model state
-        options.InvalidModelStateResponseFactory = context =>
-        {
+        options.InvalidModelStateResponseFactory = context => {
             // Remove navigation property errors (they're not sent in JSON, only IDs are)
             var keysToRemove = context.ModelState.Keys
-                .Where(k => k == "Project" || k == "AccountType" || k == "Accounts" || 
+                .Where(k => k == "Project" || k == "AccountType" || k == "Accounts" ||
                            k == "Category.Project" || k == "Category.AccountType" || k == "Category.Accounts")
                 .ToList();
-            
-            foreach (var key in keysToRemove)
-            {
+
+            foreach (var key in keysToRemove) {
                 context.ModelState.Remove(key);
             }
 
@@ -122,7 +78,7 @@ builder.Services.AddControllers()
                 .Where(x => x.Value?.Errors.Count > 0)
                 .SelectMany(x => x.Value.Errors.Select(e => e.ErrorMessage))
                 .ToList();
-            
+
             return new BadRequestObjectResult(new { success = false, errors = errors });
         };
     }); // For API controllers
@@ -136,69 +92,51 @@ var allowedHeaders = corsSection.GetSection("AllowedHeaders").Get<string[]>()!;
 var allowedMethods = corsSection.GetSection("AllowedMethods").Get<string[]>()!;
 var preflightMaxAge = corsSection.GetValue<int>("PreflightMaxAge");
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowReactApp", policy =>
-    {
+builder.Services.AddCors(options => {
+    options.AddPolicy("AllowReactApp", policy => {
         var builderPolicy = policy.WithOrigins(allowedOrigins);
-        
+
         // Configure headers
-        if (allowedHeaders.Contains("*"))
-        {
+        if (allowedHeaders.Contains("*")) {
             builderPolicy.AllowAnyHeader();
-        }
-        else
-        {
+        } else {
             builderPolicy.WithHeaders(allowedHeaders);
         }
-        
+
         // Configure methods
-        if (allowedMethods.Contains("*"))
-        {
+        if (allowedMethods.Contains("*")) {
             builderPolicy.AllowAnyMethod();
-        }
-        else
-        {
+        } else {
             builderPolicy.WithMethods(allowedMethods);
         }
-        
+
         // Configure credentials
-        if (allowCredentials)
-        {
+        if (allowCredentials) {
             builderPolicy.AllowCredentials();
         }
-        
+
         // Configure preflight cache
         builderPolicy.SetPreflightMaxAge(TimeSpan.FromSeconds(preflightMaxAge));
     });
-    
+
     // Also add a default policy for development
-    if (builder.Environment.IsDevelopment())
-    {
-        options.AddDefaultPolicy(policy =>
-        {
+    if (builder.Environment.IsDevelopment()) {
+        options.AddDefaultPolicy(policy => {
             var builderPolicy = policy.WithOrigins(allowedOrigins);
-            
-            if (allowedHeaders.Contains("*"))
-            {
+
+            if (allowedHeaders.Contains("*")) {
                 builderPolicy.AllowAnyHeader();
-            }
-            else
-            {
+            } else {
                 builderPolicy.WithHeaders(allowedHeaders);
             }
-            
-            if (allowedMethods.Contains("*"))
-            {
+
+            if (allowedMethods.Contains("*")) {
                 builderPolicy.AllowAnyMethod();
-            }
-            else
-            {
+            } else {
                 builderPolicy.WithMethods(allowedMethods);
             }
-            
-            if (allowCredentials)
-            {
+
+            if (allowCredentials) {
                 builderPolicy.AllowCredentials();
             }
         });
@@ -213,15 +151,12 @@ var jwtAudience = builder.Configuration["Jwt:Audience"]!;
 // Get cookie settings from configuration
 var accessTokenCookieName = builder.Configuration["Security:CookieSettings:AccessTokenCookieName"] ?? "accessToken";
 
-builder.Services.AddAuthentication(options =>
-{
+builder.Services.AddAuthentication(options => {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
+.AddJwtBearer(options => {
+    options.TokenValidationParameters = new TokenValidationParameters {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
         ValidateIssuer = true,
@@ -233,13 +168,10 @@ builder.Services.AddAuthentication(options =>
     };
 
     // Configure JWT to read from HttpOnly cookie as primary source
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
+    options.Events = new JwtBearerEvents {
+        OnMessageReceived = context => {
             // First, try to get token from the cookie
-            if (context.Request.Cookies.TryGetValue(accessTokenCookieName, out var cookieToken))
-            {
+            if (context.Request.Cookies.TryGetValue(accessTokenCookieName, out var cookieToken)) {
                 context.Token = cookieToken;
             }
             // If no cookie, fall back to Authorization header (handled by default)
@@ -273,8 +205,7 @@ builder.Services.AddAutoMapper(typeof(MappingProfile));
 
 
 // Configure API options for global authorization filter
-builder.Services.Configure<MvcOptions>(options =>
-{
+builder.Services.Configure<MvcOptions>(options => {
     // Create a policy that requires authenticated user
     var policy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
@@ -294,15 +225,10 @@ var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 
-// CRITICAL: UseForwardedHeaders MUST be first to detect HTTPS behind nginx
-// This sets HttpContext.Request.Scheme = "https" based on X-Forwarded-Proto header
-app.UseForwardedHeaders();
-
 // Add global exception handling middleware - must be early in the pipeline
 app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 
-if (!app.Environment.IsDevelopment())
-{
+if (!app.Environment.IsDevelopment()) {
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
