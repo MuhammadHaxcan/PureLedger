@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql.EntityFrameworkCore;
@@ -34,6 +35,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add Memory Cache
 builder.Services.AddMemoryCache();
+
+// Configure Data Protection - CRITICAL for XSRF tokens to persist across app restarts
+// Keys are stored in a directory that survives restarts
+var keysDirectory = Path.Combine(builder.Environment.ContentRootPath, "keys");
+builder.Services.AddDataProtection()
+    .SetApplicationName("PureLedger")
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory));
 
 // Configure Rate Limiting
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
