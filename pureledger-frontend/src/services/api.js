@@ -19,6 +19,7 @@ let xsrfToken = null;
  * Set XSRF token (called after login or refresh)
  */
 export const setXsrfToken = (token) => {
+  console.log('[XSRF] Token set:', token ? `${token.substring(0, 20)}...` : 'null');
   xsrfToken = token;
 };
 
@@ -31,6 +32,7 @@ export const getXsrfToken = () => xsrfToken;
  * Clear XSRF token (called on logout)
  */
 export const clearXsrfToken = () => {
+  console.log('[XSRF] Token cleared');
   xsrfToken = null;
 };
 
@@ -76,6 +78,9 @@ apiClient.interceptors.request.use(
       // Use the request token from memory (set during login/refresh)
       if (xsrfToken) {
         config.headers['X-XSRF-TOKEN'] = xsrfToken;
+        console.log('[XSRF] Adding header to', config.method?.toUpperCase(), config.url, '- Token:', xsrfToken.substring(0, 20) + '...');
+      } else {
+        console.warn('[XSRF] No token available for', config.method?.toUpperCase(), config.url);
       }
     }
 
@@ -115,36 +120,44 @@ apiClient.interceptors.response.use(
     // Handle XSRF token refresh scenario (400 with needsRefresh flag)
     if (statusCode === 400 && errorData.needsRefresh && !originalRequest._xsrfRetry) {
       originalRequest._xsrfRetry = true;
+      console.log('[XSRF] Validation failed, fetching fresh token...');
 
-      // Update XSRF token if provided in error response
+      // Always fetch a fresh token to ensure cookie and header are in sync
+      // The error response may have set a new cookie, so we need to get the matching request token
+      try {
+        const tokenResponse = await axios.get(`${API_BASE_URL}/AccountApi/xsrf-token`, {
+          withCredentials: true
+        });
+
+        if (tokenResponse.data.success && tokenResponse.data.xsrfToken) {
+          const freshToken = tokenResponse.data.xsrfToken;
+          setXsrfToken(freshToken);
+
+          // Update the header in the original request config
+          if (originalRequest.headers) {
+            originalRequest.headers['X-XSRF-TOKEN'] = freshToken;
+          }
+
+          console.log('[XSRF] Fresh token obtained, retrying request...');
+
+          // Retry the original request with the new token
+          return apiClient(originalRequest);
+        }
+      } catch (tokenError) {
+        console.error('[XSRF] Failed to fetch fresh token:', tokenError);
+      }
+
+      // If we couldn't get a fresh token, use the one from the error response as fallback
       if (errorData.xsrfToken) {
         setXsrfToken(errorData.xsrfToken);
-        console.log('XSRF token refreshed from error response, retrying request...');
-
-        // Update the header in the original request config
         if (originalRequest.headers) {
           originalRequest.headers['X-XSRF-TOKEN'] = errorData.xsrfToken;
         }
-      } else {
-        // If no token in response, try to fetch a fresh one
-        try {
-          const tokenResponse = await axios.get(`${API_BASE_URL}/AccountApi/xsrf-token`, {
-            withCredentials: true
-          });
-          if (tokenResponse.data.success && tokenResponse.data.xsrfToken) {
-            setXsrfToken(tokenResponse.data.xsrfToken);
-            if (originalRequest.headers) {
-              originalRequest.headers['X-XSRF-TOKEN'] = tokenResponse.data.xsrfToken;
-            }
-            console.log('XSRF token fetched from server, retrying request...');
-          }
-        } catch (tokenError) {
-          console.error('Failed to fetch XSRF token:', tokenError);
-        }
+        console.log('[XSRF] Using token from error response, retrying...');
+        return apiClient(originalRequest);
       }
 
-      // Retry the original request with the new token
-      return apiClient(originalRequest);
+      console.error('[XSRF] No valid token available, request will fail');
     }
 
     // Handle 401 Unauthorized - Token expired or invalid

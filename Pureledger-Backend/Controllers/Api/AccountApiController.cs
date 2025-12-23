@@ -107,6 +107,15 @@ namespace PureLedger.Controllers.Api
                 SameSite = SameSiteMode.Lax,
                 Path = "/" // Must match how cookies were set
             });
+
+            // Also clear the XSRF token cookie to prevent stale tokens on next login
+            Response.Cookies.Delete("XSRF-TOKEN", new CookieOptions
+            {
+                HttpOnly = false, // XSRF cookie is NOT HttpOnly (JS needs to read it)
+                Secure = isSecure,
+                SameSite = SameSiteMode.Lax,
+                Path = "/" // Must match how cookies were set in Antiforgery config
+            });
         }
 
         [HttpPost("login")]
@@ -156,7 +165,13 @@ namespace PureLedger.Controllers.Api
             // Generate XSRF token for CSRF protection
             var xsrfTokens = _antiforgery.GetAndStoreTokens(HttpContext);
 
-            _logger.LogInformation($"User {model.Username} logged in via API");
+            // Log token generation for debugging
+            var xsrfTokenPreview = xsrfTokens.RequestToken?.Length > 20
+                ? xsrfTokens.RequestToken.Substring(0, 20) + "..."
+                : xsrfTokens.RequestToken;
+            _logger.LogInformation(
+                "Login successful for {Username}. XSRF request token generated: {TokenPreview}. IsHttps: {IsHttps}, Scheme: {Scheme}",
+                model.Username, xsrfTokenPreview, HttpContext.Request.IsHttps, HttpContext.Request.Scheme);
 
             // Return user info without tokens (tokens are in HttpOnly cookies)
             return Ok(new

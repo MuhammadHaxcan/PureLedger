@@ -38,7 +38,18 @@ builder.Services.AddMemoryCache();
 
 // Configure Data Protection - CRITICAL for XSRF tokens to persist across app restarts
 // Keys are stored in a directory that survives restarts
-var keysDirectory = Path.Combine(builder.Environment.ContentRootPath, "keys");
+// Use explicit path from config in production, or ContentRootPath/keys in development
+var keysDirectory = builder.Configuration["DataProtection:KeysDirectory"]
+    ?? Path.Combine(builder.Environment.ContentRootPath, "keys");
+
+// Ensure keys directory exists
+if (!Directory.Exists(keysDirectory))
+{
+    Directory.CreateDirectory(keysDirectory);
+}
+
+Console.WriteLine($"[DataProtection] Keys directory: {keysDirectory}");
+
 builder.Services.AddDataProtection()
     .SetApplicationName("PureLedger")
     .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory));
