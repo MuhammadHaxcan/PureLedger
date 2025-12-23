@@ -403,17 +403,9 @@ export const AuthProvider = ({ children }) => {
                 // Show login success toast
                 showLoginSuccess(userData.fullName || userData.username);
 
-                // Fetch fresh XSRF token via GET request to ensure cookie is properly set
-                // This GET request also verifies the auth cookies are working
-                try {
-                    const xsrfResponse = await apiClient.get('/AccountApi/xsrf-token');
-                    if (xsrfResponse.data.success && xsrfResponse.data.xsrfToken) {
-                        setXsrfToken(xsrfResponse.data.xsrfToken);
-                    }
-                } catch (xsrfError) {
-                    console.warn('Failed to fetch XSRF token after login:', xsrfError);
-                    // Continue anyway - the token from login response should still work
-                }
+                // Note: We use the XSRF token from login response directly.
+                // DO NOT call /xsrf-token here - it causes a race condition where the
+                // cookie from login hasn't been stored yet, leading to token mismatch.
 
                 // Load user access and build navigation menu
                 try {
