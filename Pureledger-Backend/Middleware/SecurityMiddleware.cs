@@ -71,6 +71,12 @@ namespace PureLedger.Middleware
             var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
             var securityStampClaim = context.User.FindFirst("SecurityStamp");
 
+            _logger.LogInformation(
+                "SecurityStamp validation for {Path}: UserIdClaim={UserId}, SecurityStampClaim={StampClaim}",
+                context.Request.Path,
+                userIdClaim?.Value ?? "(null)",
+                securityStampClaim?.Value?.Substring(0, Math.Min(8, securityStampClaim?.Value?.Length ?? 0)) + "..." ?? "(null)");
+
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
             {
                 // Get the current user from database
@@ -85,11 +91,22 @@ namespace PureLedger.Middleware
                     return false;
                 }
 
+                _logger.LogInformation(
+                    "SecurityStamp comparison for user {UserId}: Token={TokenStamp}, Database={DbStamp}, Match={Match}",
+                    userId,
+                    securityStampClaim?.Value?.Substring(0, Math.Min(8, securityStampClaim?.Value?.Length ?? 0)) + "...",
+                    user.SecurityStamp?.Substring(0, Math.Min(8, user.SecurityStamp?.Length ?? 0)) + "...",
+                    securityStampClaim?.Value == user.SecurityStamp);
+
                 // Validate SecurityStamp
                 if (securityStampClaim == null || securityStampClaim.Value != user.SecurityStamp)
                 {
                     // SecurityStamp mismatch - token is no longer valid
-                    _logger.LogWarning("Token validation failed: SecurityStamp mismatch for user {UserId}", userId);
+                    _logger.LogWarning(
+                        "Token validation FAILED: SecurityStamp mismatch for user {UserId}. Token stamp: {TokenStamp}, DB stamp: {DbStamp}",
+                        userId,
+                        securityStampClaim?.Value ?? "(null)",
+                        user.SecurityStamp ?? "(null)");
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     await context.Response.WriteAsJsonAsync(new { success = false, message = "Your session has expired due to security changes. Please log in again." });
                     return false;
@@ -103,6 +120,8 @@ namespace PureLedger.Middleware
                     await context.Response.WriteAsJsonAsync(new { success = false, message = "Your account has been deactivated. Please contact an administrator." });
                     return false;
                 }
+
+                _logger.LogInformation("SecurityStamp validation PASSED for user {UserId}", userId);
             }
 
             return true;
