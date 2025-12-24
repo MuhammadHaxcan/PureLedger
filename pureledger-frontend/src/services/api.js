@@ -27,7 +27,9 @@ const getXsrfTokenFromCookie = () => {
 export const setXsrfToken = (token) => {
     // Set cookie directly to ensure consistency
     if (token) {
-        document.cookie = `XSRF-TOKEN=${encodeURIComponent(token)}; path=/; samesite=lax`;
+        // Add secure flag if on HTTPS
+        const secureFlag = window.location.protocol === 'https:' ? '; secure' : '';
+        document.cookie = `XSRF-TOKEN=${encodeURIComponent(token)}; path=/; samesite=lax${secureFlag}`;
     }
 };
 
@@ -41,7 +43,9 @@ export const getXsrfToken = () => getXsrfTokenFromCookie();
  */
 export const clearXsrfToken = () => {
     // Delete the cookie by setting it to expire in the past
-    document.cookie = 'XSRF-TOKEN=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    // Add secure flag if on HTTPS to properly delete secure cookies
+    const secureFlag = window.location.protocol === 'https:' ? '; secure' : '';
+    document.cookie = `XSRF-TOKEN=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secureFlag}`;
 };
 
 // Create axios instance with default configuration

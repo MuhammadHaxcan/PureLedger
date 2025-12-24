@@ -36,10 +36,13 @@ namespace PureLedger.Controllers.Api {
             var accessTokenExpiryMinutes = int.Parse(_configuration["Security:CookieSettings:AccessTokenExpiryMinutes"] ?? "30");
             var refreshTokenExpiryDays = int.Parse(_configuration["Security:CookieSettings:RefreshTokenExpiryDays"] ?? "7");
 
+            // Detect if request is HTTPS (via X-Forwarded-Proto from nginx)
+            var isSecure = HttpContext.Request.IsHttps;
+
             // Access token cookie - HttpOnly to prevent XSS
             Response.Cookies.Append(AccessTokenCookieName, accessToken, new CookieOptions {
                 HttpOnly = true,
-                Secure = false, // HTTP allowed per user preference
+                Secure = isSecure, // True for HTTPS, false for HTTP (development)
                 SameSite = SameSiteMode.Lax,
                 Path = "/api",
                 Expires = DateTimeOffset.UtcNow.AddMinutes(accessTokenExpiryMinutes),
@@ -49,7 +52,7 @@ namespace PureLedger.Controllers.Api {
             // Refresh token cookie - HttpOnly to prevent XSS
             Response.Cookies.Append(RefreshTokenCookieName, refreshToken, new CookieOptions {
                 HttpOnly = true,
-                Secure = false, // HTTP allowed per user preference
+                Secure = isSecure, // True for HTTPS, false for HTTP (development)
                 SameSite = SameSiteMode.Lax,
                 Path = "/api",
                 Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenExpiryDays),
@@ -61,10 +64,13 @@ namespace PureLedger.Controllers.Api {
         /// Clears all authentication and XSRF cookies on logout
         /// </summary>
         private void ClearAuthCookies() {
+            // Detect if request is HTTPS (via X-Forwarded-Proto from nginx)
+            var isSecure = HttpContext.Request.IsHttps;
+
             // Clear access token cookie
             Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions {
                 HttpOnly = true,
-                Secure = false,
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
                 Path = "/api"
             });
@@ -72,15 +78,15 @@ namespace PureLedger.Controllers.Api {
             // Clear refresh token cookie
             Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions {
                 HttpOnly = true,
-                Secure = false,
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
                 Path = "/api"
             });
 
-            // Clear XSRF token cookie (set by antiforgery system)
+            // Clear XSRF token cookie
             Response.Cookies.Delete("XSRF-TOKEN", new CookieOptions {
                 HttpOnly = false,
-                Secure = false,
+                Secure = isSecure,
                 SameSite = SameSiteMode.Lax,
                 Path = "/"
             });

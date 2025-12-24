@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql.EntityFrameworkCore;
@@ -21,6 +22,13 @@ using System.Text;
 using AspNetCoreRateLimit;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure Forwarded Headers for nginx reverse proxy (required for HTTPS)
+builder.Services.Configure<ForwardedHeadersOptions>(options => {
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // PORT CONFIGURATION:
 // - Development: Uses port from launchSettings.json (default: 5221)
@@ -226,6 +234,9 @@ builder.Services.AddScoped<IProjectCartageSettingsRepository, ProjectCartageSett
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// Add forwarded headers - MUST be first to properly detect HTTPS from nginx
+app.UseForwardedHeaders();
 
 // Add global exception handling middleware - must be early in the pipeline
 app.UseMiddleware<GlobalExceptionHandlerMiddleware>();

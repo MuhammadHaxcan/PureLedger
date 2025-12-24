@@ -113,9 +113,12 @@ namespace PureLedger.Filters {
         /// Set the XSRF cookie on the response
         /// </summary>
         public static void SetXsrfCookie(HttpContext context, string token) {
+            // Detect if request is HTTPS (via X-Forwarded-Proto from nginx)
+            var isSecure = context.Request.IsHttps;
+
             context.Response.Cookies.Append(CookieName, token, new CookieOptions {
                 HttpOnly = false, // Must be readable by JavaScript
-                Secure = false,   // Allow HTTP
+                Secure = isSecure, // True for HTTPS, false for HTTP (development)
                 SameSite = SameSiteMode.Lax,
                 Path = "/",
                 IsEssential = true
