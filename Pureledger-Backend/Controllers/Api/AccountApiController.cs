@@ -224,35 +224,23 @@ namespace PureLedger.Controllers.Api {
         [HttpPost("refresh-token")]
         [AllowAnonymous]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenViewModel? model = null) {
-            // Try to get tokens from cookies first, then from body (for backward compatibility)
-            var accessToken = Request.Cookies[AccessTokenCookieName] ?? model?.AccessToken;
+            // Get refresh token from cookie first, then from body (for backward compatibility)
             var refreshToken = Request.Cookies[RefreshTokenCookieName] ?? model?.RefreshToken;
 
-            if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken)) {
-                return BadRequest(new { success = false, message = "Invalid token request" });
+            if (string.IsNullOrEmpty(refreshToken)) {
+                return Unauthorized(new { success = false, message = "Missing refresh token" });
             }
 
-            // Extract claims from expired access token
-            var principal = _authService.GetPrincipalFromExpiredToken(accessToken);
-            if (principal == null) {
-                return Unauthorized(new { success = false, message = "Invalid access token" });
-            }
-
-            var userIdClaim = principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId)) {
-                return Unauthorized(new { success = false, message = "Invalid token claims" });
-            }
-
-            // Validate refresh token
-            var isValidRefreshToken = await _authService.ValidateRefreshTokenAsync(refreshToken);
-            if (!isValidRefreshToken) {
+            // Validate refresh token and get associated user
+            var refreshTokenEntity = await _authService.GetRefreshTokenAsync(refreshToken);
+            if (refreshTokenEntity == null || refreshTokenEntity.IsRevoked || refreshTokenEntity.ExpiryDate < DateTime.UtcNow) {
                 // Clear invalid cookies
                 ClearAuthCookies();
                 return Unauthorized(new { success = false, message = "Invalid or expired refresh token" });
             }
 
-            // Get user information
-            var user = await _authService.GetUserByIdAsync(userId);
+            // Get user information from the refresh token
+            var user = await _authService.GetUserByIdAsync(refreshTokenEntity.UserId);
             if (user == null || !user.IsActive) {
                 ClearAuthCookies();
                 return Unauthorized(new { success = false, message = "User not found or inactive" });
@@ -423,11 +411,11 @@ namespace PureLedger.Controllers.Api {
         /// Useful for frontend to verify auth state on page load.
         /// </summary>
         [HttpGet("check-auth")]
-        [Authorize]
+        [AllowAnonymous]
         public IActionResult CheckAuth() {
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
             if (userIdClaim == null) {
-                return Unauthorized(new { success = false, isAuthenticated = false });
+                return Ok(new { success = true, isAuthenticated = false });
             }
 
             return Ok(new { success = true, isAuthenticated = true });

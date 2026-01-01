@@ -27,9 +27,12 @@ namespace PureLedger.Filters {
                 return;
             }
 
-            // Skip validation for logout - allow logout even with invalid/missing XSRF token
+            // Skip validation for logout and refresh-token endpoints
+            // - logout: allow logout even with invalid/missing XSRF token
+            // - refresh-token: called when session is being restored, may not have valid XSRF token yet
+            //   The refresh token itself (HttpOnly cookie) serves as CSRF protection
             var path = context.HttpContext.Request.Path.Value?.ToLowerInvariant() ?? "";
-            if (path.EndsWith("/accountapi/logout")) {
+            if (path.EndsWith("/accountapi/logout") || path.EndsWith("/accountapi/refresh-token")) {
                 await next();
                 return;
             }

@@ -840,10 +840,10 @@ const MasterReport = () => {
                                     <Table bordered striped hover className="table-sm mb-0" id="masterReportTable">
                                     <thead className="table-light">
                                         <tr>
-                                            <th className="id-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>
+                                            <th className="id-column text-center" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>
                                             {visibleColumns.date && <th className="date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Entry Date</th>}
                                             {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Credit Date</th>}
-                                            {visibleColumns.description && <th className="description-column" style={{ minWidth: '170px' }}>Description</th>}
+                                            {visibleColumns.description && <th className="description-column" style={{ width: '200px', minWidth: '170px', maxWidth: '250px' }}>Description</th>}
                                             {visibleColumns.account && <th className="account-column" style={{ minWidth: '85px', maxWidth: '120px' }}>Account</th>}
                                             {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '100px', maxWidth: '140px' }}>Booker</th>}
                                             {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Quantity</th>}
@@ -875,12 +875,12 @@ const MasterReport = () => {
                                                                 <span className="fw-bold text-primary">OPENING</span>
                                                             ) : (
                                                                 <div>
-                                                                    <div className="d-flex flex-wrap gap-1 align-items-center">
+                                                                    <div className="d-flex flex-column gap-1 align-items-start">
                                                                         <a
                                                                             href={buildVoucherUrl(entry.journalVoucherId, 'JV')}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
-                                                                            className="voucher-link text-decoration-none badge bg-primary me-1"
+                                                                            className="voucher-link text-decoration-none badge bg-primary"
                                                                             style={{ fontSize: '0.75rem', cursor: 'pointer' }}
                                                                         >
                                                                             JV-{entry.journalVoucherId}
@@ -901,7 +901,7 @@ const MasterReport = () => {
                                                         </td>
                                                         {visibleColumns.date && <td className="date-column" style={{ whiteSpace: 'nowrap', minWidth: '85px', maxWidth: '95px' }}>{formatDate(entry.transactionDate)}</td>}
                                                         {visibleColumns.creditableDate && <td className="creditable-date-column" style={{ whiteSpace: 'nowrap', minWidth: '85px', maxWidth: '95px' }}>{formatDate(entry.creditableDate)}</td>}
-                                                        {visibleColumns.description && <td className="description-column" style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
+                                                        {visibleColumns.description && <td className="description-column" style={{ width: '200px', minWidth: '170px', maxWidth: '250px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
                                                         {visibleColumns.account && <td className="account-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.accountName || ''}</td>}
                                                         {visibleColumns.booker && <td className="booker-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.bookerName || ''}</td>}
                                                         {visibleColumns.quantity && <td className="quantity-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{entry.quantity ?? ''}</td>}

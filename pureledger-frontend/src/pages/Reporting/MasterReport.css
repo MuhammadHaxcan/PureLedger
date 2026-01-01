@@ -52,27 +52,36 @@
   white-space: nowrap;
 }
 
+/* Description column - fixed width with word wrap */
 #masterReportTable .description-column {
+  width: 200px;
   min-width: 170px;
+  max-width: 250px;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  word-break: break-word;
   white-space: normal !important;
+  hyphens: auto;
 }
 
 #masterReportTable .account-column {
-  min-width: 85px;
-  max-width: 120px;
+  width: 90px;
+  min-width: 70px;
+  max-width: 110px;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  white-space: normal;
+  word-break: break-word;
+  white-space: normal !important;
 }
 
 #masterReportTable .booker-column {
+  width: 120px;
   min-width: 100px;
   max-width: 140px;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  white-space: normal;
+  word-break: break-word;
+  white-space: normal !important;
 }
 
 #masterReportTable .quantity-column {

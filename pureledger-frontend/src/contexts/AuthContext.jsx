@@ -1,9 +1,12 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import apiClient, { setXsrfToken, clearXsrfToken } from '../services/api';
 import { PERMISSIONS, PAGE_PERMISSIONS } from '../constants/permissions';
 import { useToast } from './ToastContext';
 
 const AuthContext = createContext(null);
+
+// Module-level flag to prevent duplicate session restoration (React StrictMode runs useEffect twice)
+let isRestoringSession = false;
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -155,6 +158,13 @@ export const AuthProvider = ({ children }) => {
         const savedNavMenu = localStorage.getItem('navigationMenu');
 
         const restoreSession = async () => {
+            // Prevent duplicate session restoration (React StrictMode runs useEffect twice)
+            if (isRestoringSession) {
+                console.log('Session restoration already in progress, skipping duplicate call');
+                return;
+            }
+            isRestoringSession = true;
+
             // Try to verify auth using cookies (check-auth endpoint)
             // If access token is expired, the interceptor will automatically refresh it
             try {
@@ -163,21 +173,41 @@ export const AuthProvider = ({ children }) => {
                     // User is authenticated via cookies
                     await restoreUserData(savedUser, savedAccess, savedNavMenu);
                 } else {
-                    // Not authenticated, clear any stale local data
-                    clearAuthState();
+                    // Not authenticated - access token might be expired
+                    // If we have saved user data, try to refresh the token
+                    if (savedUser) {
+                        console.log('Access token expired, attempting to refresh...');
+                        try {
+                            // Try to refresh the token - this will use the refresh token cookie
+                            const refreshResponse = await apiClient.post('/AccountApi/refresh-token', {});
+                            if (refreshResponse.data.success) {
+                                // Token refreshed successfully, update XSRF token
+                                if (refreshResponse.data.xsrfToken) {
+                                    setXsrfToken(refreshResponse.data.xsrfToken);
+                                }
+                                // Now restore the user data
+                                await restoreUserData(savedUser, savedAccess, savedNavMenu);
+                            } else {
+                                // Refresh failed, clear auth state
+                                console.log('Token refresh failed, clearing auth state');
+                                clearAuthState();
+                            }
+                        } catch (refreshError) {
+                            // Refresh failed (likely refresh token also expired)
+                            console.log('Token refresh failed:', refreshError.message);
+                            clearAuthState();
+                        }
+                    } else {
+                        // No saved user data, just clear any stale state
+                        clearAuthState();
+                    }
                 }
             } catch (error) {
                 // Auth check failed - this could be because:
-                // 1. User not authenticated (no cookies)
-                // 2. Both access and refresh tokens expired
-                // 3. Network error
+                // 1. Network error
+                // 2. Server error
                 
-                // If we have saved user data and it's a 401 error, the interceptor
-                // already tried to refresh the token. If it failed, we need to clear state.
-                if (error.statusCode === 401) {
-                    console.log('Session expired: Both access and refresh tokens are invalid');
-                    clearAuthState();
-                } else if (error.isNetworkError) {
+                if (error.isNetworkError) {
                     // Network error - try to restore from saved data if available
                     console.log('Network error during auth check, attempting to restore saved session');
                     if (savedUser) {
@@ -192,6 +222,7 @@ export const AuthProvider = ({ children }) => {
                 }
             }
             setLoading(false);
+            isRestoringSession = false;
         };
 
         const restoreUserData = async (savedUser, savedAccess, savedNavMenu) => {

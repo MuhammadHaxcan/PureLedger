@@ -26,15 +26,15 @@ namespace PureLedger.ViewModels.Auth
     }
 
     /// <summary>
-    /// View model for refresh token requests
+    /// View model for refresh token requests.
+    /// Note: Tokens are primarily sent via HttpOnly cookies.
+    /// Body fields are optional for backward compatibility.
     /// </summary>
     public class RefreshTokenViewModel
     {
-        [Required]
-        public string AccessToken { get; set; } = string.Empty;
+        public string? AccessToken { get; set; }
 
-        [Required]
-        public string RefreshToken { get; set; } = string.Empty;
+        public string? RefreshToken { get; set; }
     }
 
     /// <summary>
