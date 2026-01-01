@@ -572,9 +572,9 @@ const ProductReport = () => {
                                 </InputGroup>
                             </div>
                         </div>
-                        <div className="product-report-container">
-                            <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                                <Table bordered striped hover className="table-sm mb-0 w-100" id="productReportTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                        <div className="report-table-container">
+                            <div className="table-responsive">
+                                <Table bordered striped hover className="table-sm mb-0" id="productReportTable">
                                     <thead className="table-light">
                                         <tr>
                                             <th className="product-column" style={{ minWidth: '140px', maxWidth: '200px' }}>Product</th>

@@ -836,8 +836,8 @@ const MasterReport = () => {
                                         </InputGroup>
                                     </div>
                                 </div>
-                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
-                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="masterReportTable" style={{ width: '100%', minWidth: '1200px', tableLayout: 'auto' }}>
+                                <div className="table-responsive">
+                                    <Table bordered striped hover className="table-sm mb-0" id="masterReportTable">
                                     <thead className="table-light">
                                         <tr>
                                             <th className="id-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>

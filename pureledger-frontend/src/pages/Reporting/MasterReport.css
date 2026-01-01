@@ -1,202 +1,91 @@
-/* Master Report Table Styles */
+/* Master Report Table Styles - Uses unified styles from App.css */
+
+/* Ensure master-report-container works with table-responsive */
 .master-report-container {
-    width: 100%;
-    overflow: hidden;
+  width: 100%;
+  max-width: 100%;
 }
 
 .master-report-container .table-responsive {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
+  overflow-x: scroll !important;
+  padding-bottom: 15px;
 }
 
-#masterReportTable {
-    width: 100% !important;
-    table-layout: auto !important;
-    margin-bottom: 0;
-    border-collapse: collapse;
-    min-width: 100%;
-}
-
-/* Ensure ID column is always visible and properly sized */
+/* Table-specific ID column styling */
 #masterReportTable th.id-column,
 #masterReportTable td.id-column {
-    width: 8% !important;
-    min-width: 100px !important;
-    display: table-cell !important;
-    visibility: visible !important;
-    position: relative;
+  min-width: 120px;
+  white-space: nowrap;
 }
 
-#masterReportTable thead th {
-    vertical-align: middle;
-    text-align: left;
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    background-color: #e9ecef;
-    font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-#masterReportTable tbody td {
-    vertical-align: middle;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-/* Description column - allow word wrapping */
-#masterReportTable tbody td.description-column {
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: normal;
-    hyphens: auto;
-}
-
-#masterReportTable tfoot td {
-    vertical-align: middle;
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    background-color: #e9ecef;
-    font-weight: 600;
-}
-
-/* Ensure totals row handles large numbers */
-#masterReportTable tfoot .debit-column,
-#masterReportTable tfoot .credit-column,
-#masterReportTable tfoot .balance-column {
-    min-width: 130px !important;
-    max-width: 160px !important;
-    width: 140px !important;
-    white-space: nowrap !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-}
-
+/* Voucher link styling */
 #masterReportTable .voucher-link {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    transition: opacity 0.2s;
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: opacity 0.2s;
 }
 
 #masterReportTable .voucher-link:hover {
-    opacity: 0.8;
-    text-decoration: none !important;
+  opacity: 0.8;
+  text-decoration: none !important;
 }
 
 #masterReportTable .entry-id {
-    font-size: 0.75rem;
-    color: #6c757d;
-    margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
 }
 
-/* Ensure table takes full width */
-.table-responsive > table {
-    width: 100% !important;
-    margin-bottom: 0;
-    min-width: 100%;
-}
-
-/* Ensure all columns are visible */
-#masterReportTable th,
-#masterReportTable td {
-    display: table-cell !important;
-    visibility: visible !important;
-}
-
-/* Fix alignment for numeric columns */
-.text-end {
-    text-align: right !important;
-}
-
-/* Ensure proper spacing in ID column */
-#masterReportTable td:first-child,
-#masterReportTable th:first-child {
-    white-space: nowrap;
-}
-
-/* Column width constraints */
+/* Column width constraints specific to Master Report */
 #masterReportTable .id-column {
-    width: 140px !important;
-    min-width: 140px !important;
-    max-width: 140px !important;
-}
-
-#masterReportTable th.id-column,
-#masterReportTable td.id-column {
-    display: table-cell !important;
-    visibility: visible !important;
+  width: 140px;
+  min-width: 120px;
+  max-width: 160px;
 }
 
 #masterReportTable .date-column,
 #masterReportTable .creditable-date-column {
-    width: 90px;
-    min-width: 85px;
-    max-width: 95px;
-    white-space: nowrap;
+  width: 90px;
+  min-width: 85px;
+  max-width: 95px;
+  white-space: nowrap;
 }
 
 #masterReportTable .description-column {
-    width: 210px;
-    min-width: 170px;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: normal !important;
+  min-width: 170px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal !important;
 }
 
 #masterReportTable .account-column {
-    width: 100px;
-    min-width: 85px;
-    max-width: 120px;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: normal;
+  min-width: 85px;
+  max-width: 120px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 #masterReportTable .booker-column {
-    width: 120px;
-    min-width: 100px;
-    max-width: 140px;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    white-space: normal;
+  min-width: 100px;
+  max-width: 140px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 #masterReportTable .quantity-column {
-    width: 100px;
-    min-width: 90px;
-    max-width: 120px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  min-width: 90px;
+  max-width: 120px;
+  white-space: nowrap;
 }
 
 #masterReportTable .debit-column,
-#masterReportTable .credit-column {
-    width: 140px;
-    min-width: 130px;
-    max-width: 160px;
-    white-space: nowrap;
-    word-wrap: normal;
-    overflow-wrap: normal;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
+#masterReportTable .credit-column,
 #masterReportTable .balance-column {
-    width: 140px;
-    min-width: 130px;
-    max-width: 160px;
-    white-space: nowrap;
-    word-wrap: normal;
-    overflow-wrap: normal;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  min-width: 130px;
+  max-width: 160px;
+  white-space: nowrap;
 }
 

@@ -6,7 +6,6 @@ import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
-import './MasterReport.css';
 
 const buildVoucherUrl = (voucherId, type) => {
     if (!voucherId) {
@@ -827,7 +826,7 @@ const UserReport = () => {
                             </div>
                         </Card.Header>
                         <Card.Body>
-                            <div className="master-report-container">
+                            <div className="report-table-container">
                                 <div className="row mb-3">
                                     <div className="col-12">
                                         <Form.Label>Search</Form.Label>
@@ -842,8 +841,8 @@ const UserReport = () => {
                                         </InputGroup>
                                     </div>
                                 </div>
-                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch' }}>
-                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="userReportTable" style={{ width: '100%', minWidth: '1200px', tableLayout: 'auto' }}>
+                                <div className="table-responsive">
+                                    <Table bordered striped hover className="table-sm mb-0" id="userReportTable">
                                     <thead className="table-light">
                                         <tr>
                                             <th className="id-column" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>

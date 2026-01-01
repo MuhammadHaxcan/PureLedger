@@ -67,7 +67,7 @@ const Projects = () => {
       };
 
       const response = editingProject
-        ? await apiClient.put(`/metadata/projects/${editingProject.projectId}`, projectData)
+        ? await apiClient.put(`/MetaDataApi/projects/${editingProject.projectId}`, projectData)
         : await apiClient.post('/MetaDataApi/projects', projectData);
 
       if (response.data.success) {

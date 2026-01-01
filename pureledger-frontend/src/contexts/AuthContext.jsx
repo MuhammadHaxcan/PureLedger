@@ -22,9 +22,10 @@ export const AuthProvider = ({ children }) => {
     const [navigationMenu, setNavigationMenu] = useState([]);
     const [permissions, setPermissions] = useState([]);
 
-    // Session timeout configuration (30 minutes of inactivity)
-    const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
-    const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+    // Removed - JWT refresh token handles session expiration
+    // Access tokens refresh every ~29 minutes, refresh tokens expire after 7 days
+    // const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+    // const [lastActivityTime, setLastActivityTime] = useState(Date.now());
 
     // Build permissions array from userAccess
     const buildPermissions = useMemo(() => {
@@ -70,7 +71,10 @@ export const AuthProvider = ({ children }) => {
         setPermissions(buildPermissions);
     }, [buildPermissions]);
 
-    // Session timeout - check for inactivity
+    // Session timeout removed - JWT refresh mechanism handles this automatically
+    // Access tokens refresh every ~29 minutes, refresh tokens expire after 7 days
+    // Backend can revoke tokens server-side if needed
+    /*
     useEffect(() => {
         if (!isAuthenticated) return;
 
@@ -108,6 +112,7 @@ export const AuthProvider = ({ children }) => {
             });
         };
     }, [isAuthenticated, lastActivityTime]);
+    */
 
     // Permission checking functions
     const hasPermission = (permission) => {
@@ -151,100 +156,125 @@ export const AuthProvider = ({ children }) => {
 
         const restoreSession = async () => {
             // Try to verify auth using cookies (check-auth endpoint)
+            // If access token is expired, the interceptor will automatically refresh it
             try {
                 const authCheckResponse = await apiClient.get('/AccountApi/check-auth');
                 if (authCheckResponse.data.success && authCheckResponse.data.isAuthenticated) {
                     // User is authenticated via cookies
-                    if (savedUser) {
-                        try {
-                            const userData = JSON.parse(savedUser);
-                            setUser(userData);
-                            setIsAuthenticated(true);
-
-                            // Fetch fresh XSRF token
-                            try {
-                                const xsrfResponse = await apiClient.get('/AccountApi/xsrf-token');
-                                if (xsrfResponse.data.success) {
-                                    setXsrfToken(xsrfResponse.data.xsrfToken);
-                                }
-                            } catch (xsrfError) {
-                                console.error('Error fetching XSRF token:', xsrfError);
-                            }
-
-                            // Restore access and navigation menu if available
-                            if (savedAccess) {
-                                try {
-                                    setUserAccess(JSON.parse(savedAccess));
-                                } catch (e) {
-                                    console.error('Error parsing saved access:', e);
-                                }
-                            }
-
-                            if (savedNavMenu) {
-                                try {
-                                    const parsedNav = JSON.parse(savedNavMenu);
-                                    setNavigationMenu(parsedNav);
-                                    // If nav is empty, try to refetch access to build it
-                                    if (!parsedNav || parsedNav.length === 0) {
-                                        await fetchAccessAndMenu(userData);
-                                    }
-                                } catch (e) {
-                                    console.error('Error parsing saved navigation menu:', e);
-                                    await fetchAccessAndMenu(userData);
-                                }
-                            } else {
-                                // No saved menu, fetch it now
-                                await fetchAccessAndMenu(userData);
-                            }
-                        } catch (error) {
-                            console.error('Error parsing saved user data:', error);
-                            // Fetch user from server
-                            try {
-                                const meResponse = await apiClient.get('/AccountApi/me');
-                                if (meResponse.data.success) {
-                                    const userData = meResponse.data.user;
-                                    setUser(userData);
-                                    setIsAuthenticated(true);
-                                    localStorage.setItem('user', JSON.stringify(userData));
-                                    await fetchAccessAndMenu(userData);
-                                }
-                            } catch (meError) {
-                                console.error('Error fetching user:', meError);
-                                clearAuthState();
-                            }
-                        }
-                    } else {
-                        // No saved user but cookies are valid, fetch user from server
-                        try {
-                            const meResponse = await apiClient.get('/AccountApi/me');
-                            if (meResponse.data.success) {
-                                const userData = meResponse.data.user;
-                                setUser(userData);
-                                setIsAuthenticated(true);
-                                localStorage.setItem('user', JSON.stringify(userData));
-                                await fetchAccessAndMenu(userData);
-
-                                // Fetch XSRF token
-                                const xsrfResponse = await apiClient.get('/AccountApi/xsrf-token');
-                                if (xsrfResponse.data.success) {
-                                    setXsrfToken(xsrfResponse.data.xsrfToken);
-                                }
-                            }
-                        } catch (meError) {
-                            console.error('Error fetching user:', meError);
-                            clearAuthState();
-                        }
-                    }
+                    await restoreUserData(savedUser, savedAccess, savedNavMenu);
                 } else {
                     // Not authenticated, clear any stale local data
                     clearAuthState();
                 }
             } catch (error) {
-                // Auth check failed (401), user not authenticated
-                console.log('Session check: User not authenticated');
-                clearAuthState();
+                // Auth check failed - this could be because:
+                // 1. User not authenticated (no cookies)
+                // 2. Both access and refresh tokens expired
+                // 3. Network error
+                
+                // If we have saved user data and it's a 401 error, the interceptor
+                // already tried to refresh the token. If it failed, we need to clear state.
+                if (error.statusCode === 401) {
+                    console.log('Session expired: Both access and refresh tokens are invalid');
+                    clearAuthState();
+                } else if (error.isNetworkError) {
+                    // Network error - try to restore from saved data if available
+                    console.log('Network error during auth check, attempting to restore saved session');
+                    if (savedUser) {
+                        await restoreUserData(savedUser, savedAccess, savedNavMenu);
+                    } else {
+                        clearAuthState();
+                    }
+                } else {
+                    // Other error, clear state
+                    console.log('Auth check failed:', error.message);
+                    clearAuthState();
+                }
             }
             setLoading(false);
+        };
+
+        const restoreUserData = async (savedUser, savedAccess, savedNavMenu) => {
+            if (savedUser) {
+                try {
+                    const userData = JSON.parse(savedUser);
+                    setUser(userData);
+                    setIsAuthenticated(true);
+
+                    // Fetch fresh XSRF token
+                    try {
+                        const xsrfResponse = await apiClient.get('/AccountApi/xsrf-token');
+                        if (xsrfResponse.data.success) {
+                            setXsrfToken(xsrfResponse.data.xsrfToken);
+                        }
+                    } catch (xsrfError) {
+                        console.error('Error fetching XSRF token:', xsrfError);
+                    }
+
+                    // Restore access and navigation menu if available
+                    if (savedAccess) {
+                        try {
+                            setUserAccess(JSON.parse(savedAccess));
+                        } catch (e) {
+                            console.error('Error parsing saved access:', e);
+                        }
+                    }
+
+                    if (savedNavMenu) {
+                        try {
+                            const parsedNav = JSON.parse(savedNavMenu);
+                            setNavigationMenu(parsedNav);
+                            // If nav is empty, try to refetch access to build it
+                            if (!parsedNav || parsedNav.length === 0) {
+                                await fetchAccessAndMenu(userData);
+                            }
+                        } catch (e) {
+                            console.error('Error parsing saved navigation menu:', e);
+                            await fetchAccessAndMenu(userData);
+                        }
+                    } else {
+                        // No saved menu, fetch it now
+                        await fetchAccessAndMenu(userData);
+                    }
+                } catch (error) {
+                    console.error('Error parsing saved user data:', error);
+                    // Fetch user from server
+                    try {
+                        const meResponse = await apiClient.get('/AccountApi/me');
+                        if (meResponse.data.success) {
+                            const userData = meResponse.data.user;
+                            setUser(userData);
+                            setIsAuthenticated(true);
+                            localStorage.setItem('user', JSON.stringify(userData));
+                            await fetchAccessAndMenu(userData);
+                        }
+                    } catch (meError) {
+                        console.error('Error fetching user:', meError);
+                        clearAuthState();
+                    }
+                }
+            } else {
+                // No saved user but cookies are valid, fetch user from server
+                try {
+                    const meResponse = await apiClient.get('/AccountApi/me');
+                    if (meResponse.data.success) {
+                        const userData = meResponse.data.user;
+                        setUser(userData);
+                        setIsAuthenticated(true);
+                        localStorage.setItem('user', JSON.stringify(userData));
+                        await fetchAccessAndMenu(userData);
+
+                        // Fetch XSRF token
+                        const xsrfResponse = await apiClient.get('/AccountApi/xsrf-token');
+                        if (xsrfResponse.data.success) {
+                            setXsrfToken(xsrfResponse.data.xsrfToken);
+                        }
+                    }
+                } catch (meError) {
+                    console.error('Error fetching user:', meError);
+                    clearAuthState();
+                }
+            }
         };
 
         const clearAuthState = () => {

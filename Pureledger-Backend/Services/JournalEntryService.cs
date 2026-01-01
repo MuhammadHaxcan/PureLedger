@@ -1065,54 +1065,47 @@ namespace PureLedger.Services
 
             var allEntries = vouchers.SelectMany(v => v.JournalEntries ?? new List<JournalEntry>()).ToList();
             var productEntries = allEntries.Where(e => e.Account?.AccountGroupId == ACCOUNT_GROUP_PRODUCT).ToList();
-            var customerEntries = allEntries.Where(e => e.Account?.AccountGroupId == ACCOUNT_GROUP_ACCOUNT).ToList();
 
-            // Calculate processed/unprocessed statistics
-            summary.TotalUnprocessedEntries = productEntries.Count(e => !e.IsProcessed && e.Quantity > 0);
-            summary.TotalUnprocessedQuantity = productEntries.Where(e => !e.IsProcessed && e.Quantity > 0).Sum(e => e.Quantity);
-            summary.TotalProcessedEntries = productEntries.Count(e => e.IsProcessed || e.Quantity <= 0);
-            summary.TotalProcessedQuantity = productEntries.Where(e => e.IsProcessed || e.Quantity <= 0).Sum(e => e.Quantity);
-
-            var totalEntries = productEntries.Count;
-            summary.ProcessingRate = totalEntries > 0 
-                ? Math.Round((summary.TotalProcessedEntries / (decimal)totalEntries) * 100, 2) 
-                : 0;
-
-            // Most Ordered Products (by total quantity from derived vouchers)
-            // Get quantities from derived vouchers - these represent actual orders/processed items
+            // Get processed data from derived vouchers (actual processed quantities)
             var derivedVoucherProducts = await _unitOfWork.JournalEntries.GetDerivedVoucherProductQuantitiesAsync(projectId);
             
-            // Get unprocessed quantities from base vouchers for comparison
-            var baseVoucherUnprocessed = productEntries
-                .Where(e => !e.IsProcessed && e.Quantity > 0)
-                .GroupBy(e => new { e.AccountId, ProductName = e.Account?.AccountName ?? "Unknown" })
-                .ToDictionary(g => g.Key.AccountId, g => g.Sum(e => e.Quantity));
+            // Calculate totals from derived vouchers (processed) and base vouchers (unprocessed)
+            decimal totalProcessedQuantity = derivedVoucherProducts.Sum(p => p.TotalQuantity);
+            int totalProcessedEntries = derivedVoucherProducts.Sum(p => p.EntryCount);
+            
+            // Unprocessed = entries in base vouchers that still have quantity > 0 and are not marked as processed
+            var unprocessedEntries = productEntries.Where(e => !e.IsProcessed && e.Quantity > 0).ToList();
+            summary.TotalUnprocessedEntries = unprocessedEntries.Count;
+            summary.TotalUnprocessedQuantity = unprocessedEntries.Sum(e => e.Quantity);
+            
+            summary.TotalProcessedEntries = totalProcessedEntries;
+            summary.TotalProcessedQuantity = (int)totalProcessedQuantity;
 
-            // Get processed quantities from base vouchers
-            var baseVoucherProcessed = productEntries
-                .Where(e => e.IsProcessed || e.Quantity <= 0)
-                .GroupBy(e => new { e.AccountId, ProductName = e.Account?.AccountName ?? "Unknown" })
-                .ToDictionary(g => g.Key.AccountId, g => g.Sum(e => e.Quantity));
+            // Calculate processing rate based on quantities (processed / (processed + unprocessed))
+            decimal totalQuantity = totalProcessedQuantity + summary.TotalUnprocessedQuantity;
+            summary.ProcessingRate = totalQuantity > 0 
+                ? Math.Round((totalProcessedQuantity / totalQuantity) * 100, 2) 
+                : 0;
 
+            // Most Ordered Products (by total quantity from derived vouchers) - limit to 3
             var mostOrderedProducts = derivedVoucherProducts
                 .Select(p => new ProductSummaryViewModel
                 {
                     ProductId = p.ProductId,
                     ProductName = p.ProductName,
-                    TotalQuantity = p.TotalQuantity, // From derived vouchers (actual orders)
-                    UnprocessedQuantity = baseVoucherUnprocessed.GetValueOrDefault(p.ProductId, 0),
-                    ProcessedQuantity = baseVoucherProcessed.GetValueOrDefault(p.ProductId, 0),
+                    TotalQuantity = p.TotalQuantity,
+                    UnprocessedQuantity = 0,
+                    ProcessedQuantity = p.TotalQuantity,
                     EntryCount = p.EntryCount
                 })
                 .OrderByDescending(p => p.TotalQuantity)
-                .Take(5)
+                .Take(3)
                 .ToList();
 
             summary.MostOrderedProducts = mostOrderedProducts;
 
-            // Most Pending Products (by unprocessed quantity)
-            var pendingProducts = productEntries
-                .Where(e => !e.IsProcessed && e.Quantity > 0)
+            // Most Pending Products (by unprocessed quantity in base vouchers) - limit to 3
+            var pendingProducts = unprocessedEntries
                 .GroupBy(e => new { e.AccountId, ProductName = e.Account?.AccountName ?? "Unknown" })
                 .Select(g => new ProductSummaryViewModel
                 {
@@ -1124,13 +1117,13 @@ namespace PureLedger.Services
                     EntryCount = g.Count()
                 })
                 .OrderByDescending(p => p.UnprocessedQuantity)
-                .Take(5)
+                .Take(3)
                 .ToList();
 
             summary.MostPendingProducts = pendingProducts;
 
             // Top Customer (by voucher count)
-            var customerVoucherMap = new Dictionary<int, (string Name, int VoucherCount, int TotalEntries)>();
+            var customerVoucherMap = new Dictionary<int, (string Name, int VoucherCount, int ProductEntries)>();
             
             foreach (var voucher in vouchers)
             {
@@ -1139,6 +1132,10 @@ namespace PureLedger.Services
                 
                 if (customerEntry != null && customerEntry.AccountId > 0)
                 {
+                    // Count only product entries (exclude account entries)
+                    var productEntriesCount = (voucher.JournalEntries ?? new List<JournalEntry>())
+                        .Count(e => e.Account?.AccountGroupId == ACCOUNT_GROUP_PRODUCT);
+                    
                     if (!customerVoucherMap.ContainsKey(customerEntry.AccountId))
                     {
                         customerVoucherMap[customerEntry.AccountId] = (
@@ -1152,7 +1149,7 @@ namespace PureLedger.Services
                     customerVoucherMap[customerEntry.AccountId] = (
                         current.Name,
                         current.VoucherCount + 1,
-                        current.TotalEntries + (voucher.JournalEntries?.Count ?? 0)
+                        current.ProductEntries + productEntriesCount
                     );
                 }
             }
@@ -1168,10 +1165,9 @@ namespace PureLedger.Services
                     CustomerId = topCustomerData.Key,
                     CustomerName = topCustomerData.Value.Name,
                     VoucherCount = topCustomerData.Value.VoucherCount,
-                    TotalEntries = topCustomerData.Value.TotalEntries
+                    TotalEntries = topCustomerData.Value.ProductEntries
                 };
             }
-
 
             // Oldest Pending Voucher
             var pendingVouchers = vouchers

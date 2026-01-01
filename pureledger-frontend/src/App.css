@@ -23,9 +23,9 @@
   --form-padding: 0.4rem 0.7rem;
   --border-radius: 0.375rem;
   --border-radius-lg: 0.5rem;
-  --font-size-sm: 0.95rem; /* Increased by ~12% from 0.85rem */
-  --font-size-base: 1.05rem; /* Increased by ~17% from 0.9rem */
-  --font-size-lg: 1.15rem; /* Increased by 15% from 1rem */
+  --font-size-sm: 0.95rem;
+  --font-size-base: 1.05rem;
+  --font-size-lg: 1.15rem;
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.2s ease;
   --transition-slow: 0.3s ease;
@@ -56,7 +56,7 @@ input[type="number"].no-arrow {
 
 /* Base Styles */
 html {
-  font-size: 16px; /* Increased by ~14% from 14px for better visibility */
+  font-size: 16px;
   scroll-behavior: smooth;
 }
 
@@ -116,15 +116,96 @@ body {
   background-color: var(--card-bg);
 }
 
-/* Fix table overflow to prevent dropdown clipping */
+/* ===========================================
+   UNIFIED REPORT TABLE STYLES
+   Only applies to report containers - NOT to general .table-responsive
+   =========================================== */
+
+/* Report table container - use these classes for all report tables */
+.report-table-container,
+.master-report-container,
+.product-report-container {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+}
+
+/* Table responsive wrapper - ONLY for report containers */
+.report-table-container .table-responsive,
+.master-report-container .table-responsive,
+.product-report-container .table-responsive {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: scroll !important;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 15px;
+  margin-bottom: 10px;
+}
+
+/* Report tables - constrained to container width */
+.report-table-container table,
+.master-report-container table,
+.product-report-container table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  table-layout: auto;
+  border-collapse: collapse;
+}
+
+/* Scrollbar styling - ONLY for report containers */
+.report-table-container .table-responsive::-webkit-scrollbar,
+.master-report-container .table-responsive::-webkit-scrollbar,
+.product-report-container .table-responsive::-webkit-scrollbar {
+  height: 14px !important;
+  display: block !important;
+  background: #f1f1f1;
+}
+
+.report-table-container .table-responsive::-webkit-scrollbar-track,
+.master-report-container .table-responsive::-webkit-scrollbar-track,
+.product-report-container .table-responsive::-webkit-scrollbar-track {
+  background: #e9ecef;
+  border-radius: 7px;
+  border: 1px solid #dee2e6;
+}
+
+.report-table-container .table-responsive::-webkit-scrollbar-thumb,
+.master-report-container .table-responsive::-webkit-scrollbar-thumb,
+.product-report-container .table-responsive::-webkit-scrollbar-thumb {
+  background: #adb5bd;
+  border-radius: 7px;
+  border: 2px solid #e9ecef;
+}
+
+.report-table-container .table-responsive::-webkit-scrollbar-thumb:hover,
+.master-report-container .table-responsive::-webkit-scrollbar-thumb:hover,
+.product-report-container .table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #6c757d;
+}
+
+/* Firefox scrollbar - ONLY for report containers */
+.report-table-container .table-responsive,
+.master-report-container .table-responsive,
+.product-report-container .table-responsive {
+  scrollbar-width: auto;
+  scrollbar-color: #adb5bd #e9ecef;
+}
+
+/* ===========================================
+   DEFAULT TABLE RESPONSIVE STYLES
+   These are the default Bootstrap-like styles
+   =========================================== */
 .table-responsive {
+  display: block;
+  width: 100%;
   overflow-x: auto;
-  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Ensure dropdowns are not clipped */
-.table-responsive,
-.card-body,
 .container-fluid {
   position: relative;
 }
@@ -302,7 +383,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Responsive Design */
 @media (max-width: 768px) {
   html {
-    font-size: 14px; /* Increased by 25% from 12px */
+    font-size: 14px;
   }
   
   .container-fluid,
@@ -314,10 +395,6 @@ h1, h2, h3, h4, h5, h6 {
 
   .card-body {
     padding: 1rem;
-  }
-
-  .table-responsive {
-    font-size: 0.8rem;
   }
 
   .btn {

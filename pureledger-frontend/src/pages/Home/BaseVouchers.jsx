@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, Form, InputGroup, Alert, Button } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -9,10 +9,11 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 
 const BaseVouchers = () => {
     usePageTitle('Base Vouchers');
-    
+    const [searchParams] = useSearchParams();
+
     // Ref to prevent duplicate submissions
     const isSubmittingRef = useRef(false);
-    
+
     const [vouchers, setVouchers] = useState([]);
     const [projects, setProjects] = useState([]);
     const [loadingProjects, setLoadingProjects] = useState(true);
@@ -32,6 +33,9 @@ const BaseVouchers = () => {
     const [summaryCollapsed, setSummaryCollapsed] = useState(true);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const pageSize = 250;
+
+    // Get projectId from URL query params
+    const urlProjectId = searchParams.get('projectId');
 
     useEffect(() => {
         loadInitData();
@@ -73,7 +77,17 @@ const BaseVouchers = () => {
             }
             
             if (response.data.success) {
-                setProjects(response.data.projects || []);
+                const loadedProjects = response.data.projects || [];
+                setProjects(loadedProjects);
+
+                // If projectId is in URL params, set it after projects are loaded
+                if (urlProjectId) {
+                    const parsedId = parseInt(urlProjectId, 10);
+                    // Verify the project exists in the loaded projects
+                    if (loadedProjects.some(p => p.projectId === parsedId)) {
+                        setProjectId(parsedId);
+                    }
+                }
             } else {
                 setError(response.data.message || 'Failed to load initial data');
             }
@@ -319,35 +333,39 @@ const BaseVouchers = () => {
                                 <>
                                     <div className="row mb-4">
                                         <div className="col-md-3 mb-3">
-                                            <div className="card bg-primary text-white">
-                                                <div className="card-body">
-                                                    <h6 className="card-subtitle mb-2">Total Base Vouchers</h6>
+                                            <div className="card bg-primary text-white h-100">
+                                                <div className="card-body py-3">
+                                                    <h6 className="card-subtitle mb-1" style={{ fontSize: '0.85rem' }}>Total Base Vouchers</h6>
                                                     <h3 className="card-title mb-0">{formatNumber(summaryStats.totalBaseVouchers)}</h3>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="col-md-3 mb-3">
-                                            <div className="card bg-warning text-white">
-                                                <div className="card-body">
-                                                    <h6 className="card-subtitle mb-2">Unprocessed Entries</h6>
-                                                    <h3 className="card-title mb-0">{formatNumber(summaryStats.totalUnprocessedEntries)}</h3>
-                                                    <small className="text-white-50">{formatNumber(summaryStats.totalUnprocessedQuantity)} qty</small>
+                                            <div className="card bg-warning text-white h-100">
+                                                <div className="card-body py-3">
+                                                    <h6 className="card-subtitle mb-1" style={{ fontSize: '0.85rem' }}>Unprocessed Entries</h6>
+                                                    <div className="d-flex align-items-baseline gap-2">
+                                                        <h3 className="card-title mb-0">{formatNumber(summaryStats.totalUnprocessedEntries)}</h3>
+                                                        <span className="text-white-50" style={{ fontSize: '0.9rem' }}>({formatNumber(summaryStats.totalUnprocessedQuantity)} qty)</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="col-md-3 mb-3">
-                                            <div className="card bg-success text-white">
-                                                <div className="card-body">
-                                                    <h6 className="card-subtitle mb-2">Processed Entries</h6>
-                                                    <h3 className="card-title mb-0">{formatNumber(summaryStats.totalProcessedEntries)}</h3>
-                                                    <small className="text-white-50">{formatNumber(summaryStats.totalProcessedQuantity)} qty</small>
+                                            <div className="card bg-success text-white h-100">
+                                                <div className="card-body py-3">
+                                                    <h6 className="card-subtitle mb-1" style={{ fontSize: '0.85rem' }}>Processed Entries</h6>
+                                                    <div className="d-flex align-items-baseline gap-2">
+                                                        <h3 className="card-title mb-0">{formatNumber(summaryStats.totalProcessedEntries)}</h3>
+                                                        <span className="text-white-50" style={{ fontSize: '0.9rem' }}>({formatNumber(summaryStats.totalProcessedQuantity)} qty)</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="col-md-3 mb-3">
-                                            <div className="card bg-info text-white">
-                                                <div className="card-body">
-                                                    <h6 className="card-subtitle mb-2">Processing Rate</h6>
+                                            <div className="card bg-info text-white h-100">
+                                                <div className="card-body py-3">
+                                                    <h6 className="card-subtitle mb-1" style={{ fontSize: '0.85rem' }}>Processing Rate</h6>
                                                     <h3 className="card-title mb-0">{formatNumber(summaryStats.processingRate)}%</h3>
                                                 </div>
                                             </div>
@@ -356,7 +374,7 @@ const BaseVouchers = () => {
 
                                     <div className="row">
                                         <div className="col-md-6 mb-3">
-                                            <h6 className="mb-3"><i className="fas fa-shopping-cart me-2"></i>Most Ordered Products</h6>
+                                            <h6 className="mb-3"><i className="fas fa-check-circle me-2"></i>Most Processed Products</h6>
                                             {summaryStats.mostOrderedProducts && summaryStats.mostOrderedProducts.length > 0 ? (
                                                 <div className="table-responsive">
                                                     <table className="table table-sm table-bordered">
@@ -368,7 +386,7 @@ const BaseVouchers = () => {
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {summaryStats.mostOrderedProducts.slice(0, 5).map((product, idx) => (
+                                                            {summaryStats.mostOrderedProducts.slice(0, 3).map((product, idx) => (
                                                                 <tr key={idx}>
                                                                     <td>{product.productName}</td>
                                                                     <td className="text-end">{formatNumber(product.totalQuantity)}</td>
@@ -379,7 +397,7 @@ const BaseVouchers = () => {
                                                     </table>
                                                 </div>
                                             ) : (
-                                                <p className="text-muted">No ordered products data available</p>
+                                                <p className="text-muted">No processed products data available</p>
                                             )}
                                         </div>
                                         <div className="col-md-6 mb-3">
@@ -390,16 +408,16 @@ const BaseVouchers = () => {
                                                         <thead className="table-light">
                                                             <tr>
                                                                 <th>Product</th>
-                                                                <th className="text-end">Unprocessed Qty</th>
-                                                                <th className="text-end">Processed Qty</th>
+                                                                <th className="text-end">Pending Qty</th>
+                                                                <th className="text-end">Entries</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {summaryStats.mostPendingProducts.slice(0, 5).map((product, idx) => (
+                                                            {summaryStats.mostPendingProducts.slice(0, 3).map((product, idx) => (
                                                                 <tr key={idx}>
                                                                     <td>{product.productName}</td>
-                                                                    <td className="text-end text-warning">{formatNumber(product.unprocessedQuantity)}</td>
-                                                                    <td className="text-end text-success">{formatNumber(product.processedQuantity)}</td>
+                                                                    <td className="text-end text-warning fw-bold">{formatNumber(product.unprocessedQuantity)}</td>
+                                                                    <td className="text-end">{formatNumber(product.entryCount)}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>

@@ -1,87 +1,12 @@
-/* Product Report Table Styles */
-.product-report-container {
-    width: 100%;
-    overflow: hidden;
-}
+/* Product Report Table Styles - Uses unified styles from App.css */
 
-.product-report-container .table-responsive {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
-}
-
-#productReportTable {
-    width: 100% !important;
-    table-layout: auto !important;
-    margin-bottom: 0;
-    border-collapse: collapse;
-    min-width: 100%;
-}
-
-#productReportTable thead th {
-    vertical-align: middle;
-    text-align: left;
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    background-color: #e9ecef;
-    font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-#productReportTable tbody td {
-    vertical-align: middle;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #dee2e6;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-
-#productReportTable tfoot td {
-    vertical-align: middle;
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    background-color: #e9ecef;
-    font-weight: 600;
-}
-
-/* Ensure table takes full width */
-.table-responsive > table {
-    width: 100% !important;
-    margin-bottom: 0;
-    min-width: 100%;
-}
-
-/* Ensure all columns are visible */
-#productReportTable th,
-#productReportTable td {
-    display: table-cell !important;
-    visibility: visible !important;
-}
-
-/* Fix alignment for numeric columns */
-.text-end {
-    text-align: right !important;
-}
-
-/* Column width constraints */
+/* Column width constraints specific to Product Report */
 #productReportTable .product-column {
-    width: 180px;
     min-width: 140px;
     max-width: 200px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal !important;
-}
-
-#productReportTable .voucher-column {
-    width: 90px;
-    min-width: 80px;
-    max-width: 110px;
-    white-space: nowrap;
 }
 
 #productReportTable .voucher-link {
@@ -97,37 +22,19 @@
 }
 
 #productReportTable .qty-column {
-    width: 80px;
     min-width: 70px;
     max-width: 90px;
     white-space: nowrap;
 }
 
 #productReportTable .currency-column {
-    width: 110px;
     min-width: 95px;
     max-width: 130px;
     white-space: nowrap;
-    word-wrap: normal;
-    overflow-wrap: normal;
 }
 
 #productReportTable .percent-column {
-    width: 80px;
     min-width: 70px;
     max-width: 90px;
     white-space: nowrap;
-}
-
-/* Ensure proper spacing in first column */
-#productReportTable td:first-child,
-#productReportTable th:first-child {
-    white-space: normal;
-}
-
-/* Ensure table takes full width */
-.product-report-container .table-responsive > table {
-    width: 100% !important;
-    margin-bottom: 0;
-    min-width: 100%;
 }

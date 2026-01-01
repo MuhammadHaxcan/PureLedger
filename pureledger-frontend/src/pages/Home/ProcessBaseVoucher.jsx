@@ -615,10 +615,12 @@ const ProcessBaseVoucher = () => {
                 setSuccess(response.data.message || `Derived voucher JV-${voucherId} created successfully`);
                 setTimeout(() => {
                     if (voucherId) {
-                        navigate(`/home/voucher-entry?jvId=${voucherId}`);
-                    } else {
-                        navigate('/home/base-vouchers');
+                        // Open print page in new tab (accessible to all users)
+                        const printUrl = `/reporting/print-voucher?voucherId=${voucherId}&type=JV`;
+                        window.open(printUrl, '_blank');
                     }
+                    // Navigate to base vouchers with project selected
+                    navigate(`/home/base-vouchers?projectId=${voucherData.projectId}`);
                 }, 2000);
             } else {
                 setError(response.data.message || 'Failed to create derived voucher');

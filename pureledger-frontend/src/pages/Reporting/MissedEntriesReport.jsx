@@ -848,8 +848,9 @@ const MissedEntriesReport = () => {
                                         </div>
                                     </Card.Header>
                                     <Card.Body>
-                                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                                            <Table bordered striped hover className="table-sm mb-0 w-100" id="missedEntriesTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                        <div className="report-table-container">
+                                            <div className="table-responsive">
+                                                <Table bordered striped hover className="table-sm mb-0" id="missedEntriesTable">
                                                 <thead className="table-light">
                                                     <tr>
                                                         <th>Date</th>
@@ -898,6 +899,7 @@ const MissedEntriesReport = () => {
                                                     )}
                                                 </tbody>
                                             </Table>
+                                        </div>
                                         </div>
                                         {isAutoLoading && (
                                             <div className="text-center my-3">
@@ -959,8 +961,9 @@ const MissedEntriesReport = () => {
                                         </div>
                                     </Card.Header>
                                     <Card.Body>
-                                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                                            <Table bordered striped hover className="table-sm mb-0 w-100" id="byCustomerTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                        <div className="report-table-container">
+                                            <div className="table-responsive">
+                                                <Table bordered striped hover className="table-sm mb-0" id="byCustomerTable">
                                                 <thead className="table-light">
                                                     <tr>
                                                         <th>Customer</th>
@@ -1004,6 +1007,7 @@ const MissedEntriesReport = () => {
                                                 </tbody>
                                             </Table>
                                         </div>
+                                        </div>
                                     </Card.Body>
                                 </Card>
 
@@ -1031,8 +1035,9 @@ const MissedEntriesReport = () => {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                                                    <Table bordered striped hover className="table-sm mb-0 w-100" id="customerDetailsTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                                <div className="report-table-container">
+                                                    <div className="table-responsive">
+                                                        <Table bordered striped hover className="table-sm mb-0" id="customerDetailsTable">
                                                         <thead className="table-light">
                                                             <tr>
                                                                 <th>Date</th>
@@ -1075,6 +1080,7 @@ const MissedEntriesReport = () => {
                                                             )}
                                                         </tbody>
                                                     </Table>
+                                                </div>
                                                 </div>
                                             )}
                                         </Card.Body>
@@ -1132,8 +1138,9 @@ const MissedEntriesReport = () => {
                                         </div>
                                     </Card.Header>
                                     <Card.Body>
-                                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                                            <Table bordered striped hover className="table-sm mb-0 w-100" id="byProductTable" style={{ width: '100%', tableLayout: 'auto' }}>
+                                        <div className="report-table-container">
+                                            <div className="table-responsive">
+                                                <Table bordered striped hover className="table-sm mb-0" id="byProductTable">
                                                 <thead className="table-light">
                                                     <tr>
                                                         <th>Product</th>
@@ -1167,6 +1174,7 @@ const MissedEntriesReport = () => {
                                                     )}
                                                 </tbody>
                                             </Table>
+                                        </div>
                                         </div>
                                     </Card.Body>
                                 </Card>

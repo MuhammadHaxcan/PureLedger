@@ -431,8 +431,9 @@ const AccountReport = () => {
                                 </InputGroup>
                             </div>
                         </div>
-                        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-                            <Table bordered striped hover className="table-sm mb-0 w-100" style={{ width: '100%', tableLayout: 'auto' }}>
+                        <div className="report-table-container">
+                            <div className="table-responsive">
+                                <Table bordered striped hover className="table-sm mb-0" id="accountReportTable">
                                 <thead className="table-light">
                                     <tr>
                                         <th>ID</th>
@@ -487,6 +488,7 @@ const AccountReport = () => {
                                     </tr>
                                 </tfoot>
                             </Table>
+                        </div>
                         </div>
                         {hasMoreData && isLoadingMore && (
                             <div className="text-center mt-3">

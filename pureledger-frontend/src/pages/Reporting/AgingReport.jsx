@@ -437,8 +437,9 @@ const AgingReport = () => {
                 </InputGroup>
               </div>
             </div>
-            <div className="table-responsive" style={{ width: '100%', overflowX: 'auto' }}>
-              <Table bordered striped hover className="table-sm mb-0 w-100" style={{ width: '100%', tableLayout: 'auto' }}>
+            <div className="report-table-container">
+              <div className="table-responsive">
+                <Table bordered striped hover className="table-sm mb-0" id="agingReportTable">
                 <thead className="table-light">
                   <tr>
                     <th>Account</th>
@@ -481,6 +482,7 @@ const AgingReport = () => {
                   </tr>
                 </tfoot>
               </Table>
+            </div>
             </div>
             {(isLoadingMore || isAutoLoading) && hasMoreData && (
               <div className="text-center mt-3" ref={loadingRef}>

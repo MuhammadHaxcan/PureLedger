@@ -145,7 +145,6 @@ apiClient.interceptors.response.use(
             const noRefreshEndpoints = [
                 '/AccountApi/login',
                 '/AccountApi/refresh-token',
-                '/AccountApi/check-auth',
                 '/AccountApi/logout',
             ];
             const isAuthEndpoint = noRefreshEndpoints.some((endpoint) =>
