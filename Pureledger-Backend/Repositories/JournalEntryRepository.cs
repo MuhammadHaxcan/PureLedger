@@ -212,6 +212,7 @@ namespace PureLedger.Repositories
         {
             var query = _context.JournalEntries
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(je => je.JournalVoucher)
                     .ThenInclude(jv => jv.Project)
                 .Include(je => je.JournalVoucher)
@@ -269,6 +270,7 @@ namespace PureLedger.Repositories
         {
             var query = _context.JournalEntries
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(je => je.JournalVoucher)
                     .ThenInclude(jv => jv.Project)
                 .Include(je => je.JournalVoucher)
@@ -886,19 +888,28 @@ namespace PureLedger.Repositories
             }
 
             // Query 1: Get aggregates for entries BEFORE start date (previous balance)
-            var prevQuery = BuildBaseQuery(null, startDate.AddDays(-1));
-            var prevAggregates = await prevQuery
-                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
-                .Select(g => new
-                {
-                    ProductId = g.Key.AccountId,
-                    ProductName = g.Key.AccountName ?? "",
-                    DebitQty = g.Where(je => je.Debit > 0).Sum(je => je.Quantity),
-                    CreditQty = g.Where(je => je.Credit > 0).Sum(je => je.Quantity),
-                    Debit = g.Sum(je => je.Debit),
-                    Credit = g.Sum(je => je.Credit)
-                })
-                .ToListAsync();
+            // Handle edge case where startDate is MinValue (no previous period exists)
+            List<dynamic> prevAggregates;
+            if (startDate == DateOnly.MinValue)
+            {
+                prevAggregates = new List<dynamic>();
+            }
+            else
+            {
+                var prevQuery = BuildBaseQuery(null, startDate.AddDays(-1));
+                prevAggregates = (await prevQuery
+                    .GroupBy(je => new { je.AccountId, je.Account.AccountName })
+                    .Select(g => new
+                    {
+                        ProductId = g.Key.AccountId,
+                        ProductName = g.Key.AccountName ?? "",
+                        DebitQty = g.Where(je => je.Debit > 0).Sum(je => je.Quantity),
+                        CreditQty = g.Where(je => je.Credit > 0).Sum(je => je.Quantity),
+                        Debit = g.Sum(je => je.Debit),
+                        Credit = g.Sum(je => je.Credit)
+                    })
+                    .ToListAsync()).Cast<dynamic>().ToList();
+            }
 
             // Query 2: Get aggregates for entries IN date range (current period)
             var currentQuery = BuildBaseQuery(startDate, endDate);

@@ -103,7 +103,7 @@ namespace PureLedger.Repositories
         {
             // Defensive inputs
             page = Math.Max(0, page);
-            pageSize = Math.Max(1, pageSize);
+            pageSize = Math.Clamp(pageSize, 1, 1000);
 
             var baseQuery = _dbContext.MissedEntries.AsNoTracking().AsQueryable();
 

@@ -386,7 +386,7 @@ namespace PureLedger.Services {
             int? bookerId = ParseNullableInt(request.BookerId);
 
             int page = Math.Max(0, request.Page);
-            int pageSize = Math.Clamp(request.PageSize, 1, 500);
+            int pageSize = Math.Clamp(request.PageSize, 1, 1000);
 
             var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceAsync(
                 startDate, projectId, categoryId, accountId);
@@ -508,7 +508,7 @@ namespace PureLedger.Services {
             int? bookerId = ParseNullableInt(request.BookerId);
 
             int page = Math.Max(0, request.Page);
-            int pageSize = Math.Clamp(request.PageSize, 1, 500);
+            int pageSize = Math.Clamp(request.PageSize, 1, 1000);
 
             var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceForUserReportAsync(
                 startDate, projectId, categoryId, accountId);
@@ -680,7 +680,7 @@ namespace PureLedger.Services {
             DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
 
             int page = Math.Max(0, request.Page);
-            int pageSize = Math.Clamp(request.PageSize, 1, 500);
+            int pageSize = Math.Clamp(request.PageSize, 1, 1000);
 
             // Get paginated product IDs
             var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(

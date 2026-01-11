@@ -15,7 +15,7 @@ const Layout = () => {
   return (
     <>
       <Navbar bg="primary" variant="dark" expand="lg" className="shadow-sm">
-        <Container>
+        <Container fluid className="px-4">
           <Navbar.Brand as={Link} to="/home/entry">
             <i className="fas fa-book-open me-2"></i>PureLedger
           </Navbar.Brand>
@@ -63,7 +63,7 @@ const Layout = () => {
           </Navbar.Collapse>
         </Container>
       </Navbar>
-      <Container className="py-3">
+      <Container fluid className="py-2 px-4">
         <main role="main">
           <Outlet />
         </main>

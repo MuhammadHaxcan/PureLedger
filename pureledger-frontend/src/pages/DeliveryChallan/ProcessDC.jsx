@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup, Nav, Tab } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
+import '../../components/Modal.css';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
@@ -1418,13 +1419,13 @@ const ProcessDC = () => {
       </Modal>
 
       {/* Products List Modal */}
-      <Modal show={showProductsModal} onHide={() => setShowProductsModal(false)} size="lg">
+      <Modal show={showProductsModal} onHide={() => setShowProductsModal(false)} size="lg" dialogClassName="products-modal">
         <Modal.Header closeButton className="bg-info text-white">
           <Modal.Title>
             <i className="fas fa-list me-2"></i>Product Entries
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body className="products-modal-body">
           {selectedVoucherForProducts && (
             <>
               <Alert variant="info" className="mb-3">

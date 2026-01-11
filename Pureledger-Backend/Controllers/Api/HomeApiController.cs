@@ -284,7 +284,7 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, data = new List<ModifiedEntriesSummaryViewModel>(), totalRecords = 0, page = 0, pageSize, hasMoreData = false });
 
                 page = Math.Max(0, page);
-                pageSize = Math.Clamp(pageSize, 1, 500);
+                pageSize = Math.Clamp(pageSize, 1, 1000);
 
                 var (vouchers, totalCount) = await _journalService.GetModifiedEntriesPaginatedAsync(projectId, page, pageSize);
                 var modifiedEntriesSummary = vouchers.Select(v => new ModifiedEntriesSummaryViewModel
@@ -383,7 +383,7 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, vouchers = new List<object>(), totalRecords = 0, page = 0, pageSize, hasMoreData = false });
 
                 page = Math.Max(0, page);
-                pageSize = Math.Clamp(pageSize, 1, 500);
+                pageSize = Math.Clamp(pageSize, 1, 1000);
 
                 var (baseVouchers, totalCount) = await _journalService.GetBaseVouchersPaginatedAsync(projectId, page, pageSize);
 

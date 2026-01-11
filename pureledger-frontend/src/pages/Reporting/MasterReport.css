@@ -39,24 +39,24 @@
 
 /* Column width constraints specific to Master Report */
 #masterReportTable .id-column {
-  width: 140px;
-  min-width: 120px;
-  max-width: 160px;
+  width: 150px;
+  min-width: 130px;
+  max-width: 180px;
 }
 
 #masterReportTable .date-column,
 #masterReportTable .creditable-date-column {
-  width: 90px;
-  min-width: 85px;
-  max-width: 95px;
+  width: 100px;
+  min-width: 90px;
+  max-width: 120px;
   white-space: nowrap;
 }
 
 /* Description column - fixed width with word wrap */
 #masterReportTable .description-column {
-  width: 200px;
-  min-width: 170px;
-  max-width: 250px;
+  width: 280px;
+  min-width: 200px;
+  max-width: 350px;
   word-wrap: break-word;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -65,9 +65,9 @@
 }
 
 #masterReportTable .account-column {
-  width: 90px;
-  min-width: 70px;
-  max-width: 110px;
+  width: 120px;
+  min-width: 90px;
+  max-width: 160px;
   word-wrap: break-word;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -75,9 +75,9 @@
 }
 
 #masterReportTable .booker-column {
-  width: 120px;
-  min-width: 100px;
-  max-width: 140px;
+  width: 140px;
+  min-width: 110px;
+  max-width: 180px;
   word-wrap: break-word;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -85,16 +85,16 @@
 }
 
 #masterReportTable .quantity-column {
-  min-width: 90px;
-  max-width: 120px;
+  min-width: 100px;
+  max-width: 150px;
   white-space: nowrap;
 }
 
 #masterReportTable .debit-column,
 #masterReportTable .credit-column,
 #masterReportTable .balance-column {
-  min-width: 130px;
-  max-width: 160px;
+  min-width: 140px;
+  max-width: 200px;
   white-space: nowrap;
 }
 

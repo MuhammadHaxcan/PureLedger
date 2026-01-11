@@ -27,7 +27,7 @@ namespace PureLedger.Extensions
             int pageSize)
         {
             page = Math.Max(0, page);
-            pageSize = Math.Clamp(pageSize, 1, 500);
+            pageSize = Math.Clamp(pageSize, 1, 1000);
             return query.Skip(page * pageSize).Take(pageSize);
         }
 

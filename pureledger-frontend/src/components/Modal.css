@@ -53,3 +53,17 @@
   overflow-x: hidden;
 }
 
+/* Products List Modal - scrollable body for many entries */
+.products-modal .modal-content {
+  max-height: 85vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.products-modal-body {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: 60vh !important;
+  flex: 1 1 auto !important;
+}
+

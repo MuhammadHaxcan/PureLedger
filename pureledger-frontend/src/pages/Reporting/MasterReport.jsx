@@ -840,16 +840,16 @@ const MasterReport = () => {
                                     <Table bordered striped hover className="table-sm mb-0" id="masterReportTable">
                                     <thead className="table-light">
                                         <tr>
-                                            <th className="id-column text-center" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>ID</th>
-                                            {visibleColumns.date && <th className="date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Entry Date</th>}
-                                            {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '85px', maxWidth: '95px', whiteSpace: 'nowrap' }}>Credit Date</th>}
-                                            {visibleColumns.description && <th className="description-column" style={{ width: '200px', minWidth: '170px', maxWidth: '250px' }}>Description</th>}
-                                            {visibleColumns.account && <th className="account-column" style={{ minWidth: '85px', maxWidth: '120px' }}>Account</th>}
-                                            {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '100px', maxWidth: '140px' }}>Booker</th>}
-                                            {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Quantity</th>}
-                                            {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '130px', maxWidth: '160px', whiteSpace: 'nowrap' }}>Debit</th>}
-                                            {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '130px', maxWidth: '160px', whiteSpace: 'nowrap' }}>Credit</th>}
-                                            {visibleColumns.balance && <th className="balance-column text-end" style={{ minWidth: '130px', maxWidth: '160px', whiteSpace: 'nowrap' }}>Balance</th>}
+                                            <th className="id-column text-center" style={{ minWidth: '130px', whiteSpace: 'nowrap' }}>ID</th>
+                                            {visibleColumns.date && <th className="date-column" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Entry Date</th>}
+                                            {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Credit Date</th>}
+                                            {visibleColumns.description && <th className="description-column" style={{ width: '280px', minWidth: '200px', maxWidth: '350px' }}>Description</th>}
+                                            {visibleColumns.account && <th className="account-column" style={{ minWidth: '90px', maxWidth: '160px' }}>Account</th>}
+                                            {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '110px', maxWidth: '180px' }}>Booker</th>}
+                                            {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '100px', maxWidth: '150px', whiteSpace: 'nowrap' }}>Quantity</th>}
+                                            {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Debit</th>}
+                                            {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Credit</th>}
+                                            {visibleColumns.balance && <th className="balance-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Balance</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -899,15 +899,15 @@ const MasterReport = () => {
                                                                 </div>
                                                             )}
                                                         </td>
-                                                        {visibleColumns.date && <td className="date-column" style={{ whiteSpace: 'nowrap', minWidth: '85px', maxWidth: '95px' }}>{formatDate(entry.transactionDate)}</td>}
-                                                        {visibleColumns.creditableDate && <td className="creditable-date-column" style={{ whiteSpace: 'nowrap', minWidth: '85px', maxWidth: '95px' }}>{formatDate(entry.creditableDate)}</td>}
-                                                        {visibleColumns.description && <td className="description-column" style={{ width: '200px', minWidth: '170px', maxWidth: '250px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
+                                                        {visibleColumns.date && <td className="date-column" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{formatDate(entry.transactionDate)}</td>}
+                                                        {visibleColumns.creditableDate && <td className="creditable-date-column" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{formatDate(entry.creditableDate)}</td>}
+                                                        {visibleColumns.description && <td className="description-column" style={{ width: '280px', minWidth: '200px', maxWidth: '350px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
                                                         {visibleColumns.account && <td className="account-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.accountName || ''}</td>}
                                                         {visibleColumns.booker && <td className="booker-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.bookerName || ''}</td>}
-                                                        {visibleColumns.quantity && <td className="quantity-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{entry.quantity ?? ''}</td>}
-                                                        {visibleColumns.debit && <td className="debit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(entry.debit)}</td>}
-                                                        {visibleColumns.credit && <td className="credit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(entry.credit)}</td>}
-                                                        {visibleColumns.balance && <td className="balance-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(entry.balance)}</td>}
+                                                        {visibleColumns.quantity && <td className="quantity-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '100px', maxWidth: '150px' }}>{entry.quantity ?? ''}</td>}
+                                                        {visibleColumns.debit && <td className="debit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.debit)}</td>}
+                                                        {visibleColumns.credit && <td className="credit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.credit)}</td>}
+                                                        {visibleColumns.balance && <td className="balance-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.balance)}</td>}
                                                     </tr>
                                                 );
                                             })

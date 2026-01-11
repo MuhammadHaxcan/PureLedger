@@ -2,8 +2,8 @@
 
 /* Column width constraints specific to Product Report */
 #productReportTable .product-column {
-    min-width: 140px;
-    max-width: 200px;
+    min-width: 180px;
+    max-width: 300px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: normal !important;
@@ -22,19 +22,19 @@
 }
 
 #productReportTable .qty-column {
-    min-width: 70px;
-    max-width: 90px;
+    min-width: 80px;
+    max-width: 120px;
     white-space: nowrap;
 }
 
 #productReportTable .currency-column {
-    min-width: 95px;
-    max-width: 130px;
+    min-width: 110px;
+    max-width: 160px;
     white-space: nowrap;
 }
 
 #productReportTable .percent-column {
-    min-width: 70px;
-    max-width: 90px;
+    min-width: 80px;
+    max-width: 110px;
     white-space: nowrap;
 }

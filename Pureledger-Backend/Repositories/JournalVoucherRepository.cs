@@ -93,7 +93,7 @@ namespace PureLedger.Repositories
         public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetVouchersWithModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize)
         {
             page = Math.Max(0, page);
-            pageSize = Math.Clamp(pageSize, 1, 500);
+            pageSize = Math.Clamp(pageSize, 1, 1000);
 
             var query = _context.Set<JournalVoucher>()
                 .AsNoTracking()
@@ -147,7 +147,7 @@ namespace PureLedger.Repositories
         public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, int page, int pageSize)
         {
             page = Math.Max(0, page);
-            pageSize = Math.Clamp(pageSize, 1, 500);
+            pageSize = Math.Clamp(pageSize, 1, 1000);
 
             var baseQuery = _context.JournalVouchers
                 .AsNoTracking()

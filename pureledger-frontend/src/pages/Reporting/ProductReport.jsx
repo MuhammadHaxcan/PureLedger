@@ -577,7 +577,7 @@ const ProductReport = () => {
                                 <Table bordered striped hover className="table-sm mb-0" id="productReportTable">
                                     <thead className="table-light">
                                         <tr>
-                                            <th className="product-column" style={{ minWidth: '140px', maxWidth: '200px' }}>Product</th>
+                                            <th className="product-column" style={{ minWidth: '180px', maxWidth: '300px' }}>Product</th>
                                             {visibleColumns.debitQty && <th className="qty-column text-end">Debit Qty</th>}
                                             {visibleColumns.creditQty && <th className="qty-column text-end">Credit Qty</th>}
                                             {visibleColumns.balanceQty && <th className="qty-column text-end">Bal Qty</th>}
@@ -607,7 +607,7 @@ const ProductReport = () => {
                                                 const isLastEntry = index === filteredProducts.length - 1;
                                                 return (
                                                     <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
-                                                        <td className="product-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: '140px', maxWidth: '200px' }} title={product.productName}>{product.productName}</td>
+                                                        <td className="product-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: '180px', maxWidth: '300px' }} title={product.productName}>{product.productName}</td>
                                                         {visibleColumns.debitQty && <td className="qty-column text-end">{formatNumber(product.totalDebitQty)}</td>}
                                                         {visibleColumns.creditQty && <td className="qty-column text-end">{formatNumber(product.totalCreditQty)}</td>}
                                                         {visibleColumns.balanceQty && <td className="qty-column text-end">{formatNumber(product.qtyBalance)}</td>}
