@@ -401,7 +401,7 @@ namespace PureLedger.Services {
                 previousBalance = openingBalance + previousEntriesBalance;
             }
 
-            var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
+            var (entriesWithDC, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
                 startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
 
             result.Entries = new List<MasterReportEntryViewModel>();
@@ -418,7 +418,7 @@ namespace PureLedger.Services {
                     TransactionDate = startDate,
                     CreditableDate = startDate,
                     Description = "Opening Balance",
-                    AccountName = accountId.HasValue ? entries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
+                    AccountName = accountId.HasValue ? entriesWithDC.FirstOrDefault().Entry?.Account?.AccountName ?? "" : "",
                     AccountId = accountId ?? 0,
                     Debit = openingDebit,
                     Credit = openingCredit,
@@ -430,7 +430,7 @@ namespace PureLedger.Services {
                 });
             }
 
-            foreach (var entry in entries) {
+            foreach (var (entry, dcEntry) in entriesWithDC) {
                 decimal entryImpact = entry.Debit - entry.Credit;
                 runningBalance += entryImpact;
 
@@ -454,7 +454,9 @@ namespace PureLedger.Services {
                     CategoryId = entry.CategoryId,
                     Quantity = entry.Quantity,
                     BookerId = entry.JournalVoucher.BookerId,
-                    BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
+                    BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty,
+                    LocationId = dcEntry?.LocationId,
+                    LocationName = dcEntry?.Location?.LocationName ?? string.Empty
                 });
             }
 

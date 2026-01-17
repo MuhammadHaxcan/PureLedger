@@ -31,6 +31,7 @@ const HomeEntry = () => {
     const [saveAsRecipe, setSaveAsRecipe] = useState(false);
     const [recipeName, setRecipeName] = useState('');
     const [entries, setEntries] = useState([{
+        entryId: null,
         categoryId: null,
         accountId: null,
         pkg: 0,
@@ -227,6 +228,7 @@ const HomeEntry = () => {
                         const calculatedDisc = parseFloat(((calculatedTotalAmount * parsedPercent) / 100).toFixed(2));
 
                         return {
+                            entryId: entry.entryId || null,
                             categoryId: entry.categoryId,
                             accountId: entry.accountId,
                             pkg: parsedPkg,
@@ -475,6 +477,7 @@ const HomeEntry = () => {
 
         const newIndex = entries.length;
         setEntries(prev => [...prev, {
+            entryId: null,
             categoryId: null,
             accountId: null,
             pkg: 0,
@@ -681,6 +684,7 @@ const HomeEntry = () => {
                 saveAsRecipe: saveAsRecipe,
                 recipeName: saveAsRecipe ? recipeName : null,
                 entries: entries.map(entry => ({
+                    entryId: entry.entryId,
                     categoryId: entry.categoryId,
                     accountId: entry.accountId,
                     pkg: entry.pkg,
@@ -730,6 +734,7 @@ const HomeEntry = () => {
                         window.location.href = '/home/entry';
                     } else {
                         setEntries([{
+                            entryId: null,
                             categoryId: null,
                             accountId: null,
                             pkg: null,

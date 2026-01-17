@@ -257,6 +257,7 @@ namespace PureLedger.Services
                 if (includeForCharges && forAmount > 0)
                     _ = await ProcessForChargesInternalAsync(journalEntry.JournalVoucherId, journalEntryId, forAmount, dcDate, forAccountId);
 
+                await _unitOfWork.SaveChangesAsync();
                 await RecalculateVoucherCompletionAsync(journalEntry.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -295,6 +296,7 @@ namespace PureLedger.Services
                 if (includeForCharges && forAmount > 0)
                     _ = await ProcessForChargesInternalAsync(journalVoucherId, null, forAmount, dcDate, forAccountId);
 
+                await _unitOfWork.SaveChangesAsync();
                 await RecalculateVoucherCompletionAsync(journalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -329,6 +331,7 @@ namespace PureLedger.Services
                 if (model.IncludeForCharges && model.ForAmount > 0)
                     _ = await ProcessForChargesInternalAsync(model.JournalVoucherId, model.EntryId, model.ForAmount, model.DcDate, model.ForAccountId);
 
+                await _unitOfWork.SaveChangesAsync();
                 await RecalculateVoucherCompletionAsync(model.JournalVoucherId);
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -354,7 +357,16 @@ namespace PureLedger.Services
             try
             {
                 var forJV = await ProcessForChargesInternalAsync(journalVoucherId, entryId, amount, dcDate, forAccountId);
+
                 await _unitOfWork.SaveChangesAsync();
+
+                var mainVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+                if (mainVoucher?.IsCompleted == true)
+                {
+                    await _sharedProcessingService.CompleteReferenceVouchersAsync(journalVoucherId);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+
                 await transaction.CommitAsync();
 
                 _logger.LogInformation("Processed FOR charges for journal voucher {JvId}", journalVoucherId);
@@ -644,6 +656,7 @@ namespace PureLedger.Services
                 int debitAccountId = await GetDebitAccountIdAsync(originalJV, entry, postToCustomer);
                 var cartageVoucher = await CreateCartageJournalVoucherAsync(originalJV.ProjectId, debitAccountId, transporterId, entry, amount, dcOtherRef);
                 await _sharedProcessingService.CreateVoucherReferenceAsync(originalJV.JournalVoucherId, cartageVoucher.JournalVoucherId, "Cartage");
+                // Note: Cartage voucher IsCompleted stays false; CompleteReferenceVouchersAsync handles it when main voucher completes
 
                 _logger.LogInformation("Processed cartage and delivery (internal) for journal voucher {JournalVoucherId}, entry {EntryId}", journalVoucherId, entryId);
                 return deliveryChallanVoucher;
@@ -803,7 +816,7 @@ namespace PureLedger.Services
 
                 originalJV.PendingForCharges = false;
                 await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
-                await _sharedProcessingService.RecalculateVoucherCompletionAsync(forJV.JournalVoucherId);
+                // Note: FOR charges voucher IsCompleted stays false; CompleteReferenceVouchersAsync handles it when main voucher completes
 
                 _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount} using single FOR account {AccountId}", forJV.JournalVoucherId, amount, forAccountIdToUse);
                 return forJV;

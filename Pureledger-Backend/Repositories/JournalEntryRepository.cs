@@ -200,7 +200,7 @@ namespace PureLedger.Repositories
             return (totals?.Debit ?? 0m) - (totals?.Credit ?? 0m);
         }
 
-        public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
+        public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
             DateOnly startDate,
             DateOnly endDate,
             int? projectId,
@@ -255,7 +255,25 @@ namespace PureLedger.Repositories
                 .Take(pageSize)
                 .ToListAsync();
 
-            return (pagedResults, totalCount);
+            // LEFT JOIN with DeliveryChallanEntries to get Location
+            // Note: A JournalEntry can have multiple DeliveryChallanEntries, so we take the first one
+            var journalEntryIds = pagedResults.Select(je => je.JournalEntryId).ToList();
+            var dcEntries = await _context.DeliveryChallanEntries
+                .AsNoTracking()
+                .Include(dce => dce.Location)
+                .Where(dce => journalEntryIds.Contains(dce.JournalEntryId))
+                .ToListAsync();
+
+            var dcEntryLookup = dcEntries
+                .GroupBy(dce => dce.JournalEntryId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var results = pagedResults.Select(je => (
+                Entry: je,
+                DCEntry: dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
+            )).ToList();
+
+            return (results, totalCount);
         }
 
         public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForUserReportAsync(

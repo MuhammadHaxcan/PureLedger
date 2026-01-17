@@ -309,15 +309,31 @@ namespace PureLedger.Services
 
                 foreach (var entryModel in model.Entries)
                 {
-                    var existingEntry = existingEntries.FirstOrDefault(e =>
-                        e.AccountId == entryModel.AccountId &&
-                        e.CategoryId == entryModel.CategoryId &&
-                        string.Equals(e.Description, entryModel.Des, StringComparison.OrdinalIgnoreCase));
+                    // Match by EntryId for existing entries (like single entry edit)
+                    // This allows AccountId/CategoryId changes to be properly tracked
+                    var existingEntry = entryModel.EntryId.HasValue
+                        ? existingEntries.FirstOrDefault(e => e.JournalEntryId == entryModel.EntryId.Value)
+                        : null;
 
                     if (existingEntry != null)
                     {
+                        // Capture old values before update (like single entry edit does)
+                        var oldAccount = await _unitOfWork.Accounts.GetByIdAsync(existingEntry.AccountId);
+                        var oldAccountGroupId = oldAccount?.AccountGroupId ?? 0;
+                        var oldQuantity = existingEntry.Quantity;
+
+                        // Update entry data (now allows AccountId/CategoryId changes)
                         UpdateExistingEntry(existingEntry, entryModel);
-                        await _unitOfWork.JournalEntries.UpdateAsync(existingEntry);
+
+                        // Capture NEW account group after update (like single entry edit)
+                        var newAccount = await _unitOfWork.Accounts.GetByIdAsync(existingEntry.AccountId);
+                        var newAccountGroupId = newAccount?.AccountGroupId ?? 0;
+
+                        // Process entry update logic (IsProcessed, DC cleanup, voucher completion)
+                        await HandleEntryUpdateAsync(
+                            existingEntry, voucherId, existingVoucher, wasCompleted,
+                            oldAccountGroupId, newAccountGroupId, oldQuantity);
+
                         existingEntries.Remove(existingEntry);
                     }
                     else
@@ -664,6 +680,7 @@ namespace PureLedger.Services
 
         private static JournalEntryRowModel MapToRowModel(JournalEntry e) => new()
         {
+            EntryId = e.JournalEntryId,
             CategoryId = e.CategoryId,
             AccountId = e.AccountId,
             Pkg = e.Account?.ProductData?.Pkg,
@@ -717,6 +734,14 @@ namespace PureLedger.Services
 
         private static void UpdateExistingEntry(JournalEntry entry, JournalEntryRowModel model)
         {
+            // Allow AccountId change (like single entry edit)
+            if (model.AccountId.HasValue && model.AccountId.Value > 0)
+                entry.AccountId = model.AccountId.Value;
+
+            // Allow CategoryId change (like single entry edit)
+            if (model.CategoryId.HasValue && model.CategoryId.Value > 0)
+                entry.CategoryId = model.CategoryId.Value;
+
             entry.Description = model.Des;
             entry.Quantity = model.Qty ?? 0;
             entry.Rate = model.Rate ?? 0;
@@ -809,6 +834,9 @@ namespace PureLedger.Services
 
             if (oldQuantity <= 0 && entry.Quantity > 0)
             {
+                // Delete linked DC entry when entry becomes unprocessed to maintain 1:1 relationship
+                await _sharedProcessingService.DeleteLinkedDCEntryAsync(entry.JournalEntryId);
+
                 entry.IsProcessed = false;
                 await _unitOfWork.JournalEntries.UpdateAsync(entry);
 
@@ -825,7 +853,15 @@ namespace PureLedger.Services
                 return;
             }
 
+            var wasProcessed = entry.IsProcessed;
             entry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(entry);
+
+            // If entry transitions from processed to unprocessed, delete linked DC entry to maintain 1:1
+            if (wasProcessed && !entry.IsProcessed)
+            {
+                await _sharedProcessingService.DeleteLinkedDCEntryAsync(entry.JournalEntryId);
+            }
+
             await _unitOfWork.JournalEntries.UpdateAsync(entry);
             await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
         }

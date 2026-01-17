@@ -2,6 +2,7 @@
 {
     public class JournalEntryRowModel
     {
+        public int? EntryId { get; set; }
         public int? CategoryId { get; set; }
         public int? AccountId { get; set; }
         public int? Pkg { get; set; } // <-- Add this line

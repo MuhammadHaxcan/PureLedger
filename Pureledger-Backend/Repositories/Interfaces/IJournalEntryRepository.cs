@@ -41,7 +41,7 @@ namespace PureLedger.Repositories.Interfaces
 
         #region Master Report Queries
 
-        Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
+        Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)> Entries, int TotalCount)> GetEntriesForMasterReportAsync(
             DateOnly startDate,
             DateOnly endDate,
             int? projectId,

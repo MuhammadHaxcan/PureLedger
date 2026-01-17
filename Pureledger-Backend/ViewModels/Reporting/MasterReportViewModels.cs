@@ -57,5 +57,7 @@ namespace PureLedger.ViewModels.Reporting
         public int Quantity { get; set; }
         public int? BookerId { get; set; }
         public string BookerName { get; set; } = string.Empty;
+        public int? LocationId { get; set; }
+        public string LocationName { get; set; } = string.Empty;
     }
 }

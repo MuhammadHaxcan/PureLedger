@@ -41,6 +41,7 @@ const MasterReport = () => {
         description: true,
         account: true,
         booker: true,
+        location: true,
         quantity: true,
         debit: true,
         credit: true,
@@ -382,6 +383,7 @@ const MasterReport = () => {
                 Description: entry.description || '',
                 Account: entry.accountName || '',
                 Booker: entry.bookerName || '',
+                Location: entry.locationName || '-',
                 Quantity: entry.quantity || '',
                 Debit: entry.debit || 0,
                 Credit: entry.credit || 0,
@@ -436,6 +438,7 @@ const MasterReport = () => {
             if (visibleColumns.description) columns.push({ header: 'Description', dataKey: 'description' });
             if (visibleColumns.account) columns.push({ header: 'Account', dataKey: 'account' });
             if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
+            if (visibleColumns.location) columns.push({ header: 'Location', dataKey: 'location' });
             if (visibleColumns.quantity) columns.push({ header: 'Qty', dataKey: 'quantity' });
             if (visibleColumns.debit) columns.push({ header: 'Debit', dataKey: 'debit' });
             if (visibleColumns.credit) columns.push({ header: 'Credit', dataKey: 'credit' });
@@ -450,6 +453,7 @@ const MasterReport = () => {
                     description: entry.description || '',
                     account: entry.accountName || '',
                     booker: entry.bookerName || '',
+                    location: entry.locationName || '-',
                     quantity: entry.quantity ?? '',
                     debit: formatCurrency(entry.debit),
                     credit: formatCurrency(entry.credit),
@@ -464,6 +468,7 @@ const MasterReport = () => {
                 description: '',
                 account: '',
                 booker: '',
+                location: '',
                 quantity: totals.quantity,
                 debit: formatCurrency(totals.debit),
                 credit: formatCurrency(totals.credit),
@@ -739,6 +744,7 @@ const MasterReport = () => {
                                             showDescription: { key: 'description', label: 'Description', icon: 'fa-align-left' },
                                             showAccount: { key: 'account', label: 'Account', icon: 'fa-user' },
                                             showBooker: { key: 'booker', label: 'Booker', icon: 'fa-user-tag' },
+                                            showLocation: { key: 'location', label: 'Location', icon: 'fa-map-marker-alt' },
                                             showQuantity: { key: 'quantity', label: 'Quantity', icon: 'fa-cubes' },
                                             showDebit: { key: 'debit', label: 'Debit', icon: 'fa-plus' },
                                             showCredit: { key: 'credit', label: 'Credit', icon: 'fa-minus' },
@@ -846,6 +852,7 @@ const MasterReport = () => {
                                             {visibleColumns.description && <th className="description-column" style={{ width: '280px', minWidth: '200px', maxWidth: '350px' }}>Description</th>}
                                             {visibleColumns.account && <th className="account-column" style={{ minWidth: '90px', maxWidth: '160px' }}>Account</th>}
                                             {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '110px', maxWidth: '180px' }}>Booker</th>}
+                                            {visibleColumns.location && <th className="location-column" style={{ minWidth: '70px', maxWidth: '120px' }}>Location</th>}
                                             {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '100px', maxWidth: '150px', whiteSpace: 'nowrap' }}>Quantity</th>}
                                             {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Debit</th>}
                                             {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Credit</th>}
@@ -855,13 +862,13 @@ const MasterReport = () => {
                                     <tbody>
                                         {filteredEntries.length === 0 && allEntries.length > 0 ? (
                                             <tr>
-                                                <td colSpan="10" className="text-center text-muted py-4">
+                                                <td colSpan="11" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
                                                 </td>
                                             </tr>
                                         ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
                                             <tr>
-                                                <td colSpan="10" className="text-center text-muted py-4">
+                                                <td colSpan="11" className="text-center text-muted py-4">
                                                     No data available
                                                 </td>
                                             </tr>
@@ -904,6 +911,7 @@ const MasterReport = () => {
                                                         {visibleColumns.description && <td className="description-column" style={{ width: '280px', minWidth: '200px', maxWidth: '350px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
                                                         {visibleColumns.account && <td className="account-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.accountName || ''}</td>}
                                                         {visibleColumns.booker && <td className="booker-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.bookerName || ''}</td>}
+                                                        {visibleColumns.location && <td className="location-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.locationName || '-'}</td>}
                                                         {visibleColumns.quantity && <td className="quantity-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '100px', maxWidth: '150px' }}>{entry.quantity ?? ''}</td>}
                                                         {visibleColumns.debit && <td className="debit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.debit)}</td>}
                                                         {visibleColumns.credit && <td className="credit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.credit)}</td>}
@@ -921,6 +929,7 @@ const MasterReport = () => {
                                             {visibleColumns.description && <td></td>}
                                             {visibleColumns.account && <td></td>}
                                             {visibleColumns.booker && <td></td>}
+                                            {visibleColumns.location && <td></td>}
                                             {visibleColumns.quantity && <td className="quantity-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px', overflow: 'visible' }}>{totals.quantity}</td>}
                                             {visibleColumns.debit && <td className="debit-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.debit)}</td>}
                                             {visibleColumns.credit && <td className="credit-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.credit)}</td>}
