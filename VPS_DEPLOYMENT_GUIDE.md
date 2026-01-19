@@ -1350,6 +1350,254 @@ ufw allow 443/tcp
 
 ---
 
-**Document Version:** 1.0
+## Appendix D: Switching Git Branch on VPS
+
+If the VPS is currently on a different branch (e.g., `BusinessLogicFixed`) and you need to switch to `master`:
+
+### D.1 Check Current Branch
+
+```bash
+cd /var/www/pureledger/backend-source
+git branch
+# Shows current branch with asterisk (*)
+```
+
+### D.2 Switch to Master Branch
+
+```bash
+# Fetch latest from remote
+git fetch origin
+
+# Stash any local changes (if any)
+git stash
+
+# Switch to master branch
+git checkout master
+
+# Pull latest changes
+git pull origin master
+```
+
+### D.3 Redeploy After Branch Switch
+
+```bash
+# Rebuild and deploy backend
+cd /var/www/pureledger/backend-source/Pureledger-Backend
+dotnet publish -c Release -o /var/www/pureledger/backend-publish
+
+# Rebuild and deploy frontend
+cd /var/www/pureledger/backend-source/pureledger-frontend
+npm install
+npm run build
+cp -r dist/* /var/www/pureledger/frontend-build/
+
+# Set permissions
+chown -R www-data:www-data /var/www/pureledger
+
+# Restart backend service
+systemctl restart pureledger-backend
+
+# Verify
+systemctl status pureledger-backend
+```
+
+### D.4 Verify Branch Switch
+
+```bash
+cd /var/www/pureledger/backend-source
+git branch
+# Should show: * master
+```
+
+### D.5 If You Need to Go Back
+
+```bash
+# Switch back to previous branch
+git checkout BusinessLogicFixed
+git pull origin BusinessLogicFixed
+
+# Then redeploy (repeat D.3 steps)
+```
+
+---
+
+## Appendix E: Database Dump & Restore
+
+### E.1 Create Database Dump on VPS
+
+```bash
+# SSH into VPS
+ssh root@72.60.209.26
+
+# Create dump in custom format (recommended - smaller and faster)
+pg_dump -h localhost -U pureledgeruser -d pureledgerdb -F c -f /tmp/pureledgerdb_backup.dump
+
+# Or create SQL format dump (human readable)
+pg_dump -h localhost -U pureledgeruser -d pureledgerdb > /tmp/pureledgerdb_backup.sql
+
+# Check dump file size
+ls -lh /tmp/pureledgerdb_backup.*
+```
+
+### E.2 Download Dump to Local Machine
+
+```bash
+# From your local machine (Windows PowerShell or Git Bash)
+scp root@72.60.209.26:/tmp/pureledgerdb_backup.dump "C:\Users\YourUser\Desktop\pureledgerdb_backup.dump"
+
+# Or for SQL format
+scp root@72.60.209.26:/tmp/pureledgerdb_backup.sql "C:\Users\YourUser\Desktop\pureledgerdb_backup.sql"
+```
+
+### E.3 Restore to Local PostgreSQL (Windows)
+
+**Prerequisites:**
+- PostgreSQL installed locally (e.g., PostgreSQL 18)
+- pg_restore.exe in PATH or use full path
+
+```bash
+# Step 1: Create local database (if not exists)
+# Open psql or pgAdmin and run:
+CREATE DATABASE pureledgerdb;
+
+# Step 2: Restore using pg_restore (custom format .dump)
+# Using connection string (recommended - includes password)
+"C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" -d "postgresql://postgres:YOUR_PASSWORD@localhost:5432/pureledgerdb" -v "C:\path\to\pureledgerdb_backup.dump"
+
+# Or using individual parameters
+"C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" -h localhost -p 5432 -U postgres -d pureledgerdb -v "C:\path\to\pureledgerdb_backup.dump"
+
+# Step 3: For SQL format (.sql), use psql instead
+"C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d pureledgerdb -f "C:\path\to\pureledgerdb_backup.sql"
+```
+
+**Expected Warnings (Safe to Ignore):**
+- `role "pureledgeruser" does not exist` - Expected if you're using different local user
+- `relation already exists` - Expected if restoring to existing database
+
+### E.4 Verify Restore Success
+
+```bash
+# Check row counts
+"C:\Program Files\PostgreSQL\18\bin\psql.exe" "postgresql://postgres:YOUR_PASSWORD@localhost:5432/pureledgerdb" -c "SELECT 'JournalEntries' as table_name, COUNT(*) FROM \"JournalEntries\" UNION ALL SELECT 'Accounts', COUNT(*) FROM \"Accounts\";"
+```
+
+### E.5 Update Backend Connection String for Local Development
+
+Edit `appsettings.json`:
+```json
+{
+  "ConnectionStrings": {
+    "LedgerDb": "Host=localhost;Port=5432;Database=pureledgerdb;Username=postgres;Password=YOUR_LOCAL_PASSWORD;Pooling=true;"
+  }
+}
+```
+
+### E.6 Restore Dump Back to VPS (Upload)
+
+```bash
+# Step 1: Upload dump from local to VPS
+scp "C:\path\to\pureledgerdb_backup.dump" root@72.60.209.26:/tmp/
+
+# Step 2: SSH into VPS
+ssh root@72.60.209.26
+
+# Step 3: Drop and recreate database (CAUTION: destroys existing data!)
+sudo -u postgres psql -c "DROP DATABASE pureledgerdb;"
+sudo -u postgres psql -c "CREATE DATABASE pureledgerdb OWNER pureledgeruser;"
+
+# Step 4: Restore
+pg_restore -h localhost -U pureledgeruser -d pureledgerdb -v /tmp/pureledgerdb_backup.dump
+
+# Step 5: Grant permissions (if needed)
+sudo -u postgres psql -d pureledgerdb -c "GRANT ALL ON SCHEMA public TO pureledgeruser;"
+sudo -u postgres psql -d pureledgerdb -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO pureledgeruser;"
+sudo -u postgres psql -d pureledgerdb -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO pureledgeruser;"
+
+# Step 6: Restart backend
+systemctl restart pureledger-backend
+```
+
+### E.7 Quick Reference Commands
+
+| Task | Command |
+|------|---------|
+| Dump on VPS | `pg_dump -h localhost -U pureledgeruser -d pureledgerdb -F c -f /tmp/backup.dump` |
+| Download to local | `scp root@72.60.209.26:/tmp/backup.dump ./backup.dump` |
+| Restore locally | `pg_restore -d "postgresql://postgres:pass@localhost:5432/pureledgerdb" backup.dump` |
+| Upload to VPS | `scp backup.dump root@72.60.209.26:/tmp/` |
+| Restore on VPS | `pg_restore -h localhost -U pureledgeruser -d pureledgerdb /tmp/backup.dump` |
+
+---
+
+## Appendix F: Quick Deploy After Code Push
+
+### F.1 Full Rebuild (Frontend + Backend)
+
+```bash
+# SSH into VPS
+ssh root@72.60.209.26
+
+# Pull latest code
+cd /var/www/pureledger/backend-source && git pull origin master
+
+# Build backend
+cd /var/www/pureledger/backend-source/Pureledger-Backend && \
+dotnet publish -c Release -o /var/www/pureledger/backend-publish
+
+# Build frontend
+cd /var/www/pureledger/backend-source/pureledger-frontend && \
+npm install && npm run build && \
+cp -r dist/* /var/www/pureledger/frontend-build/
+
+# Restart backend service
+systemctl restart pureledger-backend
+
+# Verify
+systemctl status pureledger-backend
+```
+
+### F.2 Backend Only
+
+```bash
+ssh root@72.60.209.26
+cd /var/www/pureledger/backend-source && git pull origin master
+cd Pureledger-Backend && dotnet publish -c Release -o /var/www/pureledger/backend-publish
+systemctl restart pureledger-backend
+systemctl status pureledger-backend
+```
+
+### F.3 Frontend Only
+
+```bash
+ssh root@72.60.209.26
+cd /var/www/pureledger/backend-source && git pull origin master
+cd pureledger-frontend && npm install && npm run build
+cp -r dist/* /var/www/pureledger/frontend-build/
+```
+
+### F.4 One-Liner Commands (Copy-Paste Ready)
+
+> **Note:** Must stop service before publishing to avoid file lock errors.
+
+**Full deploy:**
+```bash
+cd /var/www/pureledger/backend-source && git pull origin master && systemctl stop pureledger-backend && cd Pureledger-Backend && dotnet publish -c Release -o /var/www/pureledger/backend-publish && cd ../pureledger-frontend && npm install && npm run build && cp -r dist/* /var/www/pureledger/frontend-build/ && systemctl start pureledger-backend && systemctl status pureledger-backend
+```
+
+**Backend only:**
+```bash
+cd /var/www/pureledger/backend-source && git pull origin master && systemctl stop pureledger-backend && cd Pureledger-Backend && dotnet publish -c Release -o /var/www/pureledger/backend-publish && systemctl start pureledger-backend && systemctl status pureledger-backend
+```
+
+**Frontend only:**
+```bash
+cd /var/www/pureledger/backend-source && git pull origin master && cd pureledger-frontend && npm install && npm run build && cp -r dist/* /var/www/pureledger/frontend-build/
+```
+
+---
+
+**Document Version:** 1.3
 **Created:** December 2024
+**Updated:** January 2025
 **Author:** PureLedger DevOps
