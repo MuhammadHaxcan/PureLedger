@@ -306,6 +306,7 @@ namespace PureLedger.Services
 
                 var existingEntries = existingVoucher.JournalEntries.ToList();
                 bool newEntryAdded = false;
+                bool anyEntryChanged = false;
 
                 foreach (var entryModel in model.Entries)
                 {
@@ -317,6 +318,16 @@ namespace PureLedger.Services
 
                     if (existingEntry != null)
                     {
+                        // Check if entry has actually changed before processing
+                        if (!HasEntryChanged(existingEntry, entryModel))
+                        {
+                            // Entry unchanged - just remove from list, no processing needed
+                            existingEntries.Remove(existingEntry);
+                            continue;
+                        }
+
+                        anyEntryChanged = true;
+
                         // Capture old values before update (like single entry edit does)
                         var oldAccount = await _unitOfWork.Accounts.GetByIdAsync(existingEntry.AccountId);
                         var oldAccountGroupId = oldAccount?.AccountGroupId ?? 0;
@@ -343,16 +354,24 @@ namespace PureLedger.Services
                     }
                 }
 
+                int deletedCount = existingEntries.Count;
                 foreach (var entryToDelete in existingEntries)
                     await DeleteEntryInternalAsync(entryToDelete.JournalEntryId);
 
-                existingVoucher.IsCompleted = newEntryAdded ? false : wasCompleted;
-                await RecalculateCompletionAsync(existingVoucher.JournalVoucherId);
+                // Only recalculate completion if something actually changed
+                bool hasChanges = anyEntryChanged || newEntryAdded || deletedCount > 0;
+                if (hasChanges)
+                {
+                    existingVoucher.IsCompleted = newEntryAdded ? false : wasCompleted;
+                    await RecalculateCompletionAsync(existingVoucher.JournalVoucherId);
+                }
+
                 await _unitOfWork.JournalVouchers.UpdateAsync(existingVoucher);
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation("Successfully updated voucher {VoucherId} with {EntryCount} entries", voucherId, model.Entries.Count);
+                _logger.LogInformation("Updated voucher {VoucherId} with {EntryCount} entries (changed: {AnyChanged}, added: {NewAdded}, deleted: {Deleted})",
+                    voucherId, model.Entries.Count, anyEntryChanged, newEntryAdded, deletedCount);
                 return existingVoucher;
             }
             catch
@@ -730,6 +749,30 @@ namespace PureLedger.Services
             newEntry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.UtcNow);
             newEntry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(newEntry);
             await _unitOfWork.JournalEntries.AddAsync(newEntry);
+        }
+
+        private static bool HasEntryChanged(JournalEntry entry, JournalEntryRowModel model)
+        {
+            // Check if any field has actually changed
+            var newAccountId = model.AccountId.HasValue && model.AccountId.Value > 0 ? model.AccountId.Value : entry.AccountId;
+            var newCategoryId = model.CategoryId.HasValue && model.CategoryId.Value > 0 ? model.CategoryId.Value : entry.CategoryId;
+            var newQuantity = model.Qty ?? 0;
+            var newRate = model.Rate ?? 0;
+            var newDiscount = model.Disc ?? 0;
+            var newDebit = model.Debit ?? 0;
+            var newCredit = model.Credit ?? 0;
+            var newRbp = model.Rbp ?? "Y";
+
+            return entry.AccountId != newAccountId ||
+                   entry.CategoryId != newCategoryId ||
+                   entry.Description != model.Des ||
+                   entry.Quantity != newQuantity ||
+                   entry.Rate != newRate ||
+                   entry.DiscountPercent != model.Percent ||
+                   entry.Discount != newDiscount ||
+                   entry.Debit != newDebit ||
+                   entry.Credit != newCredit ||
+                   entry.Rbp != newRbp;
         }
 
         private static void UpdateExistingEntry(JournalEntry entry, JournalEntryRowModel model)
