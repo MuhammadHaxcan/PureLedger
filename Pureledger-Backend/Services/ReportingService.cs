@@ -53,6 +53,26 @@ namespace PureLedger.Services {
             // Optimized: Parse customer info once instead of calling 4 times
             var parsedCustomerInfo = ParseCustomerInfo(customerInfo);
 
+            // Concatenate all non-empty remarks from DCE records
+            var allRemarks = dcVoucher.Entries
+                .Where(e => !string.IsNullOrWhiteSpace(e.Remarks))
+                .Select(e => e.Remarks!.Trim())
+                .Distinct()
+                .ToList();
+            string concatenatedRemarks = allRemarks.Count > 0
+                ? string.Join(" | ", allRemarks)
+                : string.Empty;
+
+            // Concatenate all non-empty other references from DCE records
+            var allOtherRefs = dcVoucher.Entries
+                .Where(e => !string.IsNullOrWhiteSpace(e.OtherReference))
+                .Select(e => e.OtherReference!.Trim())
+                .Distinct()
+                .ToList();
+            string concatenatedOtherRefs = allOtherRefs.Count > 0
+                ? string.Join(" | ", allOtherRefs)
+                : string.Empty;
+
             var viewModel = new JournalVoucherReportViewModel {
                 JvId = journalVoucherId,
                 VoucherType = voucherType,
@@ -72,7 +92,9 @@ namespace PureLedger.Services {
                 CartageEntries = cartageEntries,
 
                 Builty = cartageEntry?.Credit != null ? (int)cartageEntry.Credit : 0,
-                ProjectImage = projectImage
+                ProjectImage = projectImage,
+                Remarks = concatenatedRemarks,
+                OtherReference = concatenatedOtherRefs
             };
             return viewModel;
         }

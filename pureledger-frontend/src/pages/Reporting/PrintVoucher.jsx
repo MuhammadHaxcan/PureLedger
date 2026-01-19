@@ -320,6 +320,8 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                           <tr>
                             <td style={{ padding: '2px 0' }}><strong>Remarks:</strong></td>
                             <td style={{ padding: '2px 0' }}>{voucherData.remarks || ''}</td>
+                            <td style={{ padding: '2px 0', paddingLeft: '15px' }}><strong>Other Ref:</strong></td>
+                            <td style={{ padding: '2px 0' }}>{voucherData.otherReference || ''}</td>
                           </tr>
                         </tbody>
                       </table>

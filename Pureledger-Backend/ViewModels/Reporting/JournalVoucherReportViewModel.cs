@@ -22,6 +22,7 @@ namespace PureLedger.ViewModels.Reporting
         public string? Adda { get; set; }
         public decimal? Builty { get; set; }
         public string? Remarks { get; set; }
+        public string? OtherReference { get; set; }
 
         // All Entries of that Entry
         public List<JournalVoucherEntryReportModel> Entries { get; set; } = new List<JournalVoucherEntryReportModel>();
