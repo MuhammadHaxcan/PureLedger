@@ -255,6 +255,7 @@ const ModifiedEntries = () => {
                                         <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Voucher ID</th>
                                         <th className="text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Debit</th>
                                         <th className="text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Credit</th>
+                                        <th className="text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Balance</th>
                                         <th className="text-center" style={{ minWidth: '150px', whiteSpace: 'nowrap' }}>Actions</th>
                                     </tr>
                                 </thead>
@@ -269,6 +270,9 @@ const ModifiedEntries = () => {
                                             </td>
                                             <td className="text-end" style={{ whiteSpace: 'nowrap' }}>
                                                 {formatCurrency(entry.totalCredit || 0)}
+                                            </td>
+                                            <td className="text-end" style={{ whiteSpace: 'nowrap' }}>
+                                                {formatCurrency(entry.balance ?? ((entry.totalDebit || 0) - (entry.totalCredit || 0)))}
                                             </td>
                                             <td className="text-center" style={{ whiteSpace: 'nowrap' }}>
                                                 <Link

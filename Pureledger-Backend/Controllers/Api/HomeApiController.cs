@@ -321,10 +321,12 @@ namespace PureLedger.Controllers.Api
                 if (voucher == null)
                     return NotFound(new { success = false, message = "Voucher not found" });
 
-                var model = new VoucherModifiedEntriesViewModel
+                // Calculate running balance for each entry
+                decimal runningBalance = 0;
+                var entries = voucher.JournalEntries.Select(e =>
                 {
-                    JvId = voucher.JournalVoucherId,
-                    Entries = voucher.JournalEntries.Select(e => new VoucherEntryDetailViewModel
+                    runningBalance += e.Debit - e.Credit;
+                    return new VoucherEntryDetailViewModel
                     {
                         EntryId = e.JournalEntryId,
                         ModifyTime = e.ModifiedDateTime,
@@ -334,8 +336,15 @@ namespace PureLedger.Controllers.Api
                         Rate = e.Rate,
                         Debit = e.Debit,
                         Credit = e.Credit,
+                        Balance = runningBalance,
                         IsModified = e.IsEdited
-                    }).ToList()
+                    };
+                }).ToList();
+
+                var model = new VoucherModifiedEntriesViewModel
+                {
+                    JvId = voucher.JournalVoucherId,
+                    Entries = entries
                 };
 
                 return Ok(new { success = true, data = model });

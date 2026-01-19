@@ -5,6 +5,7 @@ namespace PureLedger.ViewModels.Home
         public int JvId { get; set; }
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
+        public decimal Balance => TotalDebit - TotalCredit;
         public bool HasModifiedEntries { get; set; }
     }
 
@@ -23,6 +24,7 @@ namespace PureLedger.ViewModels.Home
         public decimal Rate { get; set; }
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
+        public decimal Balance { get; set; }
         public bool IsModified { get; set; }
         public DateOnly? ModifyTime { get; set; }
     }

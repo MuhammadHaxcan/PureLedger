@@ -362,7 +362,10 @@ namespace PureLedger.Services
                 bool hasChanges = anyEntryChanged || newEntryAdded || deletedCount > 0;
                 if (hasChanges)
                 {
-                    existingVoucher.IsCompleted = newEntryAdded ? false : wasCompleted;
+                    // Only set to false for new entries - let RecalculateCompletionAsync determine final state
+                    // Don't overwrite with wasCompleted as HandleEntryUpdateAsync may have already set the correct state
+                    if (newEntryAdded)
+                        existingVoucher.IsCompleted = false;
                     await RecalculateCompletionAsync(existingVoucher.JournalVoucherId);
                 }
 
@@ -478,9 +481,27 @@ namespace PureLedger.Services
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
+                // Get voucher ID before deleting entry so we can mark remaining entries as edited
+                var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
+                if (entry == null) return false;
+                var voucherId = entry.JournalVoucherId;
+
                 var result = await DeleteEntryInternalAsync(entryId);
                 if (result)
                 {
+                    // Mark remaining entries as edited to indicate voucher was modified
+                    var remainingEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
+                    if (remainingEntries.Any())
+                    {
+                        var firstEntry = remainingEntries.First();
+                        if (!firstEntry.IsEdited)
+                        {
+                            firstEntry.IsEdited = true;
+                            firstEntry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.UtcNow);
+                            await _unitOfWork.JournalEntries.UpdateAsync(firstEntry);
+                        }
+                    }
+
                     await _unitOfWork.SaveChangesAsync();
                     await transaction.CommitAsync();
                 }
@@ -918,7 +939,6 @@ namespace PureLedger.Services
             await _sharedProcessingService.DeleteLinkedDCEntryAsync(entryId);
             await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
-            var remainingEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
             await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
 
             return true;
