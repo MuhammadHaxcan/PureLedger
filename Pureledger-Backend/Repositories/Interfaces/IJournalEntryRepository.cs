@@ -48,6 +48,7 @@ namespace PureLedger.Repositories.Interfaces
             int? categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize);
 
@@ -58,6 +59,7 @@ namespace PureLedger.Repositories.Interfaces
             int? categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize);
 
@@ -66,6 +68,17 @@ namespace PureLedger.Repositories.Interfaces
             int? projectId,
             int? categoryId,
             int? accountId);
+
+        Task<Dictionary<int, int>> GetPreviousQtyBalancePerAccountAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId,
+            int? bookerId,
+            int? locationId,
+            int page,
+            int pageSize);
 
         #endregion
 

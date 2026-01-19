@@ -21,6 +21,7 @@ const MasterReport = () => {
     const [categories, setCategories] = useState([]);
     const [accounts, setAccounts] = useState([]);
     const [bookers, setBookers] = useState([]);
+    const [locations, setLocations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
@@ -43,6 +44,7 @@ const MasterReport = () => {
         booker: true,
         location: true,
         quantity: true,
+        qtyBalance: false,
         debit: true,
         credit: true,
         balance: true
@@ -53,7 +55,9 @@ const MasterReport = () => {
         projectId: null,
         categoryId: null,
         accountId: null,
-        bookerId: null
+        bookerId: null,
+        locationId: null,
+        showQtyBalance: false
     });
     const [dateFilterType, setDateFilterType] = useState('custom');
     const [currentPage, setCurrentPage] = useState(0);
@@ -111,6 +115,7 @@ const MasterReport = () => {
             const response = await apiClient.get('/ReportingApi/master-report-init');
             if (response.data.success) {
                 setProjects(response.data.projects || []);
+                setLocations(response.data.locations || []);
             } else {
                 setError(response.data.message || 'Failed to load initial data');
             }
@@ -202,6 +207,8 @@ const MasterReport = () => {
                 categoryId: formData.categoryId ? formData.categoryId.toString() : '',
                 accountId: formData.accountId ? formData.accountId.toString() : '',
                 bookerId: formData.bookerId ? formData.bookerId.toString() : '',
+                locationId: formData.locationId ? formData.locationId.toString() : '',
+                showQtyBalance: formData.showQtyBalance,
                 page: page,
                 pageSize: pageSize
             };
@@ -376,19 +383,25 @@ const MasterReport = () => {
     const handleExportMainReport = async () => {
         setExportingMainCsv(true);
         try {
-            const csvData = filteredEntries.map(entry => ({
-                ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}`,
-                'Entry Date': formatDate(entry.transactionDate),
-                'Credit Date': formatDate(entry.creditableDate),
-                Description: entry.description || '',
-                Account: entry.accountName || '',
-                Booker: entry.bookerName || '',
-                Location: entry.locationName || '-',
-                Quantity: entry.quantity || '',
-                Debit: entry.debit || 0,
-                Credit: entry.credit || 0,
-                Balance: entry.balance || 0
-            }));
+            const csvData = filteredEntries.map(entry => {
+                const row = {
+                    ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}`,
+                    'Entry Date': formatDate(entry.transactionDate),
+                    'Credit Date': formatDate(entry.creditableDate),
+                    Description: entry.description || '',
+                    Account: entry.accountName || '',
+                    Booker: entry.bookerName || '',
+                    Location: entry.locationName || '-',
+                    Quantity: entry.quantity || ''
+                };
+                if (visibleColumns.qtyBalance) {
+                    row['Qty Balance'] = entry.qtyBalance ?? '';
+                }
+                row.Debit = entry.debit || 0;
+                row.Credit = entry.credit || 0;
+                row.Balance = entry.balance || 0;
+                return row;
+            });
             await exportToCsvAsync(csvData, `MasterReport_${new Date().toISOString().split('T')[0]}.csv`);
         } finally {
             setExportingMainCsv(false);
@@ -440,6 +453,7 @@ const MasterReport = () => {
             if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
             if (visibleColumns.location) columns.push({ header: 'Location', dataKey: 'location' });
             if (visibleColumns.quantity) columns.push({ header: 'Qty', dataKey: 'quantity' });
+            if (visibleColumns.qtyBalance) columns.push({ header: 'Qty Bal', dataKey: 'qtyBalance' });
             if (visibleColumns.debit) columns.push({ header: 'Debit', dataKey: 'debit' });
             if (visibleColumns.credit) columns.push({ header: 'Credit', dataKey: 'credit' });
             if (visibleColumns.balance) columns.push({ header: 'Balance', dataKey: 'balance' });
@@ -455,6 +469,7 @@ const MasterReport = () => {
                     booker: entry.bookerName || '',
                     location: entry.locationName || '-',
                     quantity: entry.quantity ?? '',
+                    qtyBalance: entry.qtyBalance ?? '',
                     debit: formatCurrency(entry.debit),
                     credit: formatCurrency(entry.credit),
                     balance: formatCurrency(entry.balance)
@@ -470,6 +485,7 @@ const MasterReport = () => {
                 booker: '',
                 location: '',
                 quantity: totals.quantity,
+                qtyBalance: '',
                 debit: formatCurrency(totals.debit),
                 credit: formatCurrency(totals.credit),
                 balance: formatCurrency(totals.debit - totals.credit)
@@ -711,11 +727,38 @@ const MasterReport = () => {
                                 </InputGroup>
                             </div>
                             <div className="col-md-3 mb-3">
-                                <Form.Label>&nbsp;</Form.Label>
+                                <Form.Label>Location</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-map-marker-alt"></i></InputGroup.Text>
+                                    <SearchableSelect
+                                        value={formData.locationId}
+                                        onChange={(value) => setFormData({ ...formData, locationId: value ? parseInt(value) : null })}
+                                        options={[{ id: null, name: 'All Locations' }, ...locations.map(l => ({ id: l.id, name: l.name }))]}
+                                        placeholder="Search location..."
+                                        disabled={generating}
+                                    />
+                                </InputGroup>
+                            </div>
+                        </div>
+                        <div className="row mb-3">
+                            <div className="col-md-3 mb-3 d-flex align-items-center">
+                                <Form.Check
+                                    type="checkbox"
+                                    id="showQtyBalance"
+                                    label="Show Qty Balance"
+                                    checked={formData.showQtyBalance}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, showQtyBalance: e.target.checked });
+                                        setVisibleColumns(prev => ({ ...prev, qtyBalance: e.target.checked }));
+                                    }}
+                                    disabled={generating}
+                                />
+                            </div>
+                            <div className="col-md-3 mb-3">
                                 <div className="d-grid">
-                                    <Button 
-                                        type="submit" 
-                                        variant="primary" 
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
                                         disabled={generating || !formData.projectId}
                                         title={!formData.projectId ? 'Please select a project' : ''}
                                     >
@@ -746,6 +789,7 @@ const MasterReport = () => {
                                             showBooker: { key: 'booker', label: 'Booker', icon: 'fa-user-tag' },
                                             showLocation: { key: 'location', label: 'Location', icon: 'fa-map-marker-alt' },
                                             showQuantity: { key: 'quantity', label: 'Quantity', icon: 'fa-cubes' },
+                                            showQtyBalance: { key: 'qtyBalance', label: 'Qty Balance', icon: 'fa-balance-scale-left' },
                                             showDebit: { key: 'debit', label: 'Debit', icon: 'fa-plus' },
                                             showCredit: { key: 'credit', label: 'Credit', icon: 'fa-minus' },
                                             showBalance: { key: 'balance', label: 'Balance', icon: 'fa-balance-scale' }
@@ -854,6 +898,7 @@ const MasterReport = () => {
                                             {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '110px', maxWidth: '180px' }}>Booker</th>}
                                             {visibleColumns.location && <th className="location-column" style={{ minWidth: '70px', maxWidth: '120px' }}>Location</th>}
                                             {visibleColumns.quantity && <th className="quantity-column text-end" style={{ minWidth: '100px', maxWidth: '150px', whiteSpace: 'nowrap' }}>Quantity</th>}
+                                            {visibleColumns.qtyBalance && <th className="qtybalance-column text-end" style={{ minWidth: '100px', maxWidth: '150px', whiteSpace: 'nowrap' }}>Qty Balance</th>}
                                             {visibleColumns.debit && <th className="debit-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Debit</th>}
                                             {visibleColumns.credit && <th className="credit-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Credit</th>}
                                             {visibleColumns.balance && <th className="balance-column text-end" style={{ minWidth: '140px', maxWidth: '200px', whiteSpace: 'nowrap' }}>Balance</th>}
@@ -862,13 +907,13 @@ const MasterReport = () => {
                                     <tbody>
                                         {filteredEntries.length === 0 && allEntries.length > 0 ? (
                                             <tr>
-                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                <td colSpan="12" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
                                                 </td>
                                             </tr>
                                         ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
                                             <tr>
-                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                <td colSpan="12" className="text-center text-muted py-4">
                                                     No data available
                                                 </td>
                                             </tr>
@@ -913,6 +958,7 @@ const MasterReport = () => {
                                                         {visibleColumns.booker && <td className="booker-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.bookerName || ''}</td>}
                                                         {visibleColumns.location && <td className="location-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>{entry.locationName || '-'}</td>}
                                                         {visibleColumns.quantity && <td className="quantity-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '100px', maxWidth: '150px' }}>{entry.quantity ?? ''}</td>}
+                                                        {visibleColumns.qtyBalance && <td className="qtybalance-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '100px', maxWidth: '150px' }}>{entry.qtyBalance ?? ''}</td>}
                                                         {visibleColumns.debit && <td className="debit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.debit)}</td>}
                                                         {visibleColumns.credit && <td className="credit-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.credit)}</td>}
                                                         {visibleColumns.balance && <td className="balance-column text-end" style={{ whiteSpace: 'nowrap', minWidth: '140px', maxWidth: '200px', overflow: 'visible' }}>{formatCurrency(entry.balance)}</td>}
@@ -931,6 +977,7 @@ const MasterReport = () => {
                                             {visibleColumns.booker && <td></td>}
                                             {visibleColumns.location && <td></td>}
                                             {visibleColumns.quantity && <td className="quantity-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px', overflow: 'visible' }}>{totals.quantity}</td>}
+                                            {visibleColumns.qtyBalance && <td className="qtybalance-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px', overflow: 'visible' }}></td>}
                                             {visibleColumns.debit && <td className="debit-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.debit)}</td>}
                                             {visibleColumns.credit && <td className="credit-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.credit)}</td>}
                                             {visibleColumns.balance && <td className="balance-column text-end fw-bold" style={{ whiteSpace: 'nowrap', minWidth: '130px', maxWidth: '160px', overflow: 'visible' }}>{formatCurrency(totals.debit - totals.credit)}</td>}

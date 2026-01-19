@@ -184,12 +184,14 @@ namespace PureLedger.Controllers.Api
                     ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
                     : new List<Project>();
                 var categories = await _reportingService.GetAllCategoriesAsync();
+                var locations = await _reportingService.GetAllLocationsAsync();
 
                 return Ok(new
                 {
                     success = true,
                     projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }),
-                    categories = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName })
+                    categories = categories.Select(c => new { id = c.CategoryId, name = c.CategoryName }),
+                    locations = locations.Select(l => new { id = l.LocationId, name = l.LocationName })
                 });
             }
             catch (Exception ex)

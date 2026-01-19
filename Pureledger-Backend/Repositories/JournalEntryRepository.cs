@@ -207,6 +207,7 @@ namespace PureLedger.Repositories
             int? categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize)
         {
@@ -243,6 +244,13 @@ namespace PureLedger.Repositories
             if (bookerId.HasValue)
             {
                 query = query.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
+            }
+
+            // Filter by location - only include entries that have a DCEntry with matching LocationId
+            if (locationId.HasValue)
+            {
+                query = query.Where(je => _context.DeliveryChallanEntries
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
             }
 
             int totalCount = await query.CountAsync();
@@ -362,6 +370,7 @@ namespace PureLedger.Repositories
             int? categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize)
         {
@@ -398,6 +407,13 @@ namespace PureLedger.Repositories
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
+            // Filter by location - only include entries that have a DCEntry with matching LocationId
+            if (locationId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+            }
+
             int takeCount = page * pageSize;
 
             // Optimized: Single aggregate query instead of two separate queries
@@ -415,6 +431,77 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync();
 
             return (totals?.Debit ?? 0m) - (totals?.Credit ?? 0m);
+        }
+
+        public async Task<Dictionary<int, int>> GetPreviousQtyBalancePerAccountAsync(
+            DateOnly startDate,
+            DateOnly endDate,
+            int? projectId,
+            int? categoryId,
+            int? accountId,
+            int? bookerId,
+            int? locationId,
+            int page,
+            int pageSize)
+        {
+            if (page <= 0 || pageSize <= 0)
+            {
+                return new Dictionary<int, int>();
+            }
+
+            var baseQuery = _context.JournalEntries
+                .AsNoTracking()
+                .Where(je =>
+                    je.JournalVoucher.IsCompleted &&
+                    !je.JournalVoucher.IsBaseVoucher &&
+                    je.JournalVoucher.EntryDate >= startDate &&
+                    je.JournalVoucher.EntryDate <= endDate);
+
+            if (projectId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
+            }
+
+            if (categoryId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.CategoryId == categoryId.Value);
+            }
+
+            if (accountId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.AccountId == accountId.Value);
+            }
+
+            if (bookerId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
+            }
+
+            // Filter by location - only include entries that have a DCEntry with matching LocationId
+            if (locationId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+            }
+
+            int takeCount = page * pageSize;
+
+            // Get entries before current page, grouped by AccountId
+            // QtyBalance: Debit > 0 means +Quantity, Credit > 0 means -Quantity
+            var accountQtyBalances = await baseQuery
+                .OrderBy(je => je.JournalVoucher.EntryDate)
+                .ThenBy(je => je.JournalVoucherId)
+                .ThenBy(je => je.JournalEntryId)
+                .Take(takeCount)
+                .GroupBy(je => je.AccountId)
+                .Select(g => new
+                {
+                    AccountId = g.Key,
+                    QtyBalance = g.Sum(je => je.Debit > 0 ? je.Quantity : -je.Quantity)
+                })
+                .ToListAsync();
+
+            return accountQtyBalances.ToDictionary(x => x.AccountId, x => x.QtyBalance);
         }
 
         public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(

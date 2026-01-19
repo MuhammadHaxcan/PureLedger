@@ -384,6 +384,7 @@ namespace PureLedger.Services {
             int? categoryId = ParseNullableInt(request.CategoryId);
             int? accountId = ParseNullableInt(request.AccountId);
             int? bookerId = ParseNullableInt(request.BookerId);
+            int? locationId = ParseNullableInt(request.LocationId);
 
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 1000);
@@ -396,18 +397,26 @@ namespace PureLedger.Services {
             decimal previousBalance = openingBalance;
             if (page > 0) {
                 var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceAsync(
-                    startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
+                    startDate, endDate, projectId, categoryId, accountId, bookerId, locationId, page, pageSize);
 
                 previousBalance = openingBalance + previousEntriesBalance;
             }
 
             var (entriesWithDC, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForMasterReportAsync(
-                startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
+                startDate, endDate, projectId, categoryId, accountId, bookerId, locationId, page, pageSize);
 
             result.Entries = new List<MasterReportEntryViewModel>();
             result.PreviousBalance = previousBalance;
 
             decimal runningBalance = previousBalance;
+
+            // Track running qty balance per account when ShowQtyBalance is enabled
+            // Initialize with previous page balances if on page > 0
+            Dictionary<int, int> accountQtyBalance = new();
+            if (page > 0 && request.ShowQtyBalance) {
+                accountQtyBalance = await _unitOfWork.JournalEntries.GetPreviousQtyBalancePerAccountAsync(
+                    startDate, endDate, projectId, categoryId, accountId, bookerId, locationId, page, pageSize);
+            }
 
             bool includeOpening = (page == 0);
             if (includeOpening) {
@@ -426,13 +435,21 @@ namespace PureLedger.Services {
                     ProjectName = "",
                     ProjectId = projectId ?? 0,
                     CategoryName = "",
-                    CategoryId = categoryId ?? 0
+                    CategoryId = categoryId ?? 0,
+                    QtyBalance = 0
                 });
             }
 
             foreach (var (entry, dcEntry) in entriesWithDC) {
                 decimal entryImpact = entry.Debit - entry.Credit;
                 runningBalance += entryImpact;
+
+                // Calculate running qty balance per account
+                // Debit > 0 means purchase/stock-in (+qty), Credit > 0 means sale/stock-out (-qty)
+                int qtyImpact = entry.Debit > 0 ? entry.Quantity : -entry.Quantity;
+                if (!accountQtyBalance.ContainsKey(entry.AccountId))
+                    accountQtyBalance[entry.AccountId] = 0;
+                accountQtyBalance[entry.AccountId] += qtyImpact;
 
                 string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
@@ -456,7 +473,8 @@ namespace PureLedger.Services {
                     BookerId = entry.JournalVoucher.BookerId,
                     BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty,
                     LocationId = dcEntry?.LocationId,
-                    LocationName = dcEntry?.Location?.LocationName ?? string.Empty
+                    LocationName = dcEntry?.Location?.LocationName ?? string.Empty,
+                    QtyBalance = request.ShowQtyBalance ? accountQtyBalance[entry.AccountId] : 0
                 });
             }
 
