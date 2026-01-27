@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
+import SortableHeader from '../../components/SortableHeader';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import useSortableData from '../../hooks/useSortableData';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 
 const AgingReport = () => {
@@ -211,13 +213,16 @@ const AgingReport = () => {
     );
   });
 
-  const totalDueTillDate = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.dueTillDate) || 0), 0);
-  const totalTotalDue = filteredEntries.reduce((sum, row) => sum + (parseFloat(row.totalDue) || 0), 0);
+  // Apply sorting to filtered entries
+  const { sortedItems: sortedEntries, requestSort, getSortDirection } = useSortableData(filteredEntries);
+
+  const totalDueTillDate = sortedEntries.reduce((sum, row) => sum + (parseFloat(row.dueTillDate) || 0), 0);
+  const totalTotalDue = sortedEntries.reduce((sum, row) => sum + (parseFloat(row.totalDue) || 0), 0);
 
   const handleExportCsv = async () => {
     setExportingCsv(true);
     try {
-      const csvData = filteredEntries.map(entry => ({
+      const csvData = sortedEntries.map(entry => ({
         Account: entry.accountName || entry.accountId || 'N/A',
         'Due Till Date': (entry.dueTillDate || 0).toFixed(2),
         'Total Due': (entry.totalDue || 0).toFixed(2)
@@ -234,7 +239,7 @@ const AgingReport = () => {
       const selectedProject = projects.find(p => p.id === formData.projectId);
       const selectedCategory = categories.find(c => c.id === formData.categoryId);
 
-      const rows = filteredEntries.map(entry => ({
+      const rows = sortedEntries.map(entry => ({
         account: entry.accountName || entry.accountId || 'N/A',
         dueTillDate: formatCurrency(entry.dueTillDate),
         totalDue: formatCurrency(entry.totalDue)
@@ -442,26 +447,26 @@ const AgingReport = () => {
                 <Table bordered striped hover className="table-sm mb-0" id="agingReportTable">
                 <thead className="table-light">
                   <tr>
-                    <th>Account</th>
-                    <th className="text-end">Due Till Date</th>
-                    <th className="text-end">Total Due</th>
+                    <SortableHeader label="Account" sortKey="accountName" sortDirection={getSortDirection('accountName')} onSort={requestSort} />
+                    <SortableHeader label="Due Till Date" sortKey="dueTillDate" sortDirection={getSortDirection('dueTillDate')} onSort={requestSort} className="text-end" />
+                    <SortableHeader label="Total Due" sortKey="totalDue" sortDirection={getSortDirection('totalDue')} onSort={requestSort} className="text-end" />
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEntries.length === 0 && allEntries.length > 0 ? (
+                  {sortedEntries.length === 0 && allEntries.length > 0 ? (
                     <tr>
                       <td colSpan="3" className="text-center text-muted py-4">
                         {searchTerm ? 'No results found for your search' : 'No data available'}
                       </td>
                     </tr>
-                  ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
+                  ) : sortedEntries.length === 0 && allEntries.length === 0 ? (
                     <tr>
                       <td colSpan="3" className="text-center text-muted py-4">
                         No data available
                       </td>
                     </tr>
                   ) : (
-                    filteredEntries.map((row, index) => (
+                    sortedEntries.map((row, index) => (
                       <tr key={index}>
                         <td>{row.accountName || row.accountId || 'N/A'}</td>
                         <td className={`text-end ${(row.dueTillDate || 0) < 0 ? 'text-danger' : ''}`}>

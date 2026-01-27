@@ -3,7 +3,9 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import SortableHeader from '../../components/SortableHeader';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import useSortableData from '../../hooks/useSortableData';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 import './ProductReport.css';
@@ -214,10 +216,13 @@ const ProductReport = () => {
         );
     });
 
+    // Apply sorting to filtered products
+    const { sortedItems: sortedProducts, requestSort, getSortDirection } = useSortableData(filteredProducts);
+
     const handleExportCsv = async () => {
         setExportingCsv(true);
         try {
-            const csvData = filteredProducts.map(product => ({
+            const csvData = sortedProducts.map(product => ({
                 Product: product.productName || '',
                 'Debit Qty': (product.totalDebitQty || 0).toFixed(2),
                 'Credit Qty': (product.totalCreditQty || 0).toFixed(2),
@@ -245,7 +250,7 @@ const ProductReport = () => {
             const selectedCategory = categories.find(c => c.id === formData.categoryId);
             const selectedLocation = locations.find(l => l.id === formData.locationId);
 
-            const rows = filteredProducts.map(product => ({
+            const rows = sortedProducts.map(product => ({
                 product: product.productName || '',
                 debitQty: formatNumber(product.totalDebitQty),
                 creditQty: formatNumber(product.totalCreditQty),
@@ -577,34 +582,34 @@ const ProductReport = () => {
                                 <Table bordered striped hover className="table-sm mb-0" id="productReportTable">
                                     <thead className="table-light">
                                         <tr>
-                                            <th className="product-column" style={{ minWidth: '180px', maxWidth: '300px' }}>Product</th>
-                                            {visibleColumns.debitQty && <th className="qty-column text-end">Debit Qty</th>}
-                                            {visibleColumns.creditQty && <th className="qty-column text-end">Credit Qty</th>}
-                                            {visibleColumns.balanceQty && <th className="qty-column text-end">Bal Qty</th>}
-                                            {visibleColumns.avgRate && <th className="currency-column text-end">Avg Rate</th>}
-                                            {visibleColumns.totalDebit && <th className="currency-column text-end">Total Debit</th>}
-                                            {visibleColumns.totalCredit && <th className="currency-column text-end">Total Credit</th>}
-                                            {visibleColumns.cogs && <th className="currency-column text-end">COGS</th>}
-                                            {visibleColumns.margin && <th className="currency-column text-end">Margin</th>}
-                                            {visibleColumns.marginPct && <th className="percent-column text-end">Margin %</th>}
+                                            <SortableHeader label="Product" sortKey="productName" sortDirection={getSortDirection('productName')} onSort={requestSort} className="product-column" style={{ minWidth: '180px', maxWidth: '300px' }} />
+                                            {visibleColumns.debitQty && <SortableHeader label="Debit Qty" sortKey="totalDebitQty" sortDirection={getSortDirection('totalDebitQty')} onSort={requestSort} className="qty-column text-end" />}
+                                            {visibleColumns.creditQty && <SortableHeader label="Credit Qty" sortKey="totalCreditQty" sortDirection={getSortDirection('totalCreditQty')} onSort={requestSort} className="qty-column text-end" />}
+                                            {visibleColumns.balanceQty && <SortableHeader label="Bal Qty" sortKey="qtyBalance" sortDirection={getSortDirection('qtyBalance')} onSort={requestSort} className="qty-column text-end" />}
+                                            {visibleColumns.avgRate && <SortableHeader label="Avg Rate" sortKey="averageRate" sortDirection={getSortDirection('averageRate')} onSort={requestSort} className="currency-column text-end" />}
+                                            {visibleColumns.totalDebit && <SortableHeader label="Total Debit" sortKey="totalDebit" sortDirection={getSortDirection('totalDebit')} onSort={requestSort} className="currency-column text-end" />}
+                                            {visibleColumns.totalCredit && <SortableHeader label="Total Credit" sortKey="totalCredit" sortDirection={getSortDirection('totalCredit')} onSort={requestSort} className="currency-column text-end" />}
+                                            {visibleColumns.cogs && <SortableHeader label="COGS" sortKey="cogs" sortDirection={getSortDirection('cogs')} onSort={requestSort} className="currency-column text-end" />}
+                                            {visibleColumns.margin && <SortableHeader label="Margin" sortKey="margin" sortDirection={getSortDirection('margin')} onSort={requestSort} className="currency-column text-end" />}
+                                            {visibleColumns.marginPct && <SortableHeader label="Margin %" sortKey="marginPercentage" sortDirection={getSortDirection('marginPercentage')} onSort={requestSort} className="percent-column text-end" />}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredProducts.length === 0 && allProducts.length > 0 ? (
+                                        {sortedProducts.length === 0 && allProducts.length > 0 ? (
                                             <tr>
                                                 <td colSpan="10" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
                                                 </td>
                                             </tr>
-                                        ) : filteredProducts.length === 0 && allProducts.length === 0 ? (
+                                        ) : sortedProducts.length === 0 && allProducts.length === 0 ? (
                                             <tr>
                                                 <td colSpan="10" className="text-center text-muted py-4">
                                                     No data available
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredProducts.map((product, index) => {
-                                                const isLastEntry = index === filteredProducts.length - 1;
+                                            sortedProducts.map((product, index) => {
+                                                const isLastEntry = index === sortedProducts.length - 1;
                                                 return (
                                                     <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
                                                         <td className="product-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: '180px', maxWidth: '300px' }} title={product.productName}>{product.productName}</td>

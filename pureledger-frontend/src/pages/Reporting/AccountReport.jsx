@@ -3,7 +3,9 @@ import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
+import SortableHeader from '../../components/SortableHeader';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import useSortableData from '../../hooks/useSortableData';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 
 const AccountReport = () => {
@@ -185,7 +187,14 @@ const AccountReport = () => {
         );
     });
 
-    const totals = filteredEntries.reduce((acc, entry) => ({
+    // Add computed balance field for sorting, then apply sorting
+    const entriesWithBalance = filteredEntries.map(entry => ({
+        ...entry,
+        balance: entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0))
+    }));
+    const { sortedItems: sortedEntries, requestSort, getSortDirection } = useSortableData(entriesWithBalance);
+
+    const totals = sortedEntries.reduce((acc, entry) => ({
         debit: acc.debit + (entry.totalDebit || 0),
         credit: acc.credit + (entry.totalCredit || 0)
     }), { debit: 0, credit: 0 });
@@ -193,7 +202,7 @@ const AccountReport = () => {
     const handleExportCsv = async () => {
         setExportingCsv(true);
         try {
-            const csvData = filteredEntries.map(entry => ({
+            const csvData = sortedEntries.map(entry => ({
                 ID: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
                 Category: entry.categoryName || '',
                 'Account Name': entry.accountName || '',
@@ -213,7 +222,7 @@ const AccountReport = () => {
             const selectedProject = projects.find(p => p.id === formData.projectId);
             const selectedCategory = categories.find(c => c.id === formData.categoryId);
 
-            const rows = filteredEntries.map(entry => {
+            const rows = sortedEntries.map(entry => {
                 const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
                 return {
                     id: entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-',
@@ -436,32 +445,31 @@ const AccountReport = () => {
                                 <Table bordered striped hover className="table-sm mb-0" id="accountReportTable">
                                 <thead className="table-light">
                                     <tr>
-                                        <th>ID</th>
-                                        <th>Category</th>
-                                        <th>Account Name</th>
-                                        <th className="text-end">Debit</th>
-                                        <th className="text-end">Credit</th>
-                                        <th className="text-end">Balance</th>
+                                        <SortableHeader label="ID" sortKey="accountId" sortDirection={getSortDirection('accountId')} onSort={requestSort} />
+                                        <SortableHeader label="Category" sortKey="categoryName" sortDirection={getSortDirection('categoryName')} onSort={requestSort} />
+                                        <SortableHeader label="Account Name" sortKey="accountName" sortDirection={getSortDirection('accountName')} onSort={requestSort} />
+                                        <SortableHeader label="Debit" sortKey="totalDebit" sortDirection={getSortDirection('totalDebit')} onSort={requestSort} className="text-end" />
+                                        <SortableHeader label="Credit" sortKey="totalCredit" sortDirection={getSortDirection('totalCredit')} onSort={requestSort} className="text-end" />
+                                        <SortableHeader label="Balance" sortKey="balance" sortDirection={getSortDirection('balance')} onSort={requestSort} className="text-end" />
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredEntries.length === 0 && allEntries.length > 0 ? (
+                                    {sortedEntries.length === 0 && allEntries.length > 0 ? (
                                         <tr>
                                             <td colSpan="6" className="text-center text-muted py-4">
                                                 {searchTerm ? 'No results found for your search' : 'No data available'}
                                             </td>
                                         </tr>
-                                    ) : filteredEntries.length === 0 && allEntries.length === 0 ? (
+                                    ) : sortedEntries.length === 0 && allEntries.length === 0 ? (
                                         <tr>
                                             <td colSpan="6" className="text-center text-muted py-4">
                                                 No data available
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredEntries.map((entry, index) => {
-                                            const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
+                                        sortedEntries.map((entry, index) => {
                                             const formattedId = entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-';
-                                            const isLastEntry = index === filteredEntries.length - 1;
+                                            const isLastEntry = index === sortedEntries.length - 1;
                                             return (
                                                 <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
                                                     <td>{formattedId}</td>
@@ -469,8 +477,8 @@ const AccountReport = () => {
                                                     <td>{entry.accountName || '-'}</td>
                                                     <td className="text-end">{formatCurrency(entry.totalDebit)}</td>
                                                     <td className="text-end">{formatCurrency(entry.totalCredit)}</td>
-                                                    <td className={`text-end ${balance < 0 ? 'text-danger' : 'text-success'}`}>
-                                                        {formatCurrency(balance)}
+                                                    <td className={`text-end ${entry.balance < 0 ? 'text-danger' : 'text-success'}`}>
+                                                        {formatCurrency(entry.balance)}
                                                     </td>
                                                 </tr>
                                             );

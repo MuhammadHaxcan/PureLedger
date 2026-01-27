@@ -444,3 +444,19 @@ h1, h2, h3, h4, h5, h6 {
   border-top: 1px solid var(--border-color);
   padding: 1rem 1.5rem;
 }
+
+/* Sortable Table Headers */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--transition-fast);
+}
+
+.sortable-header:hover {
+  background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+.sortable-header i {
+  font-size: 0.75em;
+  vertical-align: middle;
+}
