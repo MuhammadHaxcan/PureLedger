@@ -39,6 +39,9 @@ namespace PureLedger.Data
         // Signature table
         public DbSet<Signature> Signatures { get; set; }
 
+        // Dashboard settings
+        public DbSet<DashboardSettings> DashboardSettings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -262,6 +265,19 @@ namespace PureLedger.Data
                 .WithMany()
                 .HasForeignKey(ri => ri.AccountId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            // DashboardSettings to Project relationship (one settings per project)
+            modelBuilder.Entity<DashboardSettings>()
+                .HasOne(ds => ds.Project)
+                .WithMany()
+                .HasForeignKey(ds => ds.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Unique index to ensure one settings record per project
+            modelBuilder.Entity<DashboardSettings>()
+                .HasIndex(ds => ds.ProjectId)
+                .IsUnique()
+                .HasDatabaseName("IX_DashboardSettings_ProjectId");
 
             // ========================================
             // Performance Indexes

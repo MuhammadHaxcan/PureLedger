@@ -26,6 +26,8 @@ import UserReport from './pages/Reporting/UserReport';
 import ProductReport from './pages/Reporting/ProductReport';
 import MissedEntriesReport from './pages/Reporting/MissedEntriesReport';
 import PrintOnlyVoucher from './pages/Reporting/PrintOnlyVoucher';
+import Dashboard from './pages/Reporting/Dashboard';
+import DashboardSettings from './pages/Reporting/DashboardSettings';
 import ProcessDC from './pages/DeliveryChallan/ProcessDC';
 import Users from './pages/Admin/Users';
 import EditProfile from './pages/Admin/EditProfile';
@@ -64,6 +66,8 @@ function App() {
             <Route path="/metadata/locations" element={<ProtectedRoute><Locations /></ProtectedRoute>} />
             <Route path="/metadata/bookers" element={<ProtectedRoute><Bookers /></ProtectedRoute>} />
             {/* Reporting Routes */}
+            <Route path="/reporting/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/reporting/dashboard-settings" element={<ProtectedRoute><DashboardSettings /></ProtectedRoute>} />
             <Route path="/reporting/single-doc" element={<ProtectedRoute><SingleDoc /></ProtectedRoute>} />
             <Route path="/reporting/aging-report" element={<ProtectedRoute><AgingReport /></ProtectedRoute>} />
             <Route path="/reporting/account-report" element={<ProtectedRoute><AccountReport /></ProtectedRoute>} />

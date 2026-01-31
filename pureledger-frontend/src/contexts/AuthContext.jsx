@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
                 PERMISSIONS.HOME_MODIFIED_ENTRIES, PERMISSIONS.HOME_RECIPES],
                 'MetaData': [PERMISSIONS.METADATA_PROJECTS, PERMISSIONS.METADATA_CATEGORIES, PERMISSIONS.METADATA_ACCOUNTS,
                 PERMISSIONS.METADATA_LOCATIONS, PERMISSIONS.METADATA_BOOKERS],
-                'Reporting': [PERMISSIONS.REPORTING_SINGLE_DOC, PERMISSIONS.REPORTING_AGING_REPORT, PERMISSIONS.REPORTING_ACCOUNT_REPORT,
+                'Reporting': [PERMISSIONS.REPORTING_DASHBOARD, PERMISSIONS.REPORTING_SINGLE_DOC, PERMISSIONS.REPORTING_AGING_REPORT, PERMISSIONS.REPORTING_ACCOUNT_REPORT,
                 PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_USER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES],
                 'DeliveryChallan': [PERMISSIONS.DELIVERY_PROCESS_DC],
             };
@@ -358,6 +358,7 @@ export const AuthProvider = ({ children }) => {
                 icon: 'fas fa-chart-bar',
                 controller: 'Reporting',
                 items: [
+                    { action: 'Dashboard', title: 'Dashboard', icon: 'fas fa-tachometer-alt', path: '/reporting/dashboard' },
                     { action: 'SingleDoc', title: 'Single Document', icon: 'fas fa-file-alt', path: '/reporting/single-doc' },
                     { action: 'AgingReport', title: 'Aging Report', icon: 'fas fa-calendar-alt', path: '/reporting/aging-report' },
                     { action: 'AccountReport', title: 'Account Report', icon: 'fas fa-user-circle', path: '/reporting/account-report' },
@@ -423,6 +424,7 @@ export const AuthProvider = ({ children }) => {
 
         // Check Reporting controller
         if (controllers.includes('Reporting') || (actions.Reporting && actions.Reporting.length > 0)) {
+            if (actions.Reporting?.includes('Dashboard')) return '/reporting/dashboard';
             if (actions.Reporting?.includes('SingleDoc')) return '/reporting/single-doc';
             if (actions.Reporting?.includes('AgingReport')) return '/reporting/aging-report';
             if (actions.Reporting?.includes('AccountReport')) return '/reporting/account-report';
@@ -430,7 +432,7 @@ export const AuthProvider = ({ children }) => {
             if (actions.Reporting?.includes('UserReport')) return '/reporting/user-report';
             if (actions.Reporting?.includes('ProductReport')) return '/reporting/product-report';
             if (actions.Reporting?.includes('MissedEntriesReport')) return '/reporting/missed-entries';
-            return '/reporting/single-doc';
+            return '/reporting/dashboard';
         }
 
         // Check DeliveryChallan controller

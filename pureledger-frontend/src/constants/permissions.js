@@ -17,6 +17,7 @@ export const PERMISSIONS = {
     METADATA_BOOKERS: 'MetaData.Bookers',
     
     // Reporting Controller Pages
+    REPORTING_DASHBOARD: 'Reporting.Dashboard',
     REPORTING_SINGLE_DOC: 'Reporting.SingleDoc',
     REPORTING_AGING_REPORT: 'Reporting.AgingReport',
     REPORTING_ACCOUNT_REPORT: 'Reporting.AccountReport',
@@ -51,6 +52,7 @@ export const PAGE_PERMISSIONS = {
     '/metadata/bookers': [PERMISSIONS.METADATA_BOOKERS],
     
     // Reporting routes
+    '/reporting/dashboard': [PERMISSIONS.REPORTING_DASHBOARD],
     '/reporting/single-doc': [PERMISSIONS.REPORTING_SINGLE_DOC],
     '/reporting/aging-report': [PERMISSIONS.REPORTING_AGING_REPORT],
     '/reporting/account-report': [PERMISSIONS.REPORTING_ACCOUNT_REPORT],

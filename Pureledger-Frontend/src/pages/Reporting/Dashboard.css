@@ -1,0 +1,142 @@
+/* Dashboard Container */
+.dashboard-container {
+  animation: fadeIn 0.3s ease-in-out;
+  padding-bottom: 2rem;
+  min-height: 100vh;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* KPI Cards */
+.kpi-card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+}
+
+.kpi-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+/* Activity Feed */
+.activity-feed .activity-item {
+  transition: background-color 0.15s ease-in-out;
+}
+
+.activity-feed .activity-item:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.activity-feed .activity-item:last-child {
+  border-bottom: none !important;
+}
+
+/* Alerts */
+.alerts-container .alert {
+  border-left-width: 4px;
+}
+
+/* Charts */
+.recharts-wrapper {
+  font-size: 12px;
+}
+
+.recharts-legend-wrapper {
+  font-size: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .kpi-card .h4 {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container h2 {
+    font-size: 1.5rem;
+  }
+
+  .kpi-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .kpi-card .h4 {
+    font-size: 1.1rem;
+  }
+}
+
+/* Table Styles */
+.dashboard-container .table-sm td,
+.dashboard-container .table-sm th {
+  padding: 0.5rem;
+}
+
+.dashboard-container .sticky-top {
+  background-color: #f8f9fa !important;
+  z-index: 1;
+}
+
+/* Card Headers */
+.dashboard-container .card-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.075);
+}
+
+/* Scrollbar Styling */
+.dashboard-container ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dashboard-container ::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.dashboard-container ::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.dashboard-container ::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+/* Badge Styling */
+.dashboard-container .badge {
+  font-weight: 500;
+}
+
+/* Loading placeholder animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.placeholder-glow .placeholder {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(to right, #f0f0f0 4%, #e0e0e0 25%, #f0f0f0 36%);
+  background-size: 1000px 100%;
+}

@@ -15,15 +15,18 @@ namespace PureLedger.Controllers.Api
     public class ReportingApiController : ControllerBase
     {
         private readonly IReportingService _reportingService;
+        private readonly IDashboardService _dashboardService;
         private readonly ICurrentUserService _currentUserService;
         private readonly ILogger<ReportingApiController> _logger;
 
         public ReportingApiController(
             IReportingService reportingService,
+            IDashboardService dashboardService,
             ICurrentUserService currentUserService,
             ILogger<ReportingApiController> logger)
         {
             _reportingService = reportingService;
+            _dashboardService = dashboardService;
             _currentUserService = currentUserService;
             _logger = logger;
         }
@@ -623,6 +626,101 @@ namespace PureLedger.Controllers.Api
             {
                 _logger.LogError(ex, "Error loading bookers");
                 return StatusCode(500, new { success = false, message = $"Error loading bookers: {ex.Message}" });
+            }
+        }
+
+        #endregion
+
+        #region Dashboard
+
+        [HttpGet("dashboard")]
+        public async Task<IActionResult> GetDashboard([FromQuery] int? projectId, [FromQuery] int days = 30)
+        {
+            try
+            {
+                // Clamp days to reasonable range
+                days = Math.Clamp(days, 7, 365);
+
+                var data = await _dashboardService.GetDashboardDataAsync(projectId, days);
+                return Ok(new { success = true, data });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating dashboard data");
+                return StatusCode(500, new { success = false, message = "Error generating dashboard data" });
+            }
+        }
+
+        [HttpGet("dashboard-init")]
+        public async Task<IActionResult> GetDashboardInit()
+        {
+            try
+            {
+                var userId = _currentUserService.GetCurrentUserId();
+                var projects = userId.HasValue
+                    ? await _reportingService.GetAllProjectsForUserAsync(userId.Value)
+                    : new List<Project>();
+
+                return Ok(new
+                {
+                    success = true,
+                    projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName })
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading dashboard init data");
+                return StatusCode(500, new { success = false, message = "Error loading data" });
+            }
+        }
+
+        [HttpGet("dashboard-settings/{projectId}")]
+        public async Task<IActionResult> GetDashboardSettings(int projectId)
+        {
+            try
+            {
+                var settings = await _dashboardService.GetSettingsAsync(projectId);
+                return Ok(new { success = true, data = settings });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading dashboard settings for project {ProjectId}", projectId);
+                return StatusCode(500, new { success = false, message = "Error loading settings" });
+            }
+        }
+
+        [HttpPost("dashboard-settings")]
+        public async Task<IActionResult> SaveDashboardSettings([FromBody] DashboardSettingsUpdateRequest request)
+        {
+            try
+            {
+                if (request.ProjectId <= 0)
+                {
+                    return BadRequest(new { success = false, message = "Invalid project ID" });
+                }
+
+                var settings = await _dashboardService.SaveSettingsAsync(request);
+                return Ok(new { success = true, data = settings });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving dashboard settings");
+                return StatusCode(500, new { success = false, message = "Error saving settings" });
+            }
+        }
+
+        [HttpGet("dashboard-settings/categories/{projectId}")]
+        public async Task<IActionResult> GetDashboardSettingsCategories(int projectId)
+        {
+            try
+            {
+                var categories = await _dashboardService.GetCategoriesForSettingsAsync(projectId);
+                return Ok(new { success = true, data = categories });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading categories for dashboard settings");
+                return StatusCode(500, new { success = false, message = "Error loading categories" });
             }
         }
 
