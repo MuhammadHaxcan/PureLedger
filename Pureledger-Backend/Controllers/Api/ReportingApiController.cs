@@ -88,16 +88,16 @@ namespace PureLedger.Controllers.Api
 
                 if (voucherType == VoucherType.JV && report.Entries != null)
                 {
-                    if (normalizedFilter == "products")
+                    if (normalizedFilter == "credit")
                     {
-                        foreach (var entry in report.Entries.Where(e => e.AccountGroupId == 1))
+                        foreach (var entry in report.Entries.Where(e => e.Debit > 0))
                         {
                             entry.AccountName = string.Empty;
                         }
                     }
-                    else if (normalizedFilter == "accounts")
+                    else if (normalizedFilter == "debit")
                     {
-                        foreach (var entry in report.Entries.Where(e => e.AccountGroupId == 2))
+                        foreach (var entry in report.Entries.Where(e => e.Credit > 0))
                         {
                             entry.AccountName = string.Empty;
                         }

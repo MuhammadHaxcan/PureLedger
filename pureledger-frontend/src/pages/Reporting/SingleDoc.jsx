@@ -97,8 +97,8 @@ const SingleDoc = () => {
                       onChange={(e) => setFilter(e.target.value)}
                     >
                       <option value="all">All</option>
-                      <option value="products">Products only</option>
-                      <option value="accounts">Accounts only</option>
+                      <option value="debit">Debit only</option>
+                      <option value="credit">Credit only</option>
                     </Form.Select>
                   </Form.Group>
                 </div>

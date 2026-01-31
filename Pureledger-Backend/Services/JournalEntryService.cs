@@ -476,15 +476,45 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task<bool> DeleteEntryAsync(int entryId)
+        public async Task<(bool Success, string? ErrorMessage)> DeleteEntryAsync(int entryId)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 // Get voucher ID before deleting entry so we can mark remaining entries as edited
                 var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
-                if (entry == null) return false;
+                if (entry == null) return (false, "Entry not found.");
                 var voucherId = entry.JournalVoucherId;
+
+                // Check if this is the last entry and voucher has references
+                var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
+                if (voucher == null) return (false, "Voucher not found.");
+
+                var entriesCount = voucher.JournalEntries?.Count ?? 0;
+                if (entriesCount == 1)
+                {
+                    // This is the last entry - check for references
+                    var references = await _unitOfWork.JournalVoucherReferences.GetByMainVoucherIdAsync(voucherId);
+                    if (references.Any())
+                    {
+                        var referenceDetails = new List<string>();
+                        foreach (var reference in references)
+                        {
+                            var refType = reference.ReferenceType switch
+                            {
+                                "DerivedVoucher" => "Derived Voucher",
+                                "ForCharges" => "Charges Voucher",
+                                "Cartage" => "Cartage Voucher",
+                                _ => reference.ReferenceType
+                            };
+                            referenceDetails.Add($"JV-{reference.ReferencedVoucherId} ({refType})");
+                        }
+
+                        var message = $"Cannot delete last entry. This voucher (JV-{voucherId}) has linked vouchers that will be affected: {string.Join(", ", referenceDetails)}. " +
+                                      "Please delete the referenced vouchers first or use 'Edit Entire Voucher' to manage entries.";
+                        return (false, message);
+                    }
+                }
 
                 var result = await DeleteEntryInternalAsync(entryId);
                 if (result)
@@ -508,14 +538,15 @@ namespace PureLedger.Services
                 else
                 {
                     await transaction.RollbackAsync();
+                    return (false, "Failed to delete entry. The entry may have linked data.");
                 }
-                return result;
+                return (true, null);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error deleting journal entry {EntryId}", entryId);
-                return false;
+                return (false, $"Error deleting entry: {ex.Message}");
             }
         }
 

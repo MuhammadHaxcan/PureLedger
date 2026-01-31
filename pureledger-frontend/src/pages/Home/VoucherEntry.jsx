@@ -188,11 +188,11 @@ const VoucherEntry = () => {
 
     const confirmDeleteEntry = async () => {
         if (!editingEntry) return;
-        
+
         // Prevent duplicate submissions
         if (isSubmittingRef.current) return;
         isSubmittingRef.current = true;
-        
+
         try {
             setLoading(true);
             const entryId = editingEntry.entryId || editingEntry.journalEntryId;
@@ -205,7 +205,8 @@ const VoucherEntry = () => {
                 setError(response.data.message || 'Failed to delete entry');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to delete entry');
+            const errorData = err.response?.data;
+            setError(errorData?.message || 'Failed to delete entry');
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;

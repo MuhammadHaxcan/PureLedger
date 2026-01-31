@@ -114,16 +114,12 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     return invoiceEntries.reduce((sum, entry) => sum + calculateEntryAmount(entry), 0);
   }, [invoiceEntries]);
 
-  const getEntryAccountGroupId = (entry) => {
-    return entry.accountGroupId ?? entry.AccountGroupId ?? entry.accountGroup ?? entry.AccountGroup ?? null;
-  };
-
   const shouldHideAccountName = (entry) => {
     if (voucherType !== 'JV') return false;
-    const groupId = getEntryAccountGroupId(entry);
-    if (!groupId) return false;
-    if (normalizedFilter === 'products' && groupId === 1) return true;
-    if (normalizedFilter === 'accounts' && groupId === 2) return true;
+    const debit = entry.debit || 0;
+    const credit = entry.credit || 0;
+    if (normalizedFilter === 'credit' && debit > 0) return true;
+    if (normalizedFilter === 'debit' && credit > 0) return true;
     return false;
   };
 

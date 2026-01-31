@@ -168,10 +168,10 @@ namespace PureLedger.Controllers.Api
         [HttpDelete("journal-entry/{entryId}")]
         public async Task<IActionResult> DeleteJournalEntry(int entryId)
         {
-            var success = await _journalService.DeleteEntryAsync(entryId);
+            var (success, errorMessage) = await _journalService.DeleteEntryAsync(entryId);
             return success
                 ? Ok(new { success = true })
-                : BadRequest(new { success = false, message = "Invalid entry." });
+                : BadRequest(new { success = false, message = errorMessage ?? "Failed to delete entry." });
         }
 
         #endregion
