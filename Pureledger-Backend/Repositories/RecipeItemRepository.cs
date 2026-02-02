@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class RecipeItemRepository : IRecipeItemRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
         
-        public RecipeItemRepository(LedgerDbContext context)
+        public RecipeItemRepository(TenantDbContext context)
         {
             _context = context;
         }

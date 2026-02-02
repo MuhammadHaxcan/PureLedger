@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class RefreshTokenRepository : IRefreshTokenRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public RefreshTokenRepository(LedgerDbContext context)
+        public RefreshTokenRepository(TenantDbContext context)
         {
             _context = context;
         }

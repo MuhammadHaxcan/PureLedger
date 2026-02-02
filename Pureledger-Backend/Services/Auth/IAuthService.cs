@@ -6,6 +6,40 @@ using LoginViewModel = PureLedger.ViewModels.Auth.LoginViewModel;
 namespace PureLedger.Services.Auth
 {
     /// <summary>
+    /// Result of tenant user login validation.
+    /// </summary>
+    public class TenantLoginResult
+    {
+        public bool Success { get; set; }
+        public User? User { get; set; }
+        public string? SchemaName { get; set; }
+        public string? TenantName { get; set; }
+        public int? TenantId { get; set; }
+        public string? ErrorMessage { get; set; }
+
+        public static TenantLoginResult Succeeded(User user, string schemaName, string tenantName, int tenantId)
+        {
+            return new TenantLoginResult
+            {
+                Success = true,
+                User = user,
+                SchemaName = schemaName,
+                TenantName = tenantName,
+                TenantId = tenantId
+            };
+        }
+
+        public static TenantLoginResult Failed(string errorMessage)
+        {
+            return new TenantLoginResult
+            {
+                Success = false,
+                ErrorMessage = errorMessage
+            };
+        }
+    }
+
+    /// <summary>
     /// Interface for consolidated authentication service that handles:
     /// - User authentication and validation
     /// - JWT token generation and validation
@@ -19,6 +53,7 @@ namespace PureLedger.Services.Auth
     {
         // User Authentication and Validation
         Task<bool> ValidateUserAsync(LoginViewModel model);
+        Task<TenantLoginResult> ValidateTenantUserAsync(string fullUsername, string password);
         Task<User?> GetUserByUsernameAsync(string username);
         Task<User?> GetUserByIdAsync(int userId);
         Task<bool> CheckPasswordAsync(User user, string password);
@@ -26,6 +61,7 @@ namespace PureLedger.Services.Auth
 
         // JWT Token Generation and Validation
         string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute);
+        string GenerateTenantToken(int userId, string username, string fullName, bool isAdmin, string subroute, string? tenantSchema, string? tenantName);
         string GenerateRefreshToken();
         ClaimsPrincipal? ValidateToken(string token);
         ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);

@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class LocationRepository : ILocationRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public LocationRepository(LedgerDbContext context)
+        public LocationRepository(TenantDbContext context)
         {
             _context = context;
         }

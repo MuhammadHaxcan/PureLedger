@@ -1,6 +1,9 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
+using PureLedger.Services.Tenant;
 using PureLedger.ViewModels;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -20,17 +23,26 @@ namespace PureLedger.Services.Auth
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<AuthService> _logger;
         private readonly IConfiguration _configuration;
+        private readonly ITenantCacheService _tenantCacheService;
+        private readonly MasterDbContext _masterDb;
+        private readonly ITenantSchemaProvider _schemaProvider;
 
         public AuthService(
             IHttpContextAccessor httpContextAccessor,
             IUnitOfWork unitOfWork,
             ILogger<AuthService> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ITenantCacheService tenantCacheService,
+            MasterDbContext masterDb,
+            ITenantSchemaProvider schemaProvider)
         {
             _httpContextAccessor = httpContextAccessor;
             _unitOfWork = unitOfWork;
             _logger = logger;
             _configuration = configuration;
+            _tenantCacheService = tenantCacheService;
+            _masterDb = masterDb;
+            _schemaProvider = schemaProvider;
         }
 
         #region User Authentication and Validation
@@ -61,6 +73,72 @@ namespace PureLedger.Services.Auth
             }
         }
 
+        /// <summary>
+        /// Validates a tenant user login with format "slug|username".
+        /// </summary>
+        /// <param name="fullUsername">The full username in format "slug|username"</param>
+        /// <param name="password">The password</param>
+        /// <returns>Tuple of (success, user, schemaName, tenantName)</returns>
+        public async Task<TenantLoginResult> ValidateTenantUserAsync(string fullUsername, string password)
+        {
+            try
+            {
+                // Parse the slug|username format
+                var parts = fullUsername.Split('|');
+                if (parts.Length != 2)
+                {
+                    return TenantLoginResult.Failed("Invalid username format. Use: tenant|username");
+                }
+
+                var slug = parts[0].Trim().ToLowerInvariant();
+                var username = parts[1].Trim().ToLowerInvariant();
+
+                // Look up tenant in cache
+                var tenant = await _tenantCacheService.GetTenantBySlugAsync(slug);
+                if (tenant == null)
+                {
+                    _logger.LogWarning("Tenant not found for slug: {Slug}", slug);
+                    return TenantLoginResult.Failed("Invalid tenant or credentials");
+                }
+
+                if (!tenant.IsActive)
+                {
+                    _logger.LogWarning("Attempted login to deactivated tenant: {TenantName}", tenant.Name);
+                    return TenantLoginResult.Failed("This tenant is currently deactivated");
+                }
+
+                // Set tenant schema context before looking up user
+                _schemaProvider.SetTenant(tenant.SchemaName, tenant.Id, tenant.Name);
+
+                // Look up user in tenant schema
+                var user = await _unitOfWork.Users.GetByUsernameWithAccessAsync(username);
+                if (user == null || !user.IsActive)
+                {
+                    _logger.LogWarning("User not found or inactive: {Username} in tenant {TenantName}", username, tenant.Name);
+                    return TenantLoginResult.Failed("Invalid tenant or credentials");
+                }
+
+                // Verify password
+                if (!BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+                {
+                    _logger.LogWarning("Invalid password for user {Username} in tenant {TenantName}", username, tenant.Name);
+                    return TenantLoginResult.Failed("Invalid tenant or credentials");
+                }
+
+                // Update last login
+                await UpdateLastLoginAsync(user);
+
+                _logger.LogInformation("Successful tenant login: {Username} in {TenantName}", username, tenant.Name);
+
+                return TenantLoginResult.Succeeded(user, tenant.SchemaName, tenant.Name, tenant.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating tenant user login for {Username}", fullUsername);
+                return TenantLoginResult.Failed("An error occurred during login");
+            }
+        }
+
         public async Task<User?> GetUserByUsernameAsync(string username)
         {
             return await _unitOfWork.Users.GetByUsernameWithAccessAsync(username);
@@ -88,6 +166,16 @@ namespace PureLedger.Services.Auth
 
         public string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute)
         {
+            // Default call without tenant context (for backward compatibility)
+            return GenerateTenantToken(userId, username, fullName, isAdmin, subroute, null, null);
+        }
+
+        /// <summary>
+        /// Generates a JWT token for a tenant user with tenant claims.
+        /// </summary>
+        public string GenerateTenantToken(int userId, string username, string fullName, bool isAdmin, string subroute,
+            string? tenantSchema, string? tenantName)
+        {
             var secretKey = _configuration["Jwt:SecretKey"] ?? "YourSuperSecretKeyThatShouldBeAtLeast32CharactersLong!";
             var issuer = _configuration["Jwt:Issuer"] ?? "PureLedger";
             var audience = _configuration["Jwt:Audience"] ?? "PureLedger";
@@ -102,8 +190,19 @@ namespace PureLedger.Services.Auth
                 new Claim(ClaimTypes.Name, username),
                 new Claim(ClaimTypes.GivenName, fullName),
                 new Claim("Subroute", subroute),
-                new Claim(ClaimTypes.Role, isAdmin ? "Admin" : "User")
+                new Claim(ClaimTypes.Role, isAdmin ? "Admin" : "User"),
+                new Claim("user_type", "TenantUser")
             };
+
+            // Add tenant-specific claims
+            if (!string.IsNullOrEmpty(tenantSchema))
+            {
+                claims.Add(new Claim("tenant_schema", tenantSchema));
+            }
+            if (!string.IsNullOrEmpty(tenantName))
+            {
+                claims.Add(new Claim("tenant_name", tenantName));
+            }
 
             var token = new JwtSecurityToken(
                 issuer: issuer,

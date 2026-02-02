@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class CategoryRepository : ICategoryRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public CategoryRepository(LedgerDbContext context)
+        public CategoryRepository(TenantDbContext context)
         {
             _context = context;
         }

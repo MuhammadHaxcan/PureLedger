@@ -5,9 +5,9 @@ using PureLedger.Repositories.Interfaces;
 
 public class SignatureRepository : ISignatureRepository
 {
-    private readonly LedgerDbContext _dbContext;
+    private readonly TenantDbContext _dbContext;
 
-    public SignatureRepository(LedgerDbContext dbContext)
+    public SignatureRepository(TenantDbContext dbContext)
     {
         _dbContext = dbContext;
     }

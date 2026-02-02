@@ -102,6 +102,12 @@ namespace PureLedger.Controllers.Api {
             var normalizedUsername = model.Username?.Trim().ToLowerInvariant();
             model.Username = normalizedUsername;
 
+            // Check if this is a tenant login (format: slug|username)
+            if (model.Username?.Contains('|') == true) {
+                return await TenantLogin(model.Username, model.Password);
+            }
+
+            // Legacy login (non-tenant)
             var isValid = await _authService.ValidateUserAsync(model);
             if (!isValid) {
                 return Unauthorized(new { success = false, message = "Invalid username or password" });
@@ -151,6 +157,64 @@ namespace PureLedger.Controllers.Api {
             });
         }
 
+        /// <summary>
+        /// Handle tenant user login with format "slug|username"
+        /// </summary>
+        private async Task<IActionResult> TenantLogin(string fullUsername, string password) {
+            var result = await _authService.ValidateTenantUserAsync(fullUsername, password);
+
+            if (!result.Success) {
+                return Unauthorized(new { success = false, message = result.ErrorMessage });
+            }
+
+            var user = result.User!;
+
+            // Generate JWT access token with tenant claims
+            var accessToken = _authService.GenerateTenantToken(
+                user.UserId,
+                user.Username,
+                user.FullName,
+                user.IsAdmin,
+                user.Subroute,
+                result.SchemaName,
+                result.TenantName
+            );
+
+            // Generate refresh token
+            var refreshToken = _authService.GenerateRefreshToken();
+
+            // Store refresh token in database
+            await _authService.CreateRefreshTokenAsync(user.UserId, refreshToken);
+
+            // Set tokens in HttpOnly cookies (XSS-safe)
+            SetAuthCookies(accessToken, refreshToken);
+
+            // Generate simple XSRF token for CSRF protection
+            var xsrfToken = ValidateXsrfTokenAttribute.GenerateToken();
+            ValidateXsrfTokenAttribute.SetXsrfCookie(HttpContext, xsrfToken);
+
+            _logger.LogInformation("Tenant user {FullUsername} logged in", fullUsername);
+
+            // Return user info with tenant details
+            return Ok(new {
+                success = true,
+                xsrfToken = xsrfToken,
+                user = new {
+                    userId = user.UserId,
+                    username = user.Username,
+                    fullName = user.FullName,
+                    email = user.Email,
+                    isAdmin = user.IsAdmin,
+                    subroute = user.Subroute
+                },
+                tenant = new {
+                    schemaName = result.SchemaName,
+                    tenantName = result.TenantName,
+                    tenantId = result.TenantId
+                }
+            });
+        }
+
         [HttpPost("logout")]
         [Authorize]
         public async Task<IActionResult> Logout([FromBody] LogoutViewModel? model = null) {
@@ -190,7 +254,12 @@ namespace PureLedger.Controllers.Api {
                 return NotFound(new { success = false, message = "User not found" });
             }
 
-            return Ok(new {
+            // Extract tenant claims from JWT
+            var tenantSchema = User.FindFirst("tenant_schema")?.Value;
+            var tenantName = User.FindFirst("tenant_name")?.Value;
+            var userType = User.FindFirst("user_type")?.Value ?? "TenantUser";
+
+            var response = new {
                 success = true,
                 user = new {
                     userId = user.UserId,
@@ -199,8 +268,15 @@ namespace PureLedger.Controllers.Api {
                     email = user.Email,
                     isAdmin = user.IsAdmin,
                     subroute = user.Subroute
-                }
-            });
+                },
+                tenant = !string.IsNullOrEmpty(tenantSchema) ? new {
+                    schemaName = tenantSchema,
+                    tenantName = tenantName
+                } : null,
+                userType = userType
+            };
+
+            return Ok(response);
         }
 
         [HttpGet("access")]
@@ -246,13 +322,27 @@ namespace PureLedger.Controllers.Api {
                 return Unauthorized(new { success = false, message = "User not found or inactive" });
             }
 
-            // Generate new access token
-            var newAccessToken = _authService.GenerateToken(
+            // Extract tenant claims from the expired access token (if present)
+            string? tenantSchema = null;
+            string? tenantName = null;
+            var expiredAccessToken = Request.Cookies[AccessTokenCookieName];
+            if (!string.IsNullOrEmpty(expiredAccessToken)) {
+                var principal = _authService.GetPrincipalFromExpiredToken(expiredAccessToken);
+                if (principal != null) {
+                    tenantSchema = principal.FindFirst("tenant_schema")?.Value;
+                    tenantName = principal.FindFirst("tenant_name")?.Value;
+                }
+            }
+
+            // Generate new access token with tenant claims preserved
+            var newAccessToken = _authService.GenerateTenantToken(
                 user.UserId,
                 user.Username,
                 user.FullName,
                 user.IsAdmin,
-                user.Subroute
+                user.Subroute,
+                tenantSchema,
+                tenantName
             );
 
             // Generate new refresh token

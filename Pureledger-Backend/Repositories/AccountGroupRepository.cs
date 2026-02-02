@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class AccountGroupRepository : IAccountGroupRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public AccountGroupRepository(LedgerDbContext context)
+        public AccountGroupRepository(TenantDbContext context)
         {
             _context = context;
         }

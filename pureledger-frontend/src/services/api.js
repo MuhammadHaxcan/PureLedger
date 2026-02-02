@@ -218,10 +218,12 @@ apiClient.interceptors.response.use(
                     toastId: 'session-expired',
                 });
 
-                // Clear non-sensitive auth data from localStorage
+                // Clear all auth data from localStorage
                 localStorage.removeItem('user');
                 localStorage.removeItem('userAccess');
                 localStorage.removeItem('navigationMenu');
+                localStorage.removeItem('tenant');
+                localStorage.removeItem('systemAdmin');
 
                 // Redirect to login after a short delay to show the toast
                 setTimeout(() => {

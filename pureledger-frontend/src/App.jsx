@@ -4,8 +4,10 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { DataProvider } from './contexts/DataContext';
 import Layout from './components/Layout';
+import SystemAdminLayout from './components/SystemAdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
+import TenantLogin from './pages/TenantLogin';
+import SystemAdminLogin from './pages/SystemAdminLogin';
 import HomeEntry from './pages/Home/Entry';
 import VoucherEntry from './pages/Home/VoucherEntry';
 import BaseVouchers from './pages/Home/BaseVouchers';
@@ -32,6 +34,9 @@ import EditProfile from './pages/Admin/EditProfile';
 import CartageSettings from './pages/Admin/CartageSettings';
 import Signatures from './pages/Admin/Signatures';
 import AccessDenied from './pages/Account/AccessDenied';
+// System Admin pages
+import TenantManagement from './pages/SystemAdmin/TenantManagement';
+import TenantMigrations from './pages/SystemAdmin/TenantMigrations';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
@@ -42,9 +47,20 @@ function App() {
         <DataProvider>
           <Router>
           <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* Auth Routes */}
+          <Route path="/login" element={<TenantLogin />} />
+          <Route path="/system-admin/login" element={<SystemAdminLogin />} />
+
           {/* Print-only route without layout */}
           <Route path="/reporting/print-voucher" element={<ProtectedRoute><PrintOnlyVoucher /></ProtectedRoute>} />
+
+          {/* System Admin Routes */}
+          <Route element={<ProtectedRoute requireSystemAdmin={true}><SystemAdminLayout /></ProtectedRoute>}>
+            <Route path="/system-admin/tenants" element={<TenantManagement />} />
+            <Route path="/system-admin/migrations" element={<TenantMigrations />} />
+          </Route>
+
+          {/* Tenant User Routes */}
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Navigate to="/home/entry" replace />} />
             {/* Default route that checks access first */}
@@ -74,29 +90,29 @@ function App() {
             {/* Delivery Challan Routes */}
             <Route path="/delivery/process-dc" element={<ProtectedRoute><ProcessDC /></ProtectedRoute>} />
             {/* Admin Routes */}
-            <Route 
-              path="/admin/users" 
+            <Route
+              path="/admin/users"
               element={
                 <ProtectedRoute requireAdmin={true}>
                   <Users />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/cartage-settings" 
+            <Route
+              path="/admin/cartage-settings"
               element={
                 <ProtectedRoute requireAdmin={true}>
                   <CartageSettings />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/admin/signatures" 
+            <Route
+              path="/admin/signatures"
               element={
                 <ProtectedRoute requireAdmin={true}>
                   <Signatures />
                 </ProtectedRoute>
-              } 
+              }
             />
             <Route path="/admin/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
             {/* Account Routes */}

@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class JournalVoucherRepository : IJournalVoucherRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public JournalVoucherRepository(LedgerDbContext context)
+        public JournalVoucherRepository(TenantDbContext context)
         {
             _context = context;
         }

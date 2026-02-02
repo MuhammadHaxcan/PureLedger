@@ -16,13 +16,16 @@ namespace PureLedger.Middleware {
             _logger = logger;
         }
 
-        public async Task InvokeAsync(HttpContext context, IAuthService authService) {
+        public async Task InvokeAsync(
+            HttpContext context,
+            IAuthService authService,
+            ISystemAdminAuthService systemAdminAuthService) {
             // 1. Add security headers to all responses
             AddSecurityHeaders(context);
 
             // 2. Validate user is still active for authenticated requests
             if (context.User.Identity?.IsAuthenticated == true) {
-                var validationResult = await ValidateUserAsync(context, authService);
+                var validationResult = await ValidateUserAsync(context, authService, systemAdminAuthService);
                 if (!validationResult) {
                     return; // Response already set in validation method
                 }
@@ -56,13 +59,39 @@ namespace PureLedger.Middleware {
 
         /// <summary>
         /// Validates that the user still exists and is active.
+        /// Routes to appropriate auth service based on user_type claim.
         /// </summary>
         /// <returns>True if validation passes, False if validation fails</returns>
-        private async Task<bool> ValidateUserAsync(HttpContext context, IAuthService authService) {
+        private async Task<bool> ValidateUserAsync(
+            HttpContext context,
+            IAuthService authService,
+            ISystemAdminAuthService systemAdminAuthService) {
             var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier);
+            var userType = context.User.FindFirst("user_type")?.Value;
 
             if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId)) {
-                // Get the current user from database
+                // Handle SystemAdmin users - validate against master schema
+                if (userType == "SystemAdmin") {
+                    var admin = await systemAdminAuthService.GetByIdAsync(userId);
+
+                    if (admin == null) {
+                        _logger.LogWarning("Token validation failed: SystemAdmin {AdminId} not found", userId);
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await context.Response.WriteAsJsonAsync(new { success = false, message = "Admin account not found." });
+                        return false;
+                    }
+
+                    if (!admin.IsActive) {
+                        _logger.LogWarning("Token validation failed: SystemAdmin {AdminId} is inactive", userId);
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await context.Response.WriteAsJsonAsync(new { success = false, message = "Admin account is deactivated." });
+                        return false;
+                    }
+
+                    return true; // SystemAdmin validated against master schema
+                }
+
+                // Handle tenant users - validate against tenant schema
                 var user = await authService.GetUserByIdAsync(userId);
 
                 if (user == null) {

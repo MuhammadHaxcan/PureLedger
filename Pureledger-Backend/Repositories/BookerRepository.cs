@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class BookerRepository : IBookerRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public BookerRepository(LedgerDbContext context)
+        public BookerRepository(TenantDbContext context)
         {
             _context = context;
         }

@@ -13,6 +13,7 @@ using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
 using PureLedger.Services.Interface;
 using PureLedger.Services.Auth;
+using PureLedger.Services.Tenant;
 using ICacheInvalidationService = PureLedger.Services.ICacheInvalidationService;
 using CacheInvalidationService = PureLedger.Services.CacheInvalidationService;
 using PureLedger.Middleware;
@@ -190,9 +191,41 @@ builder.Services.AddAuthentication(options => {
     };
 });
 
-// Register LedgerDbContext directly with connection string from configuration
-builder.Services.AddDbContext<LedgerDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("LedgerDb")));
+// ========================================
+// Multi-Tenant Infrastructure
+// ========================================
+
+// Tenant schema provider (holds current tenant context for the request)
+builder.Services.AddScoped<ITenantSchemaProvider, TenantSchemaProvider>();
+
+// Tenant schema interceptor (sets PostgreSQL search_path)
+builder.Services.AddScoped<TenantSchemaInterceptor>();
+
+// Connection string for both contexts
+var connectionString = builder.Configuration.GetConnectionString("LedgerDb");
+
+// Register MasterDbContext (for master schema - tenants, system admins)
+builder.Services.AddDbContext<MasterDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// Register TenantDbContext (for tenant schemas - with schema interceptor)
+builder.Services.AddDbContext<TenantDbContext>((sp, options) => {
+    options.UseNpgsql(connectionString);
+    options.AddInterceptors(sp.GetRequiredService<TenantSchemaInterceptor>());
+});
+
+// Tenant services
+builder.Services.AddSingleton<ITenantCacheService, TenantCacheService>();
+builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
+builder.Services.AddScoped<ITenantMigrationService, TenantMigrationService>();
+builder.Services.AddScoped<ITenantDecommissioningService, TenantDecommissioningService>();
+
+// System admin authentication service
+builder.Services.AddScoped<ISystemAdminAuthService, SystemAdminAuthService>();
+
+// ========================================
+// Application Services
+// ========================================
 
 // Register services
 builder.Services.AddScoped<JournalEntryService>();
@@ -258,6 +291,9 @@ app.UseRouting();
 
 // Add authentication - IMPORTANT: Must come before SecurityMiddleware
 app.UseAuthentication(); // Validates JWT and populates context.User
+
+// Add JWT tenant middleware - sets tenant context from JWT claims
+app.UseJwtTenantMiddleware();
 
 app.UseSecurity();
 

@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class DeliveryChallanEntryRepository : IDeliveryChallanEntryRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public DeliveryChallanEntryRepository(LedgerDbContext context)
+        public DeliveryChallanEntryRepository(TenantDbContext context)
         {
             _context = context;
         }

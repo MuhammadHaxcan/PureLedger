@@ -11,10 +11,10 @@ namespace PureLedger.Services
 {
     public class JournalEntryValidationService
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
         private readonly ILogger<JournalEntryValidationService> _logger;
 
-        public JournalEntryValidationService(LedgerDbContext context, ILogger<JournalEntryValidationService> logger)
+        public JournalEntryValidationService(TenantDbContext context, ILogger<JournalEntryValidationService> logger)
         {
             _context = context;
             _logger = logger;

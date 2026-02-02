@@ -5,9 +5,9 @@ using PureLedger.Repositories.Interfaces;
 
 public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepository
 {
-    private readonly LedgerDbContext _dbContext;
+    private readonly TenantDbContext _dbContext;
 
-    public ProjectCartageSettingsRepository(LedgerDbContext dbContext)
+    public ProjectCartageSettingsRepository(TenantDbContext dbContext)
     {
         _dbContext = dbContext;
     }

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, u
 import apiClient, { setXsrfToken, clearXsrfToken } from '../services/api';
 import { PERMISSIONS, PAGE_PERMISSIONS } from '../constants/permissions';
 import { useToast } from './ToastContext';
+import { systemAdminLogin as apiSystemAdminLogin, systemAdminLogout as apiSystemAdminLogout } from '../services/systemAdminApi';
 
 const AuthContext = createContext(null);
 
@@ -24,6 +25,10 @@ export const AuthProvider = ({ children }) => {
     const [userAccess, setUserAccess] = useState({ controllers: [], actions: {} });
     const [navigationMenu, setNavigationMenu] = useState([]);
     const [permissions, setPermissions] = useState([]);
+
+    // Multi-tenant state
+    const [tenant, setTenant] = useState(null); // { schemaName, tenantName, tenantId }
+    const [userType, setUserType] = useState(null); // 'TenantUser' or 'SystemAdmin'
 
     // Removed - JWT refresh token handles session expiration
     // Access tokens refresh every ~29 minutes, refresh tokens expire after 7 days
@@ -232,6 +237,23 @@ export const AuthProvider = ({ children }) => {
                     setUser(userData);
                     setIsAuthenticated(true);
 
+                    // Restore tenant info from localStorage
+                    const savedTenant = localStorage.getItem('tenant');
+                    if (savedTenant) {
+                        try {
+                            setTenant(JSON.parse(savedTenant));
+                            setUserType('TenantUser');
+                        } catch (e) {
+                            console.error('Error parsing saved tenant:', e);
+                        }
+                    }
+
+                    // Check for system admin
+                    const savedSystemAdmin = localStorage.getItem('systemAdmin');
+                    if (savedSystemAdmin) {
+                        setUserType('SystemAdmin');
+                    }
+
                     // Fetch fresh XSRF token
                     try {
                         const xsrfResponse = await apiClient.get('/AccountApi/xsrf-token');
@@ -277,6 +299,16 @@ export const AuthProvider = ({ children }) => {
                             setUser(userData);
                             setIsAuthenticated(true);
                             localStorage.setItem('user', JSON.stringify(userData));
+
+                            // Restore tenant info if present
+                            if (meResponse.data.tenant) {
+                                setTenant(meResponse.data.tenant);
+                                localStorage.setItem('tenant', JSON.stringify(meResponse.data.tenant));
+                            }
+                            if (meResponse.data.userType) {
+                                setUserType(meResponse.data.userType);
+                            }
+
                             await fetchAccessAndMenu(userData);
                         }
                     } catch (meError) {
@@ -293,6 +325,16 @@ export const AuthProvider = ({ children }) => {
                         setUser(userData);
                         setIsAuthenticated(true);
                         localStorage.setItem('user', JSON.stringify(userData));
+
+                        // Restore tenant info if present
+                        if (meResponse.data.tenant) {
+                            setTenant(meResponse.data.tenant);
+                            localStorage.setItem('tenant', JSON.stringify(meResponse.data.tenant));
+                        }
+                        if (meResponse.data.userType) {
+                            setUserType(meResponse.data.userType);
+                        }
+
                         await fetchAccessAndMenu(userData);
 
                         // Fetch XSRF token
@@ -312,7 +354,11 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('user');
             localStorage.removeItem('userAccess');
             localStorage.removeItem('navigationMenu');
+            localStorage.removeItem('tenant');
+            localStorage.removeItem('systemAdmin');
             clearXsrfToken();
+            setTenant(null);
+            setUserType(null);
         };
 
         restoreSession();
@@ -449,7 +495,7 @@ export const AuthProvider = ({ children }) => {
             });
 
             if (response.data.success) {
-                const { xsrfToken: newXsrfToken, user: userData } = response.data;
+                const { xsrfToken: newXsrfToken, user: userData, tenant: tenantData } = response.data;
 
                 // Store XSRF token in memory (not localStorage for security)
                 if (newXsrfToken) {
@@ -460,6 +506,13 @@ export const AuthProvider = ({ children }) => {
                 localStorage.setItem('user', JSON.stringify(userData));
                 setUser(userData);
                 setIsAuthenticated(true);
+                setUserType('TenantUser');
+
+                // Store tenant info if present (multi-tenant login)
+                if (tenantData) {
+                    localStorage.setItem('tenant', JSON.stringify(tenantData));
+                    setTenant(tenantData);
+                }
 
                 // Show login success toast
                 showLoginSuccess(userData.fullName || userData.username);
@@ -491,21 +544,59 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const systemAdminLogin = async (username, password) => {
+        try {
+            const result = await apiSystemAdminLogin(username, password);
+
+            if (result.success) {
+                const adminData = result.admin;
+
+                // Store system admin info
+                localStorage.setItem('systemAdmin', JSON.stringify(adminData));
+                setUser(adminData);
+                setIsAuthenticated(true);
+                setUserType('SystemAdmin');
+                setTenant(null); // System admins don't have tenant context
+
+                showLoginSuccess(adminData.fullName || adminData.username);
+
+                return { success: true, redirectTo: '/system-admin/tenants' };
+            }
+
+            return { success: false, message: result.message || 'Login failed' };
+        } catch (error) {
+            return {
+                success: false,
+                message: error.response?.data?.message || error.message || 'Login failed. Please try again.',
+            };
+        }
+    };
+
     const logout = async () => {
+        const wasSystemAdmin = userType === 'SystemAdmin';
+
         // Always clear local state first (before API call in case it fails)
         clearXsrfToken();
         localStorage.removeItem('user');
         localStorage.removeItem('userAccess');
         localStorage.removeItem('navigationMenu');
+        localStorage.removeItem('tenant');
+        localStorage.removeItem('systemAdmin');
         setUser(null);
         setIsAuthenticated(false);
         setUserAccess({ controllers: [], actions: {} });
         setNavigationMenu([]);
         setPermissions([]);
+        setTenant(null);
+        setUserType(null);
 
-        // Call logout endpoint to revoke refresh token and clear server-side cookies
+        // Call appropriate logout endpoint
         try {
-            await apiClient.post('/AccountApi/logout', {});
+            if (wasSystemAdmin) {
+                await apiSystemAdminLogout();
+            } else {
+                await apiClient.post('/AccountApi/logout', {});
+            }
         } catch (error) {
             // Ignore errors - we've already cleared local state
             console.log('Logout API call completed (may have failed, but local state is cleared)');
@@ -538,8 +629,14 @@ export const AuthProvider = ({ children }) => {
         hasPermission,
         hasAnyPermission,
         login,
+        systemAdminLogin,
         logout,
         getCurrentUser,
+        // Multi-tenant state
+        tenant,
+        userType,
+        isSystemAdmin: userType === 'SystemAdmin',
+        isTenantUser: userType === 'TenantUser',
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

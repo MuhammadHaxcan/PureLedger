@@ -9,7 +9,7 @@ namespace PureLedger.Repositories
 {
     public class UnitOfWork : IUnitOfWork
     {
-        private readonly LedgerDbContext _dbContext;
+        private readonly TenantDbContext _dbContext;
 
         // Add all required repositories as lazy-initialized properties
         private IProjectRepository? _projects;
@@ -37,12 +37,12 @@ namespace PureLedger.Repositories
         private IBookerRepository? _bookers;
         private ISignatureRepository? _signatures;
 
-        public UnitOfWork(LedgerDbContext dbContext)
+        public UnitOfWork(TenantDbContext dbContext)
         {
             _dbContext = dbContext;
         }
 
-        public LedgerDbContext DbContext => _dbContext;
+        public TenantDbContext DbContext => _dbContext;
 
         // Implement all required properties from IUnitOfWork interface with lazy initialization
         public IProjectRepository Projects => _projects ??= new ProjectRepository(_dbContext);

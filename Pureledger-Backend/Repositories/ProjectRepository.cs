@@ -7,9 +7,9 @@ namespace PureLedger.Repositories
 {
     public class ProjectRepository : IProjectRepository
     {
-        private readonly LedgerDbContext _context;
+        private readonly TenantDbContext _context;
 
-        public ProjectRepository(LedgerDbContext context)
+        public ProjectRepository(TenantDbContext context)
         {
             _context = context;
         }

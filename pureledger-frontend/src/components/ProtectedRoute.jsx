@@ -3,8 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { PAGE_PERMISSIONS } from '../constants/permissions';
 
-const ProtectedRoute = ({ children, requireAdmin = false, requiredPermission = null }) => {
-  const { isAuthenticated, user, loading, userAccess, permissions } = useAuth();
+const ProtectedRoute = ({ children, requireAdmin = false, requireSystemAdmin = false, requiredPermission = null }) => {
+  const { isAuthenticated, user, loading, userAccess, permissions, isSystemAdmin } = useAuth();
   const { canAccessPage } = usePermissions();
   const location = useLocation();
 
@@ -21,10 +21,23 @@ const ProtectedRoute = ({ children, requireAdmin = false, requiredPermission = n
 
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
+    // Redirect system admin routes to system admin login
+    if (requireSystemAdmin || location.pathname.startsWith('/system-admin')) {
+      return <Navigate to="/system-admin/login" replace state={{ from: location }} />;
+    }
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // For admin-only routes
+  // For system admin-only routes
+  if (requireSystemAdmin) {
+    if (!isSystemAdmin) {
+      return <Navigate to="/system-admin/login" replace state={{ from: location }} />;
+    }
+    // System admins pass through - they don't need other checks
+    return children ? children : <Outlet />;
+  }
+
+  // For admin-only routes (tenant admin)
   if (requireAdmin && !user?.isAdmin) {
     return <Navigate to="/account/access-denied" replace state={{ from: location }} />;
   }

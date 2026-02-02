@@ -9,9 +9,9 @@ namespace PureLedger.Repositories
 {
     public class MissedEntryRepository : IMissedEntryRepository
     {
-        private readonly LedgerDbContext _dbContext;
+        private readonly TenantDbContext _dbContext;
 
-        public MissedEntryRepository(LedgerDbContext dbContext)
+        public MissedEntryRepository(TenantDbContext dbContext)
         {
             _dbContext = dbContext;
         }

@@ -1,10 +1,10 @@
-import { Navbar, Nav, NavDropdown, Container } from 'react-bootstrap';
+import { Navbar, Nav, NavDropdown, Container, Badge } from 'react-bootstrap';
 import { Link, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import NavigationMenu from './NavigationMenu';
 
 const Layout = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, tenant } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -18,6 +18,11 @@ const Layout = () => {
         <Container fluid className="px-4">
           <Navbar.Brand as={Link} to="/home/entry">
             <i className="fas fa-book-open me-2"></i>PureLedger
+            {tenant?.tenantName && (
+              <Badge bg="light" text="dark" className="ms-2" style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}>
+                {tenant.tenantName}
+              </Badge>
+            )}
           </Navbar.Brand>
           <Navbar.Toggle aria-controls="basic-navbar-nav" />
           <Navbar.Collapse id="basic-navbar-nav">
