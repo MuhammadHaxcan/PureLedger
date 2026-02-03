@@ -543,12 +543,14 @@ const BaseVouchers = () => {
                                                 <td className="text-center" style={{ whiteSpace: 'nowrap' }}>
                                                     {isProcessable ? (
                                                         <>
-                                                            <Link
-                                                                to={`/home/process-base-voucher/${voucher.journalVoucherId}`}
+                                                            <a
+                                                                href={`/home/process-base-voucher/${voucher.journalVoucherId}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
                                                                 className="btn btn-sm btn-primary"
                                                             >
                                                                 <i className="fas fa-cogs me-1"></i> Process
-                                                            </Link>
+                                                            </a>
                                                             <button
                                                                 className="btn btn-sm btn-warning ms-1"
                                                                 onClick={() => handleMarkMissed(voucher)}
@@ -561,12 +563,14 @@ const BaseVouchers = () => {
                                                             <i className="fas fa-check-circle me-1"></i> Completed
                                                         </button>
                                                     )}
-                                                    <Link
-                                                        to={`/home/voucher-entry?jvId=${voucher.journalVoucherId}`}
+                                                    <a
+                                                        href={`/home/voucher-entry?jvId=${voucher.journalVoucherId}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
                                                         className="btn btn-sm btn-info ms-1"
                                                     >
                                                         <i className="fas fa-eye me-1"></i> View
-                                                    </Link>
+                                                    </a>
                                                 </td>
                                             </tr>
                                         );

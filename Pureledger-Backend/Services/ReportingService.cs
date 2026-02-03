@@ -496,7 +496,8 @@ namespace PureLedger.Services {
                     BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty,
                     LocationId = dcEntry?.LocationId,
                     LocationName = dcEntry?.Location?.LocationName ?? string.Empty,
-                    QtyBalance = request.ShowQtyBalance ? accountQtyBalance[entry.AccountId] : 0
+                    QtyBalance = request.ShowQtyBalance ? accountQtyBalance[entry.AccountId] : 0,
+                    Rate = entry.Rate
                 });
             }
 

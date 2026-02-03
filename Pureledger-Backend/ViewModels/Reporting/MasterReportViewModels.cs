@@ -62,5 +62,6 @@ namespace PureLedger.ViewModels.Reporting
         public int? LocationId { get; set; }
         public string LocationName { get; set; } = string.Empty;
         public int QtyBalance { get; set; }
+        public decimal Rate { get; set; }
     }
 }
