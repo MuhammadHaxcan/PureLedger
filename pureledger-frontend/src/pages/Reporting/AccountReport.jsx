@@ -263,7 +263,7 @@ const AccountReport = () => {
                 rows,
                 rowsPerPage: 20,
                 startY: selectedCategory ? 46 : 40,
-                fontSize: 8,
+                fontSize: 9,
                 cellPadding: 2,
                 filename: `AccountReport_${new Date().toISOString().split('T')[0]}.pdf`
             });

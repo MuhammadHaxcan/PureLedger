@@ -232,7 +232,7 @@ body {
   }
 
   tfoot {
-    display: table-footer-group;
+    display: table-row-group;  /* Changed from table-footer-group to prevent repeating on every page */
   }
 
   .signature-image-container {

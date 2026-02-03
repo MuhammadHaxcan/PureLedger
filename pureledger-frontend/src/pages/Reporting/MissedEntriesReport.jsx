@@ -407,8 +407,8 @@ const MissedEntriesReport = () => {
                 rows,
                 rowsPerPage: 20,
                 startY: 46,
-                fontSize: 7,
-                cellPadding: 1.5,
+                fontSize: 9,
+                cellPadding: 2,
                 filename: `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.pdf`
             });
         } finally {
@@ -466,7 +466,7 @@ const MissedEntriesReport = () => {
                 rows,
                 rowsPerPage: 20,
                 startY: 40,
-                fontSize: 8,
+                fontSize: 9,
                 cellPadding: 2,
                 filename: `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.pdf`
             });
@@ -528,7 +528,7 @@ const MissedEntriesReport = () => {
                 rows,
                 rowsPerPage: 20,
                 startY: 40,
-                fontSize: 8,
+                fontSize: 9,
                 cellPadding: 2,
                 filename: `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.pdf`
             });

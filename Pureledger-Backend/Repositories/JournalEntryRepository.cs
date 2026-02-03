@@ -128,6 +128,7 @@ namespace PureLedger.Repositories
             int categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize)
         {
@@ -158,6 +159,13 @@ namespace PureLedger.Repositories
             if (bookerId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
+            }
+
+            // Filter by location - only include entries that have a DCEntry with matching LocationId
+            if (locationId.HasValue)
+            {
+                baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
             }
 
             int takeCount = page * pageSize;
@@ -284,13 +292,14 @@ namespace PureLedger.Repositories
             return (results, totalCount);
         }
 
-        public async Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForUserReportAsync(
+        public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)> Entries, int TotalCount)> GetEntriesForUserReportAsync(
             DateOnly startDate,
             DateOnly endDate,
             int? projectId,
             int categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize)
         {
@@ -325,6 +334,13 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
+            // Filter by location - only include entries that have a DCEntry with matching LocationId
+            if (locationId.HasValue)
+            {
+                query = query.Where(je => _context.DeliveryChallanEntries
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+            }
+
             int totalCount = await query.CountAsync();
 
             var pagedResults = await query
@@ -335,7 +351,24 @@ namespace PureLedger.Repositories
                 .Take(pageSize)
                 .ToListAsync();
 
-            return (pagedResults, totalCount);
+            // LEFT JOIN with DeliveryChallanEntries to get Location
+            var journalEntryIds = pagedResults.Select(je => je.JournalEntryId).ToList();
+            var dcEntries = await _context.DeliveryChallanEntries
+                .AsNoTracking()
+                .Include(dce => dce.Location)
+                .Where(dce => journalEntryIds.Contains(dce.JournalEntryId))
+                .ToListAsync();
+
+            var dcEntryLookup = dcEntries
+                .GroupBy(dce => dce.JournalEntryId)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var results = pagedResults.Select(je => (
+                Entry: je,
+                DCEntry: dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
+            )).ToList();
+
+            return (results, totalCount);
         }
 
         public async Task<List<JournalEntry>> GetCartageEntriesByJournalVoucherIdAsync(int journalVoucherId)

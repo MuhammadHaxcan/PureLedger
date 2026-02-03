@@ -514,10 +514,12 @@ namespace PureLedger.Services {
 
         public async Task<object> GetUserReportInitAsync(int userId) {
             var projects = await GetAllProjectsForUserAsync(userId);
+            var locations = await GetAllLocationsAsync();
             return new {
                 success = true,
                 projects = projects.Select(p => new { id = p.ProjectId, name = p.ProjectName }),
-                categories = Array.Empty<object>()
+                categories = Array.Empty<object>(),
+                locations = locations.Select(l => new { id = l.LocationId, name = l.LocationName })
             };
         }
 
@@ -548,6 +550,7 @@ namespace PureLedger.Services {
             int? projectId = ParseNullableInt(request.ProjectId);
             int? accountId = ParseNullableInt(request.AccountId);
             int? bookerId = ParseNullableInt(request.BookerId);
+            int? locationId = ParseNullableInt(request.LocationId);
 
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 1000);
@@ -560,17 +563,17 @@ namespace PureLedger.Services {
             decimal previousBalance = openingBalance;
             if (page > 0) {
                 var previousEntriesBalance = await _unitOfWork.JournalEntries.GetPreviousEntriesBalanceForUserReportAsync(
-                    startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
+                    startDate, endDate, projectId, categoryId, accountId, bookerId, locationId, page, pageSize);
 
                 previousBalance = openingBalance + previousEntriesBalance;
             }
 
-            var (entries, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForUserReportAsync(
-                startDate, endDate, projectId, categoryId, accountId, bookerId, page, pageSize);
+            var (entriesWithDC, totalCount) = await _unitOfWork.JournalEntries.GetEntriesForUserReportAsync(
+                startDate, endDate, projectId, categoryId, accountId, bookerId, locationId, page, pageSize);
 
             // Filter out any entries with hidden categories (double-check)
-            var filteredEntries = entries.Where(e => !hiddenCategoryIds.Contains(e.CategoryId)).ToList();
-            var filteredCount = totalCount - (entries.Count - filteredEntries.Count);
+            var filteredEntries = entriesWithDC.Where(e => !hiddenCategoryIds.Contains(e.Entry.CategoryId)).ToList();
+            var filteredCount = totalCount - (entriesWithDC.Count - filteredEntries.Count);
 
             result.Entries = new List<UserReportEntryViewModel>();
             result.PreviousBalance = previousBalance;
@@ -586,7 +589,7 @@ namespace PureLedger.Services {
                     TransactionDate = startDate,
                     CreditableDate = startDate,
                     Description = "Opening Balance",
-                    AccountName = accountId.HasValue ? filteredEntries.FirstOrDefault()?.Account?.AccountName ?? "" : "",
+                    AccountName = accountId.HasValue ? filteredEntries.FirstOrDefault().Entry?.Account?.AccountName ?? "" : "",
                     AccountId = accountId ?? 0,
                     Debit = openingDebit,
                     Credit = openingCredit,
@@ -598,7 +601,7 @@ namespace PureLedger.Services {
                 });
             }
 
-            foreach (var entry in filteredEntries) {
+            foreach (var (entry, dcEntry) in filteredEntries) {
                 decimal entryImpact = entry.Debit - entry.Credit;
                 runningBalance += entryImpact;
 
@@ -622,7 +625,9 @@ namespace PureLedger.Services {
                     CategoryId = entry.CategoryId,
                     Quantity = entry.Quantity,
                     BookerId = entry.JournalVoucher.BookerId,
-                    BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty
+                    BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty,
+                    LocationId = dcEntry?.LocationId,
+                    LocationName = dcEntry?.Location?.LocationName ?? string.Empty
                 });
             }
 

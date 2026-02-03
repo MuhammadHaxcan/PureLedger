@@ -84,13 +84,14 @@ namespace PureLedger.Repositories.Interfaces
 
         #region User Report Queries
 
-        Task<(List<JournalEntry> Entries, int TotalCount)> GetEntriesForUserReportAsync(
+        Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)> Entries, int TotalCount)> GetEntriesForUserReportAsync(
             DateOnly startDate,
             DateOnly endDate,
             int? projectId,
             int categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize);
 
@@ -101,6 +102,7 @@ namespace PureLedger.Repositories.Interfaces
             int categoryId,
             int? accountId,
             int? bookerId,
+            int? locationId,
             int page,
             int pageSize);
 

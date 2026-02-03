@@ -37,7 +37,7 @@ export const generatePdfAsync = async (config, onProgress) => {
         rows,
         rowsPerPage = 14,
         startY = 46,
-        fontSize = 7,
+        fontSize = 9,
         cellPadding = 2,
         filename
     } = config;

@@ -54,6 +54,28 @@ const PrintOnlyVoucher = () => {
     loadVoucher();
   }, [voucherId, voucherType, filter]);
 
+  // Monitor parent window - if parent closes, navigate back
+  useEffect(() => {
+    // Only monitor if opened by another window
+    if (!window.opener) return;
+
+    const checkOpener = () => {
+      try {
+        // Try to access opener - will fail if closed
+        if (!window.opener || window.opener.closed) {
+          window.history.back();
+        }
+      } catch (e) {
+        // Cross-origin or closed - navigate back
+        window.history.back();
+      }
+    };
+
+    const interval = setInterval(checkOpener, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

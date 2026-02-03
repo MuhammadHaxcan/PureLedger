@@ -15,6 +15,13 @@ const buildVoucherUrl = (voucherId, type) => {
     return `/reporting/print-voucher?voucherId=${voucherId}&type=${type}`;
 };
 
+const openVoucher = (e, voucherId, type) => {
+    e.preventDefault();
+    if (!voucherId) return;
+    const url = buildVoucherUrl(voucherId, type);
+    window.open(url, '_blank');
+};
+
 const MasterReport = () => {
     usePageTitle('Master Report');
     const [projects, setProjects] = useState([]);
@@ -384,22 +391,18 @@ const MasterReport = () => {
         setExportingMainCsv(true);
         try {
             const csvData = filteredEntries.map(entry => {
-                const row = {
-                    ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}`,
-                    'Entry Date': formatDate(entry.transactionDate),
-                    'Credit Date': formatDate(entry.creditableDate),
-                    Description: entry.description || '',
-                    Account: entry.accountName || '',
-                    Booker: entry.bookerName || '',
-                    Location: entry.locationName || '-',
-                    Quantity: entry.quantity || ''
-                };
-                if (visibleColumns.qtyBalance) {
-                    row['Qty Balance'] = entry.qtyBalance ?? '';
-                }
-                row.Debit = entry.debit || 0;
-                row.Credit = entry.credit || 0;
-                row.Balance = entry.balance || 0;
+                const row = { ID: entry.formattedId || `JV-${entry.journalVoucherId}, Entry: ${entry.id}` };
+                if (visibleColumns.date) row['Entry Date'] = formatDate(entry.transactionDate);
+                if (visibleColumns.creditableDate) row['Credit Date'] = formatDate(entry.creditableDate);
+                if (visibleColumns.description) row['Description'] = entry.description || '';
+                if (visibleColumns.account) row['Account'] = entry.accountName || '';
+                if (visibleColumns.booker) row['Booker'] = entry.bookerName || '';
+                if (visibleColumns.location) row['Location'] = entry.locationName || '-';
+                if (visibleColumns.quantity) row['Quantity'] = entry.quantity || '';
+                if (visibleColumns.qtyBalance) row['Qty Balance'] = entry.qtyBalance ?? '';
+                if (visibleColumns.debit) row['Debit'] = entry.debit || 0;
+                if (visibleColumns.credit) row['Credit'] = entry.credit || 0;
+                if (visibleColumns.balance) row['Balance'] = entry.balance || 0;
                 return row;
             });
             await exportToCsvAsync(csvData, `MasterReport_${new Date().toISOString().split('T')[0]}.csv`);
@@ -506,7 +509,7 @@ const MasterReport = () => {
                 rows,
                 rowsPerPage: 14,
                 startY: 46,
-                fontSize: 7,
+                fontSize: 9,
                 cellPadding: 2,
                 filename: `MasterReport_${new Date().toISOString().split('T')[0]}.pdf`
             });
@@ -930,8 +933,7 @@ const MasterReport = () => {
                                                                     <div className="d-flex flex-column gap-1 align-items-start">
                                                                         <a
                                                                             href={buildVoucherUrl(entry.journalVoucherId, 'JV')}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
+                                                                            onClick={(e) => openVoucher(e, entry.journalVoucherId, 'JV')}
                                                                             className="voucher-link text-decoration-none badge bg-primary"
                                                                             style={{ fontSize: '0.75rem', cursor: 'pointer' }}
                                                                         >
@@ -939,8 +941,7 @@ const MasterReport = () => {
                                                                         </a>
                                                                         <a
                                                                             href={buildVoucherUrl(entry.journalVoucherId, 'INV')}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
+                                                                            onClick={(e) => openVoucher(e, entry.journalVoucherId, 'INV')}
                                                                             className="voucher-link text-decoration-none badge bg-success"
                                                                             style={{ fontSize: '0.75rem', cursor: 'pointer' }}
                                                                         >

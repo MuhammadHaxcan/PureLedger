@@ -222,20 +222,21 @@ const ProductReport = () => {
     const handleExportCsv = async () => {
         setExportingCsv(true);
         try {
-            const csvData = sortedProducts.map(product => ({
-                Product: product.productName || '',
-                'Debit Qty': (product.totalDebitQty || 0).toFixed(2),
-                'Credit Qty': (product.totalCreditQty || 0).toFixed(2),
-                'Balance Qty': (product.qtyBalance || 0).toFixed(2),
-                'Avg Rate': (product.averageRate || 0).toFixed(2),
-                'Total Debit': (product.totalDebit || 0).toFixed(2),
-                'Total Credit': (product.totalCredit || 0).toFixed(2),
-                COGS: (product.cogs || 0).toFixed(2),
-                Margin: (product.margin || 0).toFixed(2),
-                'Margin %': `${(product.marginPercentage || 0).toFixed(2)}%`
-            }));
-            const dateRange = formData.startDate && formData.endDate 
-                ? `${formData.startDate}_to_${formData.endDate}` 
+            const csvData = sortedProducts.map(product => {
+                const row = { Product: product.productName || '' };
+                if (visibleColumns.debitQty) row['Debit Qty'] = (product.totalDebitQty || 0).toFixed(2);
+                if (visibleColumns.creditQty) row['Credit Qty'] = (product.totalCreditQty || 0).toFixed(2);
+                if (visibleColumns.balanceQty) row['Balance Qty'] = (product.qtyBalance || 0).toFixed(2);
+                if (visibleColumns.avgRate) row['Avg Rate'] = (product.averageRate || 0).toFixed(2);
+                if (visibleColumns.totalDebit) row['Total Debit'] = (product.totalDebit || 0).toFixed(2);
+                if (visibleColumns.totalCredit) row['Total Credit'] = (product.totalCredit || 0).toFixed(2);
+                if (visibleColumns.cogs) row['COGS'] = (product.cogs || 0).toFixed(2);
+                if (visibleColumns.margin) row['Margin'] = (product.margin || 0).toFixed(2);
+                if (visibleColumns.marginPct) row['Margin %'] = `${(product.marginPercentage || 0).toFixed(2)}%`;
+                return row;
+            });
+            const dateRange = formData.startDate && formData.endDate
+                ? `${formData.startDate}_to_${formData.endDate}`
                 : 'report';
             await exportToCsvAsync(csvData, `ProductReport_${dateRange}.csv`);
         } finally {
@@ -250,45 +251,45 @@ const ProductReport = () => {
             const selectedCategory = categories.find(c => c.id === formData.categoryId);
             const selectedLocation = locations.find(l => l.id === formData.locationId);
 
-            const rows = sortedProducts.map(product => ({
-                product: product.productName || '',
-                debitQty: formatNumber(product.totalDebitQty),
-                creditQty: formatNumber(product.totalCreditQty),
-                balanceQty: formatNumber(product.qtyBalance),
-                avgRate: formatCurrency(product.averageRate || 0),
-                totalDebit: formatCurrency(product.totalDebit || 0),
-                totalCredit: formatCurrency(product.totalCredit || 0),
-                cogs: formatCurrency(product.cogs || 0),
-                margin: formatCurrency(product.margin || 0),
-                marginPct: `${formatNumber(product.marginPercentage)}%`
-            }));
+            const rows = sortedProducts.map(product => {
+                const row = { product: product.productName || '' };
+                if (visibleColumns.debitQty) row.debitQty = formatNumber(product.totalDebitQty);
+                if (visibleColumns.creditQty) row.creditQty = formatNumber(product.totalCreditQty);
+                if (visibleColumns.balanceQty) row.balanceQty = formatNumber(product.qtyBalance);
+                if (visibleColumns.avgRate) row.avgRate = formatCurrency(product.averageRate || 0);
+                if (visibleColumns.totalDebit) row.totalDebit = formatCurrency(product.totalDebit || 0);
+                if (visibleColumns.totalCredit) row.totalCredit = formatCurrency(product.totalCredit || 0);
+                if (visibleColumns.cogs) row.cogs = formatCurrency(product.cogs || 0);
+                if (visibleColumns.margin) row.margin = formatCurrency(product.margin || 0);
+                if (visibleColumns.marginPct) row.marginPct = `${formatNumber(product.marginPercentage)}%`;
+                return row;
+            });
 
             if (totals) {
-                rows.push({
-                    product: 'TOTAL',
-                    debitQty: formatNumber(totals.totalDebitQty),
-                    creditQty: formatNumber(totals.totalCreditQty),
-                    balanceQty: formatNumber(totals.netQuantity),
-                    avgRate: '-',
-                    totalDebit: formatCurrency(totals.totalDebit || 0),
-                    totalCredit: formatCurrency(totals.totalCredit || 0),
-                    cogs: formatCurrency(totals.totalCOGS || 0),
-                    margin: formatCurrency(totals.totalMargin || 0),
-                    marginPct: `${formatNumber(totals.marginPercentage)}%`
-                });
+                const totalRow = { product: 'TOTAL' };
+                if (visibleColumns.debitQty) totalRow.debitQty = formatNumber(totals.totalDebitQty);
+                if (visibleColumns.creditQty) totalRow.creditQty = formatNumber(totals.totalCreditQty);
+                if (visibleColumns.balanceQty) totalRow.balanceQty = formatNumber(totals.netQuantity);
+                if (visibleColumns.avgRate) totalRow.avgRate = '-';
+                if (visibleColumns.totalDebit) totalRow.totalDebit = formatCurrency(totals.totalDebit || 0);
+                if (visibleColumns.totalCredit) totalRow.totalCredit = formatCurrency(totals.totalCredit || 0);
+                if (visibleColumns.cogs) totalRow.cogs = formatCurrency(totals.totalCOGS || 0);
+                if (visibleColumns.margin) totalRow.margin = formatCurrency(totals.totalMargin || 0);
+                if (visibleColumns.marginPct) totalRow.marginPct = `${formatNumber(totals.marginPercentage)}%`;
+                rows.push(totalRow);
             }
 
             const columns = [
                 { header: 'Product', dataKey: 'product' },
-                { header: 'Debit Qty', dataKey: 'debitQty' },
-                { header: 'Credit Qty', dataKey: 'creditQty' },
-                { header: 'Bal Qty', dataKey: 'balanceQty' },
-                { header: 'Avg Rate', dataKey: 'avgRate' },
-                { header: 'Total Debit', dataKey: 'totalDebit' },
-                { header: 'Total Credit', dataKey: 'totalCredit' },
-                { header: 'COGS', dataKey: 'cogs' },
-                { header: 'Margin', dataKey: 'margin' },
-                { header: 'Margin %', dataKey: 'marginPct' }
+                ...(visibleColumns.debitQty ? [{ header: 'Debit Qty', dataKey: 'debitQty' }] : []),
+                ...(visibleColumns.creditQty ? [{ header: 'Credit Qty', dataKey: 'creditQty' }] : []),
+                ...(visibleColumns.balanceQty ? [{ header: 'Bal Qty', dataKey: 'balanceQty' }] : []),
+                ...(visibleColumns.avgRate ? [{ header: 'Avg Rate', dataKey: 'avgRate' }] : []),
+                ...(visibleColumns.totalDebit ? [{ header: 'Total Debit', dataKey: 'totalDebit' }] : []),
+                ...(visibleColumns.totalCredit ? [{ header: 'Total Credit', dataKey: 'totalCredit' }] : []),
+                ...(visibleColumns.cogs ? [{ header: 'COGS', dataKey: 'cogs' }] : []),
+                ...(visibleColumns.margin ? [{ header: 'Margin', dataKey: 'margin' }] : []),
+                ...(visibleColumns.marginPct ? [{ header: 'Margin %', dataKey: 'marginPct' }] : [])
             ];
 
             let subtitle = '';
@@ -314,8 +315,8 @@ const ProductReport = () => {
                 rows,
                 rowsPerPage: 20,
                 startY: selectedCategory || selectedLocation ? 56 : 46,
-                fontSize: 6,
-                cellPadding: 1.5,
+                fontSize: 9,
+                cellPadding: 2,
                 filename: `ProductReport_${new Date().toISOString().split('T')[0]}.pdf`
             });
         } finally {
@@ -432,7 +433,7 @@ const ProductReport = () => {
                                     <SearchableSelect
                                         value={formData.locationId}
                                         onChange={(value) => setFormData({ ...formData, locationId: value ? parseInt(value) : null })}
-                                        options={locations.map(l => ({ id: l.id, name: l.name }))}
+                                        options={[{ id: null, name: 'All Locations' }, ...locations.map(l => ({ id: l.id, name: l.name }))]}
                                         placeholder="Search location..."
                                         disabled={generating}
                                     />

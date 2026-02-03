@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import apiClient from '../../services/api';
 import '../../App.css';
@@ -7,6 +7,7 @@ import './PrintVoucher.css';
 const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) => {
   const [activeSignature, setActiveSignature] = useState(null);
   const normalizedFilter = (filter || 'all').toLowerCase();
+  const wasOpenedByWindow = useRef(!!window.opener); // Capture at mount (opener becomes null after parent closes)
   // Get base URL for static files (remove /api from API_BASE_URL)
   const getBaseUrl = () => {
     const baseUrl = API_BASE_URL || 'https://localhost:7062/api';
@@ -152,8 +153,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
   };
 
   const handleClose = () => {
-    // If opened in a new tab/window, close it; otherwise go back
-    if (window.opener) {
+    if (wasOpenedByWindow.current) {
       window.close();
     } else {
       window.history.back();
@@ -395,10 +395,10 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                         <td style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>{entry.accountName || ''}</td>
                         <td style={{ textAlign: 'right', minWidth: '35px', maxWidth: '45px' }}>{entry.quantity || ''}</td>
                         <td style={{ textAlign: 'right' }}>{entry.pkg || 1}</td>
-                        <td style={{ textAlign: 'right' }}>{Math.round(entry.rate || 0)}</td>
+                        <td style={{ textAlign: 'right' }}>{formatCurrency(entry.rate || 0)}</td>
                         <td style={{ textAlign: 'right' }}>{Math.round(entry.discount || 0)}</td>
-                        <td style={{ textAlign: 'right' }}>{Math.round(entry.netRate || 0)}</td>
-                        <td style={{ textAlign: 'right' }}>{Math.round(amount)}</td>
+                        <td style={{ textAlign: 'right' }}>{formatCurrency(entry.netRate || 0)}</td>
+                        <td style={{ textAlign: 'right' }}>{formatCurrency(amount)}</td>
                       </tr>
                     );
                   })}
@@ -411,17 +411,17 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                     <th style={{ textAlign: 'right' }}></th>
                     <th style={{ textAlign: 'right' }}></th>
                     <th style={{ textAlign: 'right' }}>Net Amount</th>
-                    <th style={{ textAlign: 'right' }}>{Math.round(invoiceTotal)}</th>
+                    <th style={{ textAlign: 'right' }}>{formatCurrency(invoiceTotal)}</th>
                   </tr>
                   {voucherData.forChargesAmount > 0 && (
                     <>
                       <tr className="table-warning">
                         <td colSpan="7" style={{ textAlign: 'right' }}><strong>Less: FOR Charges</strong></td>
-                        <td style={{ textAlign: 'right' }}>{Math.round(voucherData.forChargesAmount || 0)}</td>
+                        <td style={{ textAlign: 'right' }}>{formatCurrency(voucherData.forChargesAmount || 0)}</td>
                       </tr>
                       <tr className="table-info">
                         <td colSpan="7" style={{ textAlign: 'right' }}><strong>Final Amount</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{Math.round(invoiceTotal - (voucherData.forChargesAmount || 0))}</strong></td>
+                        <td style={{ textAlign: 'right' }}><strong>{formatCurrency(invoiceTotal - (voucherData.forChargesAmount || 0))}</strong></td>
                       </tr>
                     </>
                   )}
