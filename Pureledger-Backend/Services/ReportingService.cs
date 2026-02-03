@@ -828,6 +828,7 @@ namespace PureLedger.Services {
                     AverageRate = averageRate,
                     TotalDebit = currentDebit,
                     TotalCredit = currentCredit,
+                    Balance = currentDebit - currentCredit,
                     COGS = cogs,
                     Margin = margin,
                     MarginPercentage = marginPercentage,
@@ -863,6 +864,7 @@ namespace PureLedger.Services {
                 Totals = new ProductReportTotalsViewModel {
                     TotalDebit = totalDebit,
                     TotalCredit = totalCredit,
+                    Balance = totalDebit - totalCredit,
                     TotalDebitQty = totalDebitQty,
                     TotalCreditQty = totalCreditQty,
                     NetQuantity = totalDebitQty - totalCreditQty,

@@ -44,6 +44,7 @@ const ProductReport = () => {
         avgRate: true,
         totalDebit: true,
         totalCredit: true,
+        balance: true,
         cogs: true,
         margin: true,
         marginPct: true,
@@ -210,6 +211,7 @@ const ProductReport = () => {
             (product.averageRate?.toString() || '').includes(search) ||
             (product.totalDebit?.toString() || '').includes(search) ||
             (product.totalCredit?.toString() || '').includes(search) ||
+            (product.balance?.toString() || '').includes(search) ||
             (product.cogs?.toString() || '').includes(search) ||
             (product.margin?.toString() || '').includes(search) ||
             (product.marginPercentage?.toString() || '').includes(search)
@@ -230,6 +232,7 @@ const ProductReport = () => {
                 if (visibleColumns.avgRate) row['Avg Rate'] = (product.averageRate || 0).toFixed(2);
                 if (visibleColumns.totalDebit) row['Total Debit'] = (product.totalDebit || 0).toFixed(2);
                 if (visibleColumns.totalCredit) row['Total Credit'] = (product.totalCredit || 0).toFixed(2);
+                if (visibleColumns.balance) row['Balance'] = (product.balance || 0).toFixed(2);
                 if (visibleColumns.cogs) row['COGS'] = (product.cogs || 0).toFixed(2);
                 if (visibleColumns.margin) row['Margin'] = (product.margin || 0).toFixed(2);
                 if (visibleColumns.marginPct) row['Margin %'] = `${(product.marginPercentage || 0).toFixed(2)}%`;
@@ -259,6 +262,7 @@ const ProductReport = () => {
                 if (visibleColumns.avgRate) row.avgRate = formatCurrency(product.averageRate || 0);
                 if (visibleColumns.totalDebit) row.totalDebit = formatCurrency(product.totalDebit || 0);
                 if (visibleColumns.totalCredit) row.totalCredit = formatCurrency(product.totalCredit || 0);
+                if (visibleColumns.balance) row.balance = formatCurrency(product.balance || 0);
                 if (visibleColumns.cogs) row.cogs = formatCurrency(product.cogs || 0);
                 if (visibleColumns.margin) row.margin = formatCurrency(product.margin || 0);
                 if (visibleColumns.marginPct) row.marginPct = `${formatNumber(product.marginPercentage)}%`;
@@ -273,6 +277,7 @@ const ProductReport = () => {
                 if (visibleColumns.avgRate) totalRow.avgRate = '-';
                 if (visibleColumns.totalDebit) totalRow.totalDebit = formatCurrency(totals.totalDebit || 0);
                 if (visibleColumns.totalCredit) totalRow.totalCredit = formatCurrency(totals.totalCredit || 0);
+                if (visibleColumns.balance) totalRow.balance = formatCurrency(totals.balance || 0);
                 if (visibleColumns.cogs) totalRow.cogs = formatCurrency(totals.totalCOGS || 0);
                 if (visibleColumns.margin) totalRow.margin = formatCurrency(totals.totalMargin || 0);
                 if (visibleColumns.marginPct) totalRow.marginPct = `${formatNumber(totals.marginPercentage)}%`;
@@ -287,6 +292,7 @@ const ProductReport = () => {
                 ...(visibleColumns.avgRate ? [{ header: 'Avg Rate', dataKey: 'avgRate' }] : []),
                 ...(visibleColumns.totalDebit ? [{ header: 'Total Debit', dataKey: 'totalDebit' }] : []),
                 ...(visibleColumns.totalCredit ? [{ header: 'Total Credit', dataKey: 'totalCredit' }] : []),
+                ...(visibleColumns.balance ? [{ header: 'Balance', dataKey: 'balance' }] : []),
                 ...(visibleColumns.cogs ? [{ header: 'COGS', dataKey: 'cogs' }] : []),
                 ...(visibleColumns.margin ? [{ header: 'Margin', dataKey: 'margin' }] : []),
                 ...(visibleColumns.marginPct ? [{ header: 'Margin %', dataKey: 'marginPct' }] : [])
@@ -484,6 +490,7 @@ const ProductReport = () => {
                                             showAvgRate: { key: 'avgRate', label: 'Avg Rate', icon: 'fa-tags' },
                                             showTotalDebit: { key: 'totalDebit', label: 'Total Debit', icon: 'fa-plus' },
                                             showTotalCredit: { key: 'totalCredit', label: 'Total Credit', icon: 'fa-minus' },
+                                            showBalance: { key: 'balance', label: 'Balance', icon: 'fa-equals' },
                                             showCOGS: { key: 'cogs', label: 'COGS', icon: 'fa-industry' },
                                             showMargin: { key: 'margin', label: 'Margin', icon: 'fa-chart-line' },
                                             showMarginPct: { key: 'marginPct', label: 'Margin %', icon: 'fa-percentage' },
@@ -590,6 +597,7 @@ const ProductReport = () => {
                                             {visibleColumns.avgRate && <SortableHeader label="Avg Rate" sortKey="averageRate" sortDirection={getSortDirection('averageRate')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.totalDebit && <SortableHeader label="Total Debit" sortKey="totalDebit" sortDirection={getSortDirection('totalDebit')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.totalCredit && <SortableHeader label="Total Credit" sortKey="totalCredit" sortDirection={getSortDirection('totalCredit')} onSort={requestSort} className="currency-column text-end" />}
+                                            {visibleColumns.balance && <SortableHeader label="Balance" sortKey="balance" sortDirection={getSortDirection('balance')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.cogs && <SortableHeader label="COGS" sortKey="cogs" sortDirection={getSortDirection('cogs')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.margin && <SortableHeader label="Margin" sortKey="margin" sortDirection={getSortDirection('margin')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.marginPct && <SortableHeader label="Margin %" sortKey="marginPercentage" sortDirection={getSortDirection('marginPercentage')} onSort={requestSort} className="percent-column text-end" />}
@@ -598,13 +606,13 @@ const ProductReport = () => {
                                     <tbody>
                                         {sortedProducts.length === 0 && allProducts.length > 0 ? (
                                             <tr>
-                                                <td colSpan="10" className="text-center text-muted py-4">
+                                                <td colSpan="11" className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
                                                 </td>
                                             </tr>
                                         ) : sortedProducts.length === 0 && allProducts.length === 0 ? (
                                             <tr>
-                                                <td colSpan="10" className="text-center text-muted py-4">
+                                                <td colSpan="11" className="text-center text-muted py-4">
                                                     No data available
                                                 </td>
                                             </tr>
@@ -620,6 +628,7 @@ const ProductReport = () => {
                                                         {visibleColumns.avgRate && <td className="currency-column text-end">{formatCurrency(product.averageRate || 0)}</td>}
                                                         {visibleColumns.totalDebit && <td className="currency-column text-end">{formatCurrency(product.totalDebit || 0)}</td>}
                                                         {visibleColumns.totalCredit && <td className="currency-column text-end">{formatCurrency(product.totalCredit || 0)}</td>}
+                                                        {visibleColumns.balance && <td className="currency-column text-end">{formatCurrency(product.balance || 0)}</td>}
                                                         {visibleColumns.cogs && <td className="currency-column text-end">{formatCurrency(product.cogs || 0)}</td>}
                                                         {visibleColumns.margin && <td className="currency-column text-end">{formatCurrency(product.margin || 0)}</td>}
                                                         {visibleColumns.marginPct && <td className="percent-column text-end">{formatNumber(product.marginPercentage)}%</td>}
@@ -638,6 +647,7 @@ const ProductReport = () => {
                                                 {visibleColumns.avgRate && <td className="currency-column text-end">-</td>}
                                                 {visibleColumns.totalDebit && <td className="currency-column text-end">{formatCurrency(totals.totalDebit || 0)}</td>}
                                                 {visibleColumns.totalCredit && <td className="currency-column text-end">{formatCurrency(totals.totalCredit || 0)}</td>}
+                                                {visibleColumns.balance && <td className="currency-column text-end">{formatCurrency(totals.balance || 0)}</td>}
                                                 {visibleColumns.cogs && <td className="currency-column text-end">{formatCurrency(totals.totalCOGS || 0)}</td>}
                                                 {visibleColumns.margin && <td className="currency-column text-end">{formatCurrency(totals.totalMargin || 0)}</td>}
                                                 {visibleColumns.marginPct && <td className="percent-column text-end">{formatNumber(totals.marginPercentage)}%</td>}

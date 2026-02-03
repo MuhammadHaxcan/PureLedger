@@ -45,6 +45,7 @@ namespace PureLedger.ViewModels.Reporting
     {
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
+        public decimal Balance { get; set; }  // TotalDebit - TotalCredit
         public int TotalDebitQty { get; set; }
         public int TotalCreditQty { get; set; }
         public int NetQuantity { get; set; }
@@ -74,6 +75,7 @@ namespace PureLedger.ViewModels.Reporting
         public decimal AverageRate { get; set; }
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
+        public decimal Balance { get; set; }  // TotalDebit - TotalCredit
         public decimal COGS { get; set; }
         public decimal Margin { get; set; }
         public decimal MarginPercentage { get; set; }
