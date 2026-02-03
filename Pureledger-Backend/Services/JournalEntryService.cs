@@ -52,8 +52,9 @@ namespace PureLedger.Services
         public Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize)
             => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesPaginatedAsync(projectId, page, pageSize);
 
-        public Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetBaseVouchersPaginatedAsync(int? projectId, int page, int pageSize)
-            => _unitOfWork.JournalVouchers.GetAllBaseVouchersPaginatedAsync(projectId, page, pageSize);
+        public Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetBaseVouchersPaginatedAsync(
+            int? projectId, DateOnly? startDate, DateOnly? endDate, int page, int pageSize)
+            => _unitOfWork.JournalVouchers.GetAllBaseVouchersPaginatedAsync(projectId, startDate, endDate, page, pageSize);
 
         #endregion
 
@@ -1179,9 +1180,9 @@ namespace PureLedger.Services
 
         #region Base Vouchers Summary
 
-        public async Task<BaseVouchersSummaryViewModel> GetBaseVouchersSummaryAsync(int? projectId)
+        public async Task<BaseVouchersSummaryViewModel> GetBaseVouchersSummaryAsync(int? projectId, DateOnly? startDate = null, DateOnly? endDate = null)
         {
-            var vouchers = await _unitOfWork.JournalVouchers.GetBaseVouchersSummaryDataAsync(projectId);
+            var vouchers = await _unitOfWork.JournalVouchers.GetBaseVouchersSummaryDataAsync(projectId, startDate, endDate);
             
             var summary = new BaseVouchersSummaryViewModel
             {

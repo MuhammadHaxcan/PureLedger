@@ -673,12 +673,16 @@ namespace PureLedger.Services
             try
             {
                 var cartageJV = await CreateBaseCartageVoucherAsync(projectId);
-                var (debitCategoryId, cartageCategoryId) = await GetCartageAccountCategoriesAsync(debitAccountId, originalEntry.JournalVoucher.ProjectId);
+                var (debitCategoryId, cartageCategoryId, debitAccountName) = await GetCartageAccountCategoriesAsync(debitAccountId, originalEntry.JournalVoucher.ProjectId);
+
+                // Fetch transporter account name
+                var transporterAccount = await _unitOfWork.Accounts.GetByIdAsync(transporterId);
+                var transporterAccountName = transporterAccount?.AccountName ?? "";
 
                 var entries = new List<JournalEntry>
                 {
-                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, debitCategoryId, originalEntry, amount, otherRef),
-                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, cartageCategoryId, originalEntry, amount, otherRef)
+                    CreateCartageDebitEntry(cartageJV.JournalVoucherId, debitAccountId, debitCategoryId, originalEntry, amount, otherRef, debitAccountName),
+                    CreateCartageCreditEntry(cartageJV.JournalVoucherId, transporterId, cartageCategoryId, originalEntry, amount, otherRef, transporterAccountName)
                 };
 
                 foreach (var entry in entries)
@@ -706,7 +710,7 @@ namespace PureLedger.Services
             return await _unitOfWork.JournalVouchers.AddAsync(cartageJV);
         }
 
-        private async Task<(int debitCategoryId, int cartageCategoryId)> GetCartageAccountCategoriesAsync(int debitAccountId, int projectId)
+        private async Task<(int debitCategoryId, int cartageCategoryId, string debitAccountName)> GetCartageAccountCategoriesAsync(int debitAccountId, int projectId)
         {
             var debitAccount = await _unitOfWork.Accounts.GetByIdAsync(debitAccountId);
             if (debitAccount == null)
@@ -716,17 +720,17 @@ namespace PureLedger.Services
             if (projectSettings?.CartageTransporterCategoryId == null)
                 throw new InvalidOperationException($"Cartage transporter category not configured for project {projectId}");
 
-            return (debitAccount.CategoryId, projectSettings.CartageTransporterCategoryId.Value);
+            return (debitAccount.CategoryId, projectSettings.CartageTransporterCategoryId.Value, debitAccount.AccountName);
         }
 
-        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount, string? otherRef)
+        private static JournalEntry CreateCartageDebitEntry(int journalVoucherId, int accountId, int categoryId, JournalEntry originalEntry, int amount, string? otherRef, string accountName)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = accountId,
                 CategoryId = categoryId,
-                Description = BuildCartageDescription("Debit", originalEntry.JournalVoucherId, otherRef),
+                Description = BuildCartageDescription("Debit", originalEntry.JournalVoucherId, otherRef, accountName),
                 Quantity = 0,
                 Rate = amount,
                 Debit = amount,
@@ -738,14 +742,14 @@ namespace PureLedger.Services
             };
         }
 
-        private static JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, int cartageCategoryId, JournalEntry originalEntry, int amount, string? otherRef)
+        private static JournalEntry CreateCartageCreditEntry(int journalVoucherId, int transporterId, int cartageCategoryId, JournalEntry originalEntry, int amount, string? otherRef, string accountName)
         {
             return new JournalEntry
             {
                 JournalVoucherId = journalVoucherId,
                 AccountId = transporterId,
                 CategoryId = cartageCategoryId,
-                Description = BuildCartageDescription("Credit", originalEntry.JournalVoucherId, otherRef),
+                Description = BuildCartageDescription("Credit", originalEntry.JournalVoucherId, otherRef, accountName),
                 Quantity = 0,
                 Rate = amount,
                 Debit = 0,
@@ -757,11 +761,13 @@ namespace PureLedger.Services
             };
         }
 
-        private static string BuildCartageDescription(string entryType, int originalVoucherId, string? otherRef)
+        private static string BuildCartageDescription(string entryType, int originalVoucherId, string? otherRef, string? accountName)
         {
             var description = $"Cartage {entryType} - Ref to JV-{originalVoucherId}";
             if (!string.IsNullOrWhiteSpace(otherRef))
                 description += $" OtherRef-{otherRef}";
+            if (!string.IsNullOrWhiteSpace(accountName))
+                description += $" - {accountName}";
             return description;
         }
 

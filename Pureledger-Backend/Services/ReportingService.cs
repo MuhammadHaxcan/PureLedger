@@ -78,6 +78,7 @@ namespace PureLedger.Services {
                 VoucherType = voucherType,
                 ProjectName = project.ProjectName,
                 CreatedDate = dcVoucher.DCDate,
+                DueDate = dcVoucher.JournalVoucher.CreditableDate,
                 Entries = processedEntries,
 
                 CustomerAccountName = parsedCustomerInfo.Name,
@@ -127,6 +128,7 @@ namespace PureLedger.Services {
                 VoucherType = voucherType,
                 ProjectName = project.ProjectName,
                 CreatedDate = voucher.EntryDate,
+                DueDate = voucher.CreditableDate,
                 Entries = entries,
 
                 CustomerAccountName = customerDetails.Name,

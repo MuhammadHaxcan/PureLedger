@@ -251,7 +251,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                         <tbody>
                           <tr>
                             <td width="35%" style={{ padding: '2px 0' }}><strong>Due Date:</strong></td>
-                            <td style={{ padding: '2px 0' }}>{formatDate(voucherData.createdDate)}</td>
+                            <td style={{ padding: '2px 0' }}>{formatDate(voucherData.dueDate)}</td>
                           </tr>
                           <tr>
                             <td style={{ padding: '2px 0' }}><strong>Adda:</strong></td>
@@ -263,6 +263,10 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                               {voucherData.builty || ''}
                               {voucherData.cartageAmount > 0 ? ` (${Math.round(voucherData.cartageAmount)})` : ''}
                             </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: '2px 0' }}><strong>Other Ref:</strong></td>
+                            <td style={{ padding: '2px 0' }}>{voucherData.otherReference || ''}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -303,7 +307,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                         <tbody>
                           <tr>
                             <td width="35%" style={{ padding: '2px 0' }}><strong>Due Date:</strong></td>
-                            <td style={{ padding: '2px 0' }}>{formatDate(voucherData.createdDate)}</td>
+                            <td style={{ padding: '2px 0' }}>{formatDate(voucherData.dueDate)}</td>
                           </tr>
                           <tr>
                             <td style={{ padding: '2px 0' }}><strong>Adda:</strong></td>

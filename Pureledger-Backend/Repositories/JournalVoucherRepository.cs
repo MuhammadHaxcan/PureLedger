@@ -140,11 +140,12 @@ namespace PureLedger.Repositories
 
         public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
         {
-            var (vouchers, _) = await GetAllBaseVouchersPaginatedAsync(null, 0, int.MaxValue);
+            var (vouchers, _) = await GetAllBaseVouchersPaginatedAsync(null, null, null, 0, int.MaxValue);
             return vouchers;
         }
 
-        public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, int page, int pageSize)
+        public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(
+            int? projectId, DateOnly? startDate, DateOnly? endDate, int page, int pageSize)
         {
             page = Math.Max(0, page);
             pageSize = Math.Clamp(pageSize, 1, 1000);
@@ -156,6 +157,16 @@ namespace PureLedger.Repositories
             if (projectId.HasValue)
             {
                 baseQuery = baseQuery.Where(v => v.ProjectId == projectId.Value);
+            }
+
+            if (startDate.HasValue)
+            {
+                baseQuery = baseQuery.Where(v => v.EntryDate >= startDate.Value);
+            }
+
+            if (endDate.HasValue)
+            {
+                baseQuery = baseQuery.Where(v => v.EntryDate <= endDate.Value);
             }
 
             var query = baseQuery
@@ -213,7 +224,7 @@ namespace PureLedger.Repositories
         /// <summary>
         /// Get all base vouchers with entries for summary statistics calculation
         /// </summary>
-        public async Task<List<JournalVoucher>> GetBaseVouchersSummaryDataAsync(int? projectId)
+        public async Task<List<JournalVoucher>> GetBaseVouchersSummaryDataAsync(int? projectId, DateOnly? startDate = null, DateOnly? endDate = null)
         {
             IQueryable<JournalVoucher> baseQuery = _context.JournalVouchers
                 .AsNoTracking()
@@ -222,6 +233,16 @@ namespace PureLedger.Repositories
             if (projectId.HasValue)
             {
                 baseQuery = baseQuery.Where(v => v.ProjectId == projectId.Value);
+            }
+
+            if (startDate.HasValue)
+            {
+                baseQuery = baseQuery.Where(v => v.EntryDate >= startDate.Value);
+            }
+
+            if (endDate.HasValue)
+            {
+                baseQuery = baseQuery.Where(v => v.EntryDate <= endDate.Value);
             }
 
             var query = baseQuery

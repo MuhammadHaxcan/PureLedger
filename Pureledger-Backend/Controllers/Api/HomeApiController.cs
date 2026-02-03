@@ -384,7 +384,12 @@ namespace PureLedger.Controllers.Api
         }
 
         [HttpGet("base-vouchers")]
-        public async Task<IActionResult> GetBaseVouchers(int? projectId = null, int page = 0, int pageSize = 250)
+        public async Task<IActionResult> GetBaseVouchers(
+            int? projectId = null,
+            DateOnly? startDate = null,
+            DateOnly? endDate = null,
+            int page = 0,
+            int pageSize = 250)
         {
             try
             {
@@ -394,7 +399,8 @@ namespace PureLedger.Controllers.Api
                 page = Math.Max(0, page);
                 pageSize = Math.Clamp(pageSize, 1, 1000);
 
-                var (baseVouchers, totalCount) = await _journalService.GetBaseVouchersPaginatedAsync(projectId, page, pageSize);
+                var (baseVouchers, totalCount) = await _journalService.GetBaseVouchersPaginatedAsync(
+                    projectId, startDate, endDate, page, pageSize);
 
                 return Ok(new
                 {
@@ -423,11 +429,14 @@ namespace PureLedger.Controllers.Api
         }
 
         [HttpGet("base-vouchers-summary")]
-        public async Task<IActionResult> GetBaseVouchersSummary(int? projectId = null)
+        public async Task<IActionResult> GetBaseVouchersSummary(
+            int? projectId = null,
+            DateOnly? startDate = null,
+            DateOnly? endDate = null)
         {
             try
             {
-                var summary = await _journalService.GetBaseVouchersSummaryAsync(projectId);
+                var summary = await _journalService.GetBaseVouchersSummaryAsync(projectId, startDate, endDate);
                 return Ok(new { success = true, data = summary });
             }
             catch (Exception ex)

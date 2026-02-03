@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import ConfirmModal from '../../components/ConfirmModal';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const BaseVouchers = () => {
     usePageTitle('Base Vouchers');
@@ -24,6 +25,9 @@ const BaseVouchers = () => {
     const [success, setSuccess] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [projectId, setProjectId] = useState(null);
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [dateFilterType, setDateFilterType] = useState('custom');
     const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
@@ -44,7 +48,7 @@ const BaseVouchers = () => {
     useEffect(() => {
         if (projectId !== null) {
             loadBaseVouchers(0, false);
-            loadSummaryStats(projectId);
+            loadSummaryStats(projectId, startDate, endDate);
         } else {
             setVouchers([]);
             setLoadingVouchers(false);
@@ -53,7 +57,7 @@ const BaseVouchers = () => {
             setTotalRecords(0);
             setSummaryStats(null);
         }
-    }, [projectId]);
+    }, [projectId, startDate, endDate]);
 
     const loadInitData = async () => {
         setLoadingProjects(true);
@@ -98,14 +102,19 @@ const BaseVouchers = () => {
         }
     };
 
-    const loadSummaryStats = async (currentProjectId) => {
+    const loadSummaryStats = async (currentProjectId, currentStartDate, currentEndDate) => {
         if (currentProjectId === null) {
             setSummaryStats(null);
             return;
         }
         setLoadingSummary(true);
         try {
-            const response = await apiClient.get(`/HomeApi/base-vouchers-summary?projectId=${currentProjectId}`);
+            const params = {
+                projectId: currentProjectId,
+                startDate: currentStartDate || undefined,
+                endDate: currentEndDate || undefined
+            };
+            const response = await apiClient.get('/HomeApi/base-vouchers-summary', { params });
             if (response.data.success) {
                 setSummaryStats(response.data.data);
             } else {
@@ -138,6 +147,8 @@ const BaseVouchers = () => {
         try {
             const params = {
                 projectId: projectId,
+                startDate: startDate || undefined,
+                endDate: endDate || undefined,
                 page: page,
                 pageSize: pageSize
             };
@@ -242,6 +253,16 @@ const BaseVouchers = () => {
         }).format(value || 0);
     };
 
+    const handleDateFilterChange = (filterType) => {
+        setDateFilterType(filterType);
+        if (filterType === 'custom') {
+            return;
+        }
+        const dateRange = getDateRange(filterType);
+        setStartDate(dateRange.startDate);
+        setEndDate(dateRange.endDate);
+    };
+
     const filteredVouchers = vouchers.filter(voucher => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
@@ -291,6 +312,56 @@ const BaseVouchers = () => {
                 <Card.Body>
                     <Form>
                         <div className="row mb-3">
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small text-muted">Quick Filter</Form.Label>
+                                <Form.Select
+                                    size="sm"
+                                    value={dateFilterType}
+                                    onChange={(e) => handleDateFilterChange(e.target.value)}
+                                    disabled={loadingVouchers}
+                                    style={{ fontSize: '0.875rem' }}
+                                >
+                                    {dateFilterOptions.map(option => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </Form.Select>
+                            </div>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">Since</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                                    <Form.Control
+                                        type="date"
+                                        size="sm"
+                                        value={startDate}
+                                        onChange={(e) => {
+                                            setStartDate(e.target.value);
+                                            setDateFilterType('custom');
+                                        }}
+                                        disabled={loadingVouchers}
+                                        style={{ fontSize: '0.875rem' }}
+                                    />
+                                </InputGroup>
+                            </div>
+                            <div className="col-md-2 mb-3">
+                                <Form.Label className="small">To</Form.Label>
+                                <InputGroup size="sm">
+                                    <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
+                                    <Form.Control
+                                        type="date"
+                                        size="sm"
+                                        value={endDate}
+                                        onChange={(e) => {
+                                            setEndDate(e.target.value);
+                                            setDateFilterType('custom');
+                                        }}
+                                        disabled={loadingVouchers}
+                                        style={{ fontSize: '0.875rem' }}
+                                    />
+                                </InputGroup>
+                            </div>
                             <div className="col-md-4 mb-3">
                                 <Form.Label>Project</Form.Label>
                                 <InputGroup>
@@ -303,6 +374,21 @@ const BaseVouchers = () => {
                                         disabled={loadingProjects}
                                     />
                                 </InputGroup>
+                            </div>
+                            <div className="col-md-2 mb-3 d-flex align-items-end">
+                                {(startDate || endDate) && (
+                                    <Button
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        onClick={() => {
+                                            setStartDate('');
+                                            setEndDate('');
+                                            setDateFilterType('custom');
+                                        }}
+                                    >
+                                        <i className="fas fa-times me-1"></i>Clear Dates
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </Form>
