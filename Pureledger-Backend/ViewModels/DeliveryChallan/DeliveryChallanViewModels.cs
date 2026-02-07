@@ -13,7 +13,7 @@ namespace PureLedger.ViewModels.DeliveryChallan
         public int JournalVoucherId { get; set; }
         
         [Required]
-        [Range(1, int.MaxValue, ErrorMessage = "FOR charges amount must be greater than zero")]
+        [Range(0, int.MaxValue, ErrorMessage = "FOR charges amount must be zero or greater")]
         public int ForAmount { get; set; }
         
         [Required]

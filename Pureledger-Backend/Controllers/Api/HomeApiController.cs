@@ -413,7 +413,7 @@ namespace PureLedger.Controllers.Api
                         customerName = v.JournalEntries?.FirstOrDefault(e => e.Account?.AccountGroupId == 1)?.Account?.AccountName ?? "N/A",
                         entryDate = v.EntryDate,
                         unprocessedEntries = v.JournalEntries?.Count(e => !e.IsProcessed && e.Quantity > 0) ?? 0,
-                        totalEntries = v.JournalEntries?.Count ?? 0
+                        totalEntries = v.JournalEntries?.Count(e => e.Account?.AccountGroupId != 1) ?? 0
                     }).ToList(),
                     totalRecords = totalCount,
                     page,
@@ -477,7 +477,8 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, message = "Please select at least one entry to process." });
 
                 var derivedVoucherId = await _journalService.CreateDerivedVoucherAsync(
-                    model.BaseVoucherId, entriesToProcess, model.AccountEntryAmount, model.AccountEntryIsDebit, model.CreditableDate, model.BookerId);
+                    model.BaseVoucherId, entriesToProcess, model.AccountEntryAmount, model.AccountEntryIsDebit,
+                    model.DerivedEntryDate, model.DerivedCreditableDate);
 
                 return Ok(new { success = true, message = $"Successfully created derived voucher JV-{derivedVoucherId}", voucherId = derivedVoucherId });
             }

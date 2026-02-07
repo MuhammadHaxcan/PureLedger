@@ -16,6 +16,7 @@ namespace PureLedger.ViewModels.Reporting
         public string? LocationId { get; set; }
         public int Page { get; set; } = 0;
         public int PageSize { get; set; } = 100;
+        public bool ShowQtyBalance { get; set; } = false;
     }
 
     public class UserReportViewModels
@@ -55,6 +56,8 @@ namespace PureLedger.ViewModels.Reporting
         public string BookerName { get; set; } = string.Empty;
         public int? LocationId { get; set; }
         public string LocationName { get; set; } = string.Empty;
+        public int QtyBalance { get; set; }
+        public decimal Rate { get; set; }
     }
 }
 

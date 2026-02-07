@@ -26,8 +26,6 @@ namespace PureLedger.Repositories.Interfaces
 
         #region Entry Retrieval By Criteria
 
-        Task<JournalEntry?> GetByCartageId(int id);
-        Task<List<JournalEntry>> GetEntriesByCriteriaAsync(List<int> accountIds, int categoryId, int? projectId, DateOnly referenceDate);
         Task<List<JournalEntry>> GetEntriesByVoucherIdsAndAccountAsync(List<int> voucherIds, int accountId);
 
         #endregion
@@ -116,16 +114,6 @@ namespace PureLedger.Repositories.Interfaces
 
         #region Product Report Queries
 
-        Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(
-            DateOnly startDate,
-            DateOnly endDate,
-            int projectId,
-            int? categoryId,
-            int? accountId,
-            int? locationId,
-            int page,
-            int pageSize);
-
         Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
             DateOnly startDate,
             DateOnly endDate,
@@ -143,14 +131,6 @@ namespace PureLedger.Repositories.Interfaces
             int? locationId,
             int page,
             int pageSize);
-
-        Task<List<ProductAggregateDto>> GetProductAggregatesAsync(
-            List<int> productIds,
-            DateOnly startDate,
-            DateOnly endDate,
-            int projectId,
-            int? categoryId,
-            int? locationId);
 
         #endregion
 

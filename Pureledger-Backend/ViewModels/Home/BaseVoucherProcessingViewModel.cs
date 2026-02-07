@@ -9,6 +9,8 @@ namespace PureLedger.ViewModels.Home
         public int ProjectId { get; set; }
         public string? ProjectName { get; set; }
         public DateOnly EntryDate { get; set; }
+        public DateOnly? DerivedEntryDate { get; set; }
+        public DateOnly? DerivedCreditableDate { get; set; }
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public List<BaseVoucherEntryViewModel> Entries { get; set; } = new();
@@ -17,8 +19,6 @@ namespace PureLedger.ViewModels.Home
         public decimal AccountEntryAmount { get; set; }
         public bool AccountEntryIsDebit { get; set; }
         public bool AccountEntryIncluded { get; set; } = true;
-        public DateOnly CreditableDate { get; set; }
-        public int? BookerId { get; set; }
 
     }
 

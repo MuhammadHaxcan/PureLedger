@@ -84,12 +84,6 @@ namespace PureLedger.Repositories
             return await query.OrderByDescending(jv => jv.EntryDate).ToListAsync();
         }
 
-        public async Task<List<JournalVoucher>> GetVouchersWithModifiedEntriesAsync(int? projectId)
-        {
-            var (vouchers, _) = await GetVouchersWithModifiedEntriesPaginatedAsync(projectId, 0, int.MaxValue);
-            return vouchers;
-        }
-
         public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetVouchersWithModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize)
         {
             page = Math.Max(0, page);
@@ -136,12 +130,6 @@ namespace PureLedger.Repositories
             _context.JournalVouchers.Remove(voucher);
             await _context.SaveChangesAsync();
             return true;
-        }
-
-        public async Task<List<JournalVoucher>> GetAllBaseVouchersAsync()
-        {
-            var (vouchers, _) = await GetAllBaseVouchersPaginatedAsync(null, null, null, 0, int.MaxValue);
-            return vouchers;
         }
 
         public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(

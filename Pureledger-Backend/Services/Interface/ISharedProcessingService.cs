@@ -7,7 +7,6 @@ namespace PureLedger.Services.Interface
         #region Entry Processing Status
 
         Task<bool> DetermineEntryProcessedStatusAsync(JournalEntry entry);
-        Task<bool> IsEligibleForDCAsync(JournalEntry entry);
 
         #endregion
 
@@ -31,9 +30,7 @@ namespace PureLedger.Services.Interface
 
         #region DC Entry Linkage Operations
 
-        Task<DeliveryChallanEntry?> GetLinkedDCEntryAsync(int journalEntryId);
         Task DeleteLinkedDCEntryAsync(int journalEntryId);
-        Task<(bool CanModify, bool HasLinkedDC, string? Warning)> ValidateEntryModificationAsync(int entryId);
 
         #endregion
 

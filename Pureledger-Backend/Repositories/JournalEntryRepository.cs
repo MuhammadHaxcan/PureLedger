@@ -72,33 +72,6 @@ namespace PureLedger.Repositories
             return true;
         }
 
-        public async Task<JournalEntry?> GetByCartageId(int id)
-        {
-            return await _context.JournalEntries.FirstOrDefaultAsync(e => e.JournalVoucherId == id && e.Debit == 0 && e.Credit > 0);
-        }
-
-        public async Task<List<JournalEntry>> GetEntriesByCriteriaAsync(
-            List<int> accountIds, int categoryId, int? projectId, DateOnly referenceDate)
-        {
-
-            var query = _context.JournalEntries
-                
-                .Include(je => je.JournalVoucher)
-                .Where(je =>
-                    accountIds.Contains(je.AccountId) &&
-                    je.CategoryId == categoryId &&
-                    je.JournalVoucher.IsCompleted &&
-                    !je.JournalVoucher.IsBaseVoucher &&
-                    je.JournalVoucher.CreditableDate <= referenceDate);
-
-            if (projectId.HasValue)
-            {
-                query = query.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
-            }
-
-            return await query.ToListAsync();
-        }
-
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int accountId, int maxVoucherId)
         {
             // Optimized: Single aggregate query instead of two separate queries
@@ -537,72 +510,6 @@ namespace PureLedger.Repositories
             return accountQtyBalances.ToDictionary(x => x.AccountId, x => x.QtyBalance);
         }
 
-        public async Task<(List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>, int TotalCount)> GetProcessedEntriesForProductReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int? locationId,
-    int page,
-    int pageSize)
-        {
-
-            var query = _context.JournalEntries
-                .AsNoTracking()
-                .Include(je => je.JournalVoucher)
-                .Include(je => je.Account)
-                .Where(je =>
-                    je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted &&
-                    !je.JournalVoucher.IsBaseVoucher &&
-                    je.IsProcessed &&                 
-                    je.Quantity > 0 &&
-                    je.Account.AccountGroupId == 2 &&
-                    je.JournalVoucher.EntryDate >= startDate &&
-                    je.JournalVoucher.EntryDate <= endDate);
-
-            if (categoryId.HasValue)
-            {
-                query = query.Where(je => je.CategoryId == categoryId.Value);
-            }
-
-            if (accountId.HasValue)
-            {
-                query = query.Where(je => je.AccountId == accountId.Value);
-            }
-
-            int totalCount = await query.CountAsync();
-
-            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
-                        .ThenBy(je => je.JournalVoucherId)
-                        .ThenBy(je => je.JournalEntryId);
-
-            query = query.Skip(page * pageSize).Take(pageSize);
-
-            var entriesWithDC = await query
-                .GroupJoin(
-                    _context.DeliveryChallanEntries.Include(dce => dce.Location),
-                    je => je.JournalEntryId,
-                    dce => dce.JournalEntryId,
-                    (je, dces) => new { JournalEntry = je, DCEntries = dces })
-                .SelectMany(
-                    x => x.DCEntries.DefaultIfEmpty(),
-                    (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
-                .ToListAsync();
-
-            if (locationId.HasValue)
-            {
-                entriesWithDC = entriesWithDC
-                    .Where(x => x.DCEntry != null && x.DCEntry.LocationId == locationId.Value)
-                    .ToList();
-            }
-
-            var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
-
-            return (results, totalCount);
-        }
-
         public async Task<(decimal Debit, decimal Credit)> GetOpeningBalanceAsync(
             DateOnly startDate,
             int? projectId,
@@ -689,8 +596,7 @@ namespace PureLedger.Repositories
                     je.JournalVoucher.ProjectId == projectId &&
                     je.JournalVoucher.IsCompleted &&
                     !je.JournalVoucher.IsBaseVoucher &&
-                    je.IsProcessed &&                 
-                    je.Quantity > 0 &&
+                    je.IsProcessed &&
                     je.Account.AccountGroupId == 2 &&
                     je.JournalVoucher.EntryDate <= endDate);
 
@@ -908,8 +814,7 @@ namespace PureLedger.Repositories
             je.JournalVoucher.ProjectId == projectId &&
             je.JournalVoucher.IsCompleted &&
             !je.JournalVoucher.IsBaseVoucher &&
-            je.IsProcessed &&                 
-            je.Quantity > 0 &&
+            je.IsProcessed &&
             je.Account.AccountGroupId == 2 &&
             je.JournalVoucher.EntryDate <= endDate);
 
@@ -972,136 +877,6 @@ namespace PureLedger.Repositories
                     je.JournalVoucher.IsCompleted &&
                     !je.JournalVoucher.IsBaseVoucher)
                 .ToListAsync();
-        }
-
-        /// <summary>
-        /// Get aggregated product data for the product report - avoids loading all entries into memory
-        /// Uses two queries: one for previous period, one for current period, then combines in memory
-        /// </summary>
-        public async Task<List<ProductAggregateDto>> GetProductAggregatesAsync(
-            List<int> productIds,
-            DateOnly startDate,
-            DateOnly endDate,
-            int projectId,
-            int? categoryId,
-            int? locationId)
-        {
-            if (productIds == null || !productIds.Any())
-                return new List<ProductAggregateDto>();
-
-            // Base query builder for product entries
-            IQueryable<JournalEntry> BuildBaseQuery(DateOnly? fromDate, DateOnly toDate)
-            {
-                var query = _context.JournalEntries
-                    .AsNoTracking()
-                    .Include(je => je.Account)
-                    .Where(je =>
-                        productIds.Contains(je.AccountId) &&
-                        je.JournalVoucher.ProjectId == projectId &&
-                        je.JournalVoucher.IsCompleted &&
-                        !je.JournalVoucher.IsBaseVoucher &&
-                        je.IsProcessed &&
-                        je.Quantity > 0 &&
-                        je.Account.AccountGroupId == 2 &&
-                        je.JournalVoucher.EntryDate <= toDate);
-
-                if (fromDate.HasValue)
-                {
-                    query = query.Where(je => je.JournalVoucher.EntryDate >= fromDate.Value);
-                }
-
-                if (categoryId.HasValue)
-                {
-                    query = query.Where(je => je.CategoryId == categoryId.Value);
-                }
-
-                // Location filter using subquery instead of loading IDs into memory
-                if (locationId.HasValue)
-                {
-                    query = query.Where(je => _context.DeliveryChallanEntries
-                        .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
-                }
-
-                return query;
-            }
-
-            // Query 1: Get aggregates for entries BEFORE start date (previous balance)
-            // Handle edge case where startDate is MinValue (no previous period exists)
-            List<dynamic> prevAggregates;
-            if (startDate == DateOnly.MinValue)
-            {
-                prevAggregates = new List<dynamic>();
-            }
-            else
-            {
-                var prevQuery = BuildBaseQuery(null, startDate.AddDays(-1));
-                prevAggregates = (await prevQuery
-                    .GroupBy(je => new { je.AccountId, je.Account.AccountName })
-                    .Select(g => new
-                    {
-                        ProductId = g.Key.AccountId,
-                        ProductName = g.Key.AccountName ?? "",
-                        DebitQty = g.Where(je => je.Debit > 0).Sum(je => je.Quantity),
-                        CreditQty = g.Where(je => je.Credit > 0).Sum(je => je.Quantity),
-                        Debit = g.Sum(je => je.Debit),
-                        Credit = g.Sum(je => je.Credit)
-                    })
-                    .ToListAsync()).Cast<dynamic>().ToList();
-            }
-
-            // Query 2: Get aggregates for entries IN date range (current period)
-            var currentQuery = BuildBaseQuery(startDate, endDate);
-            var currentAggregates = await currentQuery
-                .GroupBy(je => new { je.AccountId, je.Account.AccountName })
-                .Select(g => new
-                {
-                    ProductId = g.Key.AccountId,
-                    ProductName = g.Key.AccountName ?? "",
-                    DebitQty = g.Where(je => je.Debit > 0).Sum(je => je.Quantity),
-                    CreditQty = g.Where(je => je.Credit > 0).Sum(je => je.Quantity),
-                    Debit = g.Sum(je => je.Debit),
-                    Credit = g.Sum(je => je.Credit)
-                })
-                .ToListAsync();
-
-            // Get product names for products that might not have any entries in either period
-            var productNames = await _context.Accounts
-                .AsNoTracking()
-                .Where(a => productIds.Contains(a.AccountId))
-                .Select(a => new { a.AccountId, a.AccountName })
-                .ToDictionaryAsync(a => a.AccountId, a => a.AccountName ?? "Unknown");
-
-            // Combine results
-            var prevDict = prevAggregates.ToDictionary(p => p.ProductId);
-            var currentDict = currentAggregates.ToDictionary(c => c.ProductId);
-
-            var results = new List<ProductAggregateDto>();
-
-            foreach (var productId in productIds)
-            {
-                var prev = prevDict.GetValueOrDefault(productId);
-                var current = currentDict.GetValueOrDefault(productId);
-
-                // Skip products with no data at all
-                if (prev == null && current == null)
-                    continue;
-
-                results.Add(new ProductAggregateDto
-                {
-                    ProductId = productId,
-                    ProductName = prev?.ProductName ?? current?.ProductName ?? productNames.GetValueOrDefault(productId, "Unknown"),
-                    PrevDebitQty = prev?.DebitQty ?? 0,
-                    PrevCreditQty = prev?.CreditQty ?? 0,
-                    PrevDebit = prev?.Debit ?? 0,
-                    PrevCredit = prev?.Credit ?? 0,
-                    CurrentDebitQty = current?.DebitQty ?? 0,
-                    CurrentCreditQty = current?.CreditQty ?? 0,
-                    CurrentDebit = current?.Debit ?? 0,
-                    CurrentCredit = current?.Credit ?? 0
-                });
-            }
-
-            return results;
         }
 
         /// <summary>

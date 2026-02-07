@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
+import { Card, Form, Button, Alert, Table } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -22,11 +22,21 @@ const ProcessBaseVoucher = () => {
     const [accountEntryAmount, setAccountEntryAmount] = useState(0);
     const [accountEntryIsDebit, setAccountEntryIsDebit] = useState(false);
     const [accountEntryIncluded, setAccountEntryIncluded] = useState(true);
-    const [creditableDate, setCreditableDate] = useState('');
-    const [bookers, setBookers] = useState([]);
-    const [bookerId, setBookerId] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasSubmitted, setHasSubmitted] = useState(false);
+    const [derivedEntryDate, setDerivedEntryDate] = useState(new Date().toISOString().split('T')[0]);
+    const [creditDays, setCreditDays] = useState(0);
+    const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+
+    // Calculate due date from entry date + credit days
+    useEffect(() => {
+        if (derivedEntryDate) {
+            const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
+            const date = new Date(derivedEntryDate);
+            date.setDate(date.getDate() + days);
+            setDueDate(date.toISOString().split('T')[0]);
+        }
+    }, [derivedEntryDate, creditDays]);
 
     // Calculate entry amounts using the same formula as Entry.jsx
     const calculateEntryAmounts = useCallback((entry) => {
@@ -183,29 +193,6 @@ const ProcessBaseVoucher = () => {
         }
     };
 
-    // Load bookers
-    const loadBookers = async () => {
-        try {
-            const response = await apiClient.get('/MetaDataApi/bookers');
-            if (response.data.success) {
-                // Transform to match the format used in Entry.jsx (id, name)
-                const enabledBookers = (response.data.data || [])
-                    .filter(b => b.isEnabled)
-                    .map(b => ({
-                        id: b.bookerID || b.id,
-                        name: b.bookerName || b.name
-                    }));
-                setBookers(enabledBookers);
-                // Set first booker as default
-                if (enabledBookers.length > 0 && !bookerId) {
-                    setBookerId(enabledBookers[0].id);
-                }
-            }
-        } catch (err) {
-            console.error('Error loading bookers:', err);
-        }
-    };
-
     // Initialize entries when voucher data loads
     useEffect(() => {
         if (voucherData && voucherData.entries && entries.length === 0) {
@@ -246,28 +233,12 @@ const ProcessBaseVoucher = () => {
         }
     }, [voucherData, calculateEntryAmounts, updateAccountEntries]);
 
-    // Set creditable date from base voucher when voucher data loads
-    useEffect(() => {
-        if (voucherData && voucherData.creditableDate) {
-            setCreditableDate(voucherData.creditableDate);
-        }
-    }, [voucherData]);
-
     // Load data on mount
     useEffect(() => {
         if (id) {
             loadBaseVoucher();
         }
-        loadBookers();
     }, [id]);
-
-    // Set default creditable date (fallback if voucher data not available)
-    useEffect(() => {
-        if (!creditableDate && !voucherData) {
-            const today = new Date();
-            setCreditableDate(today.toISOString().split('T')[0]);
-        }
-    }, [creditableDate]);
 
     // Handle quantity change
     const handleQuantityChange = (index, value) => {
@@ -280,15 +251,19 @@ const ProcessBaseVoucher = () => {
             return;
         }
 
-        const qty = parseInt(value) || 0;
-        const maxQty = entry.availableQuantity || 0;
-        
-        if (qty < 0) {
-            entry.processQuantity = 0;
-        } else if (qty > maxQty) {
-            entry.processQuantity = maxQty;
+        if (value === '') {
+            entry.processQuantity = '';
         } else {
-            entry.processQuantity = qty;
+            const qty = parseInt(value) || 0;
+            const maxQty = entry.availableQuantity || 0;
+
+            if (qty < 0) {
+                entry.processQuantity = 0;
+            } else if (qty > maxQty) {
+                entry.processQuantity = maxQty;
+            } else {
+                entry.processQuantity = qty;
+            }
         }
 
         // Recalculate all amounts
@@ -503,14 +478,6 @@ const ProcessBaseVoucher = () => {
                 return;
             }
 
-            // Validate booker is selected
-            if (!bookerId || bookerId <= 0) {
-                setError('Please select a booker.');
-                setGenerating(false);
-                isSubmittingRef.current = false;
-                return;
-            }
-
             // Validate that all selected non-account entries have valid quantities and amounts
             const invalidEntries = entries.filter(e => 
                 e.processQuantity > 0 && 
@@ -593,16 +560,15 @@ const ProcessBaseVoucher = () => {
                 accountEntryAmount: parseFloat(finalAccountEntryAmount) || 0,
                 accountEntryIsDebit: finalAccountEntryIsDebit,
                 accountEntryIncluded: accountEntryIncluded,
-                creditableDate: creditableDate || new Date().toISOString().split('T')[0],
-                bookerId: bookerId ? parseInt(bookerId) : null
+                derivedEntryDate: derivedEntryDate,
+                derivedCreditableDate: dueDate
             };
 
             console.log('Submitting derived voucher with model:', {
                 baseVoucherId: model.baseVoucherId,
                 entriesCount: model.entries.length,
                 selectedEntries: model.entries.filter(e => e.processQuantity > 0).length,
-                accountEntryAmount: model.accountEntryAmount,
-                bookerId: model.bookerId
+                accountEntryAmount: model.accountEntryAmount
             });
             
             const response = await apiClient.post('/HomeApi/create-derived-voucher', model);
@@ -692,6 +658,21 @@ const ProcessBaseVoucher = () => {
                 <i className="fas fa-info-circle me-2"></i>
                 Select items to include in the new derived voucher. You can process all or part of each entry.
             </Alert>
+
+            <div className="row mb-3">
+                <div className="col-md-3">
+                    <Form.Group>
+                        <Form.Label className="fw-bold">Base Voucher Date</Form.Label>
+                        <Form.Control type="date" value={voucherData.entryDate} readOnly className="bg-light" />
+                    </Form.Group>
+                </div>
+                <div className="col-md-3">
+                    <Form.Group>
+                        <Form.Label className="fw-bold">Entry Date</Form.Label>
+                        <Form.Control type="date" value={derivedEntryDate} onChange={(e) => setDerivedEntryDate(e.target.value)} required />
+                    </Form.Group>
+                </div>
+            </div>
 
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
@@ -811,7 +792,7 @@ const ProcessBaseVoucher = () => {
                                                         size="sm"
                                                         min="0"
                                                         max={entry.availableQuantity}
-                                                        value={entry.processQuantity || 0}
+                                                        value={entry.processQuantity === '' ? '' : (entry.processQuantity || 0)}
                                                         onChange={(e) => handleQuantityChange(index, e.target.value)}
                                                         disabled={isProcessed || isAccountEntry}
                                                     />
@@ -844,75 +825,57 @@ const ProcessBaseVoucher = () => {
                     </Card.Body>
                 </Card>
 
-                <div className="mb-3">
-                    <div className="d-flex align-items-end gap-3 mb-2">
-                        <span className="fw-bold">Selected Items:</span>
-                        <span id="selectedCount" className="badge bg-primary">{selectedCount}</span>
+                <div className="row align-items-end mb-3">
+                    <div className="col-md-3 mb-2">
+                        <Form.Label>Credit Days</Form.Label>
+                        <div className="input-group">
+                            <span className="input-group-text"><i className="fas fa-calendar-day"></i></span>
+                            <Form.Control
+                                type="number"
+                                className="no-arrow"
+                                min="0"
+                                value={creditDays}
+                                onChange={(e) => setCreditDays(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                            />
+                        </div>
                     </div>
-                    <div className="row">
-                        <div className="col-md-4">
-                            <Form.Label htmlFor="CreditableDate">Creditable Date</Form.Label>
-                            <InputGroup>
-                                <InputGroup.Text 
-                                    className="calendar-icon"
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => {
-                                        const dateInput = document.getElementById('CreditableDate');
-                                        if (dateInput && !dateInput.disabled) {
-                                            dateInput.showPicker();
-                                        }
-                                    }}
-                                >
-                                    <i className="fas fa-calendar-alt"></i>
-                                </InputGroup.Text>
-                                <Form.Control
-                                    id="CreditableDate"
-                                    name="CreditableDate"
-                                    type="date"
-                                    value={creditableDate}
-                                    onChange={(e) => setCreditableDate(e.target.value)}
-                                    required
-                                />
-                            </InputGroup>
+                    <div className="col-md-3 mb-2">
+                        <Form.Label>Due Date</Form.Label>
+                        <div className="input-group">
+                            <span className="input-group-text">
+                                <i className="fas fa-calendar-check"></i>
+                            </span>
+                            <Form.Control
+                                type="date"
+                                value={dueDate}
+                                readOnly
+                                className="bg-light"
+                                tabIndex="-1"
+                            />
                         </div>
-                        {bookers.length > 0 && (
-                            <div className="col-md-4">
-                                <Form.Label htmlFor="BookerId">Booker <span className="text-danger">*</span></Form.Label>
-                                <Form.Select
-                                    id="BookerId"
-                                    name="BookerId"
-                                    value={bookerId || ''}
-                                    onChange={(e) => setBookerId(e.target.value ? parseInt(e.target.value) : null)}
-                                    required
-                                >
-                                    {bookers.map(booker => (
-                                        <option key={booker.id} value={booker.id}>
-                                            {booker.name}
-                                        </option>
-                                    ))}
-                                </Form.Select>
-                            </div>
-                        )}
-                        <div className="col-md-4 d-flex align-items-end">
-                            <Button 
-                                type="submit" 
-                                variant="success" 
-                                id="submitBtn"
-                                className="w-100"
-                                disabled={generating || isSubmitting || selectedCount === 0 || hasSubmitted}
-                            >
-                                {generating ? (
-                                    <>
-                                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                        Processing...
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-share-alt me-1"></i> Create Derived Voucher
-                                    </>
-                                )}
-                            </Button>
+                    </div>
+                    <div className="col-md-6 mb-2 d-flex justify-content-end align-items-center gap-3">
+                        <div className="d-flex align-items-center gap-2">
+                            <span className="fw-bold">Selected Items:</span>
+                            <span id="selectedCount" className="badge bg-primary">{selectedCount}</span>
                         </div>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            id="submitBtn"
+                            disabled={generating || isSubmitting || selectedCount === 0 || hasSubmitted}
+                        >
+                            {generating ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <i className="fas fa-share-alt me-1"></i> Create Derived Voucher
+                                </>
+                            )}
+                        </Button>
                     </div>
                 </div>
             </Form>

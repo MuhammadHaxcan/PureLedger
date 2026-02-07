@@ -43,7 +43,7 @@ export const generatePdfAsync = async (config, onProgress) => {
     } = config;
 
     const doc = new jsPDF(orientation, 'mm', format);
-    
+
     if (onProgress) onProgress(0.1);
     await delay(10);
 

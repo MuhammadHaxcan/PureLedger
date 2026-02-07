@@ -55,7 +55,7 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
     withCredentials: true, // Send cookies with requests (HttpOnly cookies for auth)
-    timeout: 30000, // 30 seconds timeout
+    timeout: 120000, // 120 seconds timeout
 });
 
 // Flag to prevent multiple simultaneous refresh requests

@@ -8,10 +8,8 @@ namespace PureLedger.Services.Interface
     {
         #region Entity Retrieval
 
-        Task<List<Project>> GetAllProjectsAsync();
         Task<List<Project>> GetUserProjectsAsync(int userId);
         Task<List<Location>> GetLocationsAsync();
-        Task<JournalEntry?> GetJournalEntryByIdAsync(int journalEntryId);
 
         #endregion
 
@@ -24,10 +22,7 @@ namespace PureLedger.Services.Interface
 
         #region Delivery Challan Retrieval
 
-        Task<DeliveryChallanVoucher?> GetDCByIdAsync(int deliveryChallanId);
         Task<DeliveryChallanVoucher?> GetDCByJournalVoucherIdAsync(int journalVoucherId);
-        Task<List<DeliveryChallanVoucher>> GetDCsByDateRangeAsync(DateOnly startDate, DateOnly endDate);
-        Task<List<DeliveryChallanEntry>> GetDCEntriesByVoucherIdAsync(int deliveryChallanId);
 
         #endregion
 
@@ -48,16 +43,6 @@ namespace PureLedger.Services.Interface
             int? categoryId = null,
             int? accountId = null,
             int? userId = null);
-
-        #endregion
-
-        #region DC Voucher and Entry Creation
-
-        Task<DeliveryChallanVoucher> CreateDCVoucherAsync(int journalVoucherId, DateOnly dcDate);
-        Task<DeliveryChallanVoucher> CreateDCVoucherAsync(int journalVoucherId, DateOnly dcDate, string? reference);
-
-        Task<DeliveryChallanEntry> CreateDCEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference);
-        Task<DeliveryChallanEntry> CreateDCEntryAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate);
 
         #endregion
 
@@ -100,15 +85,6 @@ namespace PureLedger.Services.Interface
 
         #endregion
 
-        #region DC Update and Status Management
-
-        Task<DeliveryChallanVoucher> UpdateDCVoucherAsync(DeliveryChallanVoucher voucher);
-        Task<bool> CompleteDCAsync(int deliveryChallanId, DateOnly finalDeliveryDate);
-        Task UpdateVoucherStatusAsync(int journalVoucherId);
-        Task MarkVoucherCompletedAsync(int journalVoucherId);
-
-        #endregion
-
         #region Lookup Operations
 
         Task<IEnumerable<Account>> GetAccountsAsync(int categoryId);
@@ -126,6 +102,8 @@ namespace PureLedger.Services.Interface
             int amount,
             DateOnly dcDate,
             int? forAccountId = null);
+
+        Task ClearPendingForChargesAsync(int journalVoucherId);
 
         Task<int?> GetForChargesCategoryIdAsync(int projectId);
 

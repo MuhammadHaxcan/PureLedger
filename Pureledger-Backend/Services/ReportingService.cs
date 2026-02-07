@@ -453,8 +453,8 @@ namespace PureLedger.Services {
                     Description = "Opening Balance",
                     AccountName = accountId.HasValue ? entriesWithDC.FirstOrDefault().Entry?.Account?.AccountName ?? "" : "",
                     AccountId = accountId ?? 0,
-                    Debit = openingDebit,
-                    Credit = openingCredit,
+                    Debit = 0,
+                    Credit = 0,
                     Balance = openingBalance,
                     ProjectName = "",
                     ProjectId = projectId ?? 0,
@@ -583,6 +583,13 @@ namespace PureLedger.Services {
 
             decimal runningBalance = previousBalance;
 
+            // Track running qty balance per account when ShowQtyBalance is enabled
+            Dictionary<int, int> accountQtyBalance = new();
+            if (page > 0 && request.ShowQtyBalance) {
+                accountQtyBalance = await _unitOfWork.JournalEntries.GetPreviousQtyBalancePerAccountAsync(
+                    startDate, endDate, projectId, categoryId, accountId, bookerId, locationId, page, pageSize);
+            }
+
             bool includeOpening = (page == 0);
             if (includeOpening) {
                 result.Entries.Add(new UserReportEntryViewModel {
@@ -594,19 +601,26 @@ namespace PureLedger.Services {
                     Description = "Opening Balance",
                     AccountName = accountId.HasValue ? filteredEntries.FirstOrDefault().Entry?.Account?.AccountName ?? "" : "",
                     AccountId = accountId ?? 0,
-                    Debit = openingDebit,
-                    Credit = openingCredit,
+                    Debit = 0,
+                    Credit = 0,
                     Balance = openingBalance,
                     ProjectName = "",
                     ProjectId = projectId ?? 0,
                     CategoryName = "",
-                    CategoryId = categoryId
+                    CategoryId = categoryId,
+                    QtyBalance = 0
                 });
             }
 
             foreach (var (entry, dcEntry) in filteredEntries) {
                 decimal entryImpact = entry.Debit - entry.Credit;
                 runningBalance += entryImpact;
+
+                // Calculate running qty balance per account
+                int qtyImpact = entry.Debit > 0 ? entry.Quantity : -entry.Quantity;
+                if (!accountQtyBalance.ContainsKey(entry.AccountId))
+                    accountQtyBalance[entry.AccountId] = 0;
+                accountQtyBalance[entry.AccountId] += qtyImpact;
 
                 string formattedId = $"{entry.JournalVoucher.ProjectId}-{entry.CategoryId}-{entry.AccountId}";
 
@@ -630,7 +644,9 @@ namespace PureLedger.Services {
                     BookerId = entry.JournalVoucher.BookerId,
                     BookerName = entry.JournalVoucher.Booker?.BookerName ?? string.Empty,
                     LocationId = dcEntry?.LocationId,
-                    LocationName = dcEntry?.Location?.LocationName ?? string.Empty
+                    LocationName = dcEntry?.Location?.LocationName ?? string.Empty,
+                    QtyBalance = request.ShowQtyBalance ? accountQtyBalance[entry.AccountId] : 0,
+                    Rate = entry.Rate
                 });
             }
 

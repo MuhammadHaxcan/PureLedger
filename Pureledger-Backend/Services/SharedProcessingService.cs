@@ -48,14 +48,6 @@ namespace PureLedger.Services
             return true;
         }
 
-        public async Task<bool> IsEligibleForDCAsync(JournalEntry entry)
-        {
-            var accountGroupId = await GetAccountGroupIdAsync(entry.AccountId);
-            return accountGroupId == ACCOUNT_GROUP_PRODUCT
-                && entry.Quantity > 0
-                && !entry.IsProcessed;
-        }
-
         #endregion
 
         #region Voucher Completion Recalculation
@@ -171,13 +163,29 @@ namespace PureLedger.Services
             var references = await _unitOfWork.JournalVoucherReferences.GetByReferencedVoucherIdAsync(journalVoucherId);
 
             var refVoucherReferences = references
-                .Where(r => r.ReferenceType == REFERENCE_TYPE_FOR_CHARGES || r.ReferenceType == REFERENCE_TYPE_CARTAGE)
+                .Where(r => r.ReferenceType == REFERENCE_TYPE_FOR_CHARGES ||
+                            r.ReferenceType == REFERENCE_TYPE_CARTAGE ||
+                            r.ReferenceType == REFERENCE_TYPE_DERIVED_VOUCHER)
                 .ToList();
 
             if (!refVoucherReferences.Any())
                 return false;
 
             _logger.LogInformation("Reference voucher {VoucherId} is empty - deleting voucher and reference records", journalVoucherId);
+
+            // Clean up any DeliveryChallanVoucher referencing this JV before deleting (FK is NoAction)
+            var dcVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
+            if (dcVoucher != null)
+            {
+                var dcEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(dcVoucher.DeliveryChallanVoucherId);
+                foreach (var dcEntry in dcEntries)
+                {
+                    await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
+                    _logger.LogDebug("Deleted DC entry: {DCEntryId}", dcEntry.DeliveryChallanEntryId);
+                }
+                await _unitOfWork.DeliveryChallanVouchers.DeleteAsync(dcVoucher.DeliveryChallanVoucherId);
+                _logger.LogInformation("Deleted DC voucher: {DCVoucherId} for reference voucher: {VoucherId}", dcVoucher.DeliveryChallanVoucherId, journalVoucherId);
+            }
 
             foreach (var reference in refVoucherReferences)
             {
@@ -197,14 +205,9 @@ namespace PureLedger.Services
 
         #region DC Entry Linkage Operations
 
-        public async Task<DeliveryChallanEntry?> GetLinkedDCEntryAsync(int journalEntryId)
-        {
-            return await _unitOfWork.DeliveryChallanEntries.GetByJournalEntryIdAsync(journalEntryId);
-        }
-
         public async Task DeleteLinkedDCEntryAsync(int journalEntryId)
         {
-            var dcEntry = await GetLinkedDCEntryAsync(journalEntryId);
+            var dcEntry = await _unitOfWork.DeliveryChallanEntries.GetByJournalEntryIdAsync(journalEntryId);
 
             if (dcEntry == null)
             {
@@ -216,18 +219,6 @@ namespace PureLedger.Services
 
             _logger.LogInformation("Deleted DC entry {DCEntryId} linked to JV entry: {JournalEntryId}",
                 dcEntry.DeliveryChallanEntryId, journalEntryId);
-        }
-
-        public async Task<(bool CanModify, bool HasLinkedDC, string? Warning)> ValidateEntryModificationAsync(int entryId)
-        {
-            var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(entryId);
-            if (entry == null)
-                return (false, false, "Entry not found");
-
-            var hasLinkedDC = await GetLinkedDCEntryAsync(entryId) != null;
-            var warning = hasLinkedDC ? "Entry has linked DC which will be deleted" : null;
-
-            return (true, hasLinkedDC, warning);
         }
 
         #endregion

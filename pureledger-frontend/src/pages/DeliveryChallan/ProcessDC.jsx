@@ -402,6 +402,11 @@ const ProcessDC = () => {
       return;
     }
 
+    if (dcForm.includeForCharges && dcForm.forAmount > 0 && !dcForm.selectedForAccountId) {
+      setError('Please select a FOR account.');
+      return;
+    }
+
     // Prevent duplicate submissions
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
@@ -461,6 +466,11 @@ const ProcessDC = () => {
       return;
     }
 
+    if (dcForm.includeForCharges && dcForm.forAmount > 0 && !dcForm.selectedForAccountId) {
+      setError('Please select a FOR account.');
+      return;
+    }
+
     // Prevent duplicate submissions
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
@@ -515,7 +525,7 @@ const ProcessDC = () => {
       entryId: dcForm.journalEntryId,
       transporterId: null,
       amount: '',
-      postToCustomer: true
+      postToCustomer: false
     });
     setShowCartageModal(true);
   };
@@ -701,8 +711,13 @@ const ProcessDC = () => {
       return;
     }
 
-    if (!forChargesForm.forAmount || parseFloat(forChargesForm.forAmount) <= 0) {
-      setError('Please enter a valid FOR charges amount greater than zero.');
+    if (forChargesForm.forAmount === '' || forChargesForm.forAmount === null || forChargesForm.forAmount === undefined || parseFloat(forChargesForm.forAmount) < 0) {
+      setError('Please enter a valid FOR charges amount (zero or greater).');
+      return;
+    }
+
+    if (parseFloat(forChargesForm.forAmount) > 0 && !forChargesForm.selectedForAccountId) {
+      setError('Please select a FOR account.');
       return;
     }
 
@@ -1518,9 +1533,9 @@ const ProcessDC = () => {
                 <InputGroup.Text><i className="fas fa-money-bill-wave"></i></InputGroup.Text>
                 <Form.Control
                   type="number"
-                  min="1"
+                  min="0"
                   step="1"
-                  placeholder="Enter FOR charges amount"
+                  placeholder="Enter FOR charges amount (0 to dismiss)"
                   value={forChargesForm.forAmount}
                   onChange={(e) => setForChargesForm({ ...forChargesForm, forAmount: e.target.value })}
                   required
@@ -1551,7 +1566,7 @@ const ProcessDC = () => {
           <Button
             variant="success"
             onClick={handleProcessPendingForCharges}
-            disabled={processing || !forChargesForm.forAmount || parseFloat(forChargesForm.forAmount) <= 0}
+            disabled={processing || forChargesForm.forAmount === '' || forChargesForm.forAmount === null || parseFloat(forChargesForm.forAmount) < 0 || (parseFloat(forChargesForm.forAmount) > 0 && !forChargesForm.selectedForAccountId)}
           >
             {processing ? (
               <>

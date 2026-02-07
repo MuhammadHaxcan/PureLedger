@@ -389,6 +389,20 @@ namespace PureLedger.Controllers.Api
 
             try
             {
+                if (model.ForAmount == 0)
+                {
+                    await _dcService.ClearPendingForChargesAsync(model.JournalVoucherId);
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Pending FOR charges cleared successfully",
+                        data = new
+                        {
+                            journalVoucherId = model.JournalVoucherId
+                        }
+                    });
+                }
+
                 var forJV = await _dcService.ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DcDate, model.ForAccountId);
 
                 return Ok(new

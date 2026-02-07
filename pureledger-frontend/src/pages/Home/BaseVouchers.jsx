@@ -657,6 +657,14 @@ const BaseVouchers = () => {
                                                     >
                                                         <i className="fas fa-eye me-1"></i> View
                                                     </a>
+                                                    <a
+                                                        href={`/reporting/print-voucher?voucherId=${voucher.journalVoucherId}&type=JV`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="btn btn-sm btn-secondary ms-1"
+                                                    >
+                                                        <i className="fas fa-print me-1"></i> Print
+                                                    </a>
                                                 </td>
                                             </tr>
                                         );

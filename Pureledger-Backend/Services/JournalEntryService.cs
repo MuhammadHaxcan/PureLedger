@@ -198,7 +198,7 @@ namespace PureLedger.Services
             };
         }
 
-        public async Task<JournalEntryViewModel> MapVoucherToViewModelAsync(JournalVoucher voucher)
+        private async Task<JournalEntryViewModel> MapVoucherToViewModelAsync(JournalVoucher voucher)
         {
             _logger.LogInformation("Mapping voucher ID {VoucherId} to view model", voucher.JournalVoucherId);
 
@@ -573,8 +573,8 @@ namespace PureLedger.Services
             List<BaseVoucherEntryViewModel> entriesToProcess,
             decimal accountEntryAmount = 0,
             bool accountEntryIsDebit = false,
-            DateOnly? creditableDate = null,
-            int? bookerId = null)
+            DateOnly? derivedEntryDate = null,
+            DateOnly? derivedCreditableDate = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
@@ -586,7 +586,8 @@ namespace PureLedger.Services
                     {
                         baseVoucher.IsBaseVoucher = false;
                         baseVoucher.PendingForCharges = true;
-                        if (bookerId.HasValue) baseVoucher.BookerId = bookerId.Value;
+                        baseVoucher.EntryDate = derivedEntryDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                        baseVoucher.CreditableDate = derivedCreditableDate ?? baseVoucher.EntryDate.AddDays(0);
 
                         await _unitOfWork.JournalVouchers.UpdateAsync(baseVoucher);
                         await _unitOfWork.SaveChangesAsync();
@@ -604,11 +605,11 @@ namespace PureLedger.Services
                 var derivedVoucher = new JournalVoucher
                 {
                     ProjectId = baseVoucherData.ProjectId,
-                    EntryDate = DateOnly.FromDateTime(DateTime.UtcNow),
-                    CreditableDate = creditableDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                    EntryDate = derivedEntryDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                    CreditableDate = derivedCreditableDate ?? (derivedEntryDate ?? DateOnly.FromDateTime(DateTime.UtcNow)),
                     IsCompleted = false,
                     PendingForCharges = true,
-                    BookerId = bookerId ?? 0
+                    BookerId = baseVoucherData.BookerId ?? 0
                 };
 
                 derivedVoucher = await _unitOfWork.JournalVouchers.AddAsync(derivedVoucher);
@@ -738,13 +739,6 @@ namespace PureLedger.Services
 
             return viewModel;
         }
-
-        #endregion
-
-        #region Delivery Challan
-
-        public async Task<DeliveryChallanEntry?> GetDeliveryChallanEntryByJournalEntryIdAsync(int journalEntryId)
-            => await _unitOfWork.DeliveryChallanEntries.GetByJournalEntryIdAsync(journalEntryId);
 
         #endregion
 
@@ -949,6 +943,14 @@ namespace PureLedger.Services
                 return;
             }
 
+            // Qty unchanged — preserve current IsProcessed status and DC link
+            if (oldQuantity == entry.Quantity)
+            {
+                await _unitOfWork.JournalEntries.UpdateAsync(entry);
+                await _sharedProcessingService.RecalculateVoucherCompletionAsync(voucherId);
+                return;
+            }
+
             var wasProcessed = entry.IsProcessed;
             entry.IsProcessed = await _sharedProcessingService.DetermineEntryProcessedStatusAsync(entry);
 
@@ -968,6 +970,7 @@ namespace PureLedger.Services
             if (entry == null) return false;
 
             var voucherId = entry.JournalVoucherId;
+
             await _sharedProcessingService.DeleteLinkedDCEntryAsync(entryId);
             await _unitOfWork.JournalEntries.DeleteAsync(entryId);
 
