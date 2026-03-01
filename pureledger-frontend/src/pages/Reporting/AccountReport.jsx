@@ -146,17 +146,19 @@ const AccountReport = () => {
                 setTotalRecords(data.totalRecords || entries.length);
                 setCurrentPage(page + 1);
 
-                // Auto-load next page if there's more data and not searching
-                if (data.hasMoreData && !searchTerm.trim()) {
+                // Auto-load next page if there's more data
+                if (data.hasMoreData) {
                     setTimeout(() => {
                         generateReport(page + 1, true);
                     }, 100);
                 }
             } else {
                 setError('Failed to generate report');
+                setHasMoreData(false);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to generate report');
+            setHasMoreData(false);
         } finally {
             setGenerating(false);
             setIsLoadingMore(false);

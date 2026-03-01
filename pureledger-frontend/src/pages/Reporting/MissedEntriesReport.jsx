@@ -229,16 +229,19 @@ const MissedEntriesReport = () => {
                 }
             } else {
                 setError('Failed to load missed entries');
+                setHasMoreData(false);
+                setIsAutoLoading(false);
                 setTabsDisabled(false);
+                isLoadingRef.current = false;
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load missed entries');
+            setHasMoreData(false);
+            setIsAutoLoading(false);
             setTabsDisabled(false);
+            isLoadingRef.current = false;
         } finally {
             setIsLoadingMore(false);
-            if (!hasMoreData) {
-                isLoadingRef.current = false;
-            }
         }
     };
 
@@ -648,7 +651,7 @@ const MissedEntriesReport = () => {
                                     <Button 
                                         type="submit" 
                                         variant="primary" 
-                                        disabled={searching || isAutoLoading || !formData.projectId}
+                                        disabled={searching || isLoadingMore || hasMoreData || isAutoLoading || !formData.projectId}
                                         title={!formData.projectId ? 'Please select a project' : ''}
                                     >
                                         {searching ? (

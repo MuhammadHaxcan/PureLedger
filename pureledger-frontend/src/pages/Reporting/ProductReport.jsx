@@ -159,9 +159,11 @@ const ProductReport = () => {
                 }
             } else {
                 setError('Failed to generate report');
+                setHasMoreData(false);
             }
         } catch (err) {
             setError(err.response?.data?.error || 'Failed to generate report');
+            setHasMoreData(false);
         } finally {
             setGenerating(false);
             setIsLoadingMore(false);

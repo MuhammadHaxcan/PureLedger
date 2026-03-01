@@ -286,6 +286,8 @@ namespace PureLedger.Services {
             if (!int.TryParse(request.CategoryId, out int categoryId))
                 return new AgingReportResponseViewModel();
 
+            int page = Math.Max(0, request.Page);
+            int pageSize = Math.Clamp(request.PageSize, 1, 2500);
             int? projectId = ParseNullableInt(request.ProjectId);
 
             var accounts = await _unitOfWork.Accounts.GetByCategoryIdAsync(categoryId);
@@ -299,15 +301,15 @@ namespace PureLedger.Services {
                 categoryId,
                 projectId,
                 request.ReferenceDate,
-                request.Page,
-                request.PageSize);
+                page,
+                pageSize);
 
             return new AgingReportResponseViewModel {
                 Entries = entries,
                 TotalRecords = totalCount,
-                Page = request.Page,
-                PageSize = request.PageSize,
-                HasMoreData = (request.Page + 1) * request.PageSize < totalCount
+                Page = page,
+                PageSize = pageSize,
+                HasMoreData = (page + 1) * pageSize < totalCount
             };
         }
 
@@ -316,6 +318,8 @@ namespace PureLedger.Services {
                 return new AccountReportResponseViewModel();
             }
 
+            int page = Math.Max(0, request.Page);
+            int pageSize = Math.Clamp(request.PageSize, 1, 2500);
             int? categoryId = ParseNullableInt(request.CategoryId);
             int? accountId = ParseNullableInt(request.AccountId);
 
@@ -327,15 +331,15 @@ namespace PureLedger.Services {
                 projectId,
                 categoryId,
                 accountId,
-                request.Page,
-                request.PageSize);
+                page,
+                pageSize);
 
             return new AccountReportResponseViewModel {
                 Entries = entries,
                 TotalRecords = totalCount,
-                Page = request.Page,
-                PageSize = request.PageSize,
-                HasMoreData = (request.Page + 1) * request.PageSize < totalCount
+                Page = page,
+                PageSize = pageSize,
+                HasMoreData = (page + 1) * pageSize < totalCount
             };
         }
 

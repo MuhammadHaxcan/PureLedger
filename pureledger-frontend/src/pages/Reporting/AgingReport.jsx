@@ -178,16 +178,16 @@ const AgingReport = () => {
         }
       } else {
         setError(response.data.message || 'Failed to generate report');
+        setHasMoreData(false);
+        setIsAutoLoading(false);
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to generate report');
+      setHasMoreData(false);
+      setIsAutoLoading(false);
     } finally {
       setLoading(false);
       setIsLoadingMore(false);
-      // Only reset auto-loading if no more data
-      if (!hasMoreData) {
-        setIsAutoLoading(false);
-      }
     }
   };
 
@@ -352,7 +352,7 @@ const AgingReport = () => {
                   <Button
                     variant="primary"
                     type="submit"
-                    disabled={loading || isLoadingMore || !formData.referenceDate || !formData.categoryId}
+                    disabled={loading || isLoadingMore || hasMoreData || !formData.referenceDate || !formData.categoryId}
                     className="w-100"
                     title={!formData.referenceDate ? 'Please select a reference date' : !formData.categoryId ? 'Please select a category' : ''}
                   >

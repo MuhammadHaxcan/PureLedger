@@ -240,9 +240,8 @@ const UserReport = () => {
                 const allEntriesForSummary = append ? [...allEntries, ...entries] : entries;
                 calculateSummaries(allEntriesForSummary);
 
-                // Auto-load next page if there's more data and not searching
-                // Remove the append check so it auto-loads after first page too
-                if (data.hasMoreData && !searchTerm.trim()) {
+                // Auto-load next page if there's more data
+                if (data.hasMoreData) {
                     setIsAutoLoading(true);
                     setTimeout(() => {
                         generateReport(page + 1, true);
@@ -252,10 +251,12 @@ const UserReport = () => {
                 }
             } else {
                 setError('Failed to generate report');
+                setHasMoreData(false);
                 setIsAutoLoading(false);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to generate report');
+            setHasMoreData(false);
             setIsAutoLoading(false);
         } finally {
             setGenerating(false);

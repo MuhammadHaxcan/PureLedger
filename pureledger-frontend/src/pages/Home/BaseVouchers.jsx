@@ -167,7 +167,7 @@ const BaseVouchers = () => {
                 setTotalRecords(response.data.totalRecords || 0);
                 setCurrentPage(page + 1);
 
-                if (response.data.hasMoreData && !searchTerm.trim()) {
+                if (response.data.hasMoreData) {
                     setIsAutoLoading(true);
                     setTimeout(() => {
                         loadBaseVouchers(page + 1, true);
@@ -177,10 +177,12 @@ const BaseVouchers = () => {
                 }
             } else {
                 setError('Failed to load base vouchers');
+                setHasMoreData(false);
                 setIsAutoLoading(false);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load base vouchers');
+            setHasMoreData(false);
             setIsAutoLoading(false);
         } finally {
             setLoadingVouchers(false);
@@ -635,6 +637,7 @@ const BaseVouchers = () => {
                                 placeholder="Search vouchers..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
+                                disabled={loadingVouchers || isLoadingMore || hasMoreData}
                             />
                         </div>
                     </div>
