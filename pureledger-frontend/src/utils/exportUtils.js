@@ -90,31 +90,18 @@ export const generatePdfAsync = async (config, onProgress) => {
     if (onProgress) onProgress(0.3);
     await delay(10);
 
-    const totalRows = rows.length;
-    const totalPages = Math.ceil(totalRows / rowsPerPage);
-    let currentStartY = startY;
+    autoTable(doc, {
+        columns,
+        body: rows,
+        startY: startY,
+        margin: { top: 20 },
+        styles: { fontSize, cellPadding },
+        headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+        footStyles: { fillColor: [241, 245, 249], fontStyle: 'bold' }
+    });
 
-    for (let i = 0; i < rows.length; i += rowsPerPage) {
-        if (i > 0) {
-            doc.addPage();
-            currentStartY = 20;
-        }
-
-        const chunk = rows.slice(i, i + rowsPerPage);
-        
-        autoTable(doc, {
-            columns,
-            body: chunk,
-            startY: currentStartY,
-            styles: { fontSize, cellPadding },
-            headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
-            footStyles: { fillColor: [241, 245, 249], fontStyle: 'bold' }
-        });
-
-        const progress = 0.3 + (0.5 * (i + rowsPerPage) / totalRows);
-        if (onProgress) onProgress(Math.min(progress, 0.8));
-        await delay(10);
-    }
+    if (onProgress) onProgress(0.8);
+    await delay(10);
 
     if (onProgress) onProgress(0.9);
     await delay(10);

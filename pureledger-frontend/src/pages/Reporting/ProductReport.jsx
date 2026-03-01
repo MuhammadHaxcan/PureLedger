@@ -36,7 +36,7 @@ const ProductReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 1000;
+    const pageSize = 2500;
     const [visibleColumns, setVisibleColumns] = useState({
         debitQty: true,
         creditQty: true,
@@ -152,7 +152,7 @@ const ProductReport = () => {
                 setCurrentPage(page + 1);
 
                 // Auto-load next page if there's more data
-                if (data.hasMoreData && !isLoadingMore) {
+                if (data.hasMoreData) {
                     setTimeout(() => {
                         generateReport(page + 1, true);
                     }, 100);
@@ -461,7 +461,7 @@ const ProductReport = () => {
                                     <Button 
                                         type="submit" 
                                         variant="primary" 
-                                        disabled={generating || !formData.projectId}
+                                        disabled={generating || isLoadingMore || hasMoreData || !formData.projectId}
                                         title={!formData.projectId ? 'Please select a project' : ''}
                                     >
                                         {generating ? (

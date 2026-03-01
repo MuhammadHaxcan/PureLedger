@@ -66,7 +66,7 @@ const UserReport = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [previousBalance, setPreviousBalance] = useState(0);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 1000;
+    const pageSize = 2500;
     const searchTermRef = useRef('');
     const abortControllerRef = useRef(null);
     const activeFiltersRef = useRef(null);
@@ -242,7 +242,7 @@ const UserReport = () => {
 
                 // Auto-load next page if there's more data and not searching
                 // Remove the append check so it auto-loads after first page too
-                if (data.hasMoreData && !searchTerm.trim() && !isLoadingMore && !isAutoLoading) {
+                if (data.hasMoreData && !searchTerm.trim()) {
                     setIsAutoLoading(true);
                     setTimeout(() => {
                         generateReport(page + 1, true);
@@ -330,13 +330,6 @@ const UserReport = () => {
     const filteredEntries = allEntries.filter(entry => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
-        // Format dates for searching
-        const entryDateStr = entry.entryDate 
-            ? new Date(entry.entryDate).toLocaleDateString().toLowerCase()
-            : '';
-        const creditableDateStr = entry.creditableDate 
-            ? new Date(entry.creditableDate).toLocaleDateString().toLowerCase()
-            : '';
         return (
             (entry.description || '').toLowerCase().includes(search) ||
             (entry.accountName || '').toLowerCase().includes(search) ||
@@ -345,17 +338,15 @@ const UserReport = () => {
             (entry.locationName || '').toLowerCase().includes(search) ||
             entry.journalVoucherId?.toString().includes(search) ||
             entry.id?.toString().includes(search) ||
-            entryDateStr.includes(search) ||
-            creditableDateStr.includes(search) ||
+            (entry.entryDate || '').toString().toLowerCase().includes(search) ||
+            (entry.creditableDate || '').toString().toLowerCase().includes(search) ||
             (entry.quantity?.toString() || '').includes(search) ||
             (entry.debit?.toString() || '').includes(search) ||
             (entry.credit?.toString() || '').includes(search) ||
             (entry.balance?.toString() || '').includes(search) ||
             `jv-${entry.journalVoucherId || ''}`.includes(search) ||
             `inv-${entry.journalVoucherId || ''}`.includes(search) ||
-            `entry: ${entry.id || ''}`.includes(search) ||
-            entry.formattedId?.toLowerCase().includes(search) ||
-            'opening'.includes(search) && (entry.formattedId === "OPENING" || entry.description === "Opening Balance")
+            entry.formattedId?.toLowerCase().includes(search)
         );
     });
 
@@ -751,7 +742,7 @@ const UserReport = () => {
                                     <Button 
                                         type="submit" 
                                         variant="primary" 
-                                        disabled={generating || !formData.projectId || !formData.categoryId}
+                                        disabled={generating || isLoadingMore || hasMoreData || !formData.projectId || !formData.categoryId}
                                         title={!formData.projectId ? 'Please select a project' : !formData.categoryId ? 'Please select a category' : ''}
                                     >
                                         {generating ? (

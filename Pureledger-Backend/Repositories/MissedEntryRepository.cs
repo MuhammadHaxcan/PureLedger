@@ -28,6 +28,7 @@ namespace PureLedger.Repositories
                 .AsNoTracking()
                 .Include(m => m.CustomerAccount)
                 .Include(m => m.ProductAccount)
+                    .ThenInclude(a => a!.ProductData)
                 .Include(m => m.Project)
                 .Where(m => m.CustomerAccountId == customerAccountId)
                 .OrderByDescending(m => m.MissedDate)
@@ -76,6 +77,7 @@ namespace PureLedger.Repositories
                 .AsNoTracking()
                 .Include(m => m.CustomerAccount)
                 .Include(m => m.ProductAccount)
+                    .ThenInclude(a => a!.ProductData)
                 .Include(m => m.Project)
                 .AsQueryable();
 
@@ -103,7 +105,7 @@ namespace PureLedger.Repositories
         {
             // Defensive inputs
             page = Math.Max(0, page);
-            pageSize = Math.Clamp(pageSize, 1, 1000);
+            pageSize = Math.Clamp(pageSize, 1, 2500);
 
             var baseQuery = _dbContext.MissedEntries.AsNoTracking().AsQueryable();
 
@@ -133,8 +135,11 @@ namespace PureLedger.Repositories
                     Quantity = m.Quantity,
                     Rate = m.Rate,
                     Discount = m.Discount,
+                    Rbp = m.Rbp,
                     Description = m.Description,
-                    TotalValue = (m.Quantity * m.Rate) - m.Discount,
+                    TotalValue = (m.Rbp == "Y" && m.ProductAccount != null && m.ProductAccount.ProductData != null && m.ProductAccount.ProductData.Pkg > 0)
+                        ? (m.ProductAccount.ProductData.Pkg.Value * m.Quantity * m.Rate) - (m.ProductAccount.ProductData.Pkg.Value * m.Quantity * m.Rate * m.Discount / 100m)
+                        : (m.Quantity * m.Rate) - (m.Quantity * m.Rate * m.Discount / 100m),
                     CustomerAccountId = m.CustomerAccountId,
                     ProductAccountId = m.ProductAccountId,
                     ProjectId = m.ProjectId
@@ -172,7 +177,10 @@ namespace PureLedger.Repositories
                     CustomerName = g.Key.AccountName ?? "Unknown",
                     EntryCount = g.Count(),
                     TotalQuantity = g.Sum(x => x.Quantity),
-                    TotalValue = g.Sum(x => (x.Quantity * x.Rate) - x.Discount),
+                    TotalValue = g.Sum(x =>
+                        (x.Rbp == "Y" && x.ProductAccount != null && x.ProductAccount.ProductData != null && x.ProductAccount.ProductData.Pkg > 0)
+                            ? (x.ProductAccount.ProductData.Pkg.Value * x.Quantity * x.Rate) - (x.ProductAccount.ProductData.Pkg.Value * x.Quantity * x.Rate * x.Discount / 100m)
+                            : (x.Quantity * x.Rate) - (x.Quantity * x.Rate * x.Discount / 100m)),
                     UniqueProductCount = g.Select(x => x.ProductAccountId).Distinct().Count(),
                     AverageQuantityPerEntry = g.Count() > 0 ? Math.Round((decimal)g.Sum(x => x.Quantity) / g.Count(), 2) : 0m
                 })
@@ -199,7 +207,10 @@ namespace PureLedger.Repositories
                     ProductName = g.Key.AccountName ?? "Unknown",
                     EntryCount = g.Count(),
                     TotalQuantity = g.Sum(x => x.Quantity),
-                    TotalValue = g.Sum(x => (x.Quantity * x.Rate) - x.Discount),
+                    TotalValue = g.Sum(x =>
+                        (x.Rbp == "Y" && x.ProductAccount != null && x.ProductAccount.ProductData != null && x.ProductAccount.ProductData.Pkg > 0)
+                            ? (x.ProductAccount.ProductData.Pkg.Value * x.Quantity * x.Rate) - (x.ProductAccount.ProductData.Pkg.Value * x.Quantity * x.Rate * x.Discount / 100m)
+                            : (x.Quantity * x.Rate) - (x.Quantity * x.Rate * x.Discount / 100m)),
                     UniqueCustomerCount = g.Select(x => x.CustomerAccountId).Distinct().Count(),
                     AverageRate = g.Any() ? Math.Round(g.Average(x => x.Rate), 2) : 0m,
                     AverageDiscount = g.Any() ? Math.Round(g.Average(x => x.Discount), 2) : 0m

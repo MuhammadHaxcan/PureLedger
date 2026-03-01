@@ -18,12 +18,19 @@ const MissedEntriesReport = () => {
     const [summaryStats, setSummaryStats] = useState({
         totalMissedEntries: 0,
         totalMissedQuantity: 0,
+        totalMissedValue: 0,
         uniqueCustomers: 0,
         uniqueProducts: 0,
+        averageQuantityPerEntry: 0,
+        averageValuePerEntry: 0,
         topCustomer: null,
         topCustomerMissedQuantity: 0,
+        topCustomerEntryCount: 0,
         topMissedProduct: null,
-        topMissedProductQuantity: 0
+        topMissedProductQuantity: 0,
+        topProductEntryCount: 0,
+        top5Customers: [],
+        top5Products: []
     });
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
@@ -48,8 +55,8 @@ const MissedEntriesReport = () => {
     const [totalRecords, setTotalRecords] = useState(0);
     const [loadedCount, setLoadedCount] = useState(0);
     const [tabsDisabled, setTabsDisabled] = useState(false);
-    const [summaryCollapsed, setSummaryCollapsed] = useState(true);
-    const pageSize = 1000;
+    const [summaryCollapsed, setSummaryCollapsed] = useState(false);
+    const pageSize = 2500;
     const isLoadingRef = useRef(false);
 
     useEffect(() => {
@@ -105,12 +112,19 @@ const MissedEntriesReport = () => {
         setSummaryStats({
             totalMissedEntries: 0,
             totalMissedQuantity: 0,
+            totalMissedValue: 0,
             uniqueCustomers: 0,
             uniqueProducts: 0,
+            averageQuantityPerEntry: 0,
+            averageValuePerEntry: 0,
             topCustomer: null,
             topCustomerMissedQuantity: 0,
+            topCustomerEntryCount: 0,
             topMissedProduct: null,
-            topMissedProductQuantity: 0
+            topMissedProductQuantity: 0,
+            topProductEntryCount: 0,
+            top5Customers: [],
+            top5Products: []
         });
     };
 
@@ -345,6 +359,13 @@ const MissedEntriesReport = () => {
         }).format(value || 0);
     };
 
+    const formatInt = (value) => {
+        return new Intl.NumberFormat('en-PK', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(value || 0);
+    };
+
     const handleExportDetails = async () => {
         setExportingDetailsCsv(true);
         try {
@@ -440,10 +461,10 @@ const MissedEntriesReport = () => {
 
             const rows = byCustomerData.map(item => ({
                 customer: item.customerName || 'Unknown',
-                entryCount: formatNumber(item.entryCount || 0),
-                totalQuantity: formatNumber(item.totalQuantity || 0),
+                entryCount: formatInt(item.entryCount || 0),
+                totalQuantity: formatInt(item.totalQuantity || 0),
                 totalValue: formatCurrency(item.totalValue || 0),
-                uniqueProducts: formatNumber(item.uniqueProductCount || 0),
+                uniqueProducts: formatInt(item.uniqueProductCount || 0),
                 avgQty: formatNumber(item.averageQuantityPerEntry || 0)
             }));
 
@@ -500,10 +521,10 @@ const MissedEntriesReport = () => {
 
             const rows = byProductData.map(item => ({
                 product: item.productName || 'Unknown',
-                entryCount: formatNumber(item.entryCount || 0),
-                totalQuantity: formatNumber(item.totalQuantity || 0),
+                entryCount: formatInt(item.entryCount || 0),
+                totalQuantity: formatInt(item.totalQuantity || 0),
                 totalValue: formatCurrency(item.totalValue || 0),
-                uniqueCustomers: formatNumber(item.uniqueCustomerCount || 0),
+                uniqueCustomers: formatInt(item.uniqueCustomerCount || 0),
                 avgRate: formatCurrency(item.averageRate || 0),
                 avgDiscount: formatCurrency(item.averageDiscount || 0)
             }));
@@ -657,90 +678,165 @@ const MissedEntriesReport = () => {
             {/* Summary Statistics Card */}
             {hasData && (
                 <Card className="shadow mb-4">
-                    <Card.Header 
-                        className="py-3 d-flex justify-content-between align-items-center" 
+                    <Card.Header
+                        className="py-3 d-flex justify-content-between align-items-center"
                         style={{ cursor: 'pointer' }}
                         onClick={() => setSummaryCollapsed(!summaryCollapsed)}
                     >
                         <h6 className="m-0 font-weight-bold text-primary">
-                            <i className="fas fa-chart-pie me-2"></i>Summary Statistics
+                            <i className="fas fa-chart-pie me-2"></i>Summary & Analysis
                         </h6>
                         <i className={`fas fa-chevron-${summaryCollapsed ? 'down' : 'up'} text-muted`}></i>
                     </Card.Header>
                     {!summaryCollapsed && (
                         <Card.Body>
-                            <div className="row" id="summaryStats">
-                                <div className="col-md-3">
-                                    <div className="card bg-primary text-white mb-4">
-                                        <div className="card-body">
-                                            <h5 className="mb-0" id="totalEntries">{formatNumber(summaryStats.totalMissedEntries)}</h5>
-                                            <div>Total Missed Entries</div>
+                            {/* Row 1 - Key Metrics */}
+                            <div className="row g-3 mb-3" id="summaryStats">
+                                <div className="col-md-2">
+                                    <div className="card bg-primary text-white h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <h5 className="mb-0" id="totalEntries">{formatInt(summaryStats.totalMissedEntries)}</h5>
+                                            <small>Total Entries</small>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="col-md-3">
-                                    <div className="card bg-success text-white mb-4">
-                                        <div className="card-body">
-                                            <h5 className="mb-0" id="totalQuantity">{formatNumber(summaryStats.totalMissedQuantity)}</h5>
-                                            <div>Total Missed Quantity</div>
+                                <div className="col-md-2">
+                                    <div className="card bg-success text-white h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <h5 className="mb-0" id="totalQuantity">{formatInt(summaryStats.totalMissedQuantity)}</h5>
+                                            <small>Total Quantity</small>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="col-md-3">
-                                    <div className="card bg-warning text-white mb-4">
-                                        <div className="card-body">
-                                            <h5 className="mb-0" id="uniqueCustomers">{formatNumber(summaryStats.uniqueCustomers)}</h5>
-                                            <div>Unique Customers</div>
+                                <div className="col-md-2">
+                                    <div className="card bg-danger text-white h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <h5 className="mb-0">{formatCurrency(summaryStats.totalMissedValue)}</h5>
+                                            <small>Total Value</small>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="col-md-3">
-                                    <div className="card bg-info text-white mb-4">
-                                        <div className="card-body">
-                                            <h5 className="mb-0" id="uniqueProducts">{formatNumber(summaryStats.uniqueProducts)}</h5>
-                                            <div>Unique Products</div>
+                                <div className="col-md-2">
+                                    <div className="card bg-warning text-white h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <h5 className="mb-0" id="uniqueCustomers">{formatInt(summaryStats.uniqueCustomers)}</h5>
+                                            <small>Unique Customers</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-2">
+                                    <div className="card bg-info text-white h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <h5 className="mb-0" id="uniqueProducts">{formatInt(summaryStats.uniqueProducts)}</h5>
+                                            <small>Unique Products</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-2">
+                                    <div className="card bg-secondary text-white h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <h5 className="mb-0">{formatNumber(summaryStats.averageQuantityPerEntry)}</h5>
+                                            <small>Avg Qty/Entry</small>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="row" id="additionalStats">
+
+                            {/* Row 2 - Top Customer & Product (compact single-line) */}
+                            <div className="row g-3 mb-3" id="additionalStats">
                                 <div className="col-md-6">
-                                    <Card className="mb-4">
-                                        <Card.Header>
-                                            <i className="fas fa-user me-1"></i> Top Customer
-                                        </Card.Header>
-                                        <Card.Body>
+                                    <div className="card border-start border-primary border-3 h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <small className="text-muted"><i className="fas fa-user me-1"></i>Top Customer</small>
                                             {summaryStats.topCustomer ? (
-                                                <>
-                                                    <strong>{summaryStats.topCustomer}</strong>
-                                                    <div className="text-muted small">
-                                                        Missed Quantity: {formatNumber(summaryStats.topCustomerMissedQuantity)}
-                                                    </div>
-                                                </>
+                                                <div><strong>{summaryStats.topCustomer}</strong> — {formatInt(summaryStats.topCustomerMissedQuantity)} qty missed | {formatInt(summaryStats.topCustomerEntryCount)} entries</div>
                                             ) : (
-                                                <span className="text-muted">No data available</span>
+                                                <div className="text-muted">No data available</div>
                                             )}
-                                        </Card.Body>
-                                    </Card>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="col-md-6">
-                                    <Card className="mb-4">
-                                        <Card.Header>
-                                            <i className="fas fa-box me-1"></i> Top Missed Product
-                                        </Card.Header>
-                                        <Card.Body>
+                                    <div className="card border-start border-success border-3 h-100">
+                                        <div className="card-body py-2 px-3">
+                                            <small className="text-muted"><i className="fas fa-box me-1"></i>Top Product</small>
                                             {summaryStats.topMissedProduct ? (
-                                                <>
-                                                    <strong>{summaryStats.topMissedProduct}</strong>
-                                                    <div className="text-muted small">
-                                                        Missed Quantity: {formatNumber(summaryStats.topMissedProductQuantity)}
-                                                    </div>
-                                                </>
+                                                <div><strong>{summaryStats.topMissedProduct}</strong> — {formatInt(summaryStats.topMissedProductQuantity)} qty missed | {formatInt(summaryStats.topProductEntryCount)} entries</div>
                                             ) : (
-                                                <span className="text-muted">No data available</span>
+                                                <div className="text-muted">No data available</div>
                                             )}
-                                        </Card.Body>
-                                    </Card>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Row 3 - Top 5 Tables */}
+                            <div className="row g-3">
+                                <div className="col-md-6">
+                                    <div className="card h-100">
+                                        <div className="card-header py-2 px-3">
+                                            <small className="fw-bold"><i className="fas fa-users me-1"></i>Top 5 Customers by Missed Quantity</small>
+                                        </div>
+                                        <div className="card-body p-0" style={{ overflowY: 'auto' }}>
+                                            <Table size="sm" className="table-sm mb-0" hover>
+                                                <thead className="table-light">
+                                                    <tr>
+                                                        <th style={{ width: '30px' }}>#</th>
+                                                        <th>Customer</th>
+                                                        <th className="text-end">Qty</th>
+                                                        <th className="text-end">Entries</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {(summaryStats.top5Customers || []).length > 0 ? (
+                                                        summaryStats.top5Customers.map((c, i) => (
+                                                            <tr key={i}>
+                                                                <td>{i + 1}</td>
+                                                                <td>{c.name}</td>
+                                                                <td className="text-end">{formatInt(c.quantity)}</td>
+                                                                <td className="text-end">{formatInt(c.entryCount)}</td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr><td colSpan="4" className="text-center text-muted">No data</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </Table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-md-6">
+                                    <div className="card h-100">
+                                        <div className="card-header py-2 px-3">
+                                            <small className="fw-bold"><i className="fas fa-boxes-stacked me-1"></i>Top 5 Products by Missed Quantity</small>
+                                        </div>
+                                        <div className="card-body p-0" style={{ overflowY: 'auto' }}>
+                                            <Table size="sm" className="table-sm mb-0" hover>
+                                                <thead className="table-light">
+                                                    <tr>
+                                                        <th style={{ width: '30px' }}>#</th>
+                                                        <th>Product</th>
+                                                        <th className="text-end">Qty</th>
+                                                        <th className="text-end">Entries</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {(summaryStats.top5Products || []).length > 0 ? (
+                                                        summaryStats.top5Products.map((p, i) => (
+                                                            <tr key={i}>
+                                                                <td>{i + 1}</td>
+                                                                <td>{p.name}</td>
+                                                                <td className="text-end">{formatInt(p.quantity)}</td>
+                                                                <td className="text-end">{formatInt(p.entryCount)}</td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr><td colSpan="4" className="text-center text-muted">No data</td></tr>
+                                                    )}
+                                                </tbody>
+                                            </Table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </Card.Body>
@@ -880,7 +976,7 @@ const MissedEntriesReport = () => {
                                                             const quantity = entry.quantity || entry.Quantity || 0;
                                                             const rate = entry.rate || entry.Rate || 0;
                                                             const discount = entry.discount || entry.Discount || 0;
-                                                            const totalValue = entry.totalValue || entry.TotalValue || (quantity * rate - discount);
+                                                            const totalValue = entry.totalValue ?? entry.TotalValue ?? 0;
                                                             const description = entry.description || entry.Description || '';
                                                             return (
                                                                 <tr key={index}>
@@ -986,10 +1082,10 @@ const MissedEntriesReport = () => {
                                                         byCustomerData.map((item, index) => (
                                                             <tr key={index}>
                                                                 <td>{item.customerName || 'Unknown'}</td>
-                                                                <td className="text-end">{formatNumber(item.entryCount || 0)}</td>
-                                                                <td className="text-end">{formatNumber(item.totalQuantity || 0)}</td>
+                                                                <td className="text-end">{formatInt(item.entryCount || 0)}</td>
+                                                                <td className="text-end">{formatInt(item.totalQuantity || 0)}</td>
                                                                 <td className="text-end">{formatCurrency(item.totalValue || 0)}</td>
-                                                                <td className="text-end">{formatNumber(item.uniqueProductCount || 0)}</td>
+                                                                <td className="text-end">{formatInt(item.uniqueProductCount || 0)}</td>
                                                                 <td className="text-end">{formatNumber(item.averageQuantityPerEntry || 0)}</td>
                                                                 <td className="text-center">
                                                                     <Button
@@ -1063,7 +1159,7 @@ const MissedEntriesReport = () => {
                                                                     const quantity = entry.quantity || entry.Quantity || 0;
                                                                     const rate = entry.rate || entry.Rate || 0;
                                                                     const discount = entry.discount || entry.Discount || 0;
-                                                                    const totalValue = entry.totalValue || entry.TotalValue || (quantity * rate - discount);
+                                                                    const totalValue = entry.totalValue ?? entry.TotalValue ?? 0;
                                                                     const description = entry.description || entry.Description || '';
                                                                     return (
                                                                         <tr key={index}>
@@ -1163,10 +1259,10 @@ const MissedEntriesReport = () => {
                                                         byProductData.map((item, index) => (
                                                             <tr key={index}>
                                                                 <td>{item.productName || 'Unknown'}</td>
-                                                                <td className="text-end">{formatNumber(item.entryCount || 0)}</td>
-                                                                <td className="text-end">{formatNumber(item.totalQuantity || 0)}</td>
+                                                                <td className="text-end">{formatInt(item.entryCount || 0)}</td>
+                                                                <td className="text-end">{formatInt(item.totalQuantity || 0)}</td>
                                                                 <td className="text-end">{formatCurrency(item.totalValue || 0)}</td>
-                                                                <td className="text-end">{formatNumber(item.uniqueCustomerCount || 0)}</td>
+                                                                <td className="text-end">{formatInt(item.uniqueCustomerCount || 0)}</td>
                                                                 <td className="text-end">{formatCurrency(item.averageRate || 0)}</td>
                                                                 <td className="text-end">{formatCurrency(item.averageDiscount || 0)}</td>
                                                             </tr>

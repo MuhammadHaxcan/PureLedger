@@ -34,6 +34,10 @@ public class MissedEntry
     [Column(TypeName = "decimal(14,4)")]
     public decimal Discount { get; set; }
 
+    [StringLength(1)]
+    [RegularExpression("Y|N", ErrorMessage = "RBP must be 'Y' or 'N'")]
+    public string Rbp { get; set; } = "Y";
+
     [MaxLength(500)]
     public string? Description { get; set; }
 

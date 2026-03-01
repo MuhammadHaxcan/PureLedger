@@ -53,8 +53,8 @@ namespace PureLedger.Services
             => _unitOfWork.JournalVouchers.GetVouchersWithModifiedEntriesPaginatedAsync(projectId, page, pageSize);
 
         public Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetBaseVouchersPaginatedAsync(
-            int? projectId, DateOnly? startDate, DateOnly? endDate, int page, int pageSize)
-            => _unitOfWork.JournalVouchers.GetAllBaseVouchersPaginatedAsync(projectId, startDate, endDate, page, pageSize);
+            int? projectId, DateOnly? startDate, DateOnly? endDate, bool hideFullyProcessed, int page, int pageSize)
+            => _unitOfWork.JournalVouchers.GetAllBaseVouchersPaginatedAsync(projectId, startDate, endDate, hideFullyProcessed, page, pageSize);
 
         #endregion
 
@@ -662,6 +662,7 @@ namespace PureLedger.Services
                         Quantity = entry.Quantity,
                         Rate = entry.Rate,
                         Discount = entry.DiscountPercent ?? 0,
+                        Rbp = entry.Rbp ?? "Y",
                         Description = entry.Description
                     };
 
@@ -1201,7 +1202,7 @@ namespace PureLedger.Services
             var productEntries = allEntries.Where(e => e.Account?.AccountGroupId == ACCOUNT_GROUP_PRODUCT).ToList();
 
             // Get processed data from derived vouchers (actual processed quantities)
-            var derivedVoucherProducts = await _unitOfWork.JournalEntries.GetDerivedVoucherProductQuantitiesAsync(projectId);
+            var derivedVoucherProducts = await _unitOfWork.JournalEntries.GetDerivedVoucherProductQuantitiesAsync(projectId, startDate, endDate);
             
             // Calculate totals from derived vouchers (processed) and base vouchers (unprocessed)
             decimal totalProcessedQuantity = derivedVoucherProducts.Sum(p => p.TotalQuantity);
@@ -1233,12 +1234,11 @@ namespace PureLedger.Services
                     EntryCount = p.EntryCount
                 })
                 .OrderByDescending(p => p.TotalQuantity)
-                .Take(3)
                 .ToList();
 
             summary.MostOrderedProducts = mostOrderedProducts;
 
-            // Most Pending Products (by unprocessed quantity in base vouchers) - limit to 3
+            // Most Pending Products (by unprocessed quantity in base vouchers)
             var pendingProducts = unprocessedEntries
                 .GroupBy(e => new { e.AccountId, ProductName = e.Account?.AccountName ?? "Unknown" })
                 .Select(g => new ProductSummaryViewModel
@@ -1251,7 +1251,6 @@ namespace PureLedger.Services
                     EntryCount = g.Count()
                 })
                 .OrderByDescending(p => p.UnprocessedQuantity)
-                .Take(3)
                 .ToList();
 
             summary.MostPendingProducts = pendingProducts;

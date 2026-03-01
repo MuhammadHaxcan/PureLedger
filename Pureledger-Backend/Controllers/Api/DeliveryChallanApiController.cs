@@ -391,7 +391,7 @@ namespace PureLedger.Controllers.Api
             {
                 if (model.ForAmount == 0)
                 {
-                    await _dcService.ClearPendingForChargesAsync(model.JournalVoucherId);
+                    await _dcService.ClearPendingForChargesAsync(model.JournalVoucherId, model.OtherRef);
                     return Ok(new
                     {
                         success = true,
@@ -403,7 +403,7 @@ namespace PureLedger.Controllers.Api
                     });
                 }
 
-                var forJV = await _dcService.ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DcDate, model.ForAccountId);
+                var forJV = await _dcService.ProcessForChargesAsync(model.JournalVoucherId, null, model.ForAmount, model.DcDate, model.ForAccountId, model.OtherRef);
 
                 return Ok(new
                 {

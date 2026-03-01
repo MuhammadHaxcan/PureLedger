@@ -883,7 +883,7 @@ namespace PureLedger.Repositories
         /// Get aggregated product quantities from derived vouchers for base vouchers summary
         /// Efficiently calculates most ordered products by aggregating at database level
         /// </summary>
-        public async Task<List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>> GetDerivedVoucherProductQuantitiesAsync(int? projectId)
+        public async Task<List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>> GetDerivedVoucherProductQuantitiesAsync(int? projectId, DateOnly? startDate = null, DateOnly? endDate = null)
         {
             // Step 1: Get base voucher IDs filtered by project
             var baseVoucherQuery = _context.JournalVouchers
@@ -903,9 +903,59 @@ namespace PureLedger.Repositories
             }
 
             // Step 2: Get derived voucher IDs from references
-            var derivedVoucherIds = await _context.JournalVoucherReferences
+            var derivedVoucherQuery = _context.JournalVoucherReferences
                 .AsNoTracking()
-                .Where(r => r.ReferenceType == "DerivedVoucher" && baseVoucherIds.Contains(r.MainVoucherId))
+                .Where(r => r.ReferenceType == "DerivedVoucher" && baseVoucherIds.Contains(r.MainVoucherId));
+
+            // Filter derived vouchers by date range if provided
+            if (startDate.HasValue || endDate.HasValue)
+            {
+                var derivedVoucherIdsUnfiltered = await derivedVoucherQuery
+                    .Select(r => r.ReferencedVoucherId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var filteredDerivedQuery = _context.JournalVouchers
+                    .AsNoTracking()
+                    .Where(v => derivedVoucherIdsUnfiltered.Contains(v.JournalVoucherId));
+
+                if (startDate.HasValue)
+                    filteredDerivedQuery = filteredDerivedQuery.Where(v => v.EntryDate >= startDate.Value);
+                if (endDate.HasValue)
+                    filteredDerivedQuery = filteredDerivedQuery.Where(v => v.EntryDate <= endDate.Value);
+
+                var filteredDerivedVoucherIds = await filteredDerivedQuery
+                    .Select(v => v.JournalVoucherId)
+                    .ToListAsync();
+
+                if (!filteredDerivedVoucherIds.Any())
+                {
+                    return new List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>();
+                }
+
+                // Step 3: Get product entries from date-filtered derived vouchers and aggregate
+                var aggregated = await _context.JournalEntries
+                    .AsNoTracking()
+                    .Where(e => filteredDerivedVoucherIds.Contains(e.JournalVoucherId))
+                    .Join(_context.Accounts,
+                        entry => entry.AccountId,
+                        account => account.AccountId,
+                        (entry, account) => new { Entry = entry, Account = account })
+                    .Where(x => x.Account.AccountGroupId == 2) // Product accounts only
+                    .GroupBy(x => new { x.Entry.AccountId, x.Account.AccountName })
+                    .Select(g => new
+                    {
+                        ProductId = g.Key.AccountId,
+                        ProductName = g.Key.AccountName ?? "Unknown",
+                        TotalQuantity = (decimal)g.Sum(x => x.Entry.Quantity),
+                        EntryCount = g.Count()
+                    })
+                    .ToListAsync();
+
+                return aggregated.Select(x => (x.ProductId, x.ProductName, x.TotalQuantity, x.EntryCount)).ToList();
+            }
+
+            var derivedVoucherIds = await derivedVoucherQuery
                 .Select(r => r.ReferencedVoucherId)
                 .Distinct()
                 .ToListAsync();
@@ -916,7 +966,7 @@ namespace PureLedger.Repositories
             }
 
             // Step 3: Get product entries from derived vouchers and aggregate
-            var aggregated = await _context.JournalEntries
+            var aggregatedAll = await _context.JournalEntries
                 .AsNoTracking()
                 .Where(e => derivedVoucherIds.Contains(e.JournalVoucherId))
                 .Join(_context.Accounts,
@@ -934,7 +984,7 @@ namespace PureLedger.Repositories
                 })
                 .ToListAsync();
 
-            return aggregated.Select(x => (x.ProductId, x.ProductName, x.TotalQuantity, x.EntryCount)).ToList();
+            return aggregatedAll.Select(x => (x.ProductId, x.ProductName, x.TotalQuantity, x.EntryCount)).ToList();
         }
     }
 }

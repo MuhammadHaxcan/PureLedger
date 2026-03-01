@@ -159,7 +159,7 @@ namespace PureLedger.Repositories.Interfaces
         /// Get aggregated product quantities from derived vouchers for base vouchers summary
         /// Efficiently calculates most ordered products by aggregating at database level
         /// </summary>
-        Task<List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>> GetDerivedVoucherProductQuantitiesAsync(int? projectId);
+        Task<List<(int ProductId, string ProductName, decimal TotalQuantity, int EntryCount)>> GetDerivedVoucherProductQuantitiesAsync(int? projectId, DateOnly? startDate = null, DateOnly? endDate = null);
 
         #endregion
     }

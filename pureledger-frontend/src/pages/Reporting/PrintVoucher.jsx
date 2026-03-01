@@ -507,11 +507,11 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                   <td width="35%" style={{ paddingTop: '5px' }}>
                     <div style={{ backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', padding: '5px', textAlign: 'right', marginBottom: '5px' }}>
                       <strong>Previous Balance:</strong>
-                      <span id="previousBalance">{Math.round(voucherData.previousBalance || 0)}</span>
+                      <span id="previousBalance">{Math.round(voucherData.previousBalance || 0).toLocaleString()}</span>
                     </div>
                     <div style={{ backgroundColor: '#e9ecef', border: '1px solid #dee2e6', padding: '5px', textAlign: 'right' }}>
                       <strong>Customer Running Balance:</strong>
-                      <span id="customerRunningBalance">{Math.round(voucherData.customerBalance || 0)}</span>
+                      <span id="customerRunningBalance">{Math.round(voucherData.customerBalance || 0).toLocaleString()}</span>
                     </div>
                   </td>
                 </tr>

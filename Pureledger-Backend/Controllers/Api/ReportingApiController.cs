@@ -385,7 +385,7 @@ namespace PureLedger.Controllers.Api
             [FromQuery] DateOnly? endDate,
             [FromQuery] int? projectId,
             [FromQuery] int page = 0,
-            [FromQuery] int pageSize = 1000)
+            [FromQuery] int pageSize = 2500)
         {
             try
             {

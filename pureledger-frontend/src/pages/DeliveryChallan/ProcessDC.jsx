@@ -79,7 +79,8 @@ const ProcessDC = () => {
   const [forChargesForm, setForChargesForm] = useState({
     forAmount: '',
     dcDate: new Date().toISOString().split('T')[0],
-    selectedForAccountId: null
+    selectedForAccountId: null,
+    otherRef: ''
   });
   const [loadingPendingForCharges, setLoadingPendingForCharges] = useState(false);
 
@@ -734,7 +735,8 @@ const ProcessDC = () => {
         JournalVoucherId: selectedVoucherForForCharges.jvId,
         ForAmount: parseFloat(forChargesForm.forAmount),
         DcDate: forChargesForm.dcDate,
-        ForAccountId: forChargesForm.selectedForAccountId
+        ForAccountId: forChargesForm.selectedForAccountId,
+        OtherRef: forChargesForm.otherRef || null
       };
 
       const response = await apiClient.post('/DeliveryChallanApi/process-pending-for-charges', data);
@@ -1554,6 +1556,20 @@ const ProcessDC = () => {
                   value={forChargesForm.dcDate}
                   onChange={(e) => setForChargesForm({ ...forChargesForm, dcDate: e.target.value })}
                   required
+                />
+              </InputGroup>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Other Reference</Form.Label>
+              <InputGroup>
+                <InputGroup.Text><i className="fas fa-file-alt"></i></InputGroup.Text>
+                <Form.Control
+                  type="text"
+                  placeholder="Enter other reference (optional)"
+                  value={forChargesForm.otherRef}
+                  onChange={(e) => setForChargesForm({ ...forChargesForm, otherRef: e.target.value })}
+                  maxLength={200}
                 />
               </InputGroup>
             </Form.Group>

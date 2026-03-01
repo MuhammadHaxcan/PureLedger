@@ -101,9 +101,10 @@ namespace PureLedger.Services.Interface
             int? entryId,
             int amount,
             DateOnly dcDate,
-            int? forAccountId = null);
+            int? forAccountId = null,
+            string? otherRef = null);
 
-        Task ClearPendingForChargesAsync(int journalVoucherId);
+        Task ClearPendingForChargesAsync(int journalVoucherId, string? otherRef = null);
 
         Task<int?> GetForChargesCategoryIdAsync(int projectId);
 

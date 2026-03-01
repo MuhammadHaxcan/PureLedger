@@ -112,6 +112,7 @@ namespace PureLedger.ViewModels.Reporting
         public int Quantity { get; set; }
         public decimal Rate { get; set; }
         public decimal Discount { get; set; }
+        public string Rbp { get; set; } = "Y";
         public string? Description { get; set; }
         public decimal TotalValue { get; set; }
         public int CustomerAccountId { get; set; }

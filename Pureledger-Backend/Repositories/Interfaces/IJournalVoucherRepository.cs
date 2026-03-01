@@ -15,7 +15,7 @@ namespace PureLedger.Repositories.Interfaces
             bool includeEntries);
         Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetVouchersWithModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize);
         Task<bool> DeleteAsync(int journalVoucherId);
-        Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, DateOnly? startDate, DateOnly? endDate, int page, int pageSize);
+        Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(int? projectId, DateOnly? startDate, DateOnly? endDate, bool hideFullyProcessed, int page, int pageSize);
         Task<JournalVoucher?> GetBaseVoucherWithUnprocessedEntriesAsync(int id);
 
         /// <summary>

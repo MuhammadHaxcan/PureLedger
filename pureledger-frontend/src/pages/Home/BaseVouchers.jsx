@@ -36,6 +36,7 @@ const BaseVouchers = () => {
     const [summaryStats, setSummaryStats] = useState(null);
     const [summaryCollapsed, setSummaryCollapsed] = useState(true);
     const [loadingSummary, setLoadingSummary] = useState(false);
+    const [hideFullyProcessed, setHideFullyProcessed] = useState(true);
     const pageSize = 250;
 
     // Get projectId from URL query params
@@ -46,10 +47,7 @@ const BaseVouchers = () => {
     }, []);
 
     useEffect(() => {
-        if (projectId !== null) {
-            loadBaseVouchers(0, false);
-            loadSummaryStats(projectId, startDate, endDate);
-        } else {
+        if (projectId === null) {
             setVouchers([]);
             setLoadingVouchers(false);
             setCurrentPage(0);
@@ -57,7 +55,7 @@ const BaseVouchers = () => {
             setTotalRecords(0);
             setSummaryStats(null);
         }
-    }, [projectId, startDate, endDate]);
+    }, [projectId]);
 
     const loadInitData = async () => {
         setLoadingProjects(true);
@@ -149,6 +147,7 @@ const BaseVouchers = () => {
                 projectId: projectId,
                 startDate: startDate || undefined,
                 endDate: endDate || undefined,
+                hideFullyProcessed: hideFullyProcessed,
                 page: page,
                 pageSize: pageSize
             };
@@ -168,7 +167,7 @@ const BaseVouchers = () => {
                 setTotalRecords(response.data.totalRecords || 0);
                 setCurrentPage(page + 1);
 
-                if (response.data.hasMoreData && !searchTerm.trim() && !isLoadingMore && !isAutoLoading) {
+                if (response.data.hasMoreData && !searchTerm.trim()) {
                     setIsAutoLoading(true);
                     setTimeout(() => {
                         loadBaseVouchers(page + 1, true);
@@ -310,7 +309,12 @@ const BaseVouchers = () => {
                     </h6>
                 </Card.Header>
                 <Card.Body>
-                    <Form>
+                    <Form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!projectId) return;
+                        loadBaseVouchers(0, false);
+                        loadSummaryStats(projectId, startDate, endDate);
+                    }}>
                         <div className="row mb-3">
                             <div className="col-md-2 mb-3">
                                 <Form.Label className="small text-muted">Quick Filter</Form.Label>
@@ -362,8 +366,8 @@ const BaseVouchers = () => {
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-4 mb-3">
-                                <Form.Label>Project</Form.Label>
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>Project <span className="text-danger">*</span></Form.Label>
                                 <InputGroup>
                                     <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
                                     <SearchableSelect
@@ -371,12 +375,45 @@ const BaseVouchers = () => {
                                         onChange={(value) => setProjectId(value ? parseInt(value) : null)}
                                         options={projects.map(p => ({ id: p.id, name: p.name }))}
                                         placeholder="Search project..."
-                                        disabled={loadingProjects}
+                                        disabled={loadingProjects || loadingVouchers}
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-2 mb-3 d-flex align-items-end">
-                                {(startDate || endDate) && (
+                            <div className="col-md-3 mb-3 d-flex align-items-center" style={{ paddingTop: '2rem' }}>
+                                <Form.Check
+                                    type="checkbox"
+                                    id="hideFullyProcessed"
+                                    label="Hide Fully Processed"
+                                    checked={hideFullyProcessed}
+                                    onChange={(e) => setHideFullyProcessed(e.target.checked)}
+                                    disabled={loadingVouchers}
+                                />
+                            </div>
+                        </div>
+                        <div className="row">
+                            <div className="col-md-3 mb-3">
+                                <div className="d-grid">
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
+                                        disabled={loadingVouchers || isLoadingMore || hasMoreData || !projectId}
+                                        title={!projectId ? 'Please select a project' : ''}
+                                    >
+                                        {loadingVouchers ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                Loading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-search me-2"></i> Generate
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                            {(startDate || endDate) && (
+                                <div className="col-md-2 mb-3 d-flex align-items-end">
                                     <Button
                                         variant="outline-secondary"
                                         size="sm"
@@ -388,8 +425,8 @@ const BaseVouchers = () => {
                                     >
                                         <i className="fas fa-times me-1"></i>Clear Dates
                                     </Button>
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </div>
                     </Form>
                 </Card.Body>
@@ -460,70 +497,97 @@ const BaseVouchers = () => {
 
                                     <div className="row">
                                         <div className="col-md-6 mb-3">
-                                            <h6 className="mb-3"><i className="fas fa-check-circle me-2"></i>Most Processed Products</h6>
-                                            {summaryStats.mostOrderedProducts && summaryStats.mostOrderedProducts.length > 0 ? (
-                                                <div className="table-responsive">
-                                                    <table className="table table-sm table-bordered">
-                                                        <thead className="table-light">
-                                                            <tr>
-                                                                <th>Product</th>
-                                                                <th className="text-end">Total Quantity</th>
-                                                                <th className="text-end">Entries</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {summaryStats.mostOrderedProducts.slice(0, 3).map((product, idx) => (
-                                                                <tr key={idx}>
-                                                                    <td>{product.productName}</td>
-                                                                    <td className="text-end">{formatNumber(product.totalQuantity)}</td>
-                                                                    <td className="text-end">{formatNumber(product.entryCount)}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                            <div className="card border-0 shadow-sm h-100">
+                                                <div className="card-header bg-white border-bottom d-flex align-items-center py-2">
+                                                    <i className="fas fa-check-circle text-success me-2"></i>
+                                                    <span className="fw-semibold" style={{ fontSize: '0.9rem' }}>Most Processed Products</span>
+                                                    {summaryStats.mostOrderedProducts && (
+                                                        <span className="badge bg-success ms-auto">{summaryStats.mostOrderedProducts.length}</span>
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <p className="text-muted">No processed products data available</p>
-                                            )}
+                                                <div className="card-body p-0">
+                                                    {summaryStats.mostOrderedProducts && summaryStats.mostOrderedProducts.length > 0 ? (
+                                                        <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                                            <table className="table table-sm table-hover mb-0">
+                                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
+                                                                    <tr>
+                                                                        <th className="border-0 ps-3 text-start" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Product</th>
+                                                                        <th className="border-0 text-end" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Qty</th>
+                                                                        <th className="border-0 text-end pe-3" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Entries</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {summaryStats.mostOrderedProducts.map((product, idx) => (
+                                                                        <tr key={idx}>
+                                                                            <td className="ps-3" style={{ fontSize: '0.85rem' }}>{product.productName}</td>
+                                                                            <td className="text-end fw-semibold text-success" style={{ fontSize: '0.85rem' }}>{formatNumber(product.totalQuantity)}</td>
+                                                                            <td className="text-end pe-3 text-muted" style={{ fontSize: '0.85rem' }}>{formatNumber(product.entryCount)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center text-muted py-4" style={{ fontSize: '0.85rem' }}>
+                                                            <i className="fas fa-inbox me-2"></i>No processed products data
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="col-md-6 mb-3">
-                                            <h6 className="mb-3"><i className="fas fa-clock me-2"></i>Most Pending Products</h6>
-                                            {summaryStats.mostPendingProducts && summaryStats.mostPendingProducts.length > 0 ? (
-                                                <div className="table-responsive">
-                                                    <table className="table table-sm table-bordered">
-                                                        <thead className="table-light">
-                                                            <tr>
-                                                                <th>Product</th>
-                                                                <th className="text-end">Pending Qty</th>
-                                                                <th className="text-end">Entries</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {summaryStats.mostPendingProducts.slice(0, 3).map((product, idx) => (
-                                                                <tr key={idx}>
-                                                                    <td>{product.productName}</td>
-                                                                    <td className="text-end text-warning fw-bold">{formatNumber(product.unprocessedQuantity)}</td>
-                                                                    <td className="text-end">{formatNumber(product.entryCount)}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                            <div className="card border-0 shadow-sm h-100">
+                                                <div className="card-header bg-white border-bottom d-flex align-items-center py-2">
+                                                    <i className="fas fa-clock text-warning me-2"></i>
+                                                    <span className="fw-semibold" style={{ fontSize: '0.9rem' }}>Most Pending Products</span>
+                                                    {summaryStats.mostPendingProducts && (
+                                                        <span className="badge bg-warning text-dark ms-auto">{summaryStats.mostPendingProducts.length}</span>
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <p className="text-muted">No pending products data available</p>
-                                            )}
+                                                <div className="card-body p-0">
+                                                    {summaryStats.mostPendingProducts && summaryStats.mostPendingProducts.length > 0 ? (
+                                                        <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                                                            <table className="table table-sm table-hover mb-0">
+                                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
+                                                                    <tr>
+                                                                        <th className="border-0 ps-3 text-start" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Product</th>
+                                                                        <th className="border-0 text-end" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Pending Qty</th>
+                                                                        <th className="border-0 text-end pe-3" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Entries</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {summaryStats.mostPendingProducts.map((product, idx) => (
+                                                                        <tr key={idx}>
+                                                                            <td className="ps-3" style={{ fontSize: '0.85rem' }}>{product.productName}</td>
+                                                                            <td className="text-end fw-semibold text-warning" style={{ fontSize: '0.85rem' }}>{formatNumber(product.unprocessedQuantity)}</td>
+                                                                            <td className="text-end pe-3 text-muted" style={{ fontSize: '0.85rem' }}>{formatNumber(product.entryCount)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center text-muted py-4" style={{ fontSize: '0.85rem' }}>
+                                                            <i className="fas fa-inbox me-2"></i>No pending products data
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="row mt-3">
                                         <div className="col-md-6 mb-3">
                                             {summaryStats.topCustomer && (
-                                                <div className="card">
-                                                    <div className="card-body">
-                                                        <h6 className="card-title"><i className="fas fa-user-tie me-2"></i>Top Customer</h6>
-                                                        <p className="mb-1"><strong>{summaryStats.topCustomer.customerName}</strong></p>
-                                                        <p className="mb-0 text-muted">
-                                                            {formatNumber(summaryStats.topCustomer.voucherCount)} vouchers | {formatNumber(summaryStats.topCustomer.totalEntries)} entries
+                                                <div className="card border-0 shadow-sm">
+                                                    <div className="card-body py-2 px-3">
+                                                        <div className="d-flex align-items-center">
+                                                            <i className="fas fa-user-tie text-primary me-2"></i>
+                                                            <span className="fw-semibold" style={{ fontSize: '0.9rem' }}>Top Customer</span>
+                                                        </div>
+                                                        <p className="mb-0 mt-1" style={{ fontSize: '0.85rem' }}>
+                                                            <strong>{summaryStats.topCustomer.customerName}</strong>
+                                                            <span className="text-muted"> - {formatNumber(summaryStats.topCustomer.voucherCount)} vouchers | {formatNumber(summaryStats.topCustomer.totalEntries)} entries</span>
                                                         </p>
                                                     </div>
                                                 </div>
@@ -531,12 +595,15 @@ const BaseVouchers = () => {
                                         </div>
                                         <div className="col-md-6 mb-3">
                                             {summaryStats.oldestPendingVoucher && (
-                                                <div className="card">
-                                                    <div className="card-body">
-                                                        <h6 className="card-title"><i className="fas fa-calendar-times me-2"></i>Oldest Pending Voucher</h6>
-                                                        <p className="mb-1"><strong>JV-{summaryStats.oldestPendingVoucher.voucherId}</strong></p>
-                                                        <p className="mb-0 text-muted">
-                                                            {formatDate(summaryStats.oldestPendingVoucher.entryDate)} | {formatNumber(summaryStats.oldestPendingVoucher.daysPending)} days pending | {formatNumber(summaryStats.oldestPendingVoucher.unprocessedCount)} unprocessed
+                                                <div className="card border-0 shadow-sm">
+                                                    <div className="card-body py-2 px-3">
+                                                        <div className="d-flex align-items-center">
+                                                            <i className="fas fa-calendar-times text-danger me-2"></i>
+                                                            <span className="fw-semibold" style={{ fontSize: '0.9rem' }}>Oldest Pending Voucher</span>
+                                                        </div>
+                                                        <p className="mb-0 mt-1" style={{ fontSize: '0.85rem' }}>
+                                                            <strong>JV-{summaryStats.oldestPendingVoucher.voucherId}</strong>
+                                                            <span className="text-muted"> - {formatDate(summaryStats.oldestPendingVoucher.entryDate)} | {formatNumber(summaryStats.oldestPendingVoucher.daysPending)} days pending | {formatNumber(summaryStats.oldestPendingVoucher.unprocessedCount)} unprocessed</span>
                                                         </p>
                                                     </div>
                                                 </div>
@@ -599,8 +666,8 @@ const BaseVouchers = () => {
                                         <th style={{ minWidth: '150px' }}>Project</th>
                                         <th style={{ minWidth: '150px' }}>Customer</th>
                                         <th style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Entry Date</th>
-                                        <th className="text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Available Items</th>
-                                        <th className="text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Total Items</th>
+                                        <th className="text-end" style={{ minWidth: '120px', whiteSpace: 'nowrap' }}>Unprocessed Items</th>
+                                        <th className="text-end" style={{ minWidth: '100px', whiteSpace: 'nowrap' }}>Total Products</th>
                                         <th style={{ minWidth: '150px', whiteSpace: 'nowrap' }}>Status</th>
                                         <th className="text-center" style={{ minWidth: '250px', whiteSpace: 'nowrap' }}>Actions</th>
                                     </tr>
@@ -656,6 +723,14 @@ const BaseVouchers = () => {
                                                         className="btn btn-sm btn-info ms-1"
                                                     >
                                                         <i className="fas fa-eye me-1"></i> View
+                                                    </a>
+                                                    <a
+                                                        href={`/home/entry?voucherId=${voucher.journalVoucherId}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="btn btn-sm btn-outline-primary ms-1"
+                                                    >
+                                                        <i className="fas fa-edit me-1"></i> Edit
                                                     </a>
                                                     <a
                                                         href={`/reporting/print-voucher?voucherId=${voucher.journalVoucherId}&type=JV`}

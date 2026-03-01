@@ -319,12 +319,12 @@ namespace PureLedger.Services
 
         #region FOR Charges Processing
 
-        public async Task<JournalVoucher> ProcessForChargesAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate, int? forAccountId = null)
+        public async Task<JournalVoucher> ProcessForChargesAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate, int? forAccountId = null, string? otherRef = null)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var forJV = await ProcessForChargesInternalAsync(journalVoucherId, entryId, amount, dcDate, forAccountId);
+                var forJV = await ProcessForChargesInternalAsync(journalVoucherId, entryId, amount, dcDate, forAccountId, otherRef);
 
                 await _unitOfWork.SaveChangesAsync();
 
@@ -600,7 +600,7 @@ namespace PureLedger.Services
 
         #region Private Helper Methods - FOR Charges
 
-        private async Task<JournalVoucher> ProcessForChargesInternalAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate, int? forAccountId = null)
+        private async Task<JournalVoucher> ProcessForChargesInternalAsync(int journalVoucherId, int? entryId, int amount, DateOnly dcDate, int? forAccountId = null, string? otherRef = null)
         {
             try
             {
@@ -641,13 +641,18 @@ namespace PureLedger.Services
 
                 var forJV = await CreateForChargesVoucherAsync(originalJV.ProjectId, dcDate);
                 await _sharedProcessingService.CreateVoucherReferenceAsync(journalVoucherId, forJV.JournalVoucherId, "ForCharges");
-                
+
                 // Create FOR charges entries for the single selected account
-                await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountIdToUse, forAccount.CategoryId, customerAccountId, customerCategoryId, amount, journalVoucherId, entryId);
+                await CreateForChargesEntriesAsync(forJV.JournalVoucherId, forAccountIdToUse, forAccount.CategoryId, customerAccountId, customerCategoryId, amount, journalVoucherId, entryId, otherRef);
 
                 originalJV.PendingForCharges = false;
                 await _unitOfWork.JournalVouchers.UpdateAsync(originalJV);
-                // Note: FOR charges voucher IsCompleted stays false; CompleteReferenceVouchersAsync handles it when main voucher completes
+
+                // Save otherRef to the first DC entry for the original voucher
+                if (!string.IsNullOrWhiteSpace(otherRef))
+                {
+                    await SaveOtherRefToDCEntryAsync(journalVoucherId, otherRef);
+                }
 
                 _logger.LogInformation("Created FOR charges voucher {JvId} for amount {Amount} using single FOR account {AccountId}", forJV.JournalVoucherId, amount, forAccountIdToUse);
                 return forJV;
@@ -659,13 +664,20 @@ namespace PureLedger.Services
             }
         }
 
-        public async Task ClearPendingForChargesAsync(int journalVoucherId)
+        public async Task ClearPendingForChargesAsync(int journalVoucherId, string? otherRef = null)
         {
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null)
                 throw new InvalidOperationException($"Voucher {journalVoucherId} not found");
             voucher.PendingForCharges = false;
             await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+
+            // Save otherRef to the DC entry if provided
+            if (!string.IsNullOrWhiteSpace(otherRef))
+            {
+                await SaveOtherRefToDCEntryAsync(journalVoucherId, otherRef);
+            }
+
             await _unitOfWork.SaveChangesAsync();
         }
 
@@ -700,14 +712,14 @@ namespace PureLedger.Services
             throw new InvalidOperationException($"No customer account found in journal voucher {voucher.JournalVoucherId}");
         }
 
-        private async Task CreateForChargesEntriesAsync(int voucherId, int forAccountId, int forCategoryId, int customerAccountId, int customerCategoryId, int amount, int originalVoucherId, int? entryId)
+        private async Task CreateForChargesEntriesAsync(int voucherId, int forAccountId, int forCategoryId, int customerAccountId, int customerCategoryId, int amount, int originalVoucherId, int? entryId, string? otherRef = null)
         {
             var debitEntry = new JournalEntry
             {
                 JournalVoucherId = voucherId,
                 AccountId = forAccountId,
                 CategoryId = forCategoryId,
-                Description = BuildForChargesDescription("Debit", originalVoucherId, entryId),
+                Description = BuildForChargesDescription("Debit", originalVoucherId, entryId, otherRef),
                 Quantity = 0,
                 Rate = amount,
                 Debit = amount,
@@ -723,7 +735,7 @@ namespace PureLedger.Services
                 JournalVoucherId = voucherId,
                 AccountId = customerAccountId,
                 CategoryId = customerCategoryId,
-                Description = BuildForChargesDescription("Credit", originalVoucherId, entryId),
+                Description = BuildForChargesDescription("Credit", originalVoucherId, entryId, otherRef),
                 Quantity = 0,
                 Rate = amount,
                 Debit = 0,
@@ -738,12 +750,31 @@ namespace PureLedger.Services
             await _unitOfWork.JournalEntries.AddAsync(creditEntry);
         }
 
-        private static string BuildForChargesDescription(string entryType, int originalVoucherId, int? entryId)
+        private static string BuildForChargesDescription(string entryType, int originalVoucherId, int? entryId, string? otherRef = null)
         {
             var description = $"FOR Charges {entryType} - Ref to JV-{originalVoucherId}";
             if (entryId.HasValue)
                 description += $" Entry-{entryId}";
+            if (!string.IsNullOrWhiteSpace(otherRef))
+                description += $" | Other Ref: {otherRef}";
             return description;
+        }
+
+        private async Task SaveOtherRefToDCEntryAsync(int journalVoucherId, string otherRef)
+        {
+            var dcVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
+            if (dcVoucher != null)
+            {
+                var dcEntries = await _unitOfWork.DeliveryChallanEntries.GetByDeliveryChallanIdAsync(dcVoucher.DeliveryChallanVoucherId);
+                var firstEntry = dcEntries.FirstOrDefault();
+                if (firstEntry != null)
+                {
+                    firstEntry.OtherReference = string.IsNullOrWhiteSpace(firstEntry.OtherReference)
+                        ? otherRef
+                        : $"{firstEntry.OtherReference} | {otherRef}";
+                    await _unitOfWork.DeliveryChallanEntries.UpdateAsync(firstEntry);
+                }
+            }
         }
 
         #endregion

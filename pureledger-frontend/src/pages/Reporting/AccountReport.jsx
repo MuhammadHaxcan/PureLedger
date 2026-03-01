@@ -29,7 +29,7 @@ const AccountReport = () => {
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 1000;
+    const pageSize = 2500;
 
     const observer = useRef();
     const lastEntryElementRef = useCallback(node => {
@@ -147,7 +147,7 @@ const AccountReport = () => {
                 setCurrentPage(page + 1);
 
                 // Auto-load next page if there's more data and not searching
-                if (data.hasMoreData && !searchTerm.trim() && !isLoadingMore) {
+                if (data.hasMoreData && !searchTerm.trim()) {
                     setTimeout(() => {
                         generateReport(page + 1, true);
                     }, 100);
@@ -351,7 +351,7 @@ const AccountReport = () => {
                                     <Button 
                                         type="submit" 
                                         variant="primary" 
-                                        disabled={generating || !formData.projectId}
+                                        disabled={generating || isLoadingMore || hasMoreData || !formData.projectId}
                                         title={!formData.projectId ? 'Please select a project' : ''}
                                     >
                                         {generating ? (

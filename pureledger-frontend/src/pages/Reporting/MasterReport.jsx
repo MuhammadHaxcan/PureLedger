@@ -75,7 +75,7 @@ const MasterReport = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [previousBalance, setPreviousBalance] = useState(0);
     const [totalRecords, setTotalRecords] = useState(0);
-    const pageSize = 1000;
+    const pageSize = 2500;
     const searchTermRef = useRef('');
     const abortControllerRef = useRef(null);
     const activeFiltersRef = useRef(null);
@@ -246,7 +246,7 @@ const MasterReport = () => {
 
                 // Auto-load next page if there's more data and not searching
                 // Remove the append check so it auto-loads after first page too
-                if (data.hasMoreData && !searchTerm.trim() && !isLoadingMore && !isAutoLoading) {
+                if (data.hasMoreData && !searchTerm.trim()) {
                     setIsAutoLoading(true);
                     setTimeout(() => {
                         generateReport(page + 1, true);
@@ -334,11 +334,10 @@ const MasterReport = () => {
     const filteredEntries = allEntries.filter(entry => {
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
-        // Format dates for searching
-        const entryDateStr = entry.entryDate 
+        const entryDateStr = entry.entryDate
             ? new Date(entry.entryDate).toLocaleDateString().toLowerCase()
             : '';
-        const creditableDateStr = entry.creditableDate 
+        const creditableDateStr = entry.creditableDate
             ? new Date(entry.creditableDate).toLocaleDateString().toLowerCase()
             : '';
         return (
@@ -767,7 +766,7 @@ const MasterReport = () => {
                                     <Button
                                         type="submit"
                                         variant="primary"
-                                        disabled={generating || !formData.projectId}
+                                        disabled={generating || isLoadingMore || hasMoreData || !formData.projectId}
                                         title={!formData.projectId ? 'Please select a project' : ''}
                                     >
                                         {generating ? (

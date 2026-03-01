@@ -20,5 +20,8 @@ namespace PureLedger.ViewModels.DeliveryChallan
         public DateOnly DcDate { get; set; }
         
         public int? ForAccountId { get; set; }
+
+        [StringLength(200)]
+        public string? OtherRef { get; set; }
     }
 }

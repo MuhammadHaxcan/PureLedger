@@ -27,7 +27,7 @@ const AgingReport = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
   const [isAutoLoading, setIsAutoLoading] = useState(false);
-  const pageSize = 1000;
+  const pageSize = 2500;
   const observerRef = useRef(null);
   const loadingRef = useRef(null);
 
@@ -151,7 +151,7 @@ const AgingReport = () => {
           setCurrentPage(page + 1);
 
           // Auto-load next page if there's more data (not using scroll-based loading)
-          if (reportData.hasMoreData && !isLoadingMore && !isAutoLoading) {
+          if (reportData.hasMoreData) {
             setIsAutoLoading(true);
             setTimeout(() => {
               generateReport(page + 1, true);

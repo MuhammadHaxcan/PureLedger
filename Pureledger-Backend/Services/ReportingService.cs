@@ -411,7 +411,7 @@ namespace PureLedger.Services {
             int? locationId = ParseNullableInt(request.LocationId);
 
             int page = Math.Max(0, request.Page);
-            int pageSize = Math.Clamp(request.PageSize, 1, 1000);
+            int pageSize = Math.Clamp(request.PageSize, 1, 2500);
 
             var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceAsync(
                 startDate, projectId, categoryId, accountId);
@@ -556,7 +556,7 @@ namespace PureLedger.Services {
             int? locationId = ParseNullableInt(request.LocationId);
 
             int page = Math.Max(0, request.Page);
-            int pageSize = Math.Clamp(request.PageSize, 1, 1000);
+            int pageSize = Math.Clamp(request.PageSize, 1, 2500);
 
             var (openingDebit, openingCredit) = await _unitOfWork.JournalEntries.GetOpeningBalanceForUserReportAsync(
                 startDate, projectId, categoryId, accountId);
@@ -746,7 +746,7 @@ namespace PureLedger.Services {
             DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
 
             int page = Math.Max(0, request.Page);
-            int pageSize = Math.Clamp(request.PageSize, 1, 1000);
+            int pageSize = Math.Clamp(request.PageSize, 1, 2500);
 
             // Get paginated product IDs
             var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
@@ -943,40 +943,71 @@ namespace PureLedger.Services {
 
             int totalMissedEntries = entries.Count;
             int totalMissedQuantity = entries.Sum(e => e.Quantity);
+            decimal totalMissedValue = entries.Sum(e =>
+            {
+                var pkg = e.ProductAccount?.ProductData?.Pkg ?? 0;
+                var baseAmount = (e.Rbp == "Y" && pkg > 0)
+                    ? (decimal)pkg * e.Quantity * e.Rate
+                    : (decimal)e.Quantity * e.Rate;
+                return baseAmount - (baseAmount * e.Discount / 100m);
+            });
             int uniqueCustomers = entries.Select(e => e.CustomerAccountId).Distinct().Count();
             int uniqueProducts = entries.Select(e => e.ProductAccountId).Distinct().Count();
+            decimal averageQuantityPerEntry = totalMissedEntries > 0 ? Math.Round((decimal)totalMissedQuantity / totalMissedEntries, 2) : 0;
+            decimal averageValuePerEntry = totalMissedEntries > 0 ? Math.Round(totalMissedValue / totalMissedEntries, 2) : 0;
 
-            var topCustomerGroup = entries
+            var customerGroups = entries
                 .Where(e => e.CustomerAccountId > 0)
                 .GroupBy(e => e.CustomerAccountId)
                 .Select(g => new {
                     CustomerAccountId = g.Key,
                     Name = g.FirstOrDefault()?.CustomerAccount?.AccountName ?? "Unknown",
-                    Quantity = g.Sum(x => x.Quantity)
+                    Quantity = g.Sum(x => x.Quantity),
+                    EntryCount = g.Count()
                 })
                 .OrderByDescending(x => x.Quantity)
-                .FirstOrDefault();
+                .ToList();
 
-            var topProductGroup = entries
+            var topCustomerGroup = customerGroups.FirstOrDefault();
+
+            var productGroups = entries
                 .Where(e => e.ProductAccountId > 0)
                 .GroupBy(e => e.ProductAccountId)
                 .Select(g => new {
                     ProductAccountId = g.Key,
                     Name = g.FirstOrDefault()?.ProductAccount?.AccountName ?? "Unknown",
-                    Quantity = g.Sum(x => x.Quantity)
+                    Quantity = g.Sum(x => x.Quantity),
+                    EntryCount = g.Count()
                 })
                 .OrderByDescending(x => x.Quantity)
-                .FirstOrDefault();
+                .ToList();
+
+            var topProductGroup = productGroups.FirstOrDefault();
 
             return new {
                 totalMissedEntries,
                 totalMissedQuantity,
+                totalMissedValue,
                 uniqueCustomers,
                 uniqueProducts,
+                averageQuantityPerEntry,
+                averageValuePerEntry,
                 topCustomer = topCustomerGroup?.Name ?? null,
                 topCustomerMissedQuantity = topCustomerGroup?.Quantity ?? 0,
+                topCustomerEntryCount = topCustomerGroup?.EntryCount ?? 0,
                 topMissedProduct = topProductGroup?.Name ?? null,
-                topMissedProductQuantity = topProductGroup?.Quantity ?? 0
+                topMissedProductQuantity = topProductGroup?.Quantity ?? 0,
+                topProductEntryCount = topProductGroup?.EntryCount ?? 0,
+                top5Customers = customerGroups.Take(5).Select(c => new {
+                    name = c.Name,
+                    quantity = c.Quantity,
+                    entryCount = c.EntryCount
+                }),
+                top5Products = productGroups.Take(5).Select(p => new {
+                    name = p.Name,
+                    quantity = p.Quantity,
+                    entryCount = p.EntryCount
+                })
             };
         }
 
@@ -1040,19 +1071,26 @@ namespace PureLedger.Services {
                 .Where(e => (!startDate.HasValue || e.MissedDate >= startDate.Value)
                          && (!endDate.HasValue || e.MissedDate <= endDate.Value)
                          && (!projectId.HasValue || e.ProjectId == projectId.Value))
-                .Select(e => new {
-                    missedEntryId = e.MissedEntryId,
-                    missedDate = e.MissedDate,
-                    projectName = e.Project?.ProjectName ?? "",
-                    customerAccountId = e.CustomerAccountId,
-                    customerName = e.CustomerAccount?.AccountName ?? "",
-                    productAccountId = e.ProductAccountId,
-                    productName = e.ProductAccount?.AccountName ?? "",
-                    quantity = e.Quantity,
-                    rate = e.Rate,
-                    discount = e.Discount,
-                    description = e.Description,
-                    totalValue = (e.Quantity * e.Rate) - e.Discount
+                .Select(e => {
+                    var pkg = e.ProductAccount?.ProductData?.Pkg ?? 0;
+                    var baseAmount = (e.Rbp == "Y" && pkg > 0)
+                        ? (decimal)pkg * e.Quantity * e.Rate
+                        : (decimal)e.Quantity * e.Rate;
+                    var totalValue = baseAmount - (baseAmount * e.Discount / 100m);
+                    return new {
+                        missedEntryId = e.MissedEntryId,
+                        missedDate = e.MissedDate,
+                        projectName = e.Project?.ProjectName ?? "",
+                        customerAccountId = e.CustomerAccountId,
+                        customerName = e.CustomerAccount?.AccountName ?? "",
+                        productAccountId = e.ProductAccountId,
+                        productName = e.ProductAccount?.AccountName ?? "",
+                        quantity = e.Quantity,
+                        rate = e.Rate,
+                        discount = e.Discount,
+                        description = e.Description,
+                        totalValue
+                    };
                 })
                 .OrderByDescending(x => x.missedDate)
                 .ToList();

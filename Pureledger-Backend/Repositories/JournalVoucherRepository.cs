@@ -87,7 +87,7 @@ namespace PureLedger.Repositories
         public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetVouchersWithModifiedEntriesPaginatedAsync(int? projectId, int page, int pageSize)
         {
             page = Math.Max(0, page);
-            pageSize = Math.Clamp(pageSize, 1, 1000);
+            pageSize = Math.Clamp(pageSize, 1, 2500);
 
             var query = _context.Set<JournalVoucher>()
                 .AsNoTracking()
@@ -133,10 +133,10 @@ namespace PureLedger.Repositories
         }
 
         public async Task<(List<JournalVoucher> Vouchers, int TotalCount)> GetAllBaseVouchersPaginatedAsync(
-            int? projectId, DateOnly? startDate, DateOnly? endDate, int page, int pageSize)
+            int? projectId, DateOnly? startDate, DateOnly? endDate, bool hideFullyProcessed, int page, int pageSize)
         {
             page = Math.Max(0, page);
-            pageSize = Math.Clamp(pageSize, 1, 1000);
+            pageSize = Math.Clamp(pageSize, 1, 2500);
 
             var baseQuery = _context.JournalVouchers
                 .AsNoTracking()
@@ -155,6 +155,11 @@ namespace PureLedger.Repositories
             if (endDate.HasValue)
             {
                 baseQuery = baseQuery.Where(v => v.EntryDate <= endDate.Value);
+            }
+
+            if (hideFullyProcessed)
+            {
+                baseQuery = baseQuery.Where(v => v.JournalEntries.Any(e => !e.IsProcessed && e.Quantity > 0));
             }
 
             var query = baseQuery
