@@ -4,7 +4,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import apiClient from '../../services/api';
-import { exportToCsvAsync } from '../../utils/exportUtils';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 import './MasterReport.css';
 
@@ -15,6 +15,7 @@ const OldMasterReport = () => {
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
     const [exportingCsv, setExportingCsv] = useState(false);
+    const [exportingPdf, setExportingPdf] = useState(false);
 
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -333,6 +334,70 @@ const OldMasterReport = () => {
         }
     };
 
+    const handleExportPdf = async () => {
+        setExportingPdf(true);
+        try {
+            const selectedProject = projects.find(p => p.id === formData.projectId);
+
+            const columns = [{ header: 'ID', dataKey: 'id' }];
+            if (visibleColumns.date) columns.push({ header: 'Entry Date', dataKey: 'date' });
+            if (visibleColumns.creditableDate) columns.push({ header: 'Credit Date', dataKey: 'creditableDate' });
+            if (visibleColumns.project) columns.push({ header: 'Project', dataKey: 'project' });
+            if (visibleColumns.category) columns.push({ header: 'Category', dataKey: 'category' });
+            if (visibleColumns.account) columns.push({ header: 'Account', dataKey: 'account' });
+            if (visibleColumns.description) columns.push({ header: 'Description', dataKey: 'description' });
+            if (visibleColumns.booker) columns.push({ header: 'Booker', dataKey: 'booker' });
+            if (visibleColumns.location) columns.push({ header: 'Location', dataKey: 'location' });
+            if (visibleColumns.quantity) columns.push({ header: 'Qty', dataKey: 'quantity' });
+            if (visibleColumns.qtyBalance) columns.push({ header: 'Qty Bal', dataKey: 'qtyBalance' });
+            if (visibleColumns.rate) columns.push({ header: 'Rate', dataKey: 'rate' });
+            if (visibleColumns.debit) columns.push({ header: 'Debit', dataKey: 'debit' });
+            if (visibleColumns.credit) columns.push({ header: 'Credit', dataKey: 'credit' });
+            if (visibleColumns.balance) columns.push({ header: 'Balance', dataKey: 'balance' });
+
+            const rows = filteredEntries.map(entry => {
+                const row = { id: entry.formattedId || entry.id };
+                if (visibleColumns.date) row.date = formatDate(entry.transactionDate);
+                if (visibleColumns.creditableDate) row.creditableDate = formatDate(entry.creditableDate);
+                if (visibleColumns.project) row.project = entry.projectName || '';
+                if (visibleColumns.category) row.category = entry.categoryName || '';
+                if (visibleColumns.account) row.account = entry.accountName || '';
+                if (visibleColumns.description) row.description = entry.description || '';
+                if (visibleColumns.booker) row.booker = entry.bookerName || '';
+                if (visibleColumns.location) row.location = entry.locationName || '';
+                if (visibleColumns.quantity) row.quantity = entry.quantity ?? '';
+                if (visibleColumns.qtyBalance) row.qtyBalance = entry.qtyBalance ?? '';
+                if (visibleColumns.rate) row.rate = entry.rate != null ? formatCurrency(entry.rate) : '';
+                if (visibleColumns.debit) row.debit = entry.debit != null ? formatCurrency(entry.debit) : '';
+                if (visibleColumns.credit) row.credit = entry.credit != null ? formatCurrency(entry.credit) : '';
+                if (visibleColumns.balance) row.balance = entry.balance != null ? formatCurrency(entry.balance) : '';
+                return row;
+            });
+
+            const dateRange = formData.startDate
+                ? `${formatDate(formData.startDate)} to ${formatDate(formData.endDate || formData.startDate)}`
+                : null;
+
+            await generatePdfAsync({
+                orientation: 'landscape',
+                format: 'a4',
+                title: 'Old Master Report',
+                projectName: selectedProject?.name || 'All Projects',
+                dateRange,
+                generatedInfo: `Generated: ${new Date().toLocaleString()} | ${filteredEntries.length} of ${totalRecords} records | Previous Balance: ${formatCurrency(previousBalance)}`,
+                columns,
+                rows,
+                rowsPerPage: 14,
+                startY: 46,
+                fontSize: 8,
+                cellPadding: 2,
+                filename: `OldMasterReport_${new Date().toISOString().split('T')[0]}.pdf`
+            });
+        } finally {
+            setExportingPdf(false);
+        }
+    };
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -612,7 +677,7 @@ const OldMasterReport = () => {
                                 variant="outline-success"
                                 size="sm"
                                 onClick={handleExportCsv}
-                                disabled={exportingCsv}
+                                disabled={exportingCsv || exportingPdf}
                             >
                                 {exportingCsv ? (
                                     <>
@@ -622,6 +687,24 @@ const OldMasterReport = () => {
                                 ) : (
                                     <>
                                         <i className="fas fa-file-csv me-1"></i> Export CSV
+                                    </>
+                                )}
+                            </Button>
+                            <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={handleExportPdf}
+                                disabled={exportingCsv || exportingPdf}
+                                className="ms-2"
+                            >
+                                {exportingPdf ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-file-pdf me-1"></i> Export PDF
                                     </>
                                 )}
                             </Button>
@@ -651,7 +734,7 @@ const OldMasterReport = () => {
                                             {visibleColumns.date && <th className="date-column" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Entry Date</th>}
                                             {visibleColumns.creditableDate && <th className="creditable-date-column" style={{ minWidth: '90px', maxWidth: '120px', whiteSpace: 'nowrap' }}>Credit Date</th>}
                                             {visibleColumns.project && <th className="project-column" style={{ minWidth: '100px', maxWidth: '150px', whiteSpace: 'nowrap' }}>Project</th>}
-                                            {visibleColumns.category && <th className="category-column" style={{ minWidth: '100px', maxWidth: '150px', whiteSpace: 'nowrap' }}>Category</th>}
+                                            {visibleColumns.category && <th className="category-column" style={{ minWidth: '100px', maxWidth: '180px', whiteSpace: 'normal', wordWrap: 'break-word' }}>Category</th>}
                                             {visibleColumns.account && <th className="account-column" style={{ minWidth: '90px', maxWidth: '160px', wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>Account</th>}
                                             {visibleColumns.description && <th className="description-column" style={{ width: '280px', minWidth: '200px', maxWidth: '350px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }}>Description</th>}
                                             {visibleColumns.booker && <th className="booker-column" style={{ minWidth: '110px', maxWidth: '180px', wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>Booker</th>}
@@ -695,7 +778,7 @@ const OldMasterReport = () => {
                                                         {visibleColumns.date && <td className="date-column" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{formatDate(entry.transactionDate)}</td>}
                                                         {visibleColumns.creditableDate && <td className="creditable-date-column" style={{ whiteSpace: 'nowrap', minWidth: '90px', maxWidth: '120px' }}>{formatDate(entry.creditableDate)}</td>}
                                                         {visibleColumns.project && <td className="project-column" style={{ whiteSpace: 'nowrap', minWidth: '100px', maxWidth: '150px' }}>{entry.projectName || ''}</td>}
-                                                        {visibleColumns.category && <td className="category-column" style={{ whiteSpace: 'nowrap', minWidth: '100px', maxWidth: '150px' }}>{entry.categoryName || ''}</td>}
+                                                        {visibleColumns.category && <td className="category-column" style={{ whiteSpace: 'normal', wordWrap: 'break-word', minWidth: '100px', maxWidth: '180px' }}>{entry.categoryName || ''}</td>}
                                                         {visibleColumns.account && <td className="account-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', maxWidth: '160px' }}>{entry.accountName || ''}</td>}
                                                         {visibleColumns.description && <td className="description-column" style={{ width: '280px', minWidth: '200px', maxWidth: '350px', wordWrap: 'break-word', overflowWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }}>{entry.description || ''}</td>}
                                                         {visibleColumns.booker && <td className="booker-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', maxWidth: '180px' }}>{entry.bookerName || ''}</td>}
