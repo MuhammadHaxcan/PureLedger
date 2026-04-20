@@ -325,7 +325,7 @@ namespace PureLedger.Controllers.Api {
             var controllerDefinitions = new Dictionary<string, (string title, string icon, string[] actions)> {
                 ["Home"] = ("Home", "fas fa-home", new[] { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" }),
                 ["MetaData"] = ("Meta Data", "fas fa-database", new[] { "Projects", "Categories", "Accounts", "Locations", "Bookers" }),
-                ["Reporting"] = ("Reporting", "fas fa-chart-bar", new[] { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport", "MissedEntriesReport" }),
+                ["Reporting"] = ("Reporting", "fas fa-chart-bar", new[] { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" }),
                 ["DeliveryChallan"] = ("Delivery Challan", "fas fa-truck", new[] { "ProcessDC" })
             };
 
@@ -443,7 +443,8 @@ namespace PureLedger.Controllers.Api {
                     ["AccountReport"] = "fas fa-chart-pie",
                     ["MasterReport"] = "fas fa-file-alt",
                     ["ProductReport"] = "fas fa-box",
-                    ["MissedEntriesReport"] = "fas fa-exclamation-circle"
+                    ["MissedEntriesReport"] = "fas fa-exclamation-circle",
+                    ["OldMasterReport"] = "fas fa-history"
                 },
                 ["DeliveryChallan"] = new Dictionary<string, string> {
                     ["ProcessDC"] = "fas fa-truck-loading"

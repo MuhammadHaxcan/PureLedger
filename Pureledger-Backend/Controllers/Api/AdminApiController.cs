@@ -18,13 +18,14 @@ namespace PureLedger.Controllers.Api
         private readonly ICurrentUserService _currentUserService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<AdminApiController> _logger;
+        private readonly ISettingsService _settingsService;
 
         // Map of controllers and their actions for access control
         private readonly Dictionary<string, List<string>> _controllerActions = new()
         {
             ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" },
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations", "Bookers" },
-            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport" },
+            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" },
             ["DeliveryChallan"] = new() { "ProcessDC" }
         };
 
@@ -32,12 +33,14 @@ namespace PureLedger.Controllers.Api
             IAuthService authService,
             ICurrentUserService currentUserService,
             IHttpContextAccessor httpContextAccessor,
-            ILogger<AdminApiController> logger)
+            ILogger<AdminApiController> logger,
+            ISettingsService settingsService)
         {
             _authService = authService ?? throw new ArgumentNullException(nameof(authService));
             _currentUserService = currentUserService ?? throw new ArgumentNullException(nameof(currentUserService));
             _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
         }
 
         [HttpGet("users")]
@@ -115,8 +118,9 @@ namespace PureLedger.Controllers.Api
                 var actionAccess = await _authService.GetUserActionAccessAsync(targetUser.UserId);
                 var hiddenCategoryIds = await _authService.GetUserHiddenCategoriesAsync(targetUser.UserId);
 
-                var accessPermissions = new List<string>();
-                accessPermissions.AddRange(controllerAccess ?? new List<string>());
+                var accessPermissions = new HashSet<string>(
+                    controllerAccess ?? new List<string>(),
+                    StringComparer.OrdinalIgnoreCase);
                 if (actionAccess != null)
                 {
                     foreach (var controllerActionPair in actionAccess)
@@ -151,7 +155,7 @@ namespace PureLedger.Controllers.Api
                         targetUser.IsActive,
                         ProjectIds = userProjects.Select(p => p.ProjectId).ToList(),
                         HiddenCategoryIds = hiddenCategoryIds,
-                        AccessPermissions = accessPermissions
+                        AccessPermissions = accessPermissions.ToList()
                     },
                     projects = projectList,
                     categories = categoryList,
@@ -179,6 +183,12 @@ namespace PureLedger.Controllers.Api
                 if (model.AccessPermissions == null)
                 {
                     model.AccessPermissions = new List<string>();
+                }
+                else
+                {
+                    model.AccessPermissions = model.AccessPermissions
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
                 }
 
                 // Ensure ProjectIds is properly set (even if empty array)
@@ -289,6 +299,12 @@ namespace PureLedger.Controllers.Api
                 if (model.AccessPermissions == null)
                 {
                     model.AccessPermissions = new List<string>();
+                }
+                else
+                {
+                    model.AccessPermissions = model.AccessPermissions
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
                 }
 
                 // Ensure ProjectIds is properly set (even if empty array)
@@ -714,6 +730,55 @@ namespace PureLedger.Controllers.Api
                 return StatusCode(500, new { success = false, message = "Error loading categories" });
             }
         }
+
+        #region Settings Management
+
+        [HttpGet("settings/{key}")]
+        public async Task<IActionResult> GetSetting(string key)
+        {
+            try
+            {
+                var value = await _settingsService.GetSettingAsync(key);
+                return Ok(new { success = true, key, value = value ?? string.Empty });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting setting {Key}", key);
+                return StatusCode(500, new { success = false, message = "Error getting setting" });
+            }
+        }
+
+        [HttpPut("settings/{key}")]
+        public async Task<IActionResult> SetSetting(string key, [FromBody] string value)
+        {
+            try
+            {
+                if (string.Equals(key, "legacyDatabase", StringComparison.OrdinalIgnoreCase))
+                {
+                    var normalizedValue = value?.Trim().ToLowerInvariant();
+                    if (normalizedValue is not ("ghazi" or "ghazi2"))
+                    {
+                        return BadRequest(new
+                        {
+                            success = false,
+                            message = "Invalid legacy database selection"
+                        });
+                    }
+
+                    value = normalizedValue;
+                }
+
+                await _settingsService.SetSettingAsync(key, value);
+                return Ok(new { success = true, message = "Setting saved successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting {Key}", key);
+                return StatusCode(500, new { success = false, message = "Error saving setting" });
+            }
+        }
+
+        #endregion
 
         #region Signature Management
 

@@ -39,6 +39,9 @@ namespace PureLedger.Data
         // Signature table
         public DbSet<Signature> Signatures { get; set; }
 
+        // App settings table
+        public DbSet<AppSetting> AppSettings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -369,6 +372,12 @@ namespace PureLedger.Data
             modelBuilder.Entity<RefreshToken>()
                 .HasIndex(rt => new { rt.UserId, rt.IsRevoked, rt.ExpiryDate })
                 .HasDatabaseName("IX_RefreshTokens_UserId_IsRevoked_ExpiryDate");
+
+            // AppSettings index for fast key lookups
+            modelBuilder.Entity<AppSetting>()
+                .HasIndex(a => a.SettingKey)
+                .IsUnique()
+                .HasDatabaseName("IX_AppSettings_SettingKey");
         }
     }
 }

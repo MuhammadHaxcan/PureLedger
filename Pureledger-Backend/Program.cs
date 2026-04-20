@@ -194,13 +194,37 @@ builder.Services.AddAuthentication(options => {
 builder.Services.AddDbContext<LedgerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("LedgerDb")));
 
+// Register OldLedgerDbContext for legacy MariaDB database
+builder.Services.AddDbContext<OldLedgerDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("OldLedgerDb");
+    var serverVersion = ServerVersion.AutoDetect(connectionString);
+    options.UseMySql(connectionString, serverVersion, mySqlOptions =>
+    {
+        mySqlOptions.EnableRetryOnFailure(3);
+    });
+});
+
+// Register OldLedgerDb2Context for second legacy MariaDB database
+builder.Services.AddDbContext<OldLedgerDb2Context>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("OldLedgerDb2");
+    var serverVersion = ServerVersion.AutoDetect(connectionString);
+    options.UseMySql(connectionString, serverVersion, mySqlOptions =>
+    {
+        mySqlOptions.EnableRetryOnFailure(3);
+    });
+});
+
 // Register services
 builder.Services.AddScoped<JournalEntryService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
+builder.Services.AddScoped<IOldReportingService, OldReportingService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ISharedProcessingService, SharedProcessingService>();
+builder.Services.AddScoped<ISettingsService, SettingsService>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();

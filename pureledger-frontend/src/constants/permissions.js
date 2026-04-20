@@ -24,6 +24,7 @@ export const PERMISSIONS = {
     REPORTING_USER_REPORT: 'Reporting.UserReport',
     REPORTING_PRODUCT_REPORT: 'Reporting.ProductReport',
     REPORTING_MISSED_ENTRIES: 'Reporting.MissedEntriesReport',
+    REPORTING_OLD_MASTER_REPORT: 'Reporting.OldMasterReport',
     
     // Delivery Controller Pages
     DELIVERY_PROCESS_DC: 'DeliveryChallan.ProcessDC',
@@ -58,6 +59,7 @@ export const PAGE_PERMISSIONS = {
     '/reporting/user-report': [PERMISSIONS.REPORTING_USER_REPORT],
     '/reporting/product-report': [PERMISSIONS.REPORTING_PRODUCT_REPORT],
     '/reporting/missed-entries': [PERMISSIONS.REPORTING_MISSED_ENTRIES],
+    '/reporting/old-master-report': [PERMISSIONS.REPORTING_OLD_MASTER_REPORT],
     
     // Delivery routes
     '/delivery/process-dc': [PERMISSIONS.DELIVERY_PROCESS_DC],

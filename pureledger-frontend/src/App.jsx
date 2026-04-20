@@ -25,6 +25,7 @@ import MasterReport from './pages/Reporting/MasterReport';
 import UserReport from './pages/Reporting/UserReport';
 import ProductReport from './pages/Reporting/ProductReport';
 import MissedEntriesReport from './pages/Reporting/MissedEntriesReport';
+import OldMasterReport from './pages/Reporting/OldMasterReport';
 import PrintOnlyVoucher from './pages/Reporting/PrintOnlyVoucher';
 import ProcessDC from './pages/DeliveryChallan/ProcessDC';
 import Users from './pages/Admin/Users';
@@ -71,6 +72,7 @@ function App() {
             <Route path="/reporting/user-report" element={<ProtectedRoute><UserReport /></ProtectedRoute>} />
             <Route path="/reporting/product-report" element={<ProtectedRoute><ProductReport /></ProtectedRoute>} />
             <Route path="/reporting/missed-entries" element={<ProtectedRoute><MissedEntriesReport /></ProtectedRoute>} />
+            <Route path="/reporting/old-master-report" element={<ProtectedRoute><OldMasterReport /></ProtectedRoute>} />
             {/* Delivery Challan Routes */}
             <Route path="/delivery/process-dc" element={<ProtectedRoute><ProcessDC /></ProtectedRoute>} />
             {/* Admin Routes */}

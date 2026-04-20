@@ -38,6 +38,8 @@ namespace PureLedger.Attributes
             "locations",
             // Reporting lookups
             "report-data",
+            "old-master-report-categories-by-project",
+            "old-master-report-accounts-by-category",
             // DeliveryChallan lookups
             "transporter-category-id",
             "check-for-charges-available"
@@ -99,6 +101,11 @@ namespace PureLedger.Attributes
                 // MasterReport action
                 ["master-report"] = "MasterReport",
                 ["master-report-init"] = "MasterReport",
+                // OldMasterReport action
+                ["old-master-report"] = "OldMasterReport",
+                ["old-master-report-init"] = "OldMasterReport",
+                ["old-master-report-categories-by-project"] = "OldMasterReport",
+                ["old-master-report-accounts-by-category"] = "OldMasterReport",
                 // UserReport action
                 ["user-report"] = "UserReport",
                 ["user-report-init"] = "UserReport",

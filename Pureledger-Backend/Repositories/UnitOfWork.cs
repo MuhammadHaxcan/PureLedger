@@ -36,6 +36,7 @@ namespace PureLedger.Repositories
         private IRecipeItemRepository? _recipeItems; // Changed to same pattern
         private IBookerRepository? _bookers;
         private ISignatureRepository? _signatures;
+        private IAppSettingRepository? _appSettings;
 
         public UnitOfWork(LedgerDbContext dbContext)
         {
@@ -70,6 +71,7 @@ namespace PureLedger.Repositories
         
         public IBookerRepository Bookers => _bookers ??= new BookerRepository(_dbContext);
         public ISignatureRepository Signatures => _signatures ??= new SignatureRepository(_dbContext);
+        public IAppSettingRepository AppSettings => _appSettings ??= new AppSettingRepository(_dbContext);
         public async Task<int> SaveChangesAsync()
         {
             return await _dbContext.SaveChangesAsync();

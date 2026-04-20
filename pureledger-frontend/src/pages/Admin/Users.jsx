@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, Table, Button, Alert, Form, Badge } from 'react-bootstrap';
+import { Card, Table, Button, Alert, Form, Badge, InputGroup } from 'react-bootstrap';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/api';
 import Modal from '../../components/Modal';
@@ -35,9 +35,42 @@ const Users = () => {
     accessPermissions: []
   });
 
+  // Legacy database selection
+  const [selectedLegacyDb, setSelectedLegacyDb] = useState('ghazi');
+  const [legacyDbSaving, setLegacyDbSaving] = useState(false);
+  const [legacyDbSuccess, setLegacyDbSuccess] = useState('');
+
   useEffect(() => {
     loadData();
+    loadLegacyDbSetting();
   }, []);
+
+  const loadLegacyDbSetting = async () => {
+    try {
+      const response = await apiClient.get('/AdminApi/settings/legacyDatabase');
+      if (response.data.success && response.data.value) {
+        setSelectedLegacyDb(response.data.value);
+      }
+    } catch (err) {
+      console.error('Error loading legacy database setting:', err);
+    }
+  };
+
+  const handleLegacyDbChange = async (value) => {
+    setLegacyDbSaving(true);
+    setLegacyDbSuccess('');
+    try {
+      await apiClient.put('/AdminApi/settings/legacyDatabase', value);
+      setSelectedLegacyDb(value);
+      setLegacyDbSuccess('Legacy database updated successfully');
+      setTimeout(() => setLegacyDbSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error saving legacy database setting:', err);
+      setError('Failed to save legacy database setting');
+    } finally {
+      setLegacyDbSaving(false);
+    }
+  };
 
   // Load projects and controller actions when modal opens
   useEffect(() => {
@@ -511,6 +544,50 @@ const Users = () => {
           <i className="fas fa-check-circle me-2"></i>{success}
         </Alert>
       )}
+
+      {legacyDbSuccess && (
+        <Alert variant="success" dismissible onClose={() => setLegacyDbSuccess('')}>
+          <i className="fas fa-check-circle me-2"></i>{legacyDbSuccess}
+        </Alert>
+      )}
+
+      <Card className="shadow mb-4">
+        <Card.Header className="py-3">
+          <h6 className="m-0 font-weight-bold text-primary">
+            <i className="fas fa-database me-2"></i>Legacy Database Settings
+          </h6>
+        </Card.Header>
+        <Card.Body>
+          <div className="row align-items-center">
+            <div className="col-md-6">
+              <Form.Group>
+                <Form.Label>Select Legacy Database</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text><i className="fas fa-database"></i></InputGroup.Text>
+                  <Form.Select
+                    value={selectedLegacyDb}
+                    onChange={(e) => handleLegacyDbChange(e.target.value)}
+                    disabled={legacyDbSaving}
+                  >
+                    <option value="ghazi">Ghazi (bysbugvp_ghazi22)</option>
+                    <option value="ghazi2">Ghazi 2 (bysgazih)</option>
+                  </Form.Select>
+                </InputGroup>
+                <Form.Text className="text-muted">
+                  This setting controls which legacy database is used for the Old Master Report.
+                </Form.Text>
+              </Form.Group>
+            </div>
+            <div className="col-md-6">
+              {legacyDbSaving && (
+                <span className="text-muted">
+                  <i className="fas fa-spinner fa-spin me-2"></i>Saving...
+                </span>
+              )}
+            </div>
+          </div>
+        </Card.Body>
+      </Card>
 
       <Card>
         <Card.Body>

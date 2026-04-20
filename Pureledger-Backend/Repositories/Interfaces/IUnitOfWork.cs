@@ -30,6 +30,7 @@ namespace PureLedger.Repositories.Interfaces
         IRecipeItemRepository RecipeItems { get; }
         IBookerRepository Bookers { get; }
         ISignatureRepository Signatures { get; }
+        IAppSettingRepository AppSettings { get; }
 
         Task<int> SaveChangesAsync();
         

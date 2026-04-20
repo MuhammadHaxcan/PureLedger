@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
                 'MetaData': [PERMISSIONS.METADATA_PROJECTS, PERMISSIONS.METADATA_CATEGORIES, PERMISSIONS.METADATA_ACCOUNTS,
                 PERMISSIONS.METADATA_LOCATIONS, PERMISSIONS.METADATA_BOOKERS],
                 'Reporting': [PERMISSIONS.REPORTING_SINGLE_DOC, PERMISSIONS.REPORTING_AGING_REPORT, PERMISSIONS.REPORTING_ACCOUNT_REPORT,
-                PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_USER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES],
+                PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_USER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES, PERMISSIONS.REPORTING_OLD_MASTER_REPORT],
                 'DeliveryChallan': [PERMISSIONS.DELIVERY_PROCESS_DC],
             };
 
@@ -365,6 +365,7 @@ export const AuthProvider = ({ children }) => {
                     { action: 'UserReport', title: 'User Report', icon: 'fas fa-file-alt', path: '/reporting/user-report' },
                     { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
                     { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
+                    { action: 'OldMasterReport', title: 'Old Master Report', icon: 'fas fa-history', path: '/reporting/old-master-report' },
                 ],
             },
         ];
@@ -430,6 +431,7 @@ export const AuthProvider = ({ children }) => {
             if (actions.Reporting?.includes('UserReport')) return '/reporting/user-report';
             if (actions.Reporting?.includes('ProductReport')) return '/reporting/product-report';
             if (actions.Reporting?.includes('MissedEntriesReport')) return '/reporting/missed-entries';
+            if (actions.Reporting?.includes('OldMasterReport')) return '/reporting/old-master-report';
             return '/reporting/single-doc';
         }
 
