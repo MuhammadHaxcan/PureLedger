@@ -438,17 +438,17 @@ namespace PureLedger.Services
             return model;
         }
 
-        public async Task<bool> UpdateEntryAsync(JournalEntryUpdateViewModel model)
+        public async Task<(bool Success, string? ErrorMessage)> UpdateEntryAsync(JournalEntryUpdateViewModel model)
         {
             using var transaction = await _unitOfWork.BeginTransactionAsync();
             try
             {
                 var entry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(model.EntryId);
-                if (entry == null) return false;
+                if (entry == null) return (false, "Entry not found.");
 
                 var voucherId = entry.JournalVoucherId;
                 var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(voucherId);
-                if (voucher == null) return false;
+                if (voucher == null) return (false, "Voucher not found.");
 
                 var wasCompleted = voucher.IsCompleted;
                 var oldAccount = await _unitOfWork.Accounts.GetByIdAsync(entry.AccountId);
@@ -467,13 +467,13 @@ namespace PureLedger.Services
 
                 await _unitOfWork.SaveChangesAsync();
                 await transaction.CommitAsync();
-                return true;
+                return (true, null);
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error updating journal entry {EntryId}", model.EntryId);
-                return false;
+                return (false, "Error updating entry.");
             }
         }
 
@@ -863,6 +863,35 @@ namespace PureLedger.Services
 
             entry.IsEdited = true;
             entry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.UtcNow);
+        }
+
+        private static List<string> ValidateBalancedVoucherState(IReadOnlyCollection<JournalEntry> entries)
+        {
+            var errors = new List<string>();
+
+            if (entries.Count < 2)
+                errors.Add("A journal voucher must contain at least two entries.");
+
+            decimal totalDebit = 0;
+            decimal totalCredit = 0;
+            int rowNumber = 1;
+
+            foreach (var existingEntry in entries)
+            {
+                if (existingEntry.Debit <= 0 && existingEntry.Credit <= 0)
+                    errors.Add($"Entry {rowNumber}: Either Debit or Credit must be filled.");
+                else if (existingEntry.Debit > 0 && existingEntry.Credit > 0)
+                    errors.Add($"Entry {rowNumber}: Only one of Debit or Credit can be filled, not both.");
+
+                totalDebit += existingEntry.Debit;
+                totalCredit += existingEntry.Credit;
+                rowNumber++;
+            }
+
+            if (Math.Abs(totalDebit - totalCredit) > 0.01m)
+                errors.Add($"Debits {totalDebit} and credits {totalCredit} must be equal. Difference: {Math.Abs(totalDebit - totalCredit)}");
+
+            return errors;
         }
 
         #endregion

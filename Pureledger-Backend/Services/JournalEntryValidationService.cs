@@ -45,6 +45,9 @@ namespace PureLedger.Services
                 return errors; // Exit early if no entries to validate
             }
 
+            if (model.Entries.Count < 2)
+                errors.Add("A journal voucher must contain at least two entries.");
+
             // Track if entries are balanced (total debit = total credit)
             decimal totalDebit = 0;
             decimal totalCredit = 0;
@@ -121,7 +124,7 @@ namespace PureLedger.Services
             }
 
             // Check if debits and credits are balanced
-            if (totalDebit != totalCredit)
+            if (Math.Abs(totalDebit - totalCredit) > 0.01m)
             {
                 errors.Add($"Debits {totalDebit} and credits {totalCredit} must be equal. Difference: {Math.Abs(totalDebit - totalCredit)}");
             }

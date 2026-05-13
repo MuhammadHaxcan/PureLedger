@@ -218,6 +218,7 @@ builder.Services.AddDbContext<OldLedgerDb2Context>(options =>
 
 // Register services
 builder.Services.AddScoped<JournalEntryService>();
+builder.Services.AddScoped<JournalEntryValidationService>();
 builder.Services.AddScoped<IDeliveryChallanService, DeliveryChallanService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<IOldReportingService, OldReportingService>();

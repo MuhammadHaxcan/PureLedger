@@ -590,6 +590,10 @@ const HomeEntry = () => {
             return errors;
         }
 
+        if (entries.length < 2) {
+            errors.push('A journal voucher must contain at least two entries.');
+        }
+
         let totalDebit = 0;
         let totalCredit = 0;
 

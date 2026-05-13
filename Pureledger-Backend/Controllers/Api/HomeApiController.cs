@@ -20,17 +20,20 @@ namespace PureLedger.Controllers.Api
 
         private readonly ILogger<HomeApiController> _logger;
         private readonly JournalEntryService _journalService;
+        private readonly JournalEntryValidationService _journalEntryValidationService;
         private readonly ICurrentUserService _currentUserService;
         private readonly IMemoryCache _cache;
 
         public HomeApiController(
             JournalEntryService journalService,
+            JournalEntryValidationService journalEntryValidationService,
             ICurrentUserService currentUserService,
             IMemoryCache cache,
             ILogger<HomeApiController> logger,
             ISharedProcessingService sharedProcessingService)
         {
             _journalService = journalService;
+            _journalEntryValidationService = journalEntryValidationService;
             _currentUserService = currentUserService;
             _cache = cache;
             _logger = logger;
@@ -72,6 +75,13 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                if (!editingVoucherId.HasValue)
+                {
+                    var validationErrors = await _journalEntryValidationService.ValidateAsync(model);
+                    if (validationErrors.Any())
+                        return BadRequest(new { success = false, errors = validationErrors });
+                }
+
                 var journalVoucher = editingVoucherId.HasValue
                     ? await _journalService.UpdateVoucherAsync(editingVoucherId.Value, model)
                     : await _journalService.CreateVoucherAsync(model);
@@ -153,10 +163,10 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                var success = await _journalService.UpdateEntryAsync(model);
+                var (success, errorMessage) = await _journalService.UpdateEntryAsync(model);
                 return success
                     ? Ok(new { success = true })
-                    : BadRequest(new { success = false, message = "Error updating entry" });
+                    : BadRequest(new { success = false, message = errorMessage ?? "Error updating entry" });
             }
             catch (Exception ex)
             {
