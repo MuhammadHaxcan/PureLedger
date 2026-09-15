@@ -6,6 +6,8 @@ namespace PureLedger.ViewModels.Reporting
     {
         public int AccountId { get; set; }
         public string? AccountName { get; set; }
+        public int CategoryId { get; set; }
+        public string? CategoryName { get; set; }
         public int AccountGroupId { get; set; }
         public string? Description { get; set; }
         public int Quantity { get; set; }
@@ -18,6 +20,10 @@ namespace PureLedger.ViewModels.Reporting
 
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
+        public PaymentInstrumentType? InstrumentType { get; set; }
+        public string? ReferenceNumber { get; set; }
+        public DateOnly? InstrumentDate { get; set; }
 
         // Calculate line total considering both credit and debit entries
         // Credit is positive, debit is negative

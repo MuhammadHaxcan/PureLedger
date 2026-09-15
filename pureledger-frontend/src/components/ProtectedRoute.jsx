@@ -4,8 +4,8 @@ import { usePermissions } from '../hooks/usePermissions';
 import { PAGE_PERMISSIONS } from '../constants/permissions';
 
 const ProtectedRoute = ({ children, requireAdmin = false, requiredPermission = null }) => {
-  const { isAuthenticated, user, loading, userAccess, permissions } = useAuth();
-  const { canAccessPage } = usePermissions();
+  const { isAuthenticated, user, loading } = useAuth();
+  const { canAccessPage, canAccessPageByPermission } = usePermissions();
   const location = useLocation();
 
   // Show loading while auth state is being determined
@@ -39,7 +39,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requiredPermission = n
 
   // Check page permission if requiredPermission is provided
   if (requiredPermission) {
-    if (!canAccessPage(requiredPermission)) {
+    if (!canAccessPageByPermission(requiredPermission)) {
       return <Navigate to="/account/access-denied" replace state={{ from: location }} />;
     }
   } else {

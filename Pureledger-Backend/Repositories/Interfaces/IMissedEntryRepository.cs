@@ -7,7 +7,7 @@ namespace PureLedger.Repositories.Interfaces
 {
     public interface IMissedEntryRepository
     {
-        Task<MissedEntry> AddAsync(MissedEntry entry);
+        MissedEntry Add(MissedEntry entry);
         Task<List<MissedEntry>> GetFilteredEntriesAsync(DateOnly? startDate, DateOnly? endDate, int? projectId);
 
         Task<MissedEntry?> GetByIdAsync(int id);

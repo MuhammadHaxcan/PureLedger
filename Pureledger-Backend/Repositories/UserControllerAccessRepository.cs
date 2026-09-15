@@ -31,17 +31,15 @@ namespace PureLedger.Repositories
             return await _context.UserControllerAccess.FindAsync(id);
         }
 
-        public async Task<UserControllerAccess> AddAsync(UserControllerAccess access)
+        public UserControllerAccess Add(UserControllerAccess access)
         {
             _context.UserControllerAccess.Add(access);
-            await _context.SaveChangesAsync();
             return access;
         }
 
-        public async Task<UserControllerAccess> UpdateAsync(UserControllerAccess access)
+        public UserControllerAccess Update(UserControllerAccess access)
         {
             _context.UserControllerAccess.Update(access);
-            await _context.SaveChangesAsync();
             return access;
         }
 
@@ -52,7 +50,6 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.UserControllerAccess.Remove(access);
-            await _context.SaveChangesAsync();
             return true;
         }
 
@@ -63,10 +60,7 @@ namespace PureLedger.Repositories
                 .ToListAsync();
 
             if (accessList.Any())
-            {
                 _context.UserControllerAccess.RemoveRange(accessList);
-                await _context.SaveChangesAsync();
-            }
 
             return true;
         }

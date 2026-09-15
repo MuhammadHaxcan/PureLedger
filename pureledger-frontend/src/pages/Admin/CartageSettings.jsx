@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
-import apiClient, { fileToBase64, validateImageFile, base64ToBlobUrl } from '../../services/api';
+import apiClient, { fileToBase64, validateImageFile } from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const CartageSettings = () => {
-  usePageTitle('Cartage Settings');
+  usePageTitle('Cartage Settings', 'Project Cartage Settings');
   const navigate = useNavigate();
   const isSubmittingRef = useRef(false);
   const [loading, setLoading] = useState(false);
@@ -252,10 +252,6 @@ const CartageSettings = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2><i className="fas fa-cog me-2"></i>Project Cartage Settings</h2>
-      </div>
-
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           <i className="fas fa-exclamation-circle me-2"></i>

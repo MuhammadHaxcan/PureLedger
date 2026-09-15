@@ -24,17 +24,15 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync(e => e.JournalEntryId == id);
         }
 
-        public async Task<JournalEntry> AddAsync(JournalEntry entry)
+        public JournalEntry Add(JournalEntry entry)
         {
             _context.JournalEntries.Add(entry);
-            await _context.SaveChangesAsync();
             return entry;
         }
 
-        public async Task<JournalEntry> UpdateAsync(JournalEntry entry)
+        public JournalEntry Update(JournalEntry entry)
         {
             _context.JournalEntries.Update(entry);
-            await _context.SaveChangesAsync();
             return entry;
         }
 
@@ -66,9 +64,12 @@ namespace PureLedger.Repositories
             var entry = await _context.JournalEntries.FindAsync(entryId);
             if (entry == null)
                 return false;
+            if (await _context.JournalEntryInstrumentDetails.AsNoTracking()
+                    .AnyAsync(x => x.JournalEntry.JournalVoucherId == entry.JournalVoucherId))
+                throw new InvalidOperationException(
+                    "Payment & Receipt entries cannot be deleted through the generic entry workflow.");
 
             _context.JournalEntries.Remove(entry);
-            await _context.SaveChangesAsync();
             return true;
         }
 
@@ -134,11 +135,11 @@ namespace PureLedger.Repositories
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
-            // Filter by location - only include entries that have a DCEntry with matching LocationId
             if (locationId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int takeCount = page * pageSize;
@@ -201,6 +202,7 @@ namespace PureLedger.Repositories
                     .ThenInclude(jv => jv.Booker)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
+                .Include(je => je.InstrumentDetail)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     !je.JournalVoucher.IsBaseVoucher &&
@@ -231,7 +233,8 @@ namespace PureLedger.Repositories
             if (locationId.HasValue)
             {
                 query = query.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int totalCount = await query.CountAsync();
@@ -259,7 +262,9 @@ namespace PureLedger.Repositories
 
             var results = pagedResults.Select(je => (
                 Entry: je,
-                DCEntry: dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
+                DCEntry: je.JournalVoucher.IsStockTransfer && je.Account?.AccountGroupId == 1 && je.Quantity == 0
+                    ? null
+                    : dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
             )).ToList();
 
             return (results, totalCount);
@@ -285,6 +290,7 @@ namespace PureLedger.Repositories
                     .ThenInclude(jv => jv.Booker)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
+                .Include(je => je.InstrumentDetail)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     !je.JournalVoucher.IsBaseVoucher &&
@@ -311,7 +317,8 @@ namespace PureLedger.Repositories
             if (locationId.HasValue)
             {
                 query = query.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int totalCount = await query.CountAsync();
@@ -338,7 +345,9 @@ namespace PureLedger.Repositories
 
             var results = pagedResults.Select(je => (
                 Entry: je,
-                DCEntry: dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
+                DCEntry: je.JournalVoucher.IsStockTransfer && je.Account?.AccountGroupId == 1 && je.Quantity == 0
+                    ? null
+                    : dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
             )).ToList();
 
             return (results, totalCount);
@@ -417,7 +426,8 @@ namespace PureLedger.Repositories
             if (locationId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int takeCount = page * pageSize;
@@ -483,11 +493,11 @@ namespace PureLedger.Repositories
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
-            // Filter by location - only include entries that have a DCEntry with matching LocationId
             if (locationId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int takeCount = page * pageSize;
@@ -615,6 +625,25 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
+            if (locationId.HasValue)
+            {
+                var selectedLocationId = locationId.Value;
+                query = query.Where(je =>
+                    _context.DeliveryChallanEntries.Any(dce =>
+                        dce.JournalEntryId == je.JournalEntryId && dce.LocationId == selectedLocationId) ||
+                    (je.JournalVoucher.IsStockTransfer && je.Quantity == 0 && je.Debit > 0 &&
+                     _context.JournalVoucherReferences.Any(chargeRef =>
+                         chargeRef.ReferencedVoucherId == je.JournalVoucherId &&
+                         chargeRef.ReferenceType == "StockTransferCharge" &&
+                         _context.JournalEntries.Any(receiptEntry =>
+                             receiptEntry.JournalVoucherId == chargeRef.MainVoucherId &&
+                             receiptEntry.AccountId == je.AccountId &&
+                             receiptEntry.Quantity > 0 && receiptEntry.Debit > 0 &&
+                             _context.DeliveryChallanEntries.Any(receiptDce =>
+                                 receiptDce.JournalEntryId == receiptEntry.JournalEntryId &&
+                                 receiptDce.LocationId == selectedLocationId)))));
+            }
+
             query = query.OrderBy(je => je.JournalVoucher.EntryDate)
                         .ThenBy(je => je.JournalVoucherId)
                         .ThenBy(je => je.JournalEntryId);
@@ -630,15 +659,43 @@ namespace PureLedger.Repositories
                     (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
                 .ToListAsync();
 
-            if (locationId.HasValue)
-            {
-                entriesWithDC = entriesWithDC
-                    .Where(x => x.DCEntry != null && x.DCEntry.LocationId == locationId.Value)
-                    .ToList();
-            }
-
             var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
             return results;
+        }
+
+        public async Task<List<ProductStockLocationMovementDto>> GetProductStockLocationMovementsAsync(
+            int projectId,
+            int productId,
+            DateOnly endDate)
+        {
+            var query =
+                from entry in _context.JournalEntries.AsNoTracking()
+                join assignment in _context.DeliveryChallanEntries.AsNoTracking()
+                    on entry.JournalEntryId equals assignment.JournalEntryId into assignments
+                from assignment in assignments.DefaultIfEmpty()
+                join location in _context.Locations.AsNoTracking()
+                    on assignment!.LocationId equals location.LocationId into assignedLocations
+                from location in assignedLocations.DefaultIfEmpty()
+                where entry.JournalVoucher != null &&
+                      entry.Account != null &&
+                      entry.JournalVoucher!.ProjectId == projectId &&
+                      entry.AccountId == productId &&
+                      entry.Account!.AccountGroupId == 2 &&
+                      entry.JournalVoucher!.IsCompleted &&
+                      !entry.JournalVoucher!.IsBaseVoucher &&
+                      entry.IsProcessed &&
+                      entry.JournalVoucher!.EntryDate <= endDate
+                select new ProductStockLocationMovementDto
+                {
+                    JournalEntryId = entry.JournalEntryId,
+                    LocationId = assignment == null ? null : assignment.LocationId,
+                    LocationName = location == null ? null : location.LocationName,
+                    Quantity = entry.Quantity,
+                    Debit = entry.Debit,
+                    Credit = entry.Credit
+                };
+
+            return await query.ToListAsync();
         }
 
         public async Task<(List<AccountReportViewModels> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
@@ -836,8 +893,21 @@ namespace PureLedger.Repositories
     // Apply location filter using SQL subquery instead of loading IDs into memory
     if (locationId.HasValue)
     {
-        query = query.Where(je => _context.DeliveryChallanEntries
-            .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+        var selectedLocationId = locationId.Value;
+        query = query.Where(je =>
+            _context.DeliveryChallanEntries.Any(dce =>
+                dce.JournalEntryId == je.JournalEntryId && dce.LocationId == selectedLocationId) ||
+            (je.JournalVoucher.IsStockTransfer && je.Quantity == 0 && je.Debit > 0 &&
+             _context.JournalVoucherReferences.Any(chargeRef =>
+                 chargeRef.ReferencedVoucherId == je.JournalVoucherId &&
+                 chargeRef.ReferenceType == "StockTransferCharge" &&
+                 _context.JournalEntries.Any(receiptEntry =>
+                     receiptEntry.JournalVoucherId == chargeRef.MainVoucherId &&
+                     receiptEntry.AccountId == je.AccountId &&
+                     receiptEntry.Quantity > 0 && receiptEntry.Debit > 0 &&
+                     _context.DeliveryChallanEntries.Any(receiptDce =>
+                         receiptDce.JournalEntryId == receiptEntry.JournalEntryId &&
+                         receiptDce.LocationId == selectedLocationId)))));
     }
 
     // Get distinct product IDs

@@ -73,12 +73,46 @@ namespace PureLedger.ViewModels.Reporting
         public int TotalCreditQty { get; set; }
         public int QtyBalance { get; set; }
         public decimal AverageRate { get; set; }
+        public decimal InventoryValue { get; set; }
+        public int PhysicalOutwardQuantity { get; set; }
+        public int TransferOutwardQuantity { get; set; }
+        public int TransferInwardQuantity { get; set; }
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public decimal Balance { get; set; }  // TotalDebit - TotalCredit
         public decimal COGS { get; set; }
         public decimal Margin { get; set; }
         public decimal MarginPercentage { get; set; }
+    }
+
+    public class ProductStockBreakdownViewModel
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public DateOnly? AsOfDate { get; set; }
+        public int TotalQuantity { get; set; }
+        public int UnassignedQuantity { get; set; }
+        public int AmbiguousQuantity { get; set; }
+        public int ReconciliationDifference { get; set; }
+        public int AssignmentIssueCount { get; set; }
+        public List<ProductStockLocationViewModel> Locations { get; set; } = new();
+    }
+
+    public class ProductStockLocationViewModel
+    {
+        public int LocationId { get; set; }
+        public string LocationName { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+    }
+
+    public class ProductStockLocationMovementDto
+    {
+        public int JournalEntryId { get; set; }
+        public int? LocationId { get; set; }
+        public string? LocationName { get; set; }
+        public int Quantity { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
     }
 
     /// <summary>

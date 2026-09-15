@@ -55,7 +55,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Projects.AddAsync(project);
+                _unitOfWork.Projects.Add(project);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -69,13 +69,6 @@ namespace PureLedger.Services
 
             return errors;
         }
-
-        //public async Task<Project> CreateProjectAsync(Project project)
-        //{
-        //    await _unitOfWork.Projects.AddAsync(project);
-        //    await _unitOfWork.SaveChangesAsync();
-        //    return project;
-        //}
 
         public async Task<List<string>> UpdateProjectAsync(Project project)
         {
@@ -166,7 +159,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Categories.AddAsync(category);
+                _unitOfWork.Categories.Add(category);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -257,7 +250,8 @@ namespace PureLedger.Services
             }
 
             // Delete the category
-            var result = await _unitOfWork.Categories.DeleteAsync(category);
+            var result = _unitOfWork.Categories.Delete(category);
+            await _unitOfWork.SaveChangesAsync();
             return (result, new List<int>());
         }
         #endregion
@@ -339,9 +333,14 @@ namespace PureLedger.Services
                     {
                         account.AccountData = null;
                     }
+                    else if (account.AccountGroupId == 3)
+                    {
+                        account.AccountData = null;
+                        account.ProductData = null;
+                    }
                 }
 
-                await _unitOfWork.Accounts.AddAsync(account);
+                _unitOfWork.Accounts.Add(account);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -376,6 +375,12 @@ namespace PureLedger.Services
             }
 
             var oldCategoryId = existingAccount.CategoryId;
+            if (existingAccount.AccountGroupId != account.AccountGroupId &&
+                (existingAccount.AccountGroupId == 3 || account.AccountGroupId == 3))
+            {
+                errors.Add("Accounts cannot be reclassified to or from the Expense group.");
+                return errors;
+            }
 
             try
             {
@@ -418,7 +423,7 @@ namespace PureLedger.Services
                         // Remove ProductData if it exists
                         if (existingAccount.ProductData != null)
                         {
-                            await _unitOfWork.ProductDatas.DeleteAsync(existingAccount.ProductData);
+                            _unitOfWork.ProductDatas.Delete(existingAccount.ProductData);
                             existingAccount.ProductData = null;
                         }
                     }
@@ -445,8 +450,21 @@ namespace PureLedger.Services
 
                         if (existingAccount.AccountData != null)
                         {
-                            await _unitOfWork.AccountDatas.DeleteAsync(existingAccount.AccountData);
+                            _unitOfWork.AccountDatas.Delete(existingAccount.AccountData);
                             existingAccount.AccountData = null;
+                        }
+                    }
+                    else if (account.AccountGroupId == 3)
+                    {
+                        if (existingAccount.AccountData != null)
+                        {
+                            _unitOfWork.AccountDatas.Delete(existingAccount.AccountData);
+                            existingAccount.AccountData = null;
+                        }
+                        if (existingAccount.ProductData != null)
+                        {
+                            _unitOfWork.ProductDatas.Delete(existingAccount.ProductData);
+                            existingAccount.ProductData = null;
                         }
                     }
                 }
@@ -481,16 +499,17 @@ namespace PureLedger.Services
             // Delete account data and product data if they exist
             if (account.AccountData != null)
             {
-                await _unitOfWork.AccountDatas.DeleteAsync(account.AccountData);
+                _unitOfWork.AccountDatas.Delete(account.AccountData);
             }
 
             if (account.ProductData != null)
             {
-                await _unitOfWork.ProductDatas.DeleteAsync(account.ProductData);
+                _unitOfWork.ProductDatas.Delete(account.ProductData);
             }
 
             // Delete the account itself
-            var result = await _unitOfWork.Accounts.DeleteAsync(account);
+            var result = _unitOfWork.Accounts.Delete(account);
+            await _unitOfWork.SaveChangesAsync();
             return (result, new List<int>());
         }
 
@@ -554,7 +573,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Locations.AddAsync(location);
+                _unitOfWork.Locations.Add(location);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -593,7 +612,7 @@ namespace PureLedger.Services
                 existingLocation.Phone = location.Phone;
                 existingLocation.Region = location.Region;
 
-                await _unitOfWork.Locations.UpdateAsync(existingLocation);
+                _unitOfWork.Locations.Update(existingLocation);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -628,6 +647,7 @@ namespace PureLedger.Services
                     return errors;
                 }
 
+                await _unitOfWork.SaveChangesAsync();
                 _cache.Remove(CacheKeys.AllLocations);
             }
             catch (DbUpdateException ex)
@@ -668,7 +688,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Bookers.AddAsync(booker);
+                _unitOfWork.Bookers.Add(booker);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -768,6 +788,7 @@ namespace PureLedger.Services
                     return errors;
                 }
 
+                await _unitOfWork.SaveChangesAsync();
                 _cache.Remove(CacheKeys.AllBookers);
             }
             catch (DbUpdateException ex)

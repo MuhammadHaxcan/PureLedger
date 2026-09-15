@@ -26,17 +26,15 @@ namespace PureLedger.Repositories
             return await _context.Locations.FindAsync(id);
         }
 
-        public async Task<Location> AddAsync(Location location)
+        public Location Add(Location location)
         {
             _context.Locations.Add(location);
-            await _context.SaveChangesAsync();
             return location;
         }
 
-        public async Task<Location> UpdateAsync(Location location)
+        public Location Update(Location location)
         {
             _context.Locations.Update(location);
-            await _context.SaveChangesAsync();
             return location;
         }
 
@@ -47,7 +45,6 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.Locations.Remove(location);
-            await _context.SaveChangesAsync();
             return true;
         }
 

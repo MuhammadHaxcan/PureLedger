@@ -5,6 +5,8 @@ VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pureledger-backend", "Pureledger-Backend\pureledger-backend.csproj", "{11E62099-1A49-4A87-A01A-B4B1344DF1F5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pureledger-Backend.Tests", "Pureledger-Backend.Tests\Pureledger-Backend.Tests.csproj", "{D25E7692-C0DB-4D72-9F92-727241494CBD}"
+EndProject
 Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "pureledger-frontend", "pureledger-frontend\pureledger-frontend.esproj", "{EBBA8D3D-DA8D-48B3-9BCF-9D14B8597959}"
 EndProject
 Global
@@ -23,6 +25,10 @@ Global
 		{EBBA8D3D-DA8D-48B3-9BCF-9D14B8597959}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EBBA8D3D-DA8D-48B3-9BCF-9D14B8597959}.Release|Any CPU.Build.0 = Release|Any CPU
 		{EBBA8D3D-DA8D-48B3-9BCF-9D14B8597959}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{D25E7692-C0DB-4D72-9F92-727241494CBD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D25E7692-C0DB-4D72-9F92-727241494CBD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D25E7692-C0DB-4D72-9F92-727241494CBD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D25E7692-C0DB-4D72-9F92-727241494CBD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

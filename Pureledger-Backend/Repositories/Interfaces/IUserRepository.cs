@@ -10,8 +10,8 @@ namespace PureLedger.Repositories.Interfaces
         Task<User?> GetByUsernameWithAccessAsync(string username);
         Task<User?> GetByIdWithAccessAsync(int id);
         Task<List<User>> GetBySubrouteAsync(string subroute);
-        Task<User> AddAsync(User user);
-        Task<User> UpdateAsync(User user);
+        User Add(User user);
+        User Update(User user);
         Task<bool> DeleteAsync(int id);
         Task<bool> UsernameExistsAsync(string username);
         Task<int> GetAdminCountAsync();

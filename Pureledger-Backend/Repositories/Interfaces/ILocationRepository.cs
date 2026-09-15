@@ -6,8 +6,8 @@ namespace PureLedger.Repositories.Interfaces
     {
         Task<List<Location>> GetAllAsync();
         Task<Location?> GetByIdAsync(int id);
-        Task<Location> AddAsync(Location location);
-        Task<Location> UpdateAsync(Location location);
+        Location Add(Location location);
+        Location Update(Location location);
         Task<bool> DeleteAsync(int id);
 
         /// <summary>

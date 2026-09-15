@@ -45,7 +45,8 @@ namespace PureLedger.Repositories
 
         public LedgerDbContext DbContext => _dbContext;
 
-        // Implement all required properties from IUnitOfWork interface with lazy initialization
+        // All repositories share this context and only stage changes.
+        // Services control transaction scope and call SaveChangesAsync explicitly.
         public IProjectRepository Projects => _projects ??= new ProjectRepository(_dbContext);
         public IJournalVoucherRepository JournalVouchers => _journalVouchers ??= new JournalVoucherRepository(_dbContext);
         public IJournalEntryRepository JournalEntries => _journalEntries ??= new JournalEntryRepository(_dbContext);
@@ -72,15 +73,16 @@ namespace PureLedger.Repositories
         public IBookerRepository Bookers => _bookers ??= new BookerRepository(_dbContext);
         public ISignatureRepository Signatures => _signatures ??= new SignatureRepository(_dbContext);
         public IAppSettingRepository AppSettings => _appSettings ??= new AppSettingRepository(_dbContext);
-        public async Task<int> SaveChangesAsync()
+        public Task<int> SaveChangesAsync() => _dbContext.SaveChangesAsync();
+
+        public Task<bool> IsStockTransferVoucherAsync(int journalVoucherId)
         {
-            return await _dbContext.SaveChangesAsync();
+            return _dbContext.JournalVouchers
+                .AnyAsync(v => v.JournalVoucherId == journalVoucherId && v.IsStockTransfer);
         }
 
-        public async Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
-        {
-            return await _dbContext.Database.BeginTransactionAsync(isolationLevel);
-        }
+        public Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted) =>
+            _dbContext.Database.BeginTransactionAsync(isolationLevel);
 
         public void Dispose()
         {

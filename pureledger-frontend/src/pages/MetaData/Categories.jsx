@@ -309,10 +309,7 @@ const Categories = () => {
   return (
     <div className="container-fluid">
       {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-sitemap me-2"></i>Categories
-        </h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleCreate} disabled={loading}>
           <i className="fas fa-plus me-2"></i>New Category
         </Button>

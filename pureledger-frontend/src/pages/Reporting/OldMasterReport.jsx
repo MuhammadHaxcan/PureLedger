@@ -404,8 +404,7 @@ const OldMasterReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-history me-2"></i>Old Master Report</h2>
+            <div className="d-flex justify-content-end align-items-center mb-4">
                 <small className="text-muted">Legacy journalentries report</small>
             </div>
 

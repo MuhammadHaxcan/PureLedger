@@ -21,7 +21,7 @@ namespace PureLedger.Services.Auth
         Task<bool> ValidateUserAsync(LoginViewModel model);
         Task<User?> GetUserByUsernameAsync(string username);
         Task<User?> GetUserByIdAsync(int userId);
-        Task<bool> CheckPasswordAsync(User user, string password);
+        bool CheckPassword(User user, string password);
         Task UpdateLastLoginAsync(User user);
 
         // JWT Token Generation and Validation

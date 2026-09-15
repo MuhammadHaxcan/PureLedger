@@ -8,20 +8,30 @@ namespace PureLedger.Services
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<SharedProcessingService> _logger;
+        private readonly IApprovalGuardService _approvalGuard;
+        private readonly IPaymentReceiptClassifier _paymentReceiptClassifier;
 
         private const string REFERENCE_TYPE_FOR_CHARGES = "ForCharges";
         private const string REFERENCE_TYPE_CARTAGE = "Cartage";
         private const string REFERENCE_TYPE_DERIVED_VOUCHER = "DerivedVoucher";
+        private const string REFERENCE_TYPE_STOCK_TRANSFER_RECEIPT = "StockTransferReceipt";
+        private const string REFERENCE_TYPE_STOCK_TRANSFER_CHARGE = "StockTransferCharge";
+        private const string REFERENCE_TYPE_STOCK_TRANSFER_CANCELLATION = "StockTransferCancellation";
 
         private const int ACCOUNT_GROUP_ACCOUNT = 1;
         private const int ACCOUNT_GROUP_PRODUCT = 2;
+        private const int ACCOUNT_GROUP_EXPENSE = 3;
 
         public SharedProcessingService(
             IUnitOfWork unitOfWork,
-            ILogger<SharedProcessingService> logger)
+            ILogger<SharedProcessingService> logger,
+            IApprovalGuardService approvalGuard,
+            IPaymentReceiptClassifier paymentReceiptClassifier)
         {
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _approvalGuard = approvalGuard;
+            _paymentReceiptClassifier = paymentReceiptClassifier;
         }
 
         #region Entry Processing Status
@@ -43,6 +53,9 @@ namespace PureLedger.Services
             if (accountGroupId == ACCOUNT_GROUP_PRODUCT)
                 return entry.Quantity <= 0;
 
+            if (accountGroupId == ACCOUNT_GROUP_EXPENSE)
+                return true;
+
             _logger.LogWarning("Entry {EntryId} has unknown AccountGroupId {AccountGroupId}, defaulting to processed",
                 entry.JournalEntryId, accountGroupId);
             return true;
@@ -54,6 +67,14 @@ namespace PureLedger.Services
 
         public async Task<bool> RecalculateVoucherCompletionAsync(int journalVoucherId)
         {
+            if (await _paymentReceiptClassifier.HasAnyInstrumentDetailsAsync(journalVoucherId))
+            {
+                _logger.LogDebug(
+                    "Skipping generic completion recalculation for Payment & Receipt voucher {VoucherId}",
+                    journalVoucherId);
+                var protectedVoucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
+                return protectedVoucher?.IsCompleted ?? false;
+            }
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null)
             {
@@ -80,6 +101,8 @@ namespace PureLedger.Services
             }
 
             var newState = entries.All(e => e.IsProcessed);
+            if (newState && await _approvalGuard.IsVoucherPendingAsync(journalVoucherId))
+                newState = false;
             voucher.IsCompleted = newState;
 
             if (previousState != newState)
@@ -93,7 +116,7 @@ namespace PureLedger.Services
                     await ReopenReferenceVouchersAsync(journalVoucherId);
             }
 
-            await _unitOfWork.JournalVouchers.UpdateAsync(voucher);
+            _unitOfWork.JournalVouchers.Update(voucher);
 
             return newState;
         }
@@ -126,7 +149,7 @@ namespace PureLedger.Services
                 }
 
                 refVoucher.IsCompleted = isCompleted;
-                await _unitOfWork.JournalVouchers.UpdateAsync(refVoucher);
+                _unitOfWork.JournalVouchers.Update(refVoucher);
 
                 var action = isCompleted ? "completed" : "reopened";
                 _logger.LogInformation("Reference voucher {VoucherId} {Action} (Type: {ReferenceType})",
@@ -139,7 +162,21 @@ namespace PureLedger.Services
             int referenceVoucherId,
             string referenceType)
         {
-            var validTypes = new[] { REFERENCE_TYPE_FOR_CHARGES, REFERENCE_TYPE_CARTAGE, REFERENCE_TYPE_DERIVED_VOUCHER };
+            await _paymentReceiptClassifier.EnsureNotPaymentReceiptAsync(
+                mainVoucherId, "linked as a reference source");
+            await _paymentReceiptClassifier.EnsureNotPaymentReceiptAsync(
+                referenceVoucherId, "linked as a reference target");
+            // Stock-transfer types are accepted for graph navigation only. Deliberately
+            // keep them out of completion propagation and automatic child deletion.
+            var validTypes = new[]
+            {
+                REFERENCE_TYPE_FOR_CHARGES,
+                REFERENCE_TYPE_CARTAGE,
+                REFERENCE_TYPE_DERIVED_VOUCHER,
+                REFERENCE_TYPE_STOCK_TRANSFER_RECEIPT,
+                REFERENCE_TYPE_STOCK_TRANSFER_CHARGE,
+                REFERENCE_TYPE_STOCK_TRANSFER_CANCELLATION
+            };
             if (!validTypes.Contains(referenceType))
                 throw new ArgumentException($"Invalid reference type: {referenceType}. Must be one of: {string.Join(", ", validTypes)}");
 
@@ -150,7 +187,7 @@ namespace PureLedger.Services
                 ReferenceType = referenceType
             };
 
-            var result = await _unitOfWork.JournalVoucherReferences.AddAsync(reference);
+            var result = _unitOfWork.JournalVoucherReferences.Add(reference);
 
             _logger.LogInformation("Created reference: MainVoucher={MainVoucherId}, RefVoucher={ReferenceVoucherId}, Type={ReferenceType}",
                 mainVoucherId, referenceVoucherId, referenceType);
@@ -160,6 +197,8 @@ namespace PureLedger.Services
 
         public async Task<bool> DeleteReferenceVoucherIfEmptyAsync(int journalVoucherId)
         {
+            await _paymentReceiptClassifier.EnsureNotPaymentReceiptAsync(
+                journalVoucherId, "deleted by reference-voucher cleanup");
             var references = await _unitOfWork.JournalVoucherReferences.GetByReferencedVoucherIdAsync(journalVoucherId);
 
             var refVoucherReferences = references
@@ -215,6 +254,30 @@ namespace PureLedger.Services
                 return;
             }
 
+            var dcVoucher = await _unitOfWork.DeliveryChallanVouchers
+                .GetByIdWithEntriesAsync(dcEntry.DeliveryChallanVoucherId);
+            if (dcVoucher != null &&
+                dcVoucher.Entries.All(x => x.DeliveryChallanEntryId == dcEntry.DeliveryChallanEntryId))
+            {
+                var incomingReferences = await _unitOfWork.JournalVoucherReferences
+                    .GetByReferencedVoucherIdAsync(dcVoucher.JournalVoucherId);
+                var isDisposableGeneratedContainer = incomingReferences.Count > 0 &&
+                    incomingReferences.All(reference =>
+                    reference.ReferenceType == REFERENCE_TYPE_FOR_CHARGES ||
+                    reference.ReferenceType == REFERENCE_TYPE_CARTAGE);
+
+                if (isDisposableGeneratedContainer)
+                {
+                    await _unitOfWork.DeliveryChallanVouchers
+                        .DeleteAsync(dcVoucher.DeliveryChallanVoucherId);
+                    _logger.LogInformation(
+                        "Deleted empty generated DC container {DCVoucherId} after unlinking journal entry {JournalEntryId}",
+                        dcVoucher.DeliveryChallanVoucherId,
+                        journalEntryId);
+                    return;
+                }
+            }
+
             await _unitOfWork.DeliveryChallanEntries.DeleteAsync(dcEntry.DeliveryChallanEntryId);
 
             _logger.LogInformation("Deleted DC entry {DCEntryId} linked to JV entry: {JournalEntryId}",
@@ -227,6 +290,8 @@ namespace PureLedger.Services
 
         public async Task HandleAllEntriesDeletedAsync(int journalVoucherId)
         {
+            await _paymentReceiptClassifier.EnsureNotPaymentReceiptAsync(
+                journalVoucherId, "deleted by generic cleanup");
             _logger.LogInformation("All entries deleted from voucher: {VoucherId} - starting cleanup", journalVoucherId);
 
             var dcVoucher = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);

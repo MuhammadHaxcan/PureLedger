@@ -14,10 +14,9 @@ namespace PureLedger.Repositories
             _context = context;
         }
         
-        public async Task<Recipe> AddAsync(Recipe recipe)
+        public Recipe Add(Recipe recipe)
         {
             _context.Recipes.Add(recipe);
-            await _context.SaveChangesAsync();
             return recipe;
         }
         

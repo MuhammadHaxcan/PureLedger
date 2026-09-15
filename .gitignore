@@ -34,7 +34,12 @@ bld/
 [Ll]ogs/
 
 # EF Core migrations (backend)
-Pureledger-Backend/Migrations/
+Pureledger-Backend/Migrations/*
+!Pureledger-Backend/Migrations/20260728010000_AddExpenseApprovals.cs
+!Pureledger-Backend/Migrations/20260728094500_MoveFeaturePermissions.cs
+!Pureledger-Backend/Migrations/20260731010000_AddPaymentReceiptVouchers.cs
+!Pureledger-Backend/Migrations/20260801010000_RemovePaymentReceiptLineNumbers.cs
+!Pureledger-Backend/Migrations/LedgerDbContextModelSnapshot.cs
 
 
 # Visual Studio 2015/2017 cache/options directory
@@ -365,3 +370,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Superdesign temporary component templates
+.superdesign/tmp/

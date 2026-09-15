@@ -39,14 +39,12 @@ public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepositor
             }
 
             _dbContext.ProjectCartageSettings.Update(existing);
-            await _dbContext.SaveChangesAsync();
             return existing;
         }
         else
         {
             // Add new record with all properties
             _dbContext.ProjectCartageSettings.Add(settings);
-            await _dbContext.SaveChangesAsync();
             return settings;
         }
     }

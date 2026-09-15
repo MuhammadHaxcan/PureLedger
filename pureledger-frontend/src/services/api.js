@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { normalizeApiError } from '../utils/errorHandler';
 
 /**
  * API Base URL Configuration
@@ -11,6 +12,19 @@ import { toast } from 'react-toastify';
  * For production builds, ensure .env.production has: VITE_API_BASE_URL=/api
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5221/api';
+const CORRELATION_HEADER = 'X-Correlation-ID';
+
+let lastCorrelationId = null;
+
+export const getLastCorrelationId = () => lastCorrelationId;
+
+const createCorrelationId = () => {
+    if (window.crypto?.randomUUID) {
+        return `web_${window.crypto.randomUUID()}`;
+    }
+
+    return `web_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+};
 
 /**
  * Read XSRF token directly from cookie.
@@ -55,7 +69,7 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
     withCredentials: true, // Send cookies with requests (HttpOnly cookies for auth)
-    timeout: 120000, // 120 seconds timeout
+    timeout: 180000, // 180 seconds timeout
 });
 
 // Flag to prevent multiple simultaneous refresh requests
@@ -76,6 +90,13 @@ const onTokenRefreshed = () => {
 // Request interceptor to add XSRF token for CSRF protection
 apiClient.interceptors.request.use(
     (config) => {
+        const correlationId = createCorrelationId();
+        config.headers[CORRELATION_HEADER] = correlationId;
+        config.metadata = {
+            ...(config.metadata || {}),
+            correlationId,
+        };
+
         // Add XSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
         const stateMutatingMethods = ['post', 'put', 'delete', 'patch'];
         if (stateMutatingMethods.includes(config.method?.toLowerCase())) {
@@ -100,35 +121,44 @@ apiClient.interceptors.request.use(
 
 // Response interceptor to handle errors globally
 apiClient.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        const responseCorrelationId = response.headers?.[CORRELATION_HEADER.toLowerCase()] || response.headers?.[CORRELATION_HEADER];
+        if (responseCorrelationId) {
+            lastCorrelationId = responseCorrelationId;
+        }
+
+        return response;
+    },
     async (error) => {
         const originalRequest = error.config;
 
         // Extract error information from response
         const errorData = error.response?.data || {};
         const statusCode = error.response?.status;
-
-        // Build standardized error object
-        const standardizedError = {
+        const responseCorrelationId = error.response?.headers?.[CORRELATION_HEADER.toLowerCase()] || errorData.correlationId || originalRequest?.metadata?.correlationId;
+        if (responseCorrelationId) {
+            lastCorrelationId = responseCorrelationId;
+        }
+        const standardizedError = normalizeApiError({
             ...error,
-            message: errorData.message || error.message || 'An error occurred. Please try again.',
-            errors: errorData.errors || (errorData.message ? [errorData.message] : []),
-            statusCode: statusCode,
-            isNetworkError: !error.response,
-            isServerError: statusCode >= 500,
-            isClientError: statusCode >= 400 && statusCode < 500,
-        };
+            statusCode,
+            errorId: errorData.errorId,
+            correlationId: responseCorrelationId,
+            errorCode: errorData.errorCode,
+            needsRefresh: errorData.needsRefresh,
+            xsrfToken: errorData.xsrfToken,
+        });
 
         // Handle XSRF token refresh scenario (400 with needsRefresh flag)
-        if (statusCode === 400 && errorData.needsRefresh && !originalRequest._xsrfRetry) {
+        if (statusCode === 400 && standardizedError.needsRefresh && originalRequest && !originalRequest._xsrfRetry) {
             originalRequest._xsrfRetry = true;
 
             // Update XSRF token if provided in error response
-            if (errorData.xsrfToken) {
+            if (standardizedError.xsrfToken) {
                 // Set the cookie with the new token
-                setXsrfToken(errorData.xsrfToken);
+                setXsrfToken(standardizedError.xsrfToken);
                 // Also update the header on the original request for the retry
-                originalRequest.headers['X-XSRF-TOKEN'] = errorData.xsrfToken;
+                originalRequest.headers['X-XSRF-TOKEN'] = standardizedError.xsrfToken;
                 console.log('XSRF token refreshed from error response, retrying request...');
             }
 
@@ -140,7 +170,7 @@ apiClient.interceptors.response.use(
         }
 
         // Handle 401 Unauthorized - Token expired or invalid
-        if (statusCode === 401 && !originalRequest._retry) {
+        if (statusCode === 401 && originalRequest && !originalRequest._retry) {
             // Don't retry refresh for auth-related endpoints to prevent loops
             const noRefreshEndpoints = [
                 '/AccountApi/login',
@@ -236,7 +266,7 @@ apiClient.interceptors.response.use(
 
         // Handle 403 Forbidden - Access denied
         if (statusCode === 403) {
-            const accessMessage = errorData.message || 'You do not have permission to access this resource.';
+            const accessMessage = standardizedError.message || 'You do not have permission to access this resource.';
             standardizedError.message = accessMessage;
 
             // Show access denied toast
@@ -271,7 +301,6 @@ apiClient.interceptors.response.use(
         // Handle server errors (5xx)
         if (statusCode >= 500) {
             console.error('Server Error:', errorData);
-            standardizedError.message = errorData.message || 'Server error. Please try again later.';
             if (!standardizedError.errors || standardizedError.errors.length === 0) {
                 standardizedError.errors = [standardizedError.message];
             }
@@ -299,23 +328,6 @@ export const fileToBase64 = (file) => {
         reader.onload = () => resolve(reader.result);
         reader.onerror = (error) => reject(error);
     });
-};
-
-// Helper function to convert base64 to blob URL for display
-export const base64ToBlobUrl = (base64String) => {
-    if (!base64String) return null;
-
-    // If it's already a data URL, return it
-    if (base64String.startsWith('data:')) {
-        return base64String;
-    }
-
-    // If it's base64 without data URL prefix, add it
-    if (!base64String.startsWith('data:image')) {
-        return `data:image/png;base64,${base64String}`;
-    }
-
-    return base64String;
 };
 
 // Helper function to validate image file

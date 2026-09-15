@@ -8,8 +8,8 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<Project>> GetAllForUserAsync(int userId);
         Task<Project?> GetByIdAsync(int id);
         Task<Project?> GetByIdForUserAsync(int id, int userId);
-        Task<Project> AddAsync(Project project);
-        Task<Project> UpdateAsync(Project project);
+        Project Add(Project project);
+        Project Update(Project project);
         Task<bool> UserHasAccessToProjectAsync(int userId, int projectId);
 
         /// <summary>

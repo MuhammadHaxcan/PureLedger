@@ -169,12 +169,6 @@ const ModifiedEntries = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2 className="mb-0">
-                    <i className="fas fa-history me-2"></i>Modified Entries
-                </h2>
-            </div>
-
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
                     <i className="fas fa-exclamation-circle me-2"></i>{error}

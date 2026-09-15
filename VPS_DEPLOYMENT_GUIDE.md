@@ -1224,41 +1224,316 @@ dotnet ef database update --connection "Host=localhost;Database=pureledgerdb;Use
 
 ## 16. Backup & Recovery
 
-### 16.1 Database Backup
+This setup follows the same basic flow as the FreightForwarding V3 deployment:
+create a compressed PostgreSQL dump on the VPS, then pull it to the Windows
+laptop over SSH. Pureledger adds a small systemd service/timer and checksum
+verification so both steps can run unattended.
+
+**Backup schedule and retention:**
+
+| Location | Schedule | Retention |
+|----------|----------|-----------|
+| VPS `/var/backups/pureledger` | Daily at 02:00 (VPS timezone) | 14 days |
+| Laptop `C:\Users\Claude\Desktop\pureledger_backups` | Daily at 03:30 | 30 days |
+
+> The commands below are intentionally split into **LOCAL POWERSHELL** and
+> **VPS (SSH)** blocks. Run each block only on the named machine.
+
+### 16.1 Files Included in the Repository
+
+| File | Purpose |
+|------|---------|
+| `deployment/backup/pureledger-backup.sh` | Creates, validates, checksums, and expires VPS dumps |
+| `deployment/backup/install-vps-backup.sh` | Installs the VPS backup user, script, service, and timer |
+| `deployment/backup/pureledger-backup.service` | Runs one database backup |
+| `deployment/backup/pureledger-backup.timer` | Starts the service daily at 02:00 |
+| `deployment/backup/pull-pureledger-backups.ps1` | Pulls and verifies backups on Windows |
+| `deployment/backup/install-windows-task.ps1` | Registers the daily 03:30 Windows task |
+
+### 16.2 Step 1 - Generate a Dedicated SSH Key on the Laptop
+
+Run in **LOCAL POWERSHELL**. The empty passphrase is required because Task
+Scheduler cannot answer an interactive key prompt.
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
+
+# Do not run this command if this key file already exists.
+Test-Path "$env:USERPROFILE\.ssh\pureledger_backup_ed25519"
+
+# Keep this command on one line. Multiline PowerShell backticks are easy to
+# break when copied because the backtick must be the final character on a line.
+ssh-keygen.exe -t ed25519 -C "pureledger-backup-laptop" -f "$env:USERPROFILE\.ssh\pureledger_backup_ed25519" -N '""'
+```
+
+If PowerShell shows `>>` instead of the normal `PS C:\...>` prompt, press
+`Ctrl+C` once to cancel the incomplete command, then paste the single-line
+command above.
+
+Expected files:
+
+```text
+C:\Users\Claude\.ssh\pureledger_backup_ed25519
+C:\Users\Claude\.ssh\pureledger_backup_ed25519.pub
+```
+
+Keep the private file private. Only the `.pub` file is copied to the VPS.
+
+### 16.3 Step 2 - Copy the VPS Setup Files
+
+Run in **LOCAL POWERSHELL** from the Pureledger repository:
+
+```powershell
+Set-Location "C:\Users\Claude\Desktop\Pureledger\PureLedger"
+
+ssh root@72.60.209.26 "mkdir -p /tmp/pureledger-backup-setup"
+
+# Keep this command on one line when copying it into Windows PowerShell.
+scp .\deployment\backup\pureledger-backup.sh .\deployment\backup\install-vps-backup.sh .\deployment\backup\pureledger-backup.service .\deployment\backup\pureledger-backup.timer root@72.60.209.26:/tmp/pureledger-backup-setup/
+```
+
+Enter the existing VPS root password when SSH/SCP requests it.
+
+### 16.4 Step 3 - Install the VPS Backup Service
+
+First connect from **LOCAL POWERSHELL**:
+
+```powershell
+ssh root@72.60.209.26
+```
+
+Then run on **VPS (SSH)**:
 
 ```bash
-# Manual backup
-pg_dump -U pureledgeruser -h localhost pureledgerdb > /var/backups/pureledger_$(date +%Y%m%d).sql
-
-# Automated daily backup (add to cron)
-crontab -e
+cd /tmp/pureledger-backup-setup
+chmod +x install-vps-backup.sh pureledger-backup.sh
+./install-vps-backup.sh
 ```
 
-Add:
-```
-0 2 * * * pg_dump -U pureledgeruser -h localhost pureledgerdb > /var/backups/pureledger_$(date +\%Y\%m\%d).sql
-```
+The installer asks for the PostgreSQL password for `pureledgeruser`. It stores
+the password only in `/root/.pgpass` with mode `0600`; the password is not placed
+in the scripts, systemd service, command history, or this guide.
 
-### 16.2 Database Restore
+The installer creates:
+
+- non-sudo SSH user `pureledger-backup`;
+- backup directory `/var/backups/pureledger`;
+- command `/usr/local/sbin/pureledger-backup`;
+- systemd units `pureledger-backup.service` and `pureledger-backup.timer`.
+
+Confirm the timer on **VPS (SSH)**:
 
 ```bash
-# Restore from backup
-psql -U pureledgeruser -h localhost pureledgerdb < /var/backups/pureledger_20241224.sql
+systemctl status pureledger-backup.timer --no-pager
+systemctl list-timers pureledger-backup.timer --all
 ```
 
-### 16.3 Full Server Backup
+### 16.5 Step 4 - Install the Laptop Public Key on the VPS
 
-Consider using:
-- VPS provider snapshots
-- rsync to remote backup server
-- Automated backup services (e.g., Backblaze, AWS S3)
+Exit the VPS shell first:
 
 ```bash
-# Example rsync backup
-rsync -avz /var/www/pureledger/ backup-server:/backups/pureledger/
-rsync -avz /etc/nginx/ backup-server:/backups/nginx/
-rsync -avz /etc/letsencrypt/ backup-server:/backups/letsencrypt/
+exit
 ```
+
+Run in **LOCAL POWERSHELL**. This uses the root password one final time:
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\pureledger_backup_ed25519.pub" | ssh root@72.60.209.26 "cat > /home/pureledger-backup/.ssh/authorized_keys && chown pureledger-backup:pureledger-backup /home/pureledger-backup/.ssh/authorized_keys && chmod 600 /home/pureledger-backup/.ssh/authorized_keys"
+```
+
+Verify passwordless access in **LOCAL POWERSHELL**:
+
+```powershell
+# Keep this command on one line when copying it into Windows PowerShell.
+ssh -i "$env:USERPROFILE\.ssh\pureledger_backup_ed25519" -o IdentitiesOnly=yes pureledger-backup@72.60.209.26 "ls -la /var/backups/pureledger"
+```
+
+This command must not ask for the VPS password. Type `yes` only if SSH asks you
+to trust the host fingerprint on the first connection.
+
+### 16.6 Step 5 - Run and Verify the First VPS Backup
+
+Connect and run these commands manually:
+
+```powershell
+# LOCAL POWERSHELL
+ssh root@72.60.209.26
+```
+
+```bash
+# VPS (SSH)
+systemctl start pureledger-backup.service
+systemctl status pureledger-backup.service --no-pager
+journalctl -u pureledger-backup.service -n 50 --no-pager
+ls -lh /var/backups/pureledger/
+
+cd /var/backups/pureledger
+LATEST_DUMP="$(ls -1t pureledgerdb_*.dump | head -n 1)"
+pg_restore --list "$LATEST_DUMP" >/dev/null
+sha256sum --check "$LATEST_DUMP.sha256"
+```
+
+Expected checksum result:
+
+```text
+pureledgerdb_YYYYMMDD_HHMMSS.dump: OK
+```
+
+### 16.7 Step 6 - Test the Laptop Pull Manually
+
+Exit the VPS, then run in **LOCAL POWERSHELL**:
+
+```powershell
+Set-Location "C:\Users\Claude\Desktop\Pureledger\PureLedger"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\deployment\backup\pull-pureledger-backups.ps1"
+
+Get-ChildItem "C:\Users\Claude\Desktop\pureledger_backups"
+Get-Content "C:\Users\Claude\Desktop\pureledger_backups\logs\pureledger-backup-pull.log" -Tail 30
+```
+
+The pull script downloads only missing or invalid backup pairs. Files remain
+temporary with a `.partial` suffix until their SHA-256 checksum passes.
+
+### 16.8 Step 7 - Install the Windows 03:30 Scheduled Task
+
+Run in **LOCAL POWERSHELL** as the Windows user who owns the SSH key:
+
+```powershell
+Set-Location "C:\Users\Claude\Desktop\Pureledger\PureLedger"
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\deployment\backup\install-windows-task.ps1"
+```
+
+The task runs at 03:30, starts after a missed schedule, and refuses to start a
+second copy while the first is running. It uses the current interactive Windows
+user and stores no Windows password, so that user must be logged on when the task
+runs.
+
+Test and inspect the task in **LOCAL POWERSHELL**:
+
+```powershell
+Start-ScheduledTask -TaskName "Pureledger Backup Pull"
+Start-Sleep -Seconds 10
+Get-ScheduledTask -TaskName "Pureledger Backup Pull"
+Get-ScheduledTaskInfo -TaskName "Pureledger Backup Pull"
+Get-Content "C:\Users\Claude\Desktop\pureledger_backups\logs\pureledger-backup-pull.log" -Tail 30
+```
+
+`LastTaskResult` equal to `0` means the pull completed successfully.
+
+### 16.9 Daily Status and Troubleshooting Commands
+
+**VPS (SSH):**
+
+```bash
+systemctl status pureledger-backup.timer --no-pager
+systemctl list-timers pureledger-backup.timer --all
+journalctl -u pureledger-backup.service --since today --no-pager
+ls -lh /var/backups/pureledger/
+df -h /var/backups
+
+# Run an additional backup immediately
+systemctl start pureledger-backup.service
+
+# Re-run the installer after changing repository service/script files
+cd /tmp/pureledger-backup-setup
+./install-vps-backup.sh
+```
+
+**LOCAL POWERSHELL:**
+
+```powershell
+Get-ScheduledTask -TaskName "Pureledger Backup Pull"
+Get-ScheduledTaskInfo -TaskName "Pureledger Backup Pull"
+Get-ChildItem "C:\Users\Claude\Desktop\pureledger_backups" -Filter "*.dump"
+Get-Content "C:\Users\Claude\Desktop\pureledger_backups\logs\pureledger-backup-pull.log" -Tail 50
+
+# Run a pull immediately without waiting until 03:30
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Claude\Desktop\Pureledger\PureLedger\deployment\backup\pull-pureledger-backups.ps1"
+```
+
+Common failures:
+
+| Symptom | Check |
+|---------|-------|
+| VPS service reports authentication failure | Confirm `/root/.pgpass` is mode `0600` and contains the correct `pureledgeruser` password |
+| Laptop asks for an SSH password | Re-run section 16.5 and confirm the private key path |
+| `Permission denied` reading a dump | Confirm files and directory use group `pureledger-backup` |
+| Windows task result is nonzero | Read `pureledger-backup-pull.log`, then run the pull command manually |
+| No backup at exactly 02:00 | Check VPS timezone with `timedatectl` and inspect `systemctl list-timers` |
+
+### 16.10 Restore a Backup Locally on Windows
+
+Choose a real `.dump` filename from
+`C:\Users\Claude\Desktop\pureledger_backups`. Adjust the PostgreSQL version in
+`$pgBin` if needed.
+
+```powershell
+$pgBin = "C:\Program Files\PostgreSQL\18\bin"
+$dump = "C:\Users\Claude\Desktop\pureledger_backups\pureledgerdb_YYYYMMDD_HHMMSS.dump"
+
+# Create a separate local database so an existing database is not overwritten.
+& "$pgBin\createdb.exe" -h localhost -p 5432 -U postgres pureledgerdb_local
+
+& "$pgBin\pg_restore.exe" `
+  -h localhost -p 5432 -U postgres `
+  -d pureledgerdb_local `
+  --no-owner --no-privileges --verbose `
+  $dump
+```
+
+PostgreSQL prompts for the local `postgres` password. Point the local backend's
+`ConnectionStrings:LedgerDb` at `pureledgerdb_local` only after the restore
+finishes successfully.
+
+### 16.11 Restore a Backup to the VPS (Destructive)
+
+> **WARNING:** This replaces the live `pureledgerdb`. Confirm the selected dump
+> and keep another verified backup before continuing.
+
+If the selected dump exists only on the laptop, upload it in **LOCAL
+POWERSHELL**:
+
+```powershell
+scp "C:\Users\Claude\Desktop\pureledger_backups\pureledgerdb_YYYYMMDD_HHMMSS.dump" `
+    "C:\Users\Claude\Desktop\pureledger_backups\pureledgerdb_YYYYMMDD_HHMMSS.dump.sha256" `
+    root@72.60.209.26:/tmp/
+
+ssh root@72.60.209.26
+```
+
+Then run on **VPS (SSH)** after replacing the filename:
+
+```bash
+cd /tmp
+sha256sum --check pureledgerdb_YYYYMMDD_HHMMSS.dump.sha256
+
+systemctl stop pureledger-backend
+
+sudo -u postgres psql -d postgres -c \
+  "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'pureledgerdb' AND pid <> pg_backend_pid();"
+sudo -u postgres dropdb --if-exists pureledgerdb
+sudo -u postgres createdb --owner=pureledgeruser pureledgerdb
+
+PGPASSFILE=/root/.pgpass pg_restore \
+  -h localhost -p 5432 -U pureledgeruser \
+  -d pureledgerdb --no-owner --no-privileges --verbose \
+  pureledgerdb_YYYYMMDD_HHMMSS.dump
+
+systemctl start pureledger-backend
+systemctl status pureledger-backend --no-pager
+```
+
+After restore, open the application and verify representative records before
+deleting the uploaded `/tmp` files.
+
+### 16.12 What This Backup Does Not Include
+
+The database dump does not include application source, Nginx configuration, or
+Let's Encrypt certificates. Continue using Git for source code and VPS-provider
+snapshots if a full-server disaster-recovery copy is required.
 
 ---
 
@@ -1423,110 +1698,31 @@ git pull origin BusinessLogicFixed
 
 ## Appendix E: Database Dump & Restore
 
-### E.1 Create Database Dump on VPS
+The complete ordered setup and restore procedure is in [Section 16](#16-backup--recovery).
 
-```bash
-# SSH into VPS
-ssh root@72.60.209.26
-
-# Create dump in custom format (recommended - smaller and faster)
-pg_dump -h localhost -U pureledgeruser -d pureledgerdb -F c -f /tmp/pureledgerdb_backup.dump
-
-# Or create SQL format dump (human readable)
-pg_dump -h localhost -U pureledgeruser -d pureledgerdb > /tmp/pureledgerdb_backup.sql
-
-# Check dump file size
-ls -lh /tmp/pureledgerdb_backup.*
-```
-
-### E.2 Download Dump to Local Machine
-
-```bash
-# From your local machine (Windows PowerShell or Git Bash)
-scp root@72.60.209.26:/tmp/pureledgerdb_backup.dump "C:\Users\YourUser\Desktop\pureledgerdb_backup.dump"
-
-# Or for SQL format
-scp root@72.60.209.26:/tmp/pureledgerdb_backup.sql "C:\Users\YourUser\Desktop\pureledgerdb_backup.sql"
-```
-
-### E.3 Restore to Local PostgreSQL (Windows)
-
-**Prerequisites:**
-- PostgreSQL installed locally (e.g., PostgreSQL 18)
-- pg_restore.exe in PATH or use full path
-
-```bash
-# Step 1: Create local database (if not exists)
-# Open psql or pgAdmin and run:
-CREATE DATABASE pureledgerdb;
-
-# Step 2: Restore using pg_restore (custom format .dump)
-# Using connection string (recommended - includes password)
-"C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" -d "postgresql://postgres:YOUR_PASSWORD@localhost:5432/pureledgerdb" -v "C:\path\to\pureledgerdb_backup.dump"
-
-# Or using individual parameters
-"C:\Program Files\PostgreSQL\18\bin\pg_restore.exe" -h localhost -p 5432 -U postgres -d pureledgerdb -v "C:\path\to\pureledgerdb_backup.dump"
-
-# Step 3: For SQL format (.sql), use psql instead
-"C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d pureledgerdb -f "C:\path\to\pureledgerdb_backup.sql"
-```
-
-**Expected Warnings (Safe to Ignore):**
-- `role "pureledgeruser" does not exist` - Expected if you're using different local user
-- `relation already exists` - Expected if restoring to existing database
-
-### E.4 Verify Restore Success
-
-```bash
-# Check row counts
-"C:\Program Files\PostgreSQL\18\bin\psql.exe" "postgresql://postgres:YOUR_PASSWORD@localhost:5432/pureledgerdb" -c "SELECT 'JournalEntries' as table_name, COUNT(*) FROM \"JournalEntries\" UNION ALL SELECT 'Accounts', COUNT(*) FROM \"Accounts\";"
-```
-
-### E.5 Update Backend Connection String for Local Development
-
-Edit `appsettings.json`:
-```json
-{
-  "ConnectionStrings": {
-    "LedgerDb": "Host=localhost;Port=5432;Database=pureledgerdb;Username=postgres;Password=YOUR_LOCAL_PASSWORD;Pooling=true;"
-  }
-}
-```
-
-### E.6 Restore Dump Back to VPS (Upload)
-
-```bash
-# Step 1: Upload dump from local to VPS
-scp "C:\path\to\pureledgerdb_backup.dump" root@72.60.209.26:/tmp/
-
-# Step 2: SSH into VPS
-ssh root@72.60.209.26
-
-# Step 3: Drop and recreate database (CAUTION: destroys existing data!)
-sudo -u postgres psql -c "DROP DATABASE pureledgerdb;"
-sudo -u postgres psql -c "CREATE DATABASE pureledgerdb OWNER pureledgeruser;"
-
-# Step 4: Restore
-pg_restore -h localhost -U pureledgeruser -d pureledgerdb -v /tmp/pureledgerdb_backup.dump
-
-# Step 5: Grant permissions (if needed)
-sudo -u postgres psql -d pureledgerdb -c "GRANT ALL ON SCHEMA public TO pureledgeruser;"
-sudo -u postgres psql -d pureledgerdb -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO pureledgeruser;"
-sudo -u postgres psql -d pureledgerdb -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO pureledgeruser;"
-
-# Step 6: Restart backend
-systemctl restart pureledger-backend
-```
-
-### E.7 Quick Reference Commands
+### E.1 Quick Reference Commands
 
 | Task | Command |
 |------|---------|
-| Dump on VPS | `pg_dump -h localhost -U pureledgeruser -d pureledgerdb -F c -f /tmp/backup.dump` |
-| Download to local | `scp root@72.60.209.26:/tmp/backup.dump ./backup.dump` |
-| Restore locally | `pg_restore -d "postgresql://postgres:pass@localhost:5432/pureledgerdb" backup.dump` |
-| Upload to VPS | `scp backup.dump root@72.60.209.26:/tmp/` |
-| Restore on VPS | `pg_restore -h localhost -U pureledgeruser -d pureledgerdb /tmp/backup.dump` |
+| Run VPS backup now | `systemctl start pureledger-backup.service` |
+| View VPS backup logs | `journalctl -u pureledger-backup.service -n 50 --no-pager` |
+| Show next automatic run | `systemctl list-timers pureledger-backup.timer --all` |
+| List VPS dumps | `ls -lh /var/backups/pureledger/` |
+| Run laptop pull now | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Claude\Desktop\Pureledger\PureLedger\deployment\backup\pull-pureledger-backups.ps1"` |
+| Inspect Windows task | `Get-ScheduledTaskInfo -TaskName "Pureledger Backup Pull"` |
+| List laptop dumps | `Get-ChildItem "C:\Users\Claude\Desktop\pureledger_backups" -Filter "*.dump"` |
+
+### E.2 Backup File Naming
+
+Each completed backup is a verified pair:
+
+```text
+pureledgerdb_YYYYMMDD_HHMMSS.dump
+pureledgerdb_YYYYMMDD_HHMMSS.dump.sha256
+```
+
+Do not treat `.partial` files as valid backups. Never restore a dump unless its
+matching `.sha256` file passes verification.
 
 ---
 
@@ -1597,7 +1793,7 @@ cd /var/www/pureledger/backend-source && git pull origin master && cd pureledger
 
 ---
 
-**Document Version:** 1.3
+**Document Version:** 1.4
 **Created:** December 2024
-**Updated:** January 2025
+**Updated:** July 2026
 **Author:** PureLedger DevOps

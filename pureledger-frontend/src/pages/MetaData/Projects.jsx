@@ -28,7 +28,7 @@ const Projects = () => {
       if (response.data.success) {
         setProjects(response.data.data);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load projects');
     } finally {
       setLoading(false);
@@ -102,10 +102,7 @@ const Projects = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-project-diagram me-2"></i>Projects
-        </h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleCreate}>
           <i className="fas fa-plus me-2"></i>New Project
         </Button>

@@ -41,17 +41,15 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<RefreshToken> AddAsync(RefreshToken refreshToken)
+        public RefreshToken Add(RefreshToken refreshToken)
         {
-            await _context.RefreshTokens.AddAsync(refreshToken);
-            await _context.SaveChangesAsync();
+            _context.RefreshTokens.Add(refreshToken);
             return refreshToken;
         }
 
-        public async Task<RefreshToken> UpdateAsync(RefreshToken refreshToken)
+        public RefreshToken Update(RefreshToken refreshToken)
         {
             _context.RefreshTokens.Update(refreshToken);
-            await _context.SaveChangesAsync();
             return refreshToken;
         }
 
@@ -64,7 +62,7 @@ namespace PureLedger.Repositories
             refreshToken.IsRevoked = true;
             refreshToken.RevokedDate = DateTime.UtcNow;
 
-            await UpdateAsync(refreshToken);
+            Update(refreshToken);
             return true;
         }
 
@@ -81,7 +79,6 @@ namespace PureLedger.Repositories
                 token.RevokedDate = DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync();
             return true;
         }
 
@@ -92,10 +89,7 @@ namespace PureLedger.Repositories
                 .ToListAsync();
 
             if (expiredTokens.Count > 0)
-            {
                 _context.RefreshTokens.RemoveRange(expiredTokens);
-                await _context.SaveChangesAsync();
-            }
         }
     }
 }

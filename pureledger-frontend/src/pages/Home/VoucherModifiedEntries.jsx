@@ -5,8 +5,8 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const VoucherModifiedEntries = () => {
-    usePageTitle('Voucher Modified Entries');
     const { jvId } = useParams();
+    usePageTitle('Voucher Modified Entries', `Modified Entries - JV-${jvId}`);
     const [voucherData, setVoucherData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -65,10 +65,7 @@ const VoucherModifiedEntries = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2 className="mb-0">
-                    <i className="fas fa-history me-2"></i>Modified Entries - JV-{jvId}
-                </h2>
+            <div className="d-flex justify-content-end align-items-center mb-4">
                 <Link to="/home/modified-entries" className="btn btn-secondary">
                     <i className="fas fa-arrow-left me-1"></i> Back to Modified Entries
                 </Link>

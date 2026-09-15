@@ -759,11 +759,6 @@ const ProcessDC = () => {
 
   return (
     <div className="container-fluid">
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2><i className="fas fa-truck me-2"></i>Delivery Challan</h2>
-      </div>
-
       {/* Alerts */}
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using PureLedger.Services.Interface;
 using System.Security.Cryptography;
 
 namespace PureLedger.Filters {
@@ -51,28 +52,14 @@ namespace PureLedger.Filters {
                 var newToken = GenerateToken();
                 SetXsrfCookie(context.HttpContext, newToken);
 
-                context.Result = new ObjectResult(new {
-                    success = false,
-                    message = "XSRF token cookie missing. Please try again.",
-                    xsrfToken = newToken,
-                    needsRefresh = true
-                }) {
-                    StatusCode = 400
-                };
+                context.Result = CreateXsrfError(context, "XSRF token cookie missing. Please try again.", newToken);
                 return;
             }
 
             if (string.IsNullOrEmpty(headerValue)) {
                 logger?.LogWarning("XSRF validation failed - missing header. Path: {Path}", context.HttpContext.Request.Path);
 
-                context.Result = new ObjectResult(new {
-                    success = false,
-                    message = "XSRF token header missing.",
-                    xsrfToken = cookieValue,
-                    needsRefresh = true
-                }) {
-                    StatusCode = 400
-                };
+                context.Result = CreateXsrfError(context, "XSRF token header missing.", cookieValue);
                 return;
             }
 
@@ -86,14 +73,7 @@ namespace PureLedger.Filters {
                 var newToken = GenerateToken();
                 SetXsrfCookie(context.HttpContext, newToken);
 
-                context.Result = new ObjectResult(new {
-                    success = false,
-                    message = "Invalid XSRF token. Please try again.",
-                    xsrfToken = newToken,
-                    needsRefresh = true
-                }) {
-                    StatusCode = 400
-                };
+                context.Result = CreateXsrfError(context, "Invalid XSRF token. Please try again.", newToken);
                 return;
             }
 
@@ -126,6 +106,25 @@ namespace PureLedger.Filters {
                 Path = "/",
                 IsEssential = true
             });
+        }
+
+        private static ObjectResult CreateXsrfError(ActionExecutingContext context, string message, string token) {
+            var responseFactory = context.HttpContext.RequestServices.GetRequiredService<IApiErrorResponseFactory>();
+            var response = responseFactory.Create(
+                context.HttpContext,
+                StatusCodes.Status400BadRequest,
+                message,
+                new[] { message },
+                "XSRF_VALIDATION_FAILED",
+                extensions: new Dictionary<string, object?>
+                {
+                    ["xsrfToken"] = token,
+                    ["needsRefresh"] = true
+                });
+
+            return new ObjectResult(response) {
+                StatusCode = StatusCodes.Status400BadRequest
+            };
         }
     }
 }

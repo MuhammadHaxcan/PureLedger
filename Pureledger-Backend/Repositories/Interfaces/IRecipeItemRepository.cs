@@ -4,7 +4,7 @@ namespace PureLedger.Repositories.Interfaces
 {
     public interface IRecipeItemRepository
     {
-        Task<RecipeItem> AddAsync(RecipeItem recipeItem);
+        RecipeItem Add(RecipeItem recipeItem);
         Task<List<RecipeItem>> GetByRecipeIdAsync(int recipeId);
     }
 }

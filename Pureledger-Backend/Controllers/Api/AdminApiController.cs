@@ -23,10 +23,10 @@ namespace PureLedger.Controllers.Api
         // Map of controllers and their actions for access control
         private readonly Dictionary<string, List<string>> _controllerActions = new()
         {
-            ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" },
+            ["Home"] = new() { "Entry", "PaymentAndReceipt", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes", "PendingApprovals" },
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations", "Bookers" },
-            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" },
-            ["DeliveryChallan"] = new() { "ProcessDC" }
+            ["Reporting"] = new() { "SingleDoc", "PaymentReceiptVoucherReport", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" },
+            ["DeliveryChallan"] = new() { "ProcessDC", "StockTransfers" }
         };
 
         public AdminApiController(

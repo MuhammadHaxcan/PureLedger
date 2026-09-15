@@ -3,6 +3,7 @@ using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels.Reporting;
+using PureLedger.Data;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -12,12 +13,21 @@ using System.Threading.Tasks;
 namespace PureLedger.Services {
     public class ReportingService : IReportingService {
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IApprovalGuardService _approvalGuard;
+        private readonly IPaymentReceiptClassifier _paymentReceiptClassifier;
+        private readonly LedgerDbContext _context;
 
-        public ReportingService(IUnitOfWork unitOfWork) {
+        public ReportingService(IUnitOfWork unitOfWork, IApprovalGuardService approvalGuard,
+            IPaymentReceiptClassifier paymentReceiptClassifier, LedgerDbContext context) {
             _unitOfWork = unitOfWork;
+            _approvalGuard = approvalGuard;
+            _paymentReceiptClassifier = paymentReceiptClassifier;
+            _context = context;
         }
 
         public async Task<JournalVoucherReportViewModel?> GetSingleDocReportAsync(int journalVoucherId, VoucherType voucherType) {
+            await _approvalGuard.EnsureVoucherNotPendingAsync(journalVoucherId);
+            voucherType = await _paymentReceiptClassifier.ResolvePrintableTypeAsync(journalVoucherId, voucherType);
             return voucherType switch {
                 VoucherType.DC => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
                 VoucherType.INV => await GetDeliveryChallanReportAsync(journalVoucherId, voucherType),
@@ -32,8 +42,8 @@ namespace PureLedger.Services {
             var project = await _unitOfWork.Projects.GetByIdAsync(dcVoucher.JournalVoucher.ProjectId);
             if (project == null) return null;
 
-            string locationNames = GetLocationNames(dcVoucher.Entries);
-            var processedEntries = GetProcessedEntries(dcVoucher.Entries);
+            string locationNames = GetLocationNames(dcVoucher.Entries, dcVoucher.JournalVoucher.IsStockTransfer);
+            var processedEntries = GetProcessedEntries(dcVoucher.Entries, dcVoucher.JournalVoucher.IsStockTransfer);
             var customerInfo = GetCustomerAccountName(dcVoucher.JournalVoucher);
 
             var (forChargesAmount, forChargesEntries) = await GetForChargesDataAsync(journalVoucherId);
@@ -107,7 +117,10 @@ namespace PureLedger.Services {
             var project = await _unitOfWork.Projects.GetByIdAsync(voucher.ProjectId);
             if (project == null) return null;
 
-            var entries = GetJournalVoucherEntries(voucher.JournalEntries);
+            IEnumerable<JournalEntry> reportEntries = voucherType == VoucherType.PaymentReceipt
+                ? voucher.JournalEntries.OrderBy(x => x.JournalEntryId)
+                : voucher.JournalEntries;
+            var entries = GetJournalVoucherEntries(reportEntries);
             var customerInfo = GetCustomerAccountName(voucher);
 
             var cartageEntries = await _unitOfWork.JournalEntries
@@ -141,10 +154,43 @@ namespace PureLedger.Services {
                 ProjectImage = projectImage
             };
 
+            if (voucherType == VoucherType.PaymentReceipt) {
+                var audit = await _context.ApprovalVouchers.AsNoTracking()
+                    .Where(x => x.JournalVoucherId == journalVoucherId &&
+                                x.VoucherType == ApprovalVoucherType.PaymentReceipt &&
+                                x.Status == ApprovalStatuses.Approved)
+                    .OrderByDescending(x => x.ApprovalVoucherId)
+                    .Select(x => new {
+                        x.SubmittedDate,
+                        x.DecisionDate,
+                        x.HadDuplicateWarningsAtDecision,
+                        SubmittedBy = _context.Users.Where(u => u.UserId == x.PostedByUserId)
+                            .Select(u => u.Username).FirstOrDefault(),
+                        ApprovedBy = _context.Users.Where(u => u.UserId == x.DecisionByUserId)
+                            .Select(u => u.Username).FirstOrDefault()
+                    }).FirstOrDefaultAsync();
+                if (audit != null) {
+                    viewModel.ApprovalSubmittedDate = audit.SubmittedDate;
+                    viewModel.ApprovalDecisionDate = audit.DecisionDate;
+                    viewModel.SubmittedBy = audit.SubmittedBy;
+                    viewModel.ApprovedBy = audit.ApprovedBy;
+                    viewModel.HadDuplicateWarningsAtDecision = audit.HadDuplicateWarningsAtDecision;
+                }
+            }
+
             return viewModel;
         }
 
-        private string GetLocationNames(IEnumerable<DeliveryChallanEntry> entries) {
+        private string GetLocationNames(IEnumerable<DeliveryChallanEntry> entries, bool isStockTransfer) {
+            if (isStockTransfer) {
+                var physical = entries.Where(e => e.JournalEntry?.Account?.AccountGroupId == 2)
+                    .Select(e => e.Location?.LocationName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+                var route = entries.Where(e => e.JournalEntry?.Account?.AccountGroupId == 1 &&
+                                               e.JournalEntry.Quantity == 0)
+                    .Select(e => e.Location?.LocationName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+                if (route.Count > 0)
+                    return $"{string.Join(", ", physical)} → {string.Join(", ", route)}";
+            }
             return string.Join(", ",
                 entries
                     .Where(e => e.Location != null)
@@ -152,9 +198,10 @@ namespace PureLedger.Services {
                     .Distinct());
         }
 
-        private List<JournalVoucherEntryReportModel> GetProcessedEntries(IEnumerable<DeliveryChallanEntry> entries) {
+        private List<JournalVoucherEntryReportModel> GetProcessedEntries(IEnumerable<DeliveryChallanEntry> entries, bool isStockTransfer) {
             return entries
-                .Where(e => e.JournalEntry?.IsProcessed == true)
+                .Where(e => e.JournalEntry?.IsProcessed == true &&
+                            (!isStockTransfer || e.JournalEntry.Account?.AccountGroupId == 2))
                 .Select(e => MapToEntryReportModel(e.JournalEntry!))
                 .ToList();
         }
@@ -169,6 +216,8 @@ namespace PureLedger.Services {
             return new JournalVoucherEntryReportModel {
                 AccountId = entry.AccountId,
                 AccountName = entry.Account?.AccountName ?? "",
+                CategoryId = entry.CategoryId,
+                CategoryName = entry.Category?.CategoryName ?? "",
                 AccountGroupId = entry.Account?.AccountGroupId ?? 0,
                 Description = entry.Description ?? "",
                 Quantity = entry.Quantity,
@@ -177,8 +226,25 @@ namespace PureLedger.Services {
                 Discount = entry.DiscountPercent ?? 0,
                 Debit = entry.Debit,
                 Credit = entry.Credit,
-                Rbp = entry.Rbp ?? "Y"
+                Rbp = entry.Rbp ?? "Y",
+                InstrumentType = entry.InstrumentDetail?.InstrumentType,
+                ReferenceNumber = entry.InstrumentDetail?.ReferenceNumber,
+                InstrumentDate = entry.InstrumentDetail?.InstrumentDate
             };
+        }
+
+        private static string FormatReportDescription(JournalEntry entry) {
+            var description = entry.Description ?? string.Empty;
+            var detail = entry.InstrumentDetail;
+            if (detail == null) return description;
+            var metadata = detail.InstrumentType switch {
+                PaymentInstrumentType.Cash => "[P&R: Cash]",
+                PaymentInstrumentType.Cheque =>
+                    $"[P&R: Cheque; Cheque No: {detail.ReferenceNumber}; Date: {detail.InstrumentDate:yyyy-MM-dd}]",
+                _ =>
+                    $"[P&R: {detail.InstrumentType}; Ref No: {detail.ReferenceNumber}; Date: {detail.InstrumentDate:yyyy-MM-dd}]"
+            };
+            return string.IsNullOrWhiteSpace(description) ? metadata : $"{description} {metadata}";
         }
 
         private string GetCustomerAccountName(JournalVoucher voucher) {
@@ -268,7 +334,7 @@ namespace PureLedger.Services {
         }
 
         private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation) {
-            using var transaction = await _unitOfWork.BeginTransactionAsync();
+            await using var transaction = await _unitOfWork.BeginTransactionAsync();
 
             try {
                 var result = await operation();
@@ -341,24 +407,6 @@ namespace PureLedger.Services {
                 PageSize = pageSize,
                 HasMoreData = (page + 1) * pageSize < totalCount
             };
-        }
-
-        private async Task<List<Account>> GetFilteredAccountsAsync(int? accountId, int? categoryId, int projectId) {
-            if (accountId.HasValue) {
-                var account = await _unitOfWork.Accounts.GetByIdWithCategoryAsync(accountId.Value);
-
-                if (account?.Category?.ProjectId == projectId) {
-                    return new List<Account> { account };
-                }
-                return new List<Account>();
-            } else if (categoryId.HasValue) {
-                var accounts = await _unitOfWork.Accounts.GetByCategoryIdWithCategoryAsync(categoryId.Value);
-
-                return accounts.Where(a => a.Category?.ProjectId == projectId).ToList();
-            } else {
-
-                return await _unitOfWork.Accounts.GetAccountsWithEntriesInProjectAsync(projectId);
-            }
         }
 
         public async Task<decimal> GetAccountBalanceUpToVoucherAsync(int journalVoucherId) {
@@ -487,7 +535,7 @@ namespace PureLedger.Services {
                     FormattedId = formattedId,
                     TransactionDate = entry.JournalVoucher.EntryDate,
                     CreditableDate = entry.JournalVoucher.CreditableDate,
-                    Description = entry.Description,
+                    Description = FormatReportDescription(entry),
                     AccountName = entry.Account?.AccountName ?? string.Empty,
                     AccountId = entry.AccountId,
                     Debit = entry.Debit,
@@ -634,7 +682,7 @@ namespace PureLedger.Services {
                     FormattedId = formattedId,
                     TransactionDate = entry.JournalVoucher.EntryDate,
                     CreditableDate = entry.JournalVoucher.CreditableDate,
-                    Description = entry.Description,
+                    Description = FormatReportDescription(entry),
                     AccountName = entry.Account?.AccountName ?? string.Empty,
                     AccountId = entry.AccountId,
                     Debit = entry.Debit,
@@ -691,6 +739,7 @@ namespace PureLedger.Services {
         }
 
         public async Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type) {
+            await _approvalGuard.EnsureVoucherNotPendingAsync(journalVoucherId);
             var voucher = await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
             if (voucher == null) {
                 return (false, false);
@@ -752,7 +801,6 @@ namespace PureLedger.Services {
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 2500);
 
-            // Get paginated product IDs
             var (productIds, totalCount) = await _unitOfWork.JournalEntries.GetProductIdsForReportAsync(
                 startDate, endDate, projectId, categoryId, accountId, locationId, page, pageSize);
 
@@ -805,34 +853,110 @@ namespace PureLedger.Services {
                     .ToList();
 
                 var prevDebitEntries = entriesBeforeStartDate.Where(x => x.Entry.Debit > 0).ToList();
-                var prevCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
+                var prevCommercialDebitEntries = prevDebitEntries
+                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer || x.Entry.Quantity == 0)
+                    .ToList();
+                var prevPhysicalCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
+                var prevSaleCreditEntries = prevPhysicalCreditEntries
+                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer).ToList();
 
                 int prevDebitQty = prevDebitEntries.Sum(x => x.Entry.Quantity);
-                int prevCreditQty = prevCreditEntries.Sum(x => x.Entry.Quantity);
+                int prevCreditQty = prevPhysicalCreditEntries.Sum(x => x.Entry.Quantity);
                 int prevQtyBalance = prevDebitQty - prevCreditQty;
 
-                decimal prevTotalDebit = prevDebitEntries.Sum(x => x.Entry.Debit);
-                decimal prevTotalCredit = prevCreditEntries.Sum(x => x.Entry.Credit);
-                decimal prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
+                // Quantity-bearing transfer debits are internal receipts/returns, not
+                // purchases. Quantity-zero product debits are landed charges and remain
+                // part of the product's commercial cost.
+                decimal prevTotalDebit = prevCommercialDebitEntries.Sum(x => x.Entry.Debit);
+                decimal prevTotalCredit = prevSaleCreditEntries.Sum(x => x.Entry.Credit);
 
                 var currentDebitEntries = entriesInDateRange.Where(x => x.Entry.Debit > 0).ToList();
-                var currentCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
+                var currentCommercialDebitEntries = currentDebitEntries
+                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer || x.Entry.Quantity == 0)
+                    .ToList();
+                var currentPhysicalCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
+                var currentSaleCreditEntries = currentPhysicalCreditEntries
+                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer).ToList();
 
                 int currentDebitQty = currentDebitEntries.Sum(x => x.Entry.Quantity);
-                int currentCreditQty = currentCreditEntries.Sum(x => x.Entry.Quantity);
-
-                decimal currentDebit = currentDebitEntries.Sum(x => x.Entry.Debit);
-                decimal currentCredit = currentCreditEntries.Sum(x => x.Entry.Credit);
+                int currentPhysicalCreditQty = currentPhysicalCreditEntries.Sum(x => x.Entry.Quantity);
+                decimal currentDebit = currentCommercialDebitEntries.Sum(x => x.Entry.Debit);
+                decimal currentCredit = currentSaleCreditEntries.Sum(x => x.Entry.Credit);
 
                 int totalProductDebitQty = prevDebitQty + currentDebitQty;
-                int totalProductCreditQty = prevCreditQty + currentCreditQty;
+                int totalProductCreditQty = prevCreditQty + currentPhysicalCreditQty;
                 int qtyBalance = totalProductDebitQty - totalProductCreditQty;
 
-                decimal averageRate = totalProductDebitQty > 0 ?
-                    (prevTotalDebit + currentDebit) / totalProductDebitQty :
-                    prevAvgRate;
-
-                decimal cogs = averageRate * currentCreditQty;
+                decimal prevAvgRate;
+                decimal averageRate;
+                decimal inventoryValue;
+                decimal cogs;
+                if (!productEntries.Any(x => x.Entry.JournalVoucher.IsStockTransfer))
+                {
+                    // Preserve the established report calculation exactly for historical
+                    // products that have no transfer movements.
+                    prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
+                    averageRate = totalProductDebitQty > 0
+                        ? (prevTotalDebit + currentDebit) / totalProductDebitQty
+                        : prevAvgRate;
+                    cogs = averageRate * currentPhysicalCreditQty;
+                    inventoryValue = averageRate * qtyBalance;
+                }
+                else
+                {
+                    // Maintain physical inventory cost separately from sales. Normal
+                    // product credits consume stock at the pre-outward moving average;
+                    // transfer dispatch consumes its posted base value and never becomes
+                    // sales/COGS.
+                    int inventoryQty = 0;
+                    inventoryValue = 0;
+                    decimal previousInventoryValue = 0;
+                    int previousInventoryQty = 0;
+                    decimal lastKnownAverageRate = 0;
+                    decimal previousAverageRate = 0;
+                    cogs = 0;
+                    foreach (var movement in productEntries.OrderBy(x => x.Entry.JournalVoucher.EntryDate)
+                                 .ThenBy(x => x.Entry.JournalVoucherId).ThenBy(x => x.Entry.JournalEntryId))
+                    {
+                        var entry = movement.Entry;
+                        if (entry.Debit > 0)
+                        {
+                            inventoryQty += entry.Quantity;
+                            inventoryValue += entry.Debit;
+                        }
+                        else if (entry.Credit > 0)
+                        {
+                            var outgoingCost = entry.JournalVoucher.IsStockTransfer
+                                ? entry.Credit
+                                : inventoryQty > 0 ? inventoryValue / inventoryQty * entry.Quantity : 0;
+                            if (!entry.JournalVoucher.IsStockTransfer &&
+                                entry.JournalVoucher.EntryDate >= startDate &&
+                                entry.JournalVoucher.EntryDate <= endDate)
+                                cogs += outgoingCost;
+                            inventoryQty -= entry.Quantity;
+                            inventoryValue -= outgoingCost;
+                        }
+                        if (inventoryQty > 0)
+                            lastKnownAverageRate = inventoryValue / inventoryQty;
+                        if (entry.JournalVoucher.EntryDate < startDate)
+                        {
+                            previousInventoryQty = inventoryQty;
+                            previousInventoryValue = inventoryValue;
+                            previousAverageRate = inventoryQty > 0
+                                ? inventoryValue / inventoryQty
+                                : lastKnownAverageRate;
+                        }
+                    }
+                    prevAvgRate = previousInventoryQty > 0
+                        ? previousInventoryValue / previousInventoryQty
+                        : previousAverageRate;
+                    // A transfer can temporarily leave no physical units in a warehouse.
+                    // Keep the last valid moving rate visible instead of reporting zero
+                    // while the corresponding value is represented by Stock In Transit.
+                    averageRate = inventoryQty > 0
+                        ? inventoryValue / inventoryQty
+                        : lastKnownAverageRate;
+                }
                 decimal margin = currentCredit - cogs;
                 decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
 
@@ -846,9 +970,17 @@ namespace PureLedger.Services {
                     PreviousCredit = prevTotalCredit,
                     PreviousAvgRate = prevAvgRate,
                     TotalDebitQty = currentDebitQty,
-                    TotalCreditQty = currentCreditQty,
+                    // Credit Qty remains the physical outward quantity used by the
+                    // stock report. Sales-only quantity is used only for COGS/margin.
+                    TotalCreditQty = currentPhysicalCreditQty,
                     QtyBalance = qtyBalance,
                     AverageRate = averageRate,
+                    InventoryValue = inventoryValue,
+                    PhysicalOutwardQuantity = currentPhysicalCreditQty,
+                    TransferOutwardQuantity = currentPhysicalCreditEntries
+                        .Where(x => x.Entry.JournalVoucher.IsStockTransfer).Sum(x => x.Entry.Quantity),
+                    TransferInwardQuantity = currentDebitEntries
+                        .Where(x => x.Entry.JournalVoucher.IsStockTransfer && x.Entry.Quantity > 0).Sum(x => x.Entry.Quantity),
                     TotalDebit = currentDebit,
                     TotalCredit = currentCredit,
                     Balance = currentDebit - currentCredit,
@@ -863,7 +995,7 @@ namespace PureLedger.Services {
                 totalDebit += currentDebit;
                 totalCredit += currentCredit;
                 totalDebitQty += currentDebitQty;
-                totalCreditQty += currentCreditQty;
+                totalCreditQty += currentPhysicalCreditQty;
                 totalCOGS += cogs;
                 totalMargin += margin;
             }
@@ -901,6 +1033,99 @@ namespace PureLedger.Services {
                 HasMoreData = request.ExcludeNilProducts ? false : (page + 1) * pageSize < totalCount
             };
         }
+
+        public async Task<ProductStockBreakdownViewModel> GetProductStockBreakdownAsync(
+            int projectId,
+            int productId,
+            DateOnly? endDate) {
+            if (projectId <= 0)
+                throw new ArgumentException("A valid project is required.", nameof(projectId));
+            if (productId <= 0)
+                throw new ArgumentException("A valid product is required.", nameof(productId));
+
+            var product = await _unitOfWork.Accounts.GetByIdWithCategoryAsync(productId);
+            if (product?.Category?.ProjectId != projectId || product.AccountGroupId != 2)
+                throw new KeyNotFoundException("Product was not found in the selected project.");
+
+            var movements = await _unitOfWork.JournalEntries.GetProductStockLocationMovementsAsync(
+                projectId, productId, endDate ?? DateOnly.MaxValue);
+
+            var locationNames = new Dictionary<int, string>();
+            var movementsByLocation = new Dictionary<int, List<ProductStockLocationMovementDto>>();
+            var unassignedMovements = new List<ProductStockLocationMovementDto>();
+            var ambiguousMovements = new List<ProductStockLocationMovementDto>();
+            var uniqueMovements = new List<ProductStockLocationMovementDto>();
+            var assignmentIssueCount = 0;
+
+            foreach (var entryGroup in movements.GroupBy(x => x.JournalEntryId)) {
+                var movement = entryGroup.First();
+                uniqueMovements.Add(movement);
+
+                var assignments = entryGroup.Where(x => x.LocationId.HasValue).ToList();
+                if (assignments.Count == 0) {
+                    unassignedMovements.Add(movement);
+                    if (HasInventoryImpact(movement))
+                        assignmentIssueCount++;
+                    continue;
+                }
+
+                if (assignments.Count != 1) {
+                    ambiguousMovements.Add(movement);
+                    if (HasInventoryImpact(movement))
+                        assignmentIssueCount++;
+                    continue;
+                }
+
+                var assignment = assignments[0];
+                var locationId = assignment.LocationId!.Value;
+                var locationName = string.IsNullOrWhiteSpace(assignment.LocationName)
+                    ? $"Location {locationId}"
+                    : assignment.LocationName;
+                locationNames[locationId] = locationName;
+                if (!movementsByLocation.TryGetValue(locationId, out var locationMovements)) {
+                    locationMovements = new List<ProductStockLocationMovementDto>();
+                    movementsByLocation[locationId] = locationMovements;
+                }
+                locationMovements.Add(movement);
+            }
+
+            var locations = new List<ProductStockLocationViewModel>();
+            foreach (var location in movementsByLocation) {
+                var quantity = location.Value.Sum(SignedQuantity);
+                if (quantity == 0)
+                    continue;
+                locations.Add(new ProductStockLocationViewModel {
+                    LocationId = location.Key,
+                    LocationName = locationNames[location.Key],
+                    Quantity = quantity
+                });
+            }
+            locations = locations.OrderBy(x => x.LocationName).ToList();
+
+            var totalQuantity = uniqueMovements.Sum(SignedQuantity);
+            var unassignedQuantity = unassignedMovements.Sum(SignedQuantity);
+            var ambiguousQuantity = ambiguousMovements.Sum(SignedQuantity);
+            var categorizedQuantity = locations.Sum(x => x.Quantity) +
+                                      unassignedQuantity + ambiguousQuantity;
+
+            return new ProductStockBreakdownViewModel {
+                ProductId = product.AccountId,
+                ProductName = product.AccountName,
+                AsOfDate = endDate,
+                TotalQuantity = totalQuantity,
+                UnassignedQuantity = unassignedQuantity,
+                AmbiguousQuantity = ambiguousQuantity,
+                ReconciliationDifference = totalQuantity - categorizedQuantity,
+                AssignmentIssueCount = assignmentIssueCount,
+                Locations = locations
+            };
+        }
+
+        private static bool HasInventoryImpact(ProductStockLocationMovementDto movement) =>
+            movement.Quantity != 0;
+
+        private static int SignedQuantity(ProductStockLocationMovementDto movement) =>
+            movement.Debit > 0 ? movement.Quantity : movement.Credit > 0 ? -movement.Quantity : 0;
 
         public async Task<List<Location>> GetAllLocationsAsync() {
             return await _unitOfWork.Locations.GetAllAsync();

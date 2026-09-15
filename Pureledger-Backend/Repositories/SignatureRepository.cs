@@ -32,17 +32,15 @@ public class SignatureRepository : ISignatureRepository
             .ToListAsync();
     }
 
-    public async Task<Signature> AddAsync(Signature signature)
+    public Signature Add(Signature signature)
     {
         _dbContext.Signatures.Add(signature);
-        await _dbContext.SaveChangesAsync();
         return signature;
     }
 
-    public async Task<Signature> UpdateAsync(Signature signature)
+    public Signature Update(Signature signature)
     {
         _dbContext.Signatures.Update(signature);
-        await _dbContext.SaveChangesAsync();
         return signature;
     }
 
@@ -53,7 +51,6 @@ public class SignatureRepository : ISignatureRepository
             return false;
 
         _dbContext.Signatures.Remove(signature);
-        await _dbContext.SaveChangesAsync();
         return true;
     }
 
@@ -73,7 +70,6 @@ public class SignatureRepository : ISignatureRepository
             signature.IsActive = true;
         }
 
-        await _dbContext.SaveChangesAsync();
     }
 }
 

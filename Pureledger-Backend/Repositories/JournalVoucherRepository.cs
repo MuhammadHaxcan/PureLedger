@@ -19,6 +19,14 @@ namespace PureLedger.Repositories
             return await _context.JournalVouchers
                 .AsNoTracking()
                 .AsSplitQuery()
+                .Where(v => !_context.ApprovalVouchers.Any(a =>
+                    a.Status == ApprovalStatuses.Pending &&
+                    a.JournalVoucherId.HasValue &&
+                    (a.JournalVoucherId.Value == v.JournalVoucherId ||
+                     _context.JournalVoucherReferences.Any(r =>
+                         r.MainVoucherId == a.JournalVoucherId.Value &&
+                         r.ReferencedVoucherId == v.JournalVoucherId &&
+                         (r.ReferenceType == "ForCharges" || r.ReferenceType == "Cartage")))))
                 .Include(jv => jv.JournalEntries)
                     .ThenInclude(e => e.Account)
                 .OrderByDescending(jv => jv.EntryDate)
@@ -34,20 +42,20 @@ namespace PureLedger.Repositories
                     .ThenInclude(e => e.Account)
                 .Include(jv => jv.JournalEntries)
                     .ThenInclude(e => e.Category)
+                .Include(jv => jv.JournalEntries)
+                    .ThenInclude(e => e.InstrumentDetail)
                 .FirstOrDefaultAsync(jv => jv.JournalVoucherId == id);
         }
 
-        public async Task<JournalVoucher> AddAsync(JournalVoucher voucher)
+        public JournalVoucher Add(JournalVoucher voucher)
         {
             _context.JournalVouchers.Add(voucher);
-            await _context.SaveChangesAsync();
             return voucher;
         }
 
-        public async Task<JournalVoucher> UpdateAsync(JournalVoucher voucher)
+        public JournalVoucher Update(JournalVoucher voucher)
         {
             _context.JournalVouchers.Update(voucher);
-            await _context.SaveChangesAsync();
             return voucher;
         }
 
@@ -58,6 +66,9 @@ namespace PureLedger.Repositories
             bool includeEntries)
         {
             IQueryable<JournalVoucher> query = _context.JournalVouchers
+                // Delivery Challan/FOR/cartage selectors must conservatively omit
+                // every instrument-linked voucher, including a partial/corrupt graph.
+                .Where(jv => !jv.JournalEntries.Any(je => je.InstrumentDetail != null))
                 .Include(jv => jv.Project);
                 
             if (includeEntries)
@@ -95,6 +106,14 @@ namespace PureLedger.Repositories
                     .ThenInclude(e => e.Category)
                 .Include(v => v.JournalEntries)
                     .ThenInclude(e => e.Account)
+                .Where(v => !_context.ApprovalVouchers.Any(a =>
+                    a.Status == ApprovalStatuses.Pending &&
+                    a.JournalVoucherId.HasValue &&
+                    (a.JournalVoucherId.Value == v.JournalVoucherId ||
+                     _context.JournalVoucherReferences.Any(r =>
+                         r.MainVoucherId == a.JournalVoucherId.Value &&
+                         r.ReferencedVoucherId == v.JournalVoucherId &&
+                         (r.ReferenceType == "ForCharges" || r.ReferenceType == "Cartage")))))
                 .Where(v => v.JournalEntries.Any(e => e.IsEdited));
 
             if (projectId.HasValue)
@@ -116,6 +135,10 @@ namespace PureLedger.Repositories
 
         public async Task<bool> DeleteAsync(int journalVoucherId)
         {
+            if (await _context.JournalEntryInstrumentDetails.AsNoTracking()
+                    .AnyAsync(x => x.JournalEntry.JournalVoucherId == journalVoucherId))
+                throw new InvalidOperationException(
+                    "Payment & Receipt vouchers cannot be deleted through the generic voucher workflow.");
             var voucher = await _context.JournalVouchers
                 .Include(jv => jv.JournalEntries)
                 .FirstOrDefaultAsync(jv => jv.JournalVoucherId == journalVoucherId);
@@ -128,7 +151,6 @@ namespace PureLedger.Repositories
                 _context.JournalEntries.RemoveRange(voucher.JournalEntries);
 
             _context.JournalVouchers.Remove(voucher);
-            await _context.SaveChangesAsync();
             return true;
         }
 

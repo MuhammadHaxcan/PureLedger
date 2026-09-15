@@ -5,6 +5,7 @@ import Modal from '../../components/Modal';
 import ConfirmModal from '../../components/ConfirmModal';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { ACCOUNT_GROUP } from '../../constants/accountGroups';
 
 const Accounts = () => {
   usePageTitle('Accounts');
@@ -42,6 +43,17 @@ const Accounts = () => {
   const [filterProjectId, setFilterProjectId] = useState(null); // Filter for displaying accounts
   const [filterCategoryId, setFilterCategoryId] = useState(null); // Filter for displaying accounts
   const [filterCategories, setFilterCategories] = useState([]); // Categories for filter dropdown
+  const originalEditingGroupId = Number(
+    editingAccount?.accountGroupId ?? editingAccount?.AccountGroupId ?? 0
+  );
+  const selectableAccountGroups = editingAccount
+    ? accountGroups.filter(group => {
+      const groupId = Number(group.id);
+      return originalEditingGroupId === ACCOUNT_GROUP.EXPENSE
+        ? groupId === ACCOUNT_GROUP.EXPENSE
+        : groupId !== ACCOUNT_GROUP.EXPENSE;
+    })
+    : accountGroups;
 
   useEffect(() => {
     loadProjects();
@@ -77,7 +89,7 @@ const Accounts = () => {
       if (response.data.success) {
         setProjects(response.data.data);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load projects');
     }
   };
@@ -88,7 +100,7 @@ const Accounts = () => {
       if (response.data.success) {
         setAccountGroups(response.data.data);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load account groups');
     }
   };
@@ -256,7 +268,7 @@ const Accounts = () => {
         
         setShowModal(true);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load account details');
     } finally {
       setLoading(false);
@@ -294,10 +306,9 @@ const Accounts = () => {
     setSuccess('');
 
     try {
-      const selectedAccountGroup = accountGroups.find(ag => ag.id.toString() === formData.accountGroupId);
-      const accountGroupName = selectedAccountGroup?.name?.toLowerCase().trim() || '';
-      const isAccountGroup = accountGroupName === 'account';
-      const isProductGroup = accountGroupName === 'product';
+      const selectedGroupId = Number(formData.accountGroupId);
+      const isAccountGroup = selectedGroupId === ACCOUNT_GROUP.ACCOUNT;
+      const isProductGroup = selectedGroupId === ACCOUNT_GROUP.PRODUCT;
 
       const accountData = {
         accountId: editingAccount?.accountId || 0,
@@ -364,10 +375,7 @@ const Accounts = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-users me-2"></i>Accounts
-        </h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleCreate}>
           <i className="fas fa-plus me-2"></i>New Account
         </Button>
@@ -603,10 +611,9 @@ const Accounts = () => {
               <SearchableSelect
                 value={formData.accountGroupId ? parseInt(formData.accountGroupId) : null}
                 onChange={(value) => {
-                  const accountGroupName = accountGroups.find(ag => ag.id.toString() === value?.toString())?.name?.toLowerCase() || '';
                   setFormData({ ...formData, accountGroupId: value ? value.toString() : '' });
                 }}
-                options={accountGroups.map(ag => ({ id: ag.id, name: ag.name }))}
+                options={selectableAccountGroups.map(ag => ({ id: ag.id, name: ag.name }))}
                 placeholder="Select Account Group"
                 required
                 disabled={editingAccount?.hasJournalAssociations || loading}
@@ -615,6 +622,12 @@ const Accounts = () => {
             {editingAccount?.hasJournalAssociations && (
               <Form.Text className="text-muted">
                 Account Group cannot be changed because this account is associated with journal vouchers.
+              </Form.Text>
+            )}
+            {editingAccount && !editingAccount.hasJournalAssociations && (
+              <Form.Text className="text-muted">
+                Expense accounts cannot be reclassified, and existing Account/Product records
+                cannot be converted to Expense. Account and Product remain interchangeable here.
               </Form.Text>
             )}
           </Form.Group>

@@ -56,17 +56,15 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<DeliveryChallanVoucher> AddAsync(DeliveryChallanVoucher deliveryChallanVoucher)
+        public DeliveryChallanVoucher Add(DeliveryChallanVoucher deliveryChallanVoucher)
         {
-            await _context.DeliveryChallanVouchers.AddAsync(deliveryChallanVoucher);
-            await _context.SaveChangesAsync(); // Pattern A: Save within repository
+            _context.DeliveryChallanVouchers.Add(deliveryChallanVoucher);
             return deliveryChallanVoucher;
         }
 
-        public async Task<DeliveryChallanVoucher> UpdateAsync(DeliveryChallanVoucher deliveryChallanVoucher)
+        public DeliveryChallanVoucher Update(DeliveryChallanVoucher deliveryChallanVoucher)
         {
             _context.DeliveryChallanVouchers.Update(deliveryChallanVoucher);
-            await _context.SaveChangesAsync(); // Pattern A: Save within repository
             return deliveryChallanVoucher;
         }
 
@@ -92,7 +90,6 @@ namespace PureLedger.Repositories
                 _context.DeliveryChallanEntries.RemoveRange(voucher.Entries);
 
             _context.DeliveryChallanVouchers.Remove(voucher);
-            await _context.SaveChangesAsync(); // Pattern A: Already present
             return true;
         }
     }

@@ -42,8 +42,6 @@ namespace PureLedger.Repositories
                 };
                 _dbContext.AppSettings.Add(setting);
             }
-
-            await _dbContext.SaveChangesAsync();
         }
     }
 }

@@ -38,3 +38,20 @@
     max-width: 110px;
     white-space: nowrap;
 }
+
+#productReportTable .stock-location-column {
+    min-width: 125px;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.stock-breakdown-table th:last-child,
+.stock-breakdown-table td:last-child {
+    width: 150px;
+}
+
+.stock-breakdown-table th:nth-child(n+2),
+.stock-breakdown-table td:nth-child(n+2) {
+    min-width: 125px;
+    white-space: nowrap;
+}

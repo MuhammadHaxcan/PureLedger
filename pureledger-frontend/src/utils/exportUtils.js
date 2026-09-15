@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Papa from 'papaparse';
 
@@ -35,7 +35,6 @@ export const generatePdfAsync = async (config, onProgress) => {
         generatedInfo,
         columns,
         rows,
-        rowsPerPage = 14,
         startY = 46,
         fontSize = 9,
         cellPadding = 2,

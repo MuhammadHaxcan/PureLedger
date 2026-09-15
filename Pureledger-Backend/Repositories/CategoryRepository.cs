@@ -39,17 +39,15 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<Category> AddAsync(Category category)
+        public Category Add(Category category)
         {
             _context.Categories.Add(category);
-            await _context.SaveChangesAsync();
             return category;
         }
 
-        public async Task<Category> UpdateAsync(Category category)
+        public Category Update(Category category)
         {
             _context.Categories.Update(category);
-            await _context.SaveChangesAsync();
             return category;
         }
 
@@ -60,18 +58,10 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<bool> DeleteAsync(Category category)
+        public bool Delete(Category category)
         {
-            try
-            {
-                _context.Categories.Remove(category);
-                await _context.SaveChangesAsync();
-                return true;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            _context.Categories.Remove(category);
+            return true;
         }
 
         public async Task<bool> ExistsByNameInProjectAsync(string name, int projectId, int? excludeId = null)

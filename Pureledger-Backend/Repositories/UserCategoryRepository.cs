@@ -33,10 +33,9 @@ namespace PureLedger.Repositories
             return await _context.UserCategories.FindAsync(id);
         }
 
-        public async Task<UserCategory> AddAsync(UserCategory userCategory)
+        public UserCategory Add(UserCategory userCategory)
         {
             _context.UserCategories.Add(userCategory);
-            await _context.SaveChangesAsync();
             return userCategory;
         }
 
@@ -47,7 +46,6 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.UserCategories.Remove(userCategory);
-            await _context.SaveChangesAsync();
             return true;
         }
 
@@ -58,10 +56,7 @@ namespace PureLedger.Repositories
                 .ToListAsync();
 
             if (userCategories.Any())
-            {
                 _context.UserCategories.RemoveRange(userCategories);
-                await _context.SaveChangesAsync();
-            }
 
             return true;
         }
@@ -73,10 +68,7 @@ namespace PureLedger.Repositories
                 .ToListAsync();
 
             if (userCategories.Any())
-            {
                 _context.UserCategories.RemoveRange(userCategories);
-                await _context.SaveChangesAsync();
-            }
 
             return true;
         }

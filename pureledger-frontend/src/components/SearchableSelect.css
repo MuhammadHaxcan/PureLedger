@@ -64,8 +64,9 @@
   max-height: 200px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: white;
-  border: 1px solid #ced4da;
+  color: var(--text-primary);
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
   border-radius: 0.25rem;
   z-index: 2000; /* Sit above modal content/backdrops */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
@@ -81,8 +82,9 @@
   max-height: 200px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: white;
-  border: 1px solid #ced4da;
+  color: var(--text-primary);
+  background: var(--dropdown-bg);
+  border: 1px solid var(--input-border);
   border-radius: 0.25rem;
   z-index: 1070; /* Higher than Bootstrap modal z-index (1055) and modal backdrop (1050) */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
@@ -104,14 +106,14 @@
 
 .searchable-select-option:hover,
 .select-option:hover {
-  background-color: #f0f7ff;
+  background-color: var(--row-hover-bg);
 }
 
 .searchable-select-option.selected,
 .searchable-select-option.highlighted,
 .select-option.selected {
-  background-color: #0d6efd;
-  color: white;
+  background-color: var(--accent-color);
+  color: #ffffff;
   font-weight: 500;
 }
 
@@ -136,16 +138,21 @@
 }
 
 .select-dropdown::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--scrollbar-track);
   border-radius: 4px;
 }
 
 .select-dropdown::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 .select-dropdown::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--scrollbar-thumb-hover);
+}
+
+.searchable-select-dropdown,
+.select-dropdown {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 

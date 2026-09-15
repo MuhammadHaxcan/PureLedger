@@ -19,6 +19,8 @@ namespace PureLedger.Controllers.Api
         private readonly ISettingsService _settingsService;
         private readonly ICurrentUserService _currentUserService;
         private readonly ILogger<ReportingApiController> _logger;
+        private readonly IPaymentReceiptClassifier _paymentReceiptClassifier;
+        private readonly IPaymentReceiptService _paymentReceipts;
 
         private const string LEGACY_DATABASE_KEY = "legacyDatabase";
 
@@ -27,13 +29,17 @@ namespace PureLedger.Controllers.Api
             IOldReportingService oldReportingService,
             ISettingsService settingsService,
             ICurrentUserService currentUserService,
-            ILogger<ReportingApiController> logger)
+            ILogger<ReportingApiController> logger,
+            IPaymentReceiptClassifier paymentReceiptClassifier,
+            IPaymentReceiptService paymentReceipts)
         {
             _reportingService = reportingService;
             _oldReportingService = oldReportingService;
             _settingsService = settingsService;
             _currentUserService = currentUserService;
             _logger = logger;
+            _paymentReceiptClassifier = paymentReceiptClassifier;
+            _paymentReceipts = paymentReceipts;
         }
 
         private async Task<string> GetLegacyDatabaseAsync()
@@ -59,19 +65,30 @@ namespace PureLedger.Controllers.Api
         #region Voucher Reports
 
         [HttpGet("validate-voucher")]
-        public async Task<IActionResult> ValidateVoucher([FromQuery] int journalVoucherId, [FromQuery] string type)
+        public async Task<IActionResult> ValidateVoucher([FromQuery] int journalVoucherId, [FromQuery] string type = "JV")
         {
             try
             {
-                if (Enum.TryParse<VoucherType>(type, out var voucherType))
+                if (Enum.TryParse<VoucherType>(type, true, out var voucherType))
                 {
-                    var result = await _reportingService.ValidateVoucherAsync(journalVoucherId, voucherType);
-                    return Ok(new { success = true, exists = result.Exists, isBaseVoucher = result.IsBaseVoucher });
+                    var resolvedType = await _paymentReceiptClassifier.ResolvePrintableTypeAsync(journalVoucherId, voucherType);
+                    if (resolvedType == VoucherType.PaymentReceipt)
+                        await _paymentReceipts.EnsureVoucherAccessAsync(
+                            journalVoucherId, RequireUser(), _currentUserService.IsCurrentUserAdmin());
+                    var result = await _reportingService.ValidateVoucherAsync(journalVoucherId, resolvedType);
+                    return Ok(new { success = true, exists = result.Exists, isBaseVoucher = result.IsBaseVoucher, resolvedVoucherType = resolvedType.ToString() });
                 }
                 return BadRequest(new { success = false, message = "Invalid voucher type" });
             }
             catch (Exception ex)
             {
+                if (ex is ApprovalConflictException)
+                    return Conflict(new { success = false, message = ex.Message });
+                if (ex is PaymentReceiptIntegrityException)
+                    return Conflict(new { success = false, message = ex.Message });
+                if (ex is UnauthorizedAccessException)
+                    return StatusCode(StatusCodes.Status403Forbidden,
+                        new { success = false, message = "You do not have access to this Payment & Receipt voucher." });
                 _logger.LogError(ex, "Error validating voucher");
                 return StatusCode(500, new { success = false, message = "Error validating voucher" });
             }
@@ -87,11 +104,15 @@ namespace PureLedger.Controllers.Api
                     return BadRequest(new { success = false, message = "Invalid voucher ID" });
                 }
 
-                if (!Enum.TryParse<VoucherType>(type, out var voucherType))
+                if (!Enum.TryParse<VoucherType>(type, true, out var voucherType))
                 {
                     return BadRequest(new { success = false, message = "Invalid voucher type" });
                 }
 
+                voucherType = await _paymentReceiptClassifier.ResolvePrintableTypeAsync(journalVoucherId, voucherType);
+                if (voucherType == VoucherType.PaymentReceipt)
+                    await _paymentReceipts.EnsureVoucherAccessAsync(
+                        journalVoucherId, RequireUser(), _currentUserService.IsCurrentUserAdmin());
                 var normalizedFilter = filter?.ToLowerInvariant() ?? "all";
                 var report = await _reportingService.GetSingleDocReportAsync(journalVoucherId, voucherType);
                 if (report == null)
@@ -140,6 +161,7 @@ namespace PureLedger.Controllers.Api
                     success = true,
                     data = report,
                     type = voucherType.ToString(),
+                    resolvedVoucherType = voucherType.ToString(),
                     filter = voucherType == VoucherType.JV ? normalizedFilter : null,
                     customerBalance,
                     previousBalance
@@ -147,6 +169,13 @@ namespace PureLedger.Controllers.Api
             }
             catch (Exception ex)
             {
+                if (ex is ApprovalConflictException)
+                    return Conflict(new { success = false, message = ex.Message });
+                if (ex is PaymentReceiptIntegrityException)
+                    return Conflict(new { success = false, message = ex.Message });
+                if (ex is UnauthorizedAccessException)
+                    return StatusCode(StatusCodes.Status403Forbidden,
+                        new { success = false, message = "You do not have access to this Payment & Receipt voucher." });
                 _logger.LogError(ex, "Error loading print voucher {VoucherId}", journalVoucherId);
                 return StatusCode(500, new { success = false, message = "Error loading voucher" });
             }
@@ -448,6 +477,34 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        [HttpGet("product-report-stock-breakdown")]
+        public async Task<IActionResult> GetProductStockBreakdown(
+            [FromQuery] int projectId,
+            [FromQuery] int productId,
+            [FromQuery] DateOnly? endDate)
+        {
+            try
+            {
+                var breakdown = await _reportingService.GetProductStockBreakdownAsync(projectId, productId, endDate);
+                return Ok(new { success = true, data = breakdown });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Error loading stock breakdown for product {ProductId} in project {ProjectId}",
+                    productId, projectId);
+                return StatusCode(500, new { success = false, message = "Error loading stock breakdown" });
+            }
+        }
+
         [HttpGet("product-report-locations")]
         public async Task<IActionResult> GetProductReportLocations()
         {
@@ -719,6 +776,9 @@ namespace PureLedger.Controllers.Api
         }
 
         #endregion
+
+        private int RequireUser() => _currentUserService.GetCurrentUserId()
+            ?? throw new UnauthorizedAccessException("User is not authenticated.");
     }
 }
 
