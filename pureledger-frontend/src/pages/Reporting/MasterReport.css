@@ -33,7 +33,7 @@
 
 #masterReportTable .entry-id {
   font-size: 0.75rem;
-  color: #6c757d;
+  color: var(--text-secondary);
   margin-top: 0.25rem;
 }
 

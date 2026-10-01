@@ -34,17 +34,15 @@ namespace PureLedger.Repositories
             return await _context.Bookers.FindAsync(id);
         }
 
-        public async Task<Booker> AddAsync(Booker booker)
+        public Booker Add(Booker booker)
         {
             _context.Bookers.Add(booker);
-            await _context.SaveChangesAsync();
             return booker;
         }
 
-        public async Task<Booker> UpdateAsync(Booker booker)
+        public Booker Update(Booker booker)
         {
             _context.Bookers.Update(booker);
-            await _context.SaveChangesAsync();
             return booker;
         }
 
@@ -55,7 +53,6 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.Bookers.Remove(booker);
-            await _context.SaveChangesAsync();
             return true;
         }
 

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Form, Button, Alert, Table, InputGroup, Modal } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -11,7 +11,7 @@ import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 import './ProductReport.css';
 
 const ProductReport = () => {
-    usePageTitle('Product Report');
+    usePageTitle('Product Report', 'Product Stock & Margin Report');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [locations, setLocations] = useState([]);
@@ -32,10 +32,14 @@ const ProductReport = () => {
     });
     const [excludeNilProducts, setExcludeNilProducts] = useState(false);
     const [dateFilterType, setDateFilterType] = useState('custom');
-    const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
+    const [appliedReportFilters, setAppliedReportFilters] = useState(null);
+    const [breakdownTarget, setBreakdownTarget] = useState(null);
+    const [stockBreakdown, setStockBreakdown] = useState(null);
+    const [breakdownLoading, setBreakdownLoading] = useState(false);
+    const [breakdownError, setBreakdownError] = useState('');
     const pageSize = 2500;
     const [visibleColumns, setVisibleColumns] = useState({
         debitQty: true,
@@ -50,21 +54,23 @@ const ProductReport = () => {
         marginPct: true,
     });
 
-    const observer = useRef();
-    const lastEntryElementRef = useCallback(node => {
-        if (isLoadingMore || generating) return;
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMoreData) {
-                const nextPage = Math.floor(allProducts.length / pageSize);
-                generateReport(nextPage, true);
-            }
-        });
-        if (node) observer.current.observe(node);
-    }, [isLoadingMore, generating, hasMoreData, allProducts.length, pageSize]);
+    const reportRequest = useRef({
+        runId: 0,
+        controller: null,
+        timer: null,
+        requestedPages: new Set()
+    });
+    const breakdownAbortController = useRef(null);
 
     useEffect(() => {
+        const request = reportRequest.current;
         loadInitData();
+        return () => {
+            request.runId += 1;
+            clearTimeout(request.timer);
+            request.controller?.abort();
+            breakdownAbortController.current?.abort();
+        };
     }, []);
 
     useEffect(() => {
@@ -107,19 +113,33 @@ const ProductReport = () => {
         }
     };
 
-    const generateReport = async (page = 0, append = false) => {
+    const generateReport = async (page = 0, append = false, runId = null) => {
         if (!formData.projectId) {
             setError('Please select a project');
             return;
         }
 
+        const request = reportRequest.current;
         if (page === 0) {
+            request.runId += 1;
+            clearTimeout(request.timer);
+            request.controller?.abort();
+            request.controller = new AbortController();
+            request.requestedPages = new Set();
+            runId = request.runId;
             setGenerating(true);
             setAllProducts([]);
             setTotals(null);
+            setAppliedReportFilters(null);
+            setBreakdownTarget(null);
+            setStockBreakdown(null);
+            breakdownAbortController.current?.abort();
         } else {
+            if (runId !== request.runId || request.requestedPages.has(page)) return;
             setIsLoadingMore(true);
         }
+        request.requestedPages.add(page);
+        const controller = request.controller;
 
         setError('');
 
@@ -134,8 +154,17 @@ const ProductReport = () => {
                 page: page,
                 pageSize: pageSize
             };
+            const requestedFilters = {
+                projectId: Number(params.projectId),
+                locationId: params.locationId ? Number(params.locationId) : null,
+                endDate: params.endDate || null
+            };
 
-            const response = await apiClient.get('/ReportingApi/product-report', { params });
+            const response = await apiClient.get('/ReportingApi/product-report', {
+                params,
+                signal: controller.signal
+            });
+            if (runId !== request.runId || controller.signal.aborted) return;
             if (response.data.success && response.data.data) {
                 const data = response.data.data;
                 const products = data.productSummaries || [];
@@ -144,17 +173,18 @@ const ProductReport = () => {
                     setAllProducts(prev => [...prev, ...products]);
                 } else {
                     setAllProducts(products);
+                    setAppliedReportFilters(requestedFilters);
                 }
                 
                 setTotals(data.totals || {});
                 setHasMoreData(data.hasMoreData || false);
                 setTotalRecords(data.totalRecords || products.length);
-                setCurrentPage(page + 1);
 
                 // Auto-load next page if there's more data
                 if (data.hasMoreData) {
-                    setTimeout(() => {
-                        generateReport(page + 1, true);
+                    request.timer = setTimeout(() => {
+                        request.timer = null;
+                        generateReport(page + 1, true, runId);
                     }, 100);
                 }
             } else {
@@ -162,11 +192,66 @@ const ProductReport = () => {
                 setHasMoreData(false);
             }
         } catch (err) {
+            if (runId !== request.runId || controller.signal.aborted) return;
             setError(err.response?.data?.error || 'Failed to generate report');
             setHasMoreData(false);
         } finally {
-            setGenerating(false);
-            setIsLoadingMore(false);
+            if (runId === request.runId) {
+                setGenerating(false);
+                setIsLoadingMore(false);
+            }
+        }
+    };
+
+    const closeStockBreakdown = () => {
+        breakdownAbortController.current?.abort();
+        breakdownAbortController.current = null;
+        setBreakdownTarget(null);
+        setStockBreakdown(null);
+        setBreakdownError('');
+        setBreakdownLoading(false);
+    };
+
+    const openStockBreakdown = async (product) => {
+        if (!appliedReportFilters || appliedReportFilters.locationId) return;
+
+        breakdownAbortController.current?.abort();
+        const target = {
+            productId: product.productId,
+            productName: product.productName,
+            reportQuantity: product.qtyBalance ?? product.reportQuantity,
+            reportTransitQuantity: product.inTransitQuantity ?? product.reportTransitQuantity ?? 0
+        };
+
+        setBreakdownTarget(target);
+        setBreakdownError('');
+        setStockBreakdown(null);
+        setBreakdownLoading(true);
+        const controller = new AbortController();
+        breakdownAbortController.current = controller;
+
+        try {
+            const params = {
+                projectId: appliedReportFilters.projectId,
+                productId: product.productId
+            };
+            if (appliedReportFilters.endDate) params.endDate = appliedReportFilters.endDate;
+            const response = await apiClient.get('/ReportingApi/product-report-stock-breakdown', {
+                params,
+                signal: controller.signal
+            });
+            if (!response.data.success || !response.data.data) {
+                throw new Error(response.data.message || 'Failed to load stock breakdown');
+            }
+            if (controller.signal.aborted) return;
+            setStockBreakdown(response.data.data);
+        } catch (err) {
+            if (controller.signal.aborted) return;
+            setBreakdownError(
+                err.response?.data?.message || err.message || 'Failed to load stock breakdown'
+            );
+        } finally {
+            if (!controller.signal.aborted) setBreakdownLoading(false);
         }
     };
 
@@ -222,6 +307,33 @@ const ProductReport = () => {
 
     // Apply sorting to filtered products
     const { sortedItems: sortedProducts, requestSort, getSortDirection } = useSortableData(filteredProducts);
+    const totalBalanceQuantity = !hasMoreData && allProducts.length >= totalRecords
+        ? allProducts.reduce((sum, product) => sum + (product.qtyBalance || 0), 0)
+        : totals?.balanceQuantity ?? null;
+    const showStockBreakdownActions = !!appliedReportFilters && !appliedReportFilters.locationId;
+    const breakdownLocations = (() => {
+        if (!stockBreakdown) return [];
+        const rows = new Map((stockBreakdown.locations || []).map(location => [location.locationId, {
+            locationId: location.locationId,
+            locationName: location.locationName,
+            availableQuantity: location.quantity,
+            incomingQuantity: 0
+        }]));
+        for (const route of stockBreakdown.inTransitRoutes || []) {
+            if (route.destinationLocationId == null) continue;
+            const row = rows.get(route.destinationLocationId) || {
+                locationId: route.destinationLocationId,
+                locationName: route.destinationLocationName,
+                availableQuantity: 0,
+                incomingQuantity: 0
+            };
+            row.incomingQuantity += route.quantity;
+            rows.set(route.destinationLocationId, row);
+        }
+        return [...rows.values()].sort((a, b) => a.locationName.localeCompare(b.locationName));
+    })();
+    const tableColumnCount = 1 + Object.values(visibleColumns).filter(Boolean).length +
+        (showStockBreakdownActions ? 1 : 0);
 
     const handleExportCsv = async () => {
         setExportingCsv(true);
@@ -275,7 +387,8 @@ const ProductReport = () => {
                 const totalRow = { product: 'TOTAL' };
                 if (visibleColumns.debitQty) totalRow.debitQty = formatNumber(totals.totalDebitQty);
                 if (visibleColumns.creditQty) totalRow.creditQty = formatNumber(totals.totalCreditQty);
-                if (visibleColumns.balanceQty) totalRow.balanceQty = formatNumber(totals.netQuantity);
+                if (visibleColumns.balanceQty) totalRow.balanceQty = totalBalanceQuantity == null
+                    ? '-' : formatNumber(totalBalanceQuantity);
                 if (visibleColumns.avgRate) totalRow.avgRate = '-';
                 if (visibleColumns.totalDebit) totalRow.totalDebit = formatCurrency(totals.totalDebit || 0);
                 if (visibleColumns.totalCredit) totalRow.totalCredit = formatCurrency(totals.totalCredit || 0);
@@ -338,10 +451,6 @@ const ProductReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-box me-2"></i>Product Stock & Margin Report</h2>
-            </div>
-
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
                     <i className="fas fa-exclamation-circle me-2"></i>{error}
@@ -418,6 +527,7 @@ const ProductReport = () => {
                                         placeholder="Search project..."
                                         required
                                         disabled={generating}
+                                        ariaLabel="Project"
                                     />
                                 </InputGroup>
                             </div>
@@ -444,6 +554,7 @@ const ProductReport = () => {
                                         options={[{ id: null, name: 'All Locations' }, ...locations.map(l => ({ id: l.id, name: l.name }))]}
                                         placeholder="Search location..."
                                         disabled={generating}
+                                        ariaLabel="Location"
                                     />
                                 </InputGroup>
                             </div>
@@ -587,6 +698,10 @@ const ProductReport = () => {
                                 </InputGroup>
                             </div>
                         </div>
+                        <div className="small text-muted px-3 pt-2">
+                            Debit Qty and Credit Qty include stock transfers. Bal Qty is available stock for the selected location or all locations.
+                            Total Debit and Total Credit exclude transfer cost; product receiving charges remain in Total Debit.
+                        </div>
                         <div className="report-table-container">
                             <div className="table-responsive">
                                 <Table bordered striped hover className="table-sm mb-0" id="productReportTable">
@@ -603,26 +718,26 @@ const ProductReport = () => {
                                             {visibleColumns.cogs && <SortableHeader label="COGS" sortKey="cogs" sortDirection={getSortDirection('cogs')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.margin && <SortableHeader label="Margin" sortKey="margin" sortDirection={getSortDirection('margin')} onSort={requestSort} className="currency-column text-end" />}
                                             {visibleColumns.marginPct && <SortableHeader label="Margin %" sortKey="marginPercentage" sortDirection={getSortDirection('marginPercentage')} onSort={requestSort} className="percent-column text-end" />}
+                                            {showStockBreakdownActions && <th className="stock-location-column text-center">Stock locations</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {sortedProducts.length === 0 && allProducts.length > 0 ? (
                                             <tr>
-                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                <td colSpan={tableColumnCount} className="text-center text-muted py-4">
                                                     {searchTerm ? 'No results found for your search' : 'No data available'}
                                                 </td>
                                             </tr>
                                         ) : sortedProducts.length === 0 && allProducts.length === 0 ? (
                                             <tr>
-                                                <td colSpan="11" className="text-center text-muted py-4">
+                                                <td colSpan={tableColumnCount} className="text-center text-muted py-4">
                                                     No data available
                                                 </td>
                                             </tr>
                                         ) : (
                                             sortedProducts.map((product, index) => {
-                                                const isLastEntry = index === sortedProducts.length - 1;
                                                 return (
-                                                    <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                    <tr key={index}>
                                                         <td className="product-column" style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', minWidth: '180px', maxWidth: '300px' }} title={product.productName}>{product.productName}</td>
                                                         {visibleColumns.debitQty && <td className="qty-column text-end">{formatNumber(product.totalDebitQty)}</td>}
                                                         {visibleColumns.creditQty && <td className="qty-column text-end">{formatNumber(product.totalCreditQty)}</td>}
@@ -634,6 +749,20 @@ const ProductReport = () => {
                                                         {visibleColumns.cogs && <td className="currency-column text-end">{formatCurrency(product.cogs || 0)}</td>}
                                                         {visibleColumns.margin && <td className="currency-column text-end">{formatCurrency(product.margin || 0)}</td>}
                                                         {visibleColumns.marginPct && <td className="percent-column text-end">{formatNumber(product.marginPercentage)}%</td>}
+                                                        {showStockBreakdownActions && (
+                                                            <td className="stock-location-column text-center">
+                                                                <Button
+                                                                    variant="outline-primary"
+                                                                    size="sm"
+                                                                    onClick={() => openStockBreakdown(product)}
+                                                                    aria-label={`View stock locations for ${product.productName}`}
+                                                                    title="View available stock by warehouse"
+                                                                >
+                                                                    <i className="fas fa-warehouse me-1" aria-hidden="true"></i>
+                                                                    View
+                                                                </Button>
+                                                            </td>
+                                                        )}
                                                     </tr>
                                                 );
                                             })
@@ -645,7 +774,8 @@ const ProductReport = () => {
                                                 <td className="text-end">TOTAL</td>
                                                 {visibleColumns.debitQty && <td className="qty-column text-end">{formatNumber(totals.totalDebitQty)}</td>}
                                                 {visibleColumns.creditQty && <td className="qty-column text-end">{formatNumber(totals.totalCreditQty)}</td>}
-                                                {visibleColumns.balanceQty && <td className="qty-column text-end">{formatNumber(totals.netQuantity)}</td>}
+                                                {visibleColumns.balanceQty && <td className="qty-column text-end">{totalBalanceQuantity == null
+                                                    ? '-' : formatNumber(totalBalanceQuantity)}</td>}
                                                 {visibleColumns.avgRate && <td className="currency-column text-end">-</td>}
                                                 {visibleColumns.totalDebit && <td className="currency-column text-end">{formatCurrency(totals.totalDebit || 0)}</td>}
                                                 {visibleColumns.totalCredit && <td className="currency-column text-end">{formatCurrency(totals.totalCredit || 0)}</td>}
@@ -653,6 +783,7 @@ const ProductReport = () => {
                                                 {visibleColumns.cogs && <td className="currency-column text-end">{formatCurrency(totals.totalCOGS || 0)}</td>}
                                                 {visibleColumns.margin && <td className="currency-column text-end">{formatCurrency(totals.totalMargin || 0)}</td>}
                                                 {visibleColumns.marginPct && <td className="percent-column text-end">{formatNumber(totals.marginPercentage)}%</td>}
+                                                {showStockBreakdownActions && <td></td>}
                                             </tr>
                                         </tfoot>
                                     )}
@@ -669,6 +800,135 @@ const ProductReport = () => {
                     </Card.Body>
                 </Card>
             )}
+
+            <Modal show={!!breakdownTarget} onHide={closeStockBreakdown} centered size="lg">
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        <i className="fas fa-warehouse me-2" aria-hidden="true"></i>
+                        {breakdownTarget?.productName} - Stock by warehouse
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-muted small mb-3">
+                        Available quantity {appliedReportFilters?.endDate
+                            ? `as of ${appliedReportFilters.endDate}`
+                            : 'across all posted dates'}
+                    </div>
+
+                    {breakdownLoading && (
+                        <div className="text-center py-4" role="status">
+                            <span className="spinner-border text-primary" aria-hidden="true"></span>
+                            <div className="mt-2">Loading stock locations...</div>
+                        </div>
+                    )}
+
+                    {breakdownError && (
+                        <Alert variant="danger">
+                            <i className="fas fa-exclamation-circle me-2" aria-hidden="true"></i>
+                            {breakdownError}
+                            <div className="mt-2">
+                                <Button variant="outline-danger" size="sm" onClick={() => openStockBreakdown(breakdownTarget)}>
+                                    Retry
+                                </Button>
+                            </div>
+                        </Alert>
+                    )}
+
+                    {stockBreakdown && (
+                        <>
+                            {(stockBreakdown.assignmentIssueCount > 0 || stockBreakdown.reconciliationDifference !== 0 || stockBreakdown.transitRouteIssueCount > 0) && (
+                                <Alert variant="warning">
+                                    Some stock movements or transfer routes do not have exactly one warehouse assignment.
+                                    They are shown separately so the displayed totals remain auditable.
+                                </Alert>
+                            )}
+                            {(Number(stockBreakdown.totalQuantity) !== Number(breakdownTarget?.reportQuantity) ||
+                                Number(stockBreakdown.inTransitQuantity || 0) !== Number(breakdownTarget?.reportTransitQuantity || 0)) && (
+                                <Alert variant="warning">
+                                    The current stock position differs from the generated report row.
+                                    Regenerate the report if stock changed after it was loaded.
+                                </Alert>
+                            )}
+                            <div className="table-responsive">
+                                <Table bordered hover size="sm" className="stock-breakdown-table mb-0">
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th>Warehouse</th>
+                                            <th className="text-end">Available quantity</th>
+                                            <th className="text-end">Incoming in transit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {breakdownLocations.map(location => (
+                                            <tr key={location.locationId}>
+                                                <td>{location.locationName}</td>
+                                                <td className={`text-end ${location.availableQuantity < 0 ? 'text-danger' : ''}`}>
+                                                    {formatNumber(location.availableQuantity)}
+                                                </td>
+                                                <td className="text-end">{formatNumber(location.incomingQuantity)}</td>
+                                            </tr>
+                                        ))}
+                                        {stockBreakdown.unassignedQuantity !== 0 && (
+                                            <tr className="table-warning">
+                                                <td>Unassigned / no warehouse</td>
+                                                <td className="text-end">{formatNumber(stockBreakdown.unassignedQuantity)}</td>
+                                                <td></td>
+                                            </tr>
+                                        )}
+                                        {stockBreakdown.ambiguousQuantity !== 0 && (
+                                            <tr className="table-warning">
+                                                <td>Multiple warehouse assignments</td>
+                                                <td className="text-end">{formatNumber(stockBreakdown.ambiguousQuantity)}</td>
+                                                <td></td>
+                                            </tr>
+                                        )}
+                                        {breakdownLocations.length === 0 &&
+                                            stockBreakdown.unassignedQuantity === 0 &&
+                                            stockBreakdown.ambiguousQuantity === 0 && (
+                                                <tr>
+                                                    <td colSpan="3" className="text-center text-muted py-3">
+                                                        No available stock by warehouse
+                                                    </td>
+                                                </tr>
+                                            )}
+                                    </tbody>
+                                    <tfoot className="table-secondary fw-bold">
+                                        <tr>
+                                            <td>Total available</td>
+                                            <td className="text-end">{formatNumber(stockBreakdown.totalQuantity)}</td>
+                                            <td className="text-end">{formatNumber(stockBreakdown.inTransitQuantity)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </Table>
+                            </div>
+                            <div className="mt-3 fw-semibold">
+                                Total stock position: {formatNumber(stockBreakdown.totalStockPosition ??
+                                    (Number(stockBreakdown.totalQuantity) + Number(stockBreakdown.inTransitQuantity || 0)))}
+                            </div>
+                            {(stockBreakdown.inTransitRoutes || []).length > 0 && (
+                                <div className="mt-3">
+                                    <div className="fw-semibold mb-2">Outstanding transfers</div>
+                                    <Table bordered size="sm">
+                                        <thead className="table-light"><tr>
+                                            <th>Transfer</th><th>Route</th><th className="text-end">Quantity</th>
+                                        </tr></thead>
+                                        <tbody>{stockBreakdown.inTransitRoutes.map(route => (
+                                            <tr key={route.dispatchJournalVoucherId}>
+                                                <td>JV #{route.dispatchJournalVoucherId}</td>
+                                                <td>{route.sourceLocationName} → {route.destinationLocationName}</td>
+                                                <td className="text-end">{formatNumber(route.quantity)}</td>
+                                            </tr>
+                                        ))}</tbody>
+                                    </Table>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={closeStockBreakdown}>Close</Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

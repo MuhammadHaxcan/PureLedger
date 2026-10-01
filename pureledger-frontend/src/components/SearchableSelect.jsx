@@ -10,7 +10,11 @@ const SearchableSelect = ({
   required = false,
   size = 'sm',
   onClear,
-  className = ''
+  className = '',
+  ariaLabel,
+  isInvalid = false,
+  autoFocus = false,
+  showAllOptionsOnFocus = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -43,26 +47,6 @@ const SearchableSelect = ({
     return text.includes(searchTerm.toLowerCase());
   });
 
-  // Update search input when value changes externally
-  useEffect(() => {
-    if (selectedOption) {
-      setSearchTerm(displayValue);
-    } else if (!isOpen && value === null) {
-      setSearchTerm('');
-    } else if (!isOpen && value !== null && value !== undefined) {
-      // If value exists but option not found, try to find it again
-      const found = options.find(opt => {
-        const optValue = opt.id !== undefined ? opt.id : opt.value;
-        return optValue === value;
-      });
-      if (found) {
-        setSearchTerm(found.name || found.label || found.text || '');
-      } else {
-        setSearchTerm('');
-      }
-    }
-  }, [value, selectedOption, displayValue, isOpen, options]);
-
   // Handle click outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -83,7 +67,7 @@ const SearchableSelect = ({
     if (isOpen && selectedIndex >= 0 && dropdownRef.current) {
       const selectedElement = dropdownRef.current.querySelector(`[data-index="${selectedIndex}"]`);
       if (selectedElement) {
-        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        selectedElement.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
       }
     }
   }, [selectedIndex, isOpen]);
@@ -105,12 +89,19 @@ const SearchableSelect = ({
   };
 
   const handleInputFocus = () => {
+    const focusTerm = showAllOptionsOnFocus ? '' : displayValue;
+    setSearchTerm(focusTerm);
     setIsOpen(true);
     // Highlight currently selected option
     if (selectedOption) {
-      const index = filteredOptions.findIndex(opt => 
-        (opt.id === value || opt.value === value)
-      );
+      const focusOptions = options.filter(opt => {
+        const text = (opt.name || opt.label || opt.text || '').toLowerCase();
+        return text.includes(focusTerm.toLowerCase());
+      });
+      const index = focusOptions.findIndex(opt => {
+        const optValue = opt.id !== undefined ? opt.id : opt.value;
+        return optValue === value;
+      });
       if (index >= 0) {
         setSelectedIndex(index);
       }
@@ -197,9 +188,12 @@ const SearchableSelect = ({
       <input
         ref={inputRef}
         type="text"
-        className={`form-control form-control-${size} select-search`}
+        className={`form-control form-control-${size} select-search ${isInvalid ? 'is-invalid' : ''}`}
         placeholder={placeholder}
-        value={searchTerm}
+        aria-label={ariaLabel}
+        aria-invalid={isInvalid || undefined}
+        autoFocus={autoFocus}
+        value={isOpen ? searchTerm : displayValue}
         onChange={handleInputChange}
         onFocus={handleInputFocus}
         onKeyDown={handleKeyDown}
@@ -244,7 +238,7 @@ const SearchableSelect = ({
             const optText = option.name || option.label || option.text;
             const isSelected = (optValue === value) || (optValue === null && value === null) || (optValue === '' && (value === null || value === '')) || (selectedIndex === index);
             const isHighlighted = selectedIndex === index;
-            
+
             return (
               <div
                 key={index}

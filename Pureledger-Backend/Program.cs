@@ -7,7 +7,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql.EntityFrameworkCore;
 using PureLedger.Data;
-using PureLedger.Mapping;
 using PureLedger.Repositories;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services;
@@ -20,8 +19,32 @@ using PureLedger.Filters;
 using System.Linq;
 using System.Text;
 using AspNetCoreRateLimit;
+using Serilog;
+using Serilog.Events;
+using PureLedger.Services.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "PureLedger")
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+        .WriteTo.Console(outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] [{CorrelationId}] {SourceContext} {Message:lj}{NewLine}{Exception}")
+        .WriteTo.File(
+            path: "logs/pureledger-.log",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30,
+            shared: true,
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{CorrelationId}] {SourceContext} {Message:lj} {Properties:j}{NewLine}{Exception}");
+});
 
 // Configure Forwarded Headers for nginx reverse proxy (required for HTTPS)
 builder.Services.Configure<ForwardedHeadersOptions>(options => {
@@ -86,10 +109,18 @@ builder.Services.AddControllers()
             // Get remaining errors
             var errors = context.ModelState
                 .Where(x => x.Value?.Errors.Count > 0)
-                .SelectMany(x => x.Value.Errors.Select(e => e.ErrorMessage))
+                .SelectMany(x => x.Value!.Errors.Select(e => e.ErrorMessage))
                 .ToList();
 
-            return new BadRequestObjectResult(new { success = false, errors = errors });
+            var responseFactory = context.HttpContext.RequestServices.GetRequiredService<IApiErrorResponseFactory>();
+            var response = responseFactory.Create(
+                context.HttpContext,
+                StatusCodes.Status400BadRequest,
+                "Please fix the highlighted validation errors and try again.",
+                errors,
+                "VALIDATION_FAILED");
+
+            return new BadRequestObjectResult(response);
         };
     }); // For API controllers
 builder.Services.AddHttpContextAccessor();
@@ -127,6 +158,7 @@ builder.Services.AddCors(options => {
 
         // Configure preflight cache
         builderPolicy.SetPreflightMaxAge(TimeSpan.FromSeconds(preflightMaxAge));
+        builderPolicy.WithExposedHeaders(CorrelationIdMiddleware.HeaderName);
     });
 
     // Also add a default policy for development
@@ -149,6 +181,8 @@ builder.Services.AddCors(options => {
             if (allowCredentials) {
                 builderPolicy.AllowCredentials();
             }
+
+            builderPolicy.WithExposedHeaders(CorrelationIdMiddleware.HeaderName);
         });
     }
 });
@@ -192,6 +226,9 @@ builder.Services.AddAuthentication(options => {
 
 // Register LedgerDbContext directly with connection string from configuration
 builder.Services.AddDbContext<LedgerDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("LedgerDb")),
+    optionsLifetime: ServiceLifetime.Singleton);
+builder.Services.AddDbContextFactory<LedgerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("LedgerDb")));
 
 // Register OldLedgerDbContext for legacy MariaDB database
@@ -226,6 +263,15 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ISharedProcessingService, SharedProcessingService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
+builder.Services.AddScoped<IApplicationLogService, ApplicationLogService>();
+builder.Services.AddScoped<IApiErrorResponseFactory, ApiErrorResponseFactory>();
+builder.Services.AddScoped<IStockTransferService, StockTransferService>();
+builder.Services.AddScoped<IApprovalGuardService, ApprovalGuardService>();
+builder.Services.AddScoped<IApprovalService, ApprovalService>();
+builder.Services.AddScoped<IPaymentReceiptClassifier, PaymentReceiptClassifier>();
+builder.Services.AddSingleton<IPaymentReceiptApprovalCheckpoint, NoOpPaymentReceiptApprovalCheckpoint>();
+builder.Services.AddScoped<IPaymentReceiptService, PaymentReceiptService>();
+builder.Services.AddScoped<ApiErrorResultFilter>();
 
 // Register services
 builder.Services.AddScoped<MetaDataValidationService>();
@@ -234,10 +280,6 @@ builder.Services.AddSingleton<ICacheInvalidationService, CacheInvalidationServic
 
 // Register UnitOfWork - this will create all repositories internally with the same DbContext
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-
-// Register AutoMapper
-builder.Services.AddAutoMapper(typeof(MappingProfile));
-
 
 // Configure API options for global authorization filter
 builder.Services.Configure<MvcOptions>(options => {
@@ -252,6 +294,7 @@ builder.Services.Configure<MvcOptions>(options => {
 
     // Add XSRF token validation for authenticated state-changing requests
     options.Filters.Add(new ValidateXsrfTokenAttribute());
+    options.Filters.AddService<ApiErrorResultFilter>();
 });
 
 builder.Services.AddScoped<IProjectCartageSettingsRepository, ProjectCartageSettingsRepository>();
@@ -263,8 +306,30 @@ var app = builder.Build();
 // Add forwarded headers - MUST be first to properly detect HTTPS from nginx
 app.UseForwardedHeaders();
 
+app.UseMiddleware<CorrelationIdMiddleware>();
+
 // Add global exception handling middleware - must be early in the pipeline
 app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
+
+app.UseMiddleware<RequestBodyCaptureMiddleware>();
+
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+    options.GetLevel = (httpContext, elapsed, ex) =>
+        ex != null || httpContext.Response.StatusCode >= 500
+            ? LogEventLevel.Error
+            : httpContext.Response.StatusCode >= 400
+                ? LogEventLevel.Warning
+                : LogEventLevel.Information;
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("CorrelationId", httpContext.Items["CorrelationId"]?.ToString() ?? httpContext.TraceIdentifier);
+        diagnosticContext.Set("UserId", httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value);
+        diagnosticContext.Set("Username", httpContext.User.Identity?.Name);
+        diagnosticContext.Set("ClientIp", httpContext.Connection.RemoteIpAddress?.ToString());
+    };
+});
 
 if (!app.Environment.IsDevelopment()) {
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.

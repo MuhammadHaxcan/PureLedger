@@ -54,17 +54,15 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<User> AddAsync(User user)
+        public User Add(User user)
         {
             _context.Users.Add(user);
-            await _context.SaveChangesAsync();
             return user;
         }
 
-        public async Task<User> UpdateAsync(User user)
+        public User Update(User user)
         {
             _context.Users.Update(user);
-            await _context.SaveChangesAsync();
             return user;
         }
 
@@ -75,7 +73,6 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
             return true;
         }
 

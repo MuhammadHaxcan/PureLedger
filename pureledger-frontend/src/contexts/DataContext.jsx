@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useCallback } from 'react';
 import apiClient from '../services/api';
+import { normalizeApiError } from '../utils/errorHandler';
 
 const DataContext = createContext();
 
@@ -20,6 +21,23 @@ export function DataProvider({ children }) {
         bookers: false,
     });
 
+    const [dataErrors, setDataErrors] = useState({});
+
+    const setResourceError = useCallback((resource, error, fallbackMessage) => {
+        const normalized = normalizeApiError(error, fallbackMessage);
+        setDataErrors(prev => ({ ...prev, [resource]: normalized }));
+        return normalized;
+    }, []);
+
+    const clearResourceError = useCallback((resource) => {
+        setDataErrors(prev => {
+            if (!prev[resource]) return prev;
+            const next = { ...prev };
+            delete next[resource];
+            return next;
+        });
+    }, []);
+
     // Cache to track what's been loaded
     const [loaded, setLoaded] = useState({
         projects: false,
@@ -38,14 +56,15 @@ export function DataProvider({ children }) {
             if (response.data.success) {
                 setProjects(response.data.data || []);
                 setLoaded(prev => ({ ...prev, projects: true }));
+                clearResourceError('projects');
             }
         } catch (error) {
             console.error('Error loading projects:', error);
-            setProjects([]);
+            setResourceError('projects', error, 'Failed to load projects.');
         } finally {
             setLoadingStates(prev => ({ ...prev, projects: false }));
         }
-    }, [loaded.projects]);
+    }, [clearResourceError, loaded.projects, setResourceError]);
 
     // Load categories only when needed
     const loadCategories = useCallback(async (force = false) => {
@@ -56,14 +75,15 @@ export function DataProvider({ children }) {
             if (response.data.success) {
                 setCategories(response.data.data || []);
                 setLoaded(prev => ({ ...prev, categories: true }));
+                clearResourceError('categories');
             }
         } catch (error) {
             console.error('Error loading categories:', error);
-            setCategories([]);
+            setResourceError('categories', error, 'Failed to load categories.');
         } finally {
             setLoadingStates(prev => ({ ...prev, categories: false }));
         }
-    }, [loaded.categories]);
+    }, [clearResourceError, loaded.categories, setResourceError]);
 
     // Track loaded accounts by project/category combination
     const [loadedAccountsCache, setLoadedAccountsCache] = useState(new Set());
@@ -87,14 +107,15 @@ export function DataProvider({ children }) {
             if (response.data.success) {
                 setAccounts(response.data.data || []);
                 setLoadedAccountsCache(prev => new Set([...prev, cacheKey]));
+                clearResourceError('accounts');
             }
         } catch (error) {
             console.error('Error loading accounts:', error);
-            setAccounts([]);
+            setResourceError('accounts', error, 'Failed to load accounts.');
         } finally {
             setLoadingStates(prev => ({ ...prev, accounts: false }));
         }
-    }, [loadedAccountsCache]);
+    }, [clearResourceError, loadedAccountsCache, setResourceError]);
 
     // Load locations only when needed
     const loadLocations = useCallback(async (force = false) => {
@@ -105,14 +126,15 @@ export function DataProvider({ children }) {
             if (response.data.success) {
                 setLocations(response.data.data || []);
                 setLoaded(prev => ({ ...prev, locations: true }));
+                clearResourceError('locations');
             }
         } catch (error) {
             console.error('Error loading locations:', error);
-            setLocations([]);
+            setResourceError('locations', error, 'Failed to load locations.');
         } finally {
             setLoadingStates(prev => ({ ...prev, locations: false }));
         }
-    }, [loaded.locations]);
+    }, [clearResourceError, loaded.locations, setResourceError]);
 
     // Load bookers only when needed
     const loadBookers = useCallback(async (force = false) => {
@@ -123,14 +145,15 @@ export function DataProvider({ children }) {
             if (response.data.success) {
                 setBookers(response.data.data || []);
                 setLoaded(prev => ({ ...prev, bookers: true }));
+                clearResourceError('bookers');
             }
         } catch (error) {
             console.error('Error loading bookers:', error);
-            setBookers([]);
+            setResourceError('bookers', error, 'Failed to load bookers.');
         } finally {
             setLoadingStates(prev => ({ ...prev, bookers: false }));
         }
-    }, [loaded.bookers]);
+    }, [clearResourceError, loaded.bookers, setResourceError]);
 
     // Load categories by project
     const loadCategoriesByProject = useCallback(async (projectId) => {
@@ -138,14 +161,16 @@ export function DataProvider({ children }) {
         try {
             const response = await apiClient.get(`/HomeApi/categories-by-project/${projectId}`);
             if (response.data.success) {
+                clearResourceError('categoriesByProject');
                 return response.data.data || [];
             }
             return [];
         } catch (error) {
             console.error('Error loading categories by project:', error);
+            setResourceError('categoriesByProject', error, 'Failed to load categories for this project.');
             return [];
         }
-    }, []);
+    }, [clearResourceError, setResourceError]);
 
     // Load accounts by category
     const loadAccountsByCategory = useCallback(async (categoryId) => {
@@ -153,14 +178,16 @@ export function DataProvider({ children }) {
         try {
             const response = await apiClient.get(`/HomeApi/accounts-by-category/${categoryId}`);
             if (response.data.success) {
+                clearResourceError('accountsByCategory');
                 return response.data.data || [];
             }
             return [];
         } catch (error) {
             console.error('Error loading accounts by category:', error);
+            setResourceError('accountsByCategory', error, 'Failed to load accounts for this category.');
             return [];
         }
-    }, []);
+    }, [clearResourceError, setResourceError]);
 
     // Project CRUD functions
     const addProject = async (project) => {
@@ -386,6 +413,8 @@ export function DataProvider({ children }) {
             
             // Loading states
             loadingStates,
+            dataErrors,
+            clearResourceError,
             
             // Load functions (on-demand loading)
             loadProjects,

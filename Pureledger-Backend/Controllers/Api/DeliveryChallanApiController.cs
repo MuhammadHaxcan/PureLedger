@@ -275,6 +275,10 @@ namespace PureLedger.Controllers.Api
                 _logger.LogWarning(ex, "Invalid argument for journal entry {EntryId}", model.JournalEntryId);
                 return NotFound(new { success = false, message = ex.Message });
             }
+            catch (ApprovalConflictException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to create delivery challan entry for journal entry {EntryId}", model.JournalEntryId);
@@ -305,6 +309,10 @@ namespace PureLedger.Controllers.Api
                         results = results.Select(r => new { r.EntryId, r.Success, r.Message })
                     }
                 });
+            }
+            catch (ApprovalConflictException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {
@@ -343,6 +351,10 @@ namespace PureLedger.Controllers.Api
             {
                 _logger.LogWarning(ex, "Invalid argument for cartage processing");
                 return NotFound(new { success = false, message = ex.Message });
+            }
+            catch (ApprovalConflictException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {
@@ -415,6 +427,10 @@ namespace PureLedger.Controllers.Api
                         journalVoucherId = model.JournalVoucherId
                     }
                 });
+            }
+            catch (ApprovalConflictException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
             }
             catch (InvalidOperationException ex)
             {

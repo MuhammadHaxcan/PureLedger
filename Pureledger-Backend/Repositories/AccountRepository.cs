@@ -56,32 +56,22 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync(a => a.AccountId == id);
         }
 
-        public async Task<Account> AddAsync(Account account)
+        public Account Add(Account account)
         {
             _context.Accounts.Add(account);
-            await _context.SaveChangesAsync();
             return account;
         }
 
-        public async Task<Account> UpdateAsync(Account account)
+        public Account Update(Account account)
         {
             _context.Accounts.Update(account);
-            await _context.SaveChangesAsync();
             return account;
         }
 
-        public async Task<bool> DeleteAsync(Account account)
+        public bool Delete(Account account)
         {
-            try
-            {
-                _context.Accounts.Remove(account);
-                await _context.SaveChangesAsync();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            _context.Accounts.Remove(account);
+            return true;
         }
 
         public async Task<object?> GetProductDetailsAsync(int accountId)

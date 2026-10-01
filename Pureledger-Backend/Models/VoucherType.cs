@@ -4,6 +4,7 @@ namespace PureLedger.Models
     {
         JV, // Journal Voucher
         DC, // Delivery Challan
-        INV // Invoice
+        INV, // Invoice
+        PaymentReceipt
     }
 }

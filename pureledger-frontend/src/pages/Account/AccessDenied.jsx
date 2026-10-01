@@ -9,7 +9,14 @@ const AccessDenied = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, navigationMenu } = useAuth();
-    const { canAccessHomeEntry, canAccessHome, canAccessMetaData, canAccessReporting, canAccessProcessDC } = usePermissions();
+    const {
+        canAccessHomeEntry,
+        canAccessHome,
+        canAccessMetaData,
+        canAccessReporting,
+        canAccessProcessDC,
+        canAccessStockTransfers
+    } = usePermissions();
     const [firstAccessibleRoute, setFirstAccessibleRoute] = useState('/home/entry');
 
     useEffect(() => {
@@ -29,11 +36,21 @@ const AccessDenied = () => {
                 setFirstAccessibleRoute('/reporting/single-doc');
             } else if (canAccessProcessDC) {
                 setFirstAccessibleRoute('/delivery/process-dc');
+            } else if (canAccessStockTransfers) {
+                setFirstAccessibleRoute('/stock-transfers');
             } else {
                 setFirstAccessibleRoute('/account/access-denied');
             }
         }
-    }, [navigationMenu, canAccessHomeEntry, canAccessHome, canAccessMetaData, canAccessReporting, canAccessProcessDC]);
+    }, [
+        navigationMenu,
+        canAccessHomeEntry,
+        canAccessHome,
+        canAccessMetaData,
+        canAccessReporting,
+        canAccessProcessDC,
+        canAccessStockTransfers
+    ]);
 
     const attemptedPath = location.state?.from?.pathname || location.pathname;
 

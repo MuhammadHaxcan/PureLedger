@@ -28,7 +28,7 @@ const Bookers = () => {
       if (response.data.success) {
         setBookers(response.data.data);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load bookers');
     } finally {
       setLoading(false);
@@ -49,7 +49,7 @@ const Bookers = () => {
         setFormData({ bookerName: response.data.data.bookerName });
         setShowModal(true);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load booker details');
     }
   };
@@ -128,10 +128,7 @@ const Bookers = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-user-tie me-2"></i>Bookers
-        </h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleCreate}>
           <i className="fas fa-plus me-2"></i>New Booker
         </Button>

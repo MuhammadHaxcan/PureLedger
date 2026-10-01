@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getProjectImageDataUrl } from '../../services/projectImgApi';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const buildVoucherUrl = (voucherId, type) => {
@@ -497,6 +498,7 @@ const UserReport = () => {
                 format: 'a4',
                 title: 'User Report',
                 projectName: selectedProject?.name || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
                 dateRange,
                 generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords || filteredEntries.length}`,
                 columns,
@@ -507,6 +509,8 @@ const UserReport = () => {
                 cellPadding: 2,
                 filename: `UserReport_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingMainPdf(false);
         }
@@ -538,6 +542,7 @@ const UserReport = () => {
                 format: 'a4',
                 title: 'User Report - Account Summary',
                 projectName: selectedProject?.name || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
                 generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
                 rows,
@@ -547,6 +552,8 @@ const UserReport = () => {
                 cellPadding: 2,
                 filename: `UserReportAccountSummary_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingAccountPdf(false);
         }
@@ -578,6 +585,7 @@ const UserReport = () => {
                 format: 'a4',
                 title: 'User Report - Category Summary',
                 projectName: selectedProject?.name || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
                 generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
                 rows,
@@ -587,6 +595,8 @@ const UserReport = () => {
                 cellPadding: 2,
                 filename: `UserReportCategorySummary_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingCategoryPdf(false);
         }
@@ -598,10 +608,6 @@ const UserReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-file-alt me-2"></i>User Report</h2>
-            </div>
-
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
                     <i className="fas fa-exclamation-circle me-2"></i>{error}

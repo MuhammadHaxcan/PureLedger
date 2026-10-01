@@ -31,6 +31,9 @@ namespace PureLedger.Models
         // Property to track if FOR charges are pending
         public bool PendingForCharges { get; set; } = false;
 
+        // Marks the complete JV-native inter-warehouse transfer graph.
+        public bool IsStockTransfer { get; set; } = false;
+
         // Optimistic concurrency token for race condition prevention
         [Timestamp]
         public byte[]? RowVersion { get; set; }

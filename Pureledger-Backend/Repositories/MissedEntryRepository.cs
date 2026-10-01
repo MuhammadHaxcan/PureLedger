@@ -16,10 +16,9 @@ namespace PureLedger.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<MissedEntry> AddAsync(MissedEntry entry)
+        public MissedEntry Add(MissedEntry entry)
         {
-            var result = await _dbContext.MissedEntries.AddAsync(entry);
-            return result.Entity;
+            return _dbContext.MissedEntries.Add(entry).Entity;
         }
 
         public async Task<List<MissedEntry>> GetByCustomerAccountIdAsync(int customerAccountId)

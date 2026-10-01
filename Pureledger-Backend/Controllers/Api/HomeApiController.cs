@@ -23,6 +23,7 @@ namespace PureLedger.Controllers.Api
         private readonly JournalEntryValidationService _journalEntryValidationService;
         private readonly ICurrentUserService _currentUserService;
         private readonly IMemoryCache _cache;
+        private readonly IApprovalService _approvalService;
 
         public HomeApiController(
             JournalEntryService journalService,
@@ -30,13 +31,15 @@ namespace PureLedger.Controllers.Api
             ICurrentUserService currentUserService,
             IMemoryCache cache,
             ILogger<HomeApiController> logger,
-            ISharedProcessingService sharedProcessingService)
+            ISharedProcessingService sharedProcessingService,
+            IApprovalService approvalService)
         {
             _journalService = journalService;
             _journalEntryValidationService = journalEntryValidationService;
             _currentUserService = currentUserService;
             _cache = cache;
             _logger = logger;
+            _approvalService = approvalService;
         }
 
         #endregion
@@ -75,6 +78,26 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue) return Unauthorized(new { success = false, message = "User not authenticated" });
+
+                var approvalResult = await _approvalService.SubmitManualExpenseAsync(
+                    model, editingVoucherId, userId.Value);
+                if (approvalResult != null)
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        status = "PendingApproval",
+                        approvalVoucherId = approvalResult.ApprovalVoucherId,
+                        voucherId = approvalResult.JournalVoucherId,
+                        projectId = approvalResult.ProjectId,
+                        message = "Voucher submitted for approval.",
+                        shouldPrint = false,
+                        printUrl = (string?)null
+                    });
+                }
+
                 if (!editingVoucherId.HasValue)
                 {
                     var validationErrors = await _journalEntryValidationService.ValidateAsync(model);
@@ -97,6 +120,12 @@ namespace PureLedger.Controllers.Api
                     shouldPrint = action == "submit_print",
                     printUrl = action == "submit_print" ? $"/api/reporting/print-voucher/{journalVoucher.JournalVoucherId}?type=JV" : null
                 });
+            }
+            catch (InvalidOperationException ex)
+            {
+                if (ex is ApprovalConflictException)
+                    return Conflict(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -138,6 +167,10 @@ namespace PureLedger.Controllers.Api
                     return NotFound(new { success = false, message = "Voucher not found" });
 
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
             }
             catch (Exception ex)
             {

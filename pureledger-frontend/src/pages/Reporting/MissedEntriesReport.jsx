@@ -8,7 +8,7 @@ import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const MissedEntriesReport = () => {
-    usePageTitle('Missed Entries');
+    usePageTitle('Missed Entries', 'Missed Entries Report');
     const [projects, setProjects] = useState([]);
     const [allEntries, setAllEntries] = useState([]);
     const [byCustomerData, setByCustomerData] = useState([]);
@@ -569,10 +569,6 @@ const MissedEntriesReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-exclamation-circle me-2"></i>Missed Entries Report</h2>
-            </div>
-
             <Card className="shadow mb-4">
                 <Card.Header className="py-3 d-flex justify-content-between align-items-center">
                     <h6 className="m-0 font-weight-bold text-primary">

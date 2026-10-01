@@ -25,10 +25,6 @@ namespace PureLedger.Models {
         // Mark as nullable
         public virtual Category? CartageTransporterCategory { get; set; }
 
-        // Store image as base64 encoded string in database (like Signature model)
-        [Column(TypeName = "text")]
-        public string? ProjectImage { get; set; }
-
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext) {
             // At least one of ForExpenseCategoryId or CartageTransporterCategoryId must be set
             if (!ForExpenseCategoryId.HasValue && !CartageTransporterCategoryId.HasValue) {

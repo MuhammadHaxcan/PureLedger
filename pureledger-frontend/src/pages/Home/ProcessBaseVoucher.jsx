@@ -6,7 +6,6 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ProcessBaseVoucher = () => {
-    usePageTitle('Process Base Voucher');
     const { id } = useParams();
     const navigate = useNavigate();
     
@@ -27,6 +26,11 @@ const ProcessBaseVoucher = () => {
     const [derivedEntryDate, setDerivedEntryDate] = useState(new Date().toISOString().split('T')[0]);
     const [creditDays, setCreditDays] = useState(0);
     const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+
+    usePageTitle(
+        'Process Base Voucher',
+        voucherData ? `Process Base Voucher JV-${voucherData.baseVoucherId}` : 'Process Base Voucher'
+    );
 
     // Calculate due date from entry date + credit days
     useEffect(() => {
@@ -645,10 +649,7 @@ const ProcessBaseVoucher = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2>
-                    <i className="fas fa-cogs me-2"></i>Process Base Voucher JV-{voucherData.baseVoucherId}
-                </h2>
+            <div className="d-flex justify-content-end align-items-center mb-3">
                 <Link to="/home/base-vouchers" className="btn btn-secondary">
                     <i className="fas fa-arrow-left me-1"></i> Back to Base Vouchers
                 </Link>

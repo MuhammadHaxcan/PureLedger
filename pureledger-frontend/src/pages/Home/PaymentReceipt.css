@@ -1,0 +1,91 @@
+.payment-receipt-form .payment-receipt-grid {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+
+.payment-receipt-form .payment-receipt-grid th,
+.payment-receipt-form .payment-receipt-grid td {
+    vertical-align: middle;
+    padding-right: 0.45rem;
+    padding-left: 0.45rem;
+}
+
+.payment-receipt-form .payment-receipt-table-wrap {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+}
+
+.payment-receipt-form .payment-receipt-grid .category-column {
+    width: 12%;
+}
+
+.payment-receipt-form .payment-receipt-grid .account-column {
+    width: 13%;
+}
+
+.payment-receipt-form .payment-receipt-grid .description-column {
+    width: 15%;
+}
+
+.payment-receipt-form .payment-receipt-grid .instrument-column {
+    width: 12%;
+}
+
+.payment-receipt-form .payment-receipt-grid .reference-column {
+    width: 13%;
+}
+
+.payment-receipt-form .payment-receipt-grid .date-column {
+    width: 12%;
+}
+
+.payment-receipt-form .payment-receipt-grid .money-column {
+    width: 9%;
+}
+
+.payment-receipt-form .payment-receipt-grid .delete-column {
+    width: 5%;
+    text-align: center;
+}
+
+.payment-receipt-form .payment-receipt-grid .form-control,
+.payment-receipt-form .payment-receipt-grid .form-select,
+.payment-receipt-form .payment-receipt-grid .searchable-select-container {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.payment-receipt-form .payment-receipt-grid th {
+    line-height: 1.2;
+    white-space: normal;
+}
+
+.payment-receipt-form .payment-receipt-grid tr.duplicate-warning > td {
+    background-color: var(--warning-soft);
+}
+
+.payment-receipt-form .payment-receipt-grid tbody tr.duplicate-warning:hover > td {
+    background-color: color-mix(in srgb, var(--warning-soft) 82%, var(--text-primary) 18%);
+}
+
+.payment-receipt-form .field-error {
+    color: var(--bs-danger);
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.payment-receipt-form .payment-receipt-grid tfoot td {
+    vertical-align: middle;
+}
+
+@media (max-width: 1199.98px) {
+    .payment-receipt-form .payment-receipt-table-wrap {
+        overflow-x: auto !important;
+    }
+
+    .payment-receipt-form .payment-receipt-grid {
+        min-width: 1050px;
+    }
+}

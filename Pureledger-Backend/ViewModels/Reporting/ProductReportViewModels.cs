@@ -46,9 +46,10 @@ namespace PureLedger.ViewModels.Reporting
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public decimal Balance { get; set; }  // TotalDebit - TotalCredit
-        public int TotalDebitQty { get; set; }
-        public int TotalCreditQty { get; set; }
-        public int NetQuantity { get; set; }
+        public int TotalDebitQty { get; set; } // Current-period physical stock in, including transfer receipts/returns
+        public int TotalCreditQty { get; set; } // Current-period physical stock out, including transfer dispatches
+        public int NetQuantity { get; set; } // TotalDebitQty - TotalCreditQty
+        public int BalanceQuantity { get; set; } // Sum of available stock across filtered products
         public decimal TotalCOGS { get; set; }
         public decimal TotalMargin { get; set; }
         public decimal MarginPercentage { get; set; }
@@ -68,17 +69,74 @@ namespace PureLedger.ViewModels.Reporting
         public decimal PreviousAvgRate { get; set; }
         public bool HasPreviousBalance { get; set; }
 
-        // Current period data (within date range)
+        // Current period quantity includes transfers; monetary debit/credit excludes
+        // transfer base postings but includes product receiving charges.
         public int TotalDebitQty { get; set; }
         public int TotalCreditQty { get; set; }
         public int QtyBalance { get; set; }
         public decimal AverageRate { get; set; }
+        public decimal InventoryValue { get; set; }
+        public int PhysicalOutwardQuantity { get; set; }
+        public int TransferOutwardQuantity { get; set; }
+        public int TransferInwardQuantity { get; set; }
+        public int InTransitQuantity { get; set; }
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public decimal Balance { get; set; }  // TotalDebit - TotalCredit
         public decimal COGS { get; set; }
         public decimal Margin { get; set; }
         public decimal MarginPercentage { get; set; }
+    }
+
+    public class ProductStockBreakdownViewModel
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public DateOnly? AsOfDate { get; set; }
+        public int TotalQuantity { get; set; }
+        public int InTransitQuantity { get; set; }
+        public int TotalStockPosition { get; set; }
+        public int TransitRouteIssueCount { get; set; }
+        public int UnassignedQuantity { get; set; }
+        public int AmbiguousQuantity { get; set; }
+        public int ReconciliationDifference { get; set; }
+        public int AssignmentIssueCount { get; set; }
+        public List<ProductStockLocationViewModel> Locations { get; set; } = new();
+        public List<ProductTransitRouteViewModel> InTransitRoutes { get; set; } = new();
+    }
+
+    public class ProductTransitRouteViewModel
+    {
+        public int DispatchJournalVoucherId { get; set; }
+        public DateOnly DispatchDate { get; set; }
+        public int? SourceLocationId { get; set; }
+        public string SourceLocationName { get; set; } = string.Empty;
+        public int? DestinationLocationId { get; set; }
+        public string DestinationLocationName { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public bool HasRouteIssue { get; set; }
+    }
+
+    public class ProductTransitMovementDto : ProductTransitRouteViewModel
+    {
+        public int ProductId { get; set; }
+    }
+
+    public class ProductStockLocationViewModel
+    {
+        public int LocationId { get; set; }
+        public string LocationName { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+    }
+
+    public class ProductStockLocationMovementDto
+    {
+        public int JournalEntryId { get; set; }
+        public int? LocationId { get; set; }
+        public string? LocationName { get; set; }
+        public int Quantity { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
     }
 
     /// <summary>

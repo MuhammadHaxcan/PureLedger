@@ -323,10 +323,10 @@ namespace PureLedger.Controllers.Api {
 
             // Define controller structure with icons
             var controllerDefinitions = new Dictionary<string, (string title, string icon, string[] actions)> {
-                ["Home"] = ("Home", "fas fa-home", new[] { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" }),
+                ["Home"] = ("Home", "fas fa-home", new[] { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes", "PendingApprovals" }),
                 ["MetaData"] = ("Meta Data", "fas fa-database", new[] { "Projects", "Categories", "Accounts", "Locations", "Bookers" }),
                 ["Reporting"] = ("Reporting", "fas fa-chart-bar", new[] { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" }),
-                ["DeliveryChallan"] = ("Delivery Challan", "fas fa-truck", new[] { "ProcessDC" })
+                ["DeliveryChallan"] = ("Delivery Challan", "fas fa-truck", new[] { "ProcessDC", "StockTransfers" })
             };
 
             foreach (var kvp in controllerDefinitions) {
@@ -428,7 +428,8 @@ namespace PureLedger.Controllers.Api {
                     ["VoucherEntry"] = "fas fa-file-invoice",
                     ["ModifiedEntries"] = "fas fa-history",
                     ["BaseVouchers"] = "fas fa-layer-group",
-                    ["Recipes"] = "fas fa-book-open"
+                    ["Recipes"] = "fas fa-book-open",
+                    ["PendingApprovals"] = "fas fa-clipboard-check"
                 },
                 ["MetaData"] = new Dictionary<string, string> {
                     ["Projects"] = "fas fa-project-diagram",
@@ -447,7 +448,8 @@ namespace PureLedger.Controllers.Api {
                     ["OldMasterReport"] = "fas fa-history"
                 },
                 ["DeliveryChallan"] = new Dictionary<string, string> {
-                    ["ProcessDC"] = "fas fa-truck-loading"
+                    ["ProcessDC"] = "fas fa-truck-loading",
+                    ["StockTransfers"] = "fas fa-exchange-alt"
                 }
             };
 

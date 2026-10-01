@@ -7,12 +7,14 @@ import SortableHeader from '../../components/SortableHeader';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import useSortableData from '../../hooks/useSortableData';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getProjectImageDataUrl } from '../../services/projectImgApi';
 
 const AccountReport = () => {
     usePageTitle('Account Report');
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);
     const [accounts, setAccounts] = useState([]);
+    const [bookers, setBookers] = useState([]);
     const [allEntries, setAllEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -23,9 +25,10 @@ const AccountReport = () => {
     const [formData, setFormData] = useState({
         projectId: null,
         categoryId: null,
-        accountId: null
+        accountId: null,
+        bookerId: null
     });
-    const [currentPage, setCurrentPage] = useState(0);
+    const [appliedBookerId, setAppliedBookerId] = useState(null);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
@@ -46,6 +49,7 @@ const AccountReport = () => {
 
     useEffect(() => {
         loadInitData();
+        loadBookers();
     }, []);
 
     useEffect(() => {
@@ -84,6 +88,17 @@ const AccountReport = () => {
         }
     };
 
+    const loadBookers = async () => {
+        try {
+            const response = await apiClient.get('/ReportingApi/bookers');
+            if (response.data.success) {
+                setBookers(response.data.data || []);
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to load bookers');
+        }
+    };
+
     const loadCategoriesByProject = async (projectId) => {
         try {
             const response = await apiClient.get(`/ReportingApi/categories-by-project/${projectId}`);
@@ -91,6 +106,7 @@ const AccountReport = () => {
                 setCategories(response.data.data || []);
             }
         } catch (err) {
+            console.error('Error loading categories:', err);
         }
     };
 
@@ -101,6 +117,7 @@ const AccountReport = () => {
                 setAccounts(response.data.data || []);
             }
         } catch (err) {
+            console.error('Error loading accounts:', err);
         }
     };
 
@@ -114,7 +131,6 @@ const AccountReport = () => {
             setGenerating(true);
             setAllEntries([]);
             setSearchTerm('');
-            setCurrentPage(0);
         } else {
             setIsLoadingMore(true);
         }
@@ -126,6 +142,7 @@ const AccountReport = () => {
                 projectId: formData.projectId.toString(),
                 categoryId: formData.categoryId ? formData.categoryId.toString() : null,
                 accountId: formData.accountId ? formData.accountId.toString() : null,
+                bookerId: formData.bookerId ? formData.bookerId.toString() : null,
                 page: page,
                 pageSize: pageSize
             };
@@ -140,11 +157,11 @@ const AccountReport = () => {
                     setAllEntries(prev => [...prev, ...entries]);
                 } else {
                     setAllEntries(entries);
+                    setAppliedBookerId(formData.bookerId);
                 }
 
                 setHasMoreData(data.hasMoreData || false);
                 setTotalRecords(data.totalRecords || entries.length);
-                setCurrentPage(page + 1);
 
                 // Auto-load next page if there's more data
                 if (data.hasMoreData) {
@@ -223,6 +240,11 @@ const AccountReport = () => {
         try {
             const selectedProject = projects.find(p => p.id === formData.projectId);
             const selectedCategory = categories.find(c => c.id === formData.categoryId);
+            const selectedBooker = bookers.find(b => Number(b.id) === Number(appliedBookerId));
+            const subtitle = [
+                selectedCategory ? `Category: ${selectedCategory.name}` : null,
+                selectedBooker ? `Booker: ${selectedBooker.name}` : null
+            ].filter(Boolean).join(' | ') || null;
 
             const rows = sortedEntries.map(entry => {
                 const balance = entry.netBalance || ((entry.totalDebit || 0) - (entry.totalCredit || 0));
@@ -259,16 +281,19 @@ const AccountReport = () => {
                 format: 'a4',
                 title: 'Account Report',
                 projectName: selectedProject?.name || 'All Projects',
-                subtitle: selectedCategory ? `Category: ${selectedCategory.name}` : null,
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
+                subtitle,
                 generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`,
                 columns,
                 rows,
                 rowsPerPage: 20,
-                startY: selectedCategory ? 46 : 40,
+                startY: subtitle ? 46 : 40,
                 fontSize: 9,
                 cellPadding: 2,
                 filename: `AccountReport_${new Date().toISOString().split('T')[0]}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingPdf(false);
         }
@@ -287,10 +312,6 @@ const AccountReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-chart-pie me-2"></i>Account Report</h2>
-            </div>
-
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
                     <i className="fas fa-exclamation-circle me-2"></i>{error}
@@ -344,6 +365,19 @@ const AccountReport = () => {
                                         options={[{ id: null, name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
                                         placeholder="Search account..."
                                         disabled={!formData.categoryId || generating}
+                                    />
+                                </InputGroup>
+                            </div>
+                            <div className="col-md-3 mb-3">
+                                <Form.Label>Booker/Salesperson</Form.Label>
+                                <InputGroup>
+                                    <InputGroup.Text><i className="fas fa-user-tag"></i></InputGroup.Text>
+                                    <SearchableSelect
+                                        value={formData.bookerId}
+                                        onChange={(value) => setFormData({ ...formData, bookerId: value ? parseInt(value) : null })}
+                                        options={[{ id: null, name: 'All Bookers' }, ...bookers.map(b => ({ id: b.id, name: b.name }))]}
+                                        placeholder="Search booker..."
+                                        disabled={generating}
                                     />
                                 </InputGroup>
                             </div>

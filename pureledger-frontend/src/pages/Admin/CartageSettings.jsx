@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
-import apiClient, { fileToBase64, validateImageFile, base64ToBlobUrl } from '../../services/api';
+import apiClient from '../../services/api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const CartageSettings = () => {
-  usePageTitle('Cartage Settings');
+  usePageTitle('Cartage Settings', 'Project Cartage Settings');
   const navigate = useNavigate();
   const isSubmittingRef = useRef(false);
   const [loading, setLoading] = useState(false);
@@ -20,12 +20,8 @@ const CartageSettings = () => {
     id: null,
     projectId: null,
     forExpenseCategoryId: null,
-    cartageTransporterCategoryId: null,
-    projectImage: null
+    cartageTransporterCategoryId: null
   });
-  
-  const [projectImageFile, setProjectImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     loadInitialData();
@@ -45,14 +41,8 @@ const CartageSettings = () => {
             id: response.data.data.id || null,
             projectId: response.data.data.projectId,
             forExpenseCategoryId: response.data.data.forExpenseCategoryId || null,
-            cartageTransporterCategoryId: response.data.data.cartageTransporterCategoryId || null,
-            projectImage: response.data.data.projectImage || null
+            cartageTransporterCategoryId: response.data.data.cartageTransporterCategoryId || null
           });
-          
-          // Load image preview if exists (now as base64)
-          if (response.data.data.projectImage) {
-            setImagePreview(response.data.data.projectImage);
-          }
         }
       }
     } catch (error) {
@@ -71,7 +61,6 @@ const CartageSettings = () => {
         forExpenseCategoryId: null,
         cartageTransporterCategoryId: null
       }));
-      setImagePreview(null);
       return;
     }
 
@@ -93,16 +82,8 @@ const CartageSettings = () => {
           id: settings.id || null,
           projectId: settings.projectId,
           forExpenseCategoryId: settings.forExpenseCategoryId || null,
-          cartageTransporterCategoryId: settings.cartageTransporterCategoryId || null,
-          projectImage: settings.projectImage || null // Now stores base64 string
+          cartageTransporterCategoryId: settings.cartageTransporterCategoryId || null
         }));
-        
-        // Load image preview (now as base64)
-        if (settings.projectImage) {
-          setImagePreview(settings.projectImage);
-        } else {
-          setImagePreview(null);
-        }
       } else {
         // No existing settings, reset form
         setFormData(prev => ({
@@ -110,10 +91,8 @@ const CartageSettings = () => {
           id: null,
           projectId: projectId,
           forExpenseCategoryId: null,
-          cartageTransporterCategoryId: null,
-          projectImage: null
+          cartageTransporterCategoryId: null
         }));
-        setImagePreview(null);
       }
     } catch (error) {
       console.error('Error loading project data:', error);
@@ -134,30 +113,6 @@ const CartageSettings = () => {
     }));
   };
 
-  const handleImageChange = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate image file
-      const validation = validateImageFile(file, 5); // 5MB max
-      if (!validation.valid) {
-        setError(validation.error);
-        e.target.value = ''; // Clear file input
-        return;
-      }
-
-      setProjectImageFile(file);
-      // Create preview using base64
-      try {
-        const base64 = await fileToBase64(file);
-        setImagePreview(base64);
-      } catch (error) {
-        console.error('Error reading image file:', error);
-        setError('Failed to read image file');
-        e.target.value = '';
-      }
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmittingRef.current) return;
@@ -175,22 +130,6 @@ const CartageSettings = () => {
     setLoading(true);
 
     try {
-      // Convert image to base64 if a new file was selected
-      let projectImageBase64 = null;
-      
-      if (projectImageFile) {
-        // Convert file to base64 data URL (includes data: prefix)
-        projectImageBase64 = await fileToBase64(projectImageFile);
-      } else if (formData.projectImage) {
-        // Use existing image (already in base64 format, may or may not have data: prefix)
-        projectImageBase64 = formData.projectImage;
-        // Ensure it has data URL prefix if it doesn't
-        if (!projectImageBase64.startsWith('data:')) {
-          projectImageBase64 = `data:image/png;base64,${projectImageBase64}`;
-        }
-      }
-
-      // Send as JSON with base64 image (full data URL)
       const toNumberOrNull = (value) => {
         if (value === null || value === undefined || value === '') {
           return null;
@@ -213,8 +152,7 @@ const CartageSettings = () => {
         id: formData.id ?? 0,
         projectId: Number(formData.projectId),
         forExpenseCategoryId: forExpenseCategoryId,
-        cartageTransporterCategoryId: cartageTransporterCategoryId,
-        projectImageBase64: projectImageBase64 ?? null
+        cartageTransporterCategoryId: cartageTransporterCategoryId
       };
 
       const response = await apiClient.post('/AdminApi/project-cartage-settings', submitData);
@@ -252,10 +190,6 @@ const CartageSettings = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2><i className="fas fa-cog me-2"></i>Project Cartage Settings</h2>
-      </div>
-
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           <i className="fas fa-exclamation-circle me-2"></i>
@@ -282,7 +216,6 @@ const CartageSettings = () => {
         <Card.Body>
           <Form onSubmit={handleSubmit} id="cartage-settings-form">
             <input type="hidden" name="Id" value={formData.id || ''} />
-            <input type="hidden" name="ProjectImage" value={formData.projectImage || ''} />
 
             <div className="mb-3">
               <Form.Label>Project <span className="text-danger">*</span></Form.Label>
@@ -329,29 +262,6 @@ const CartageSettings = () => {
                   onClear={() => setFormData(prev => ({ ...prev, cartageTransporterCategoryId: null }))}
                 />
               </div>
-            </div>
-
-            <div className="mb-3">
-              <Form.Label>Project Image</Form.Label>
-              <div className="input-group">
-                <span className="input-group-text"><i className="fas fa-image"></i></span>
-                <Form.Control
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  disabled={loading}
-                />
-              </div>
-              {imagePreview && (
-                <div className="mt-2">
-                  <img
-                    src={imagePreview}
-                    className="img-thumbnail"
-                    style={{ maxHeight: '200px' }}
-                    alt="Project preview"
-                  />
-                </div>
-              )}
             </div>
 
             <div className="d-flex justify-content-between mt-4">

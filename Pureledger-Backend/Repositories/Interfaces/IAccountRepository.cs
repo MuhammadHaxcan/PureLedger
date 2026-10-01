@@ -9,9 +9,9 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<Account>> GetEnabledByCategoryIdAsync(int categoryId);
         Task<Account?> GetByIdAsync(int id);
         Task<Account?> GetByIdWithDetailsAsync(int id);
-        Task<Account> AddAsync(Account account);
-        Task<Account> UpdateAsync(Account account);
-        Task<bool> DeleteAsync(Account account);
+        Account Add(Account account);
+        Account Update(Account account);
+        bool Delete(Account account);
         Task<object?> GetProductDetailsAsync(int accountId);
         Task<List<Account>> GetAllAsync();
         Task<Account?> GetByIdWithCategoryAsync(int id);

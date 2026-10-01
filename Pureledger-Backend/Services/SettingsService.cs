@@ -20,6 +20,7 @@ namespace PureLedger.Services
         public async Task SetSettingAsync(string key, string value)
         {
             await _unitOfWork.AppSettings.SetValueAsync(key, value);
+            await _unitOfWork.SaveChangesAsync();
         }
     }
 }

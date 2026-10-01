@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import apiClient from '../../services/api';
 import '../../App.css';
@@ -89,8 +89,6 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     fetchActiveSignature();
   }, []);
 
-  if (!voucherData) return null;
-
   const isDC = voucherType === 'DC';
   const isInv = voucherType === 'INV';
   const isJV = voucherType === 'JV';
@@ -107,13 +105,10 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     return Math.abs(entry.lineTotal || 0);
   };
 
-  const invoiceEntries = useMemo(() => {
-    return voucherData.entries?.filter(e => e.quantity > 0) || [];
-  }, [voucherData.entries]);
+  const invoiceEntries = voucherData?.entries?.filter(e => e.quantity > 0) || [];
+  const invoiceTotal = invoiceEntries.reduce((sum, entry) => sum + calculateEntryAmount(entry), 0);
 
-  const invoiceTotal = useMemo(() => {
-    return invoiceEntries.reduce((sum, entry) => sum + calculateEntryAmount(entry), 0);
-  }, [invoiceEntries]);
+  if (!voucherData) return null;
 
   const shouldHideAccountName = (entry) => {
     if (voucherType !== 'JV') return false;
@@ -128,6 +123,14 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     if (shouldHideAccountName(entry)) return '';
     return entry.accountName ?? entry.AccountName ?? '';
   };
+
+  const journalEntries = voucherData.entries || [];
+  const displayedJournalEntries = isJV && ['debit', 'credit'].includes(normalizedFilter)
+    ? [
+        ...journalEntries.filter(entry => !shouldHideAccountName(entry)),
+        ...journalEntries.filter(shouldHideAccountName),
+      ]
+    : journalEntries;
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -474,7 +477,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                   </tr>
                 </thead>
                 <tbody>
-                  {voucherData.entries?.map((entry, index) => (
+                  {displayedJournalEntries.map((entry, index) => (
                     <tr key={index}>
                       <td>{getDisplayAccountName(entry)}</td>
                       <td>{entry.description || ''}</td>

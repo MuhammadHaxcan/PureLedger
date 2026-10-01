@@ -28,25 +28,16 @@ public class ProjectCartageSettingsRepository : IProjectCartageSettingsRepositor
 
         if (existing != null)
         {
-            // Update existing record with all properties including ProjectImage
             existing.ForExpenseCategoryId = settings.ForExpenseCategoryId;
             existing.CartageTransporterCategoryId = settings.CartageTransporterCategoryId;
 
-            // Update the image if a new one is provided (base64 string)
-            if (!string.IsNullOrEmpty(settings.ProjectImage))
-            {
-                existing.ProjectImage = settings.ProjectImage;
-            }
-
             _dbContext.ProjectCartageSettings.Update(existing);
-            await _dbContext.SaveChangesAsync();
             return existing;
         }
         else
         {
             // Add new record with all properties
             _dbContext.ProjectCartageSettings.Add(settings);
-            await _dbContext.SaveChangesAsync();
             return settings;
         }
     }

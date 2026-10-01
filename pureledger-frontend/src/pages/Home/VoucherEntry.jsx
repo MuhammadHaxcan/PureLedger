@@ -1,22 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { Modal, Form, Button, Alert, InputGroup } from 'react-bootstrap';
+import { Modal, Form, Button, Alert, Badge, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import ConfirmModal from '../../components/ConfirmModal';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import paymentReceiptVoucherApi from '../../services/paymentReceiptVoucherApi';
+import { usePermissions } from '../../hooks/usePermissions';
+import { normalizePaymentInstrumentType, paymentInstrumentLabel } from '../../constants/paymentInstruments';
 
 const VoucherEntry = () => {
-    usePageTitle('Voucher Entry');
+    usePageTitle('Voucher Entry', 'Voucher Entry & Summary');
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { canAccessReporting } = usePermissions();
     
     // Ref to prevent duplicate submissions
     const isSubmittingRef = useRef(false);
     
     const [voucherId, setVoucherId] = useState(searchParams.get('jvId') || '');
     const [voucher, setVoucher] = useState(null);
+    const [paymentReceiptData, setPaymentReceiptData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -75,12 +80,18 @@ const VoucherEntry = () => {
         setLoading(true);
         setError('');
         setSuccess('');
+        setPaymentReceiptData(null);
         setHasSearched(true);
 
         try {
             const response = await apiClient.get(`/HomeApi/voucher/${id}`);
             if (response.data.success) {
-                setVoucher(response.data.voucher);
+                const loadedVoucher = response.data.voucher;
+                setVoucher(loadedVoucher);
+                if (loadedVoucher.hasPaymentReceiptDetails && loadedVoucher.isPaymentReceipt) {
+                    const paymentReceiptResponse = await paymentReceiptVoucherApi.getPostedVoucher(id);
+                    setPaymentReceiptData(paymentReceiptResponse.data?.data ?? paymentReceiptResponse.data);
+                }
                 setSuccess('Voucher loaded successfully');
             } else {
                 setError(response.data.message || 'Failed to load voucher');
@@ -89,6 +100,7 @@ const VoucherEntry = () => {
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load voucher');
             setVoucher(null);
+            setPaymentReceiptData(null);
         } finally {
             setLoading(false);
         }
@@ -106,6 +118,8 @@ const VoucherEntry = () => {
             minimumFractionDigits: 2
         }).format(value);
     };
+
+    const formatDate = value => value ? String(value).slice(0, 10) : 'N/A';
 
     const handleEditEntry = async (entry) => {
         console.log('handleEditEntry called with entry:', entry);
@@ -278,15 +292,28 @@ const VoucherEntry = () => {
     };
 
     const handleEditVoucher = () => {
+        if (voucher?.isPaymentReceipt && voucher?.hasPaymentReceiptDetails) {
+            navigate(`/home/payment-and-receipt?voucherId=${voucher.journalVoucherId}`);
+            return;
+        }
+        if (voucher?.isStockTransferGenerated || voucher?.isStockTransfer) {
+            navigate(`/stock-transfers?transferId=${voucher.journalVoucherId}`);
+            return;
+        }
         navigate(`/home/entry?voucherId=${voucherId}`);
     };
 
+    const isStockTransferVoucher = Boolean(
+        voucher?.isStockTransferGenerated || voucher?.isStockTransfer
+    );
+    const isManualExpenseVoucher = Boolean(voucher?.isManualExpenseVoucher);
+    const isPaymentReceiptVoucher = Boolean(voucher?.hasPaymentReceiptDetails && voucher?.isPaymentReceipt);
+    const showIndividualEntryActions = !isStockTransferVoucher && !isManualExpenseVoucher && !isPaymentReceiptVoucher;
+
+    const paymentReceiptIntegrityError = voucher?.hasPaymentReceiptDetails && !voucher?.isPaymentReceipt;
+
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2><i className="fas fa-file-invoice me-2"></i>Voucher Entry & Summary</h2>
-            </div>
-
             {success && (
                 <div className="alert alert-success alert-dismissible fade show" role="alert">
                     <i className="fas fa-check-circle me-2"></i>{success}
@@ -355,17 +382,154 @@ const VoucherEntry = () => {
                 </div>
             )}
 
-            {voucher && (
+            {paymentReceiptIntegrityError && (
+                <Alert variant="danger">
+                    <i className="fas fa-shield-alt me-2"></i>
+                    <strong>Payment &amp; Receipt integrity error.</strong>{' '}
+                    {voucher.paymentReceiptIntegrityError || 'This voucher has partial instrument linkage and cannot be edited through any voucher flow.'}
+                </Alert>
+            )}
+
+            {isPaymentReceiptVoucher && paymentReceiptData && (
+                <div className="card shadow mb-3">
+                    <div className="card-header py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <h6 className="m-0 font-weight-bold text-primary">
+                            <i className="fas fa-list me-2"></i>Voucher Summary - JV-{voucher.journalVoucherId}
+                        </h6>
+                        <div className="d-flex flex-wrap align-items-center gap-2">
+                            <Badge bg="info">P&amp;R Voucher</Badge>
+                            {canAccessReporting && paymentReceiptData.isCompleted && !paymentReceiptData.pendingApprovalId && (
+                                <a
+                                    className="btn btn-outline-primary btn-sm"
+                                    href={`/reporting/print-voucher?voucherId=${voucher.journalVoucherId}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    <i className="fas fa-print me-1"></i>Print P&amp;R
+                                </a>
+                            )}
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={handleEditVoucher}
+                                disabled={!paymentReceiptData.isCompleted || Boolean(paymentReceiptData.pendingApprovalId)}
+                                title={paymentReceiptData.pendingApprovalId
+                                    ? `Revision pending as approval #${paymentReceiptData.pendingApprovalId}`
+                                    : ''}
+                            >
+                                <i className="fas fa-edit me-1"></i>Edit Entire Voucher
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="card-body">
+                        {paymentReceiptData.pendingApprovalId && (
+                            <Alert variant="warning">
+                                <Badge bg="warning" text="dark" className="me-2">P&amp;R Voucher</Badge>
+                                This complete voucher is pending as approval #{paymentReceiptData.pendingApprovalId} and is read-only until that request is decided.
+                            </Alert>
+                        )}
+
+                        <div className="row mb-2">
+                            <div className="col-md-4">
+                                <strong>Project:</strong> {paymentReceiptData.projectName || voucher.projectName || 'N/A'}
+                            </div>
+                            <div className="col-md-4">
+                                <strong>Entry Date:</strong> {formatDate(paymentReceiptData.entryDate || voucher.entryDate)}
+                            </div>
+                            <div className="col-md-4">
+                                <strong>Status:</strong> {paymentReceiptData.isCompleted ? 'Completed' : 'Pending Approval'}
+                            </div>
+                        </div>
+                        <div className="row mb-3">
+                            <div className="col-md-12">
+                                <strong>Total Debit:</strong> {formatCurrency(paymentReceiptData.totalDebit || 0)}
+                                <span className="mx-2">|</span>
+                                <strong>Total Credit:</strong> {formatCurrency(paymentReceiptData.totalCredit || 0)}
+                            </div>
+                        </div>
+
+                        <div className="table-responsive">
+                            <table className="table table-bordered table-hover">
+                                <thead className="table-primary">
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Account</th>
+                                        <th>Description</th>
+                                        <th>Instrument</th>
+                                        <th>Reference/Cheque No.</th>
+                                        <th>Instrument Date</th>
+                                        <th className="text-end">Debit</th>
+                                        <th className="text-end">Credit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(paymentReceiptData.entries || []).map((entry, index) => {
+                                        const instrumentType = normalizePaymentInstrumentType(entry.instrumentType);
+                                        return (
+                                            <tr key={entry.originalJournalEntryId ?? entry.journalEntryId ?? index}>
+                                                <td>{entry.categoryName || 'N/A'}</td>
+                                                <td>{entry.accountName || 'N/A'}</td>
+                                                <td style={{ overflowWrap: 'anywhere', whiteSpace: 'normal', maxWidth: 260 }}>{entry.description || '-'}</td>
+                                                <td>{paymentInstrumentLabel(instrumentType)}</td>
+                                                <td>{instrumentType === 'Cash' ? '' : entry.referenceNumber || ''}</td>
+                                                <td>{instrumentType === 'Cash' ? '' : formatDate(entry.instrumentDate)}</td>
+                                                <td className="text-end">{formatCurrency(entry.debit || 0)}</td>
+                                                <td className="text-end">{formatCurrency(entry.credit || 0)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot className="table-secondary">
+                                    <tr className="fw-bold">
+                                        <td colSpan={6} className="text-end">Total</td>
+                                        <td className="text-end">{formatCurrency(paymentReceiptData.totalDebit || 0)}</td>
+                                        <td className="text-end">{formatCurrency(paymentReceiptData.totalCredit || 0)}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {voucher && !voucher.hasPaymentReceiptDetails && (
                 <div className="card shadow mb-3">
                     <div className="card-header py-2 d-flex justify-content-between align-items-center">
                         <h6 className="m-0 font-weight-bold text-primary">
                             <i className="fas fa-list me-2"></i>Voucher Summary - JV-{voucher.journalVoucherId}
                         </h6>
-                        <Button variant="primary" size="sm" onClick={handleEditVoucher}>
-                            <i className="fas fa-edit me-1"></i> Edit Entire Voucher
+                        <Button
+                            variant={isStockTransferVoucher ? 'outline-primary' : 'primary'}
+                            size="sm"
+                            onClick={handleEditVoucher}
+                            disabled={isManualExpenseVoucher && voucher.isPendingApproval}
+                        >
+                            <i className={`fas ${isStockTransferVoucher ? 'fa-truck-loading' : 'fa-edit'} me-1`}></i>
+                            {isStockTransferVoucher ? 'Open Stock Transfer' : 'Edit Entire Voucher'}
                         </Button>
                     </div>
                     <div className="card-body">
+                        {isStockTransferVoucher && (
+                            <Alert variant="info">
+                                <i className="fas fa-lock me-2"></i>
+                                This voucher belongs to a stock-transfer graph and is read-only here.
+                                Use <Link className="alert-link ms-1" to={`/stock-transfers?transferId=${voucher.journalVoucherId}`}>
+                                    Stock Transfers
+                                </Link> to receive, close short, delete the complete transfer, or edit its pending dispatch.
+                            </Alert>
+                        )}
+                        {isManualExpenseVoucher && (
+                            <Alert variant="warning">
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                    <Badge bg="warning" text="dark">Expense Voucher</Badge>
+                                    <span>
+                                        {voucher.isPendingApproval
+                                            ? 'This complete Expense voucher already has a pending revision and is read-only until that request is decided.'
+                                            : 'Expense vouchers are edited only as a complete balanced voucher. Individual line edit and delete actions are unavailable.'}
+                                    </span>
+                                </div>
+                            </Alert>
+                        )}
                         <div className="row mb-2">
                             <div className="col-md-3">
                                 <strong>Project:</strong> {voucher.projectName || 'N/A'}
@@ -379,7 +543,11 @@ const VoucherEntry = () => {
                         </div>
                         <div className="row mb-3">
                             <div className="col-md-12">
-                                <strong>Total Debit:</strong> {formatCurrency(voucher.totalDebit || 0)} <span className="ms-2 me-2">|</span> <strong>Total Credit:</strong> {formatCurrency(voucher.totalCredit || 0)}
+                                <strong>Total Debit:</strong> {formatCurrency(voucher.totalDebit || 0)}
+                                <span className="ms-2 me-2">|</span>
+                                <strong>Total Credit:</strong> {formatCurrency(voucher.totalCredit || 0)}
+                                <span className="ms-2 me-2">|</span>
+                                <strong>Balance:</strong> {formatCurrency(Number(voucher.totalDebit || 0) - Number(voucher.totalCredit || 0))}
                             </div>
                         </div>
 
@@ -390,12 +558,12 @@ const VoucherEntry = () => {
                                         <th>Category</th>
                                         <th>Account</th>
                                         <th>Description</th>
-                                        <th>Quantity</th>
-                                        <th>Rate</th>
-                                        <th>Discount</th>
+                                        {!isManualExpenseVoucher && <th>Quantity</th>}
+                                        {!isManualExpenseVoucher && <th>Rate</th>}
+                                        {!isManualExpenseVoucher && <th>Discount</th>}
                                         <th>Debit</th>
                                         <th>Credit</th>
-                                        <th className="text-center">Actions</th>
+                                        {showIndividualEntryActions && <th className="text-center">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -407,41 +575,57 @@ const VoucherEntry = () => {
                                                     <td>{entry.categoryName || 'N/A'}</td>
                                                     <td>{entry.accountName || 'N/A'}</td>
                                                     <td style={{ wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '200px' }}>{entry.description || '-'}</td>
-                                                    <td>{entry.quantity || 0}</td>
-                                                    <td>{formatCurrency(entry.rate || 0)}</td>
-                                                    <td>{formatCurrency(entry.discount || 0)}</td>
+                                                    {!isManualExpenseVoucher && <td>{entry.quantity || 0}</td>}
+                                                    {!isManualExpenseVoucher && <td>{formatCurrency(entry.rate || 0)}</td>}
+                                                    {!isManualExpenseVoucher && <td>{formatCurrency(entry.discount || 0)}</td>}
                                                     <td>{formatCurrency(entry.debit || 0)}</td>
                                                     <td>{formatCurrency(entry.credit || 0)}</td>
-                                                    <td className="text-center">
-                                                        <Button
-                                                            variant="outline-primary"
-                                                            size="sm"
-                                                            className="me-1"
-                                                            onClick={() => handleEditEntry(entry)}
-                                                            title="Edit Entry"
-                                                            disabled={!entryId}
-                                                        >
-                                                            <i className="fas fa-edit"></i>
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline-danger"
-                                                            size="sm"
-                                                            onClick={() => handleDeleteEntry(entry)}
-                                                            title="Delete Entry"
-                                                            disabled={!entryId}
-                                                        >
-                                                            <i className="fas fa-trash"></i>
-                                                        </Button>
-                                                    </td>
+                                                    {showIndividualEntryActions && (
+                                                        <td className="text-center">
+                                                            <Button
+                                                                variant="outline-primary"
+                                                                size="sm"
+                                                                className="me-1"
+                                                                onClick={() => handleEditEntry(entry)}
+                                                                title="Edit Entry"
+                                                                disabled={!entryId}
+                                                            >
+                                                                <i className="fas fa-edit"></i>
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline-danger"
+                                                                size="sm"
+                                                                onClick={() => handleDeleteEntry(entry)}
+                                                                title="Delete Entry"
+                                                                disabled={!entryId}
+                                                            >
+                                                                <i className="fas fa-trash"></i>
+                                                            </Button>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             );
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan="9" className="text-center">No entries found</td>
+                                            <td
+                                                colSpan={isManualExpenseVoucher ? 5 : (showIndividualEntryActions ? 9 : 8)}
+                                                className="text-center"
+                                            >
+                                                No entries found
+                                            </td>
                                         </tr>
                                     )}
                                 </tbody>
+                                {isManualExpenseVoucher && voucher.entries?.length > 0 && (
+                                    <tfoot className="table-secondary">
+                                        <tr className="fw-bold">
+                                            <td colSpan={3} className="text-end">Total</td>
+                                            <td>{formatCurrency(voucher.totalDebit || 0)}</td>
+                                            <td>{formatCurrency(voucher.totalCredit || 0)}</td>
+                                        </tr>
+                                    </tfoot>
+                                )}
                             </table>
                         </div>
                     </div>

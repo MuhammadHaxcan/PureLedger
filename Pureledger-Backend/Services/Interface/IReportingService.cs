@@ -20,6 +20,7 @@ namespace PureLedger.Services.Interface
         Task<IEnumerable<Category>> GetCategoriesByProjectForUserAsync(int projectId, int userId);
         Task<(bool Exists, bool IsBaseVoucher)> ValidateVoucherAsync(int journalVoucherId, VoucherType type);
         Task<ProductReportViewModel> GetProductReportAsync(ProductReportRequest request);
+        Task<ProductStockBreakdownViewModel> GetProductStockBreakdownAsync(int projectId, int productId, DateOnly? endDate);
         Task<List<Location>> GetAllLocationsAsync();
         Task<ProjectCartageSettings?> GetProjectCartageSettingsAsync(int projectId);
         Task<JournalVoucher?> GetJournalVoucherAsync(int journalVoucherId);

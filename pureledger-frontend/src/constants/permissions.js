@@ -8,6 +8,8 @@ export const PERMISSIONS = {
     HOME_BASE_VOUCHERS: 'Home.BaseVouchers',
     HOME_MODIFIED_ENTRIES: 'Home.ModifiedEntries',
     HOME_RECIPES: 'Home.Recipes',
+    HOME_PENDING_APPROVALS: 'Home.PendingApprovals',
+    HOME_PAYMENT_AND_RECEIPT: 'Home.PaymentAndReceipt',
     
     // MetaData Controller Pages
     METADATA_PROJECTS: 'MetaData.Projects',
@@ -25,9 +27,11 @@ export const PERMISSIONS = {
     REPORTING_PRODUCT_REPORT: 'Reporting.ProductReport',
     REPORTING_MISSED_ENTRIES: 'Reporting.MissedEntriesReport',
     REPORTING_OLD_MASTER_REPORT: 'Reporting.OldMasterReport',
+    REPORTING_PAYMENT_RECEIPT_VOUCHER_REPORT: 'Reporting.PaymentReceiptVoucherReport',
     
     // Delivery Controller Pages
     DELIVERY_PROCESS_DC: 'DeliveryChallan.ProcessDC',
+    DELIVERY_STOCK_TRANSFERS: 'DeliveryChallan.StockTransfers',
     
     // Admin Pages (typically admin-only)
     ADMIN_USERS: 'Admin.Users',
@@ -43,6 +47,9 @@ export const PAGE_PERMISSIONS = {
     '/home/base-vouchers': [PERMISSIONS.HOME_BASE_VOUCHERS],
     '/home/modified-entries': [PERMISSIONS.HOME_MODIFIED_ENTRIES],
     '/home/recipes': [PERMISSIONS.HOME_RECIPES],
+    '/home/payment-and-receipt': [PERMISSIONS.HOME_PAYMENT_AND_RECEIPT],
+    '/approvals/pending': [PERMISSIONS.HOME_PENDING_APPROVALS],
+    '/approvals/pending/payment-receipt/edit': [PERMISSIONS.HOME_PENDING_APPROVALS],
     
     // MetaData routes
     '/metadata/projects': [PERMISSIONS.METADATA_PROJECTS],
@@ -60,9 +67,11 @@ export const PAGE_PERMISSIONS = {
     '/reporting/product-report': [PERMISSIONS.REPORTING_PRODUCT_REPORT],
     '/reporting/missed-entries': [PERMISSIONS.REPORTING_MISSED_ENTRIES],
     '/reporting/old-master-report': [PERMISSIONS.REPORTING_OLD_MASTER_REPORT],
+    '/reporting/payment-receipt-vouchers': [PERMISSIONS.REPORTING_PAYMENT_RECEIPT_VOUCHER_REPORT],
     
     // Delivery routes
     '/delivery/process-dc': [PERMISSIONS.DELIVERY_PROCESS_DC],
+    '/stock-transfers': [PERMISSIONS.DELIVERY_STOCK_TRANSFERS],
     
     // Admin routes
     '/admin/users': [PERMISSIONS.ADMIN_USERS],

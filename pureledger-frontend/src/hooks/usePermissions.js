@@ -81,6 +81,8 @@ export function usePermissions() {
     const canAccessBaseVouchers = hasPermission(PERMISSIONS.HOME_BASE_VOUCHERS);
     const canAccessModifiedEntries = hasPermission(PERMISSIONS.HOME_MODIFIED_ENTRIES);
     const canAccessRecipes = hasPermission(PERMISSIONS.HOME_RECIPES);
+    const canAccessPendingApprovals = hasPermission(PERMISSIONS.HOME_PENDING_APPROVALS);
+    const canAccessPaymentAndReceipt = hasPermission(PERMISSIONS.HOME_PAYMENT_AND_RECEIPT);
 
     // MetaData page permissions
     const canAccessProjects = hasPermission(PERMISSIONS.METADATA_PROJECTS);
@@ -97,9 +99,12 @@ export function usePermissions() {
     const canAccessUserReport = hasPermission(PERMISSIONS.REPORTING_USER_REPORT);
     const canAccessProductReport = hasPermission(PERMISSIONS.REPORTING_PRODUCT_REPORT);
     const canAccessMissedEntries = hasPermission(PERMISSIONS.REPORTING_MISSED_ENTRIES);
+    const canAccessOldMasterReport = hasPermission(PERMISSIONS.REPORTING_OLD_MASTER_REPORT);
+    const canAccessPaymentReceiptVoucherReport = hasPermission(PERMISSIONS.REPORTING_PAYMENT_RECEIPT_VOUCHER_REPORT);
 
     // Delivery page permissions
     const canAccessProcessDC = hasPermission(PERMISSIONS.DELIVERY_PROCESS_DC);
+    const canAccessStockTransfers = hasPermission(PERMISSIONS.DELIVERY_STOCK_TRANSFERS);
 
     // Admin page permissions
     const canAccessUsers = hasPermission(PERMISSIONS.ADMIN_USERS);
@@ -107,12 +112,14 @@ export function usePermissions() {
     const canAccessEditProfile = hasPermission(PERMISSIONS.ADMIN_EDIT_PROFILE);
 
     // Composite permissions for common use cases
-    const canAccessHome = canAccessHomeEntry || canAccessVoucherEntry || canAccessBaseVouchers || 
-                         canAccessModifiedEntries || canAccessRecipes;
+    const canAccessHome = canAccessHomeEntry || canAccessPaymentAndReceipt || canAccessVoucherEntry || canAccessBaseVouchers ||
+                         canAccessModifiedEntries || canAccessRecipes || canAccessPendingApprovals;
+    const canAccessDelivery = canAccessProcessDC || canAccessStockTransfers;
     const canAccessMetaData = canAccessProjects || canAccessCategories || canAccessAccounts || 
                              canAccessLocations || canAccessBookers;
     const canAccessReporting = canAccessSingleDoc || canAccessAgingReport || canAccessAccountReport || 
-                              canAccessMasterReport || canAccessUserReport || canAccessProductReport || canAccessMissedEntries;
+                              canAccessMasterReport || canAccessUserReport || canAccessProductReport || canAccessMissedEntries ||
+                              canAccessOldMasterReport || canAccessPaymentReceiptVoucherReport;
     const canAccessAdmin = canAccessUsers || canAccessCartageSettings || canAccessEditProfile;
 
     return {
@@ -137,6 +144,8 @@ export function usePermissions() {
         canAccessBaseVouchers,
         canAccessModifiedEntries,
         canAccessRecipes,
+        canAccessPendingApprovals,
+        canAccessPaymentAndReceipt,
         
         // MetaData page permissions
         canAccessProjects,
@@ -153,9 +162,12 @@ export function usePermissions() {
         canAccessUserReport,
         canAccessProductReport,
         canAccessMissedEntries,
+        canAccessOldMasterReport,
+        canAccessPaymentReceiptVoucherReport,
         
         // Delivery page permissions
         canAccessProcessDC,
+        canAccessStockTransfers,
         
         // Admin page permissions
         canAccessUsers,
@@ -164,6 +176,7 @@ export function usePermissions() {
         
         // Composite permissions
         canAccessHome,
+        canAccessDelivery,
         canAccessMetaData,
         canAccessReporting,
         canAccessAdmin,

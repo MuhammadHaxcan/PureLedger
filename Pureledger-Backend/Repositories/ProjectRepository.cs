@@ -59,17 +59,15 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<Project> AddAsync(Project project)
+        public Project Add(Project project)
         {
             _context.Projects.Add(project);
-            await _context.SaveChangesAsync();
             return project;
         }
 
-        public async Task<Project> UpdateAsync(Project project)
+        public Project Update(Project project)
         {
             _context.Projects.Update(project);
-            await _context.SaveChangesAsync();
             return project;
         }
 

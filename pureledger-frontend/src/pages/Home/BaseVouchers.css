@@ -1,0 +1,44 @@
+.base-vouchers-filter-grid {
+    display: grid;
+    grid-template-columns:
+        minmax(150px, 1fr)
+        minmax(175px, 1fr)
+        minmax(175px, 1fr)
+        minmax(180px, 220px)
+        max-content
+        minmax(140px, .7fr);
+    gap: 1rem;
+    align-items: end;
+}
+
+.base-vouchers-filter-field,
+.base-vouchers-filter-action {
+    min-width: 0;
+}
+
+.base-vouchers-project-filter .input-group {
+    flex-wrap: nowrap;
+}
+
+.base-vouchers-filter-check {
+    display: flex;
+    min-height: 31px;
+    align-items: center;
+    white-space: nowrap;
+}
+
+@media (max-width: 1199.98px) {
+    .base-vouchers-filter-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .base-vouchers-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .base-vouchers-filter-check {
+        min-height: auto;
+    }
+}

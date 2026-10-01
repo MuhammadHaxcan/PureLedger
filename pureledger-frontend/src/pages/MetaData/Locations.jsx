@@ -28,7 +28,7 @@ const Locations = () => {
       if (response.data.success) {
         setLocations(response.data.data);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load locations');
     } finally {
       setLoading(false);
@@ -49,7 +49,7 @@ const Locations = () => {
         setFormData({ locationName: response.data.data.locationName });
         setShowModal(true);
       }
-    } catch (error) {
+    } catch {
       setError('Failed to load location details');
     }
   };
@@ -111,10 +111,7 @@ const Locations = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-map-marker-alt me-2"></i>Locations
-        </h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleCreate}>
           <i className="fas fa-plus me-2"></i>New Location
         </Button>

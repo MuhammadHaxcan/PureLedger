@@ -8,8 +8,8 @@ namespace PureLedger.Repositories.Interfaces
         #region Basic CRUD Operations
 
         Task<JournalEntry?> GetByIdWithDetailsAsync(int id);
-        Task<JournalEntry> AddAsync(JournalEntry entry);
-        Task<JournalEntry> UpdateAsync(JournalEntry entry);
+        JournalEntry Add(JournalEntry entry);
+        JournalEntry Update(JournalEntry entry);
         Task<bool> DeleteAsync(int entryId);
 
         #endregion
@@ -132,6 +132,17 @@ namespace PureLedger.Repositories.Interfaces
             int page,
             int pageSize);
 
+        Task<List<ProductStockLocationMovementDto>> GetProductStockLocationMovementsAsync(
+            int projectId,
+            int productId,
+            DateOnly endDate);
+
+        Task<List<ProductTransitMovementDto>> GetProductTransitMovementsAsync(
+            int projectId,
+            DateOnly endDate,
+            int? categoryId = null,
+            int? productId = null);
+
         #endregion
 
         #region Account and Aging Report Queries
@@ -140,6 +151,7 @@ namespace PureLedger.Repositories.Interfaces
             int projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId,
             int page,
             int pageSize);
 

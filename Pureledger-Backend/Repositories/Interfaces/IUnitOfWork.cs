@@ -32,7 +32,12 @@ namespace PureLedger.Repositories.Interfaces
         ISignatureRepository Signatures { get; }
         IAppSettingRepository AppSettings { get; }
 
+        /// <summary>
+        /// Persists all mutations staged by repositories sharing this unit of work.
+        /// Repository mutation methods never save independently.
+        /// </summary>
         Task<int> SaveChangesAsync();
+        Task<bool> IsStockTransferVoucherAsync(int journalVoucherId);
         
         // Add transaction support
         Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
