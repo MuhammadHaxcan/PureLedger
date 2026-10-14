@@ -102,13 +102,18 @@ namespace PureLedger.Services
                     }
                     else if (group == "product")
                     {
-                        // For "product" group, percent and disc are optional
-                        // But rate and qty must be valid
-                        if (entry.Rate <= 0)
-                            errors.Add($"{entryPrefix}Rate must be greater than zero for product accounts.");
+                        // For "product" group, percent and disc are optional.
+                        // Rate cannot be negative (a charge posted against a product, such as cartage or
+                        // freight, legitimately has rate 0). Quantity is mandatory only when the voucher
+                        // has "Require Quantity for Product Accounts" ticked, exactly like the Entry page.
+                        if (entry.Rate < 0)
+                            errors.Add($"{entryPrefix}Rate must be greater than or equal to zero for product accounts.");
 
-                        if (entry.Qty <= 0)
+                        if (model.RequireQuantity && (entry.Qty ?? 0) <= 0)
                             errors.Add($"{entryPrefix}Quantity must be greater than zero for product accounts.");
+
+                        if (entry.Qty < 0)
+                            errors.Add($"{entryPrefix}Quantity cannot be negative.");
 
                         if (entry.Rbp == null)
                             errors.Add($"{entryPrefix}The Rbp must be Y or N");
