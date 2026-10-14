@@ -103,7 +103,7 @@ const PrintOnlyVoucher = () => {
   }
 
   return (
-    <div style={{ 
+    <div className="print-only-voucher" style={{
       minHeight: '100vh', 
       padding: '20px', 
       backgroundColor: '#fff',

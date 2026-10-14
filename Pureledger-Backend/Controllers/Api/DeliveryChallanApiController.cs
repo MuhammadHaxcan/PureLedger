@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using PureLedger.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Models;
@@ -129,6 +130,7 @@ namespace PureLedger.Controllers.Api
                         challan = new
                         {
                             challanDate = deliveryChallan.DCDate,
+                            station = deliveryChallan.Station,
                             locationId = firstEntry?.LocationId,
                             otherRef = firstEntry?.OtherReference
                         }
@@ -256,7 +258,7 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                var dcEntry = await _dcService.CreateSingleDCAsync(model.JournalEntryId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount, model.ForAccountId);
+                var dcEntry = await _dcService.CreateSingleDCAsync(model.JournalEntryId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount, model.ForAccountId, model.Station);
 
                 return Ok(new
                 {
@@ -270,14 +272,14 @@ namespace PureLedger.Controllers.Api
                     }
                 });
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid argument for journal entry {EntryId}", model.JournalEntryId);
-                return NotFound(new { success = false, message = ex.Message });
+                return NotFound(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (ApprovalConflictException ex)
             {
-                return Conflict(new { success = false, message = ex.Message });
+                return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {
@@ -294,7 +296,7 @@ namespace PureLedger.Controllers.Api
 
             try
             {
-                var (deliveryChallanId, results) = await _dcService.ProcessBatchDCAsync(model.JournalVoucherId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount, model.ForAccountId);
+                var (deliveryChallanId, results) = await _dcService.ProcessBatchDCAsync(model.JournalVoucherId, model.DCDate, model.OtherReference, model.LocationId, model.Remarks, model.IncludeForCharges, model.ForAmount, model.ForAccountId, model.Station);
 
                 var successCount = results.Count(r => r.Success);
 
@@ -312,12 +314,12 @@ namespace PureLedger.Controllers.Api
             }
             catch (ApprovalConflictException ex)
             {
-                return Conflict(new { success = false, message = ex.Message });
+                return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid operation for voucher {VoucherId}", model.JournalVoucherId);
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {
@@ -347,19 +349,19 @@ namespace PureLedger.Controllers.Api
                     }
                 });
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid argument for cartage processing");
-                return NotFound(new { success = false, message = ex.Message });
+                return NotFound(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (ApprovalConflictException ex)
             {
-                return Conflict(new { success = false, message = ex.Message });
+                return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid operation for cartage processing");
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {
@@ -430,12 +432,12 @@ namespace PureLedger.Controllers.Api
             }
             catch (ApprovalConflictException ex)
             {
-                return Conflict(new { success = false, message = ex.Message });
+                return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid operation for processing pending FOR charges for voucher {VoucherId}", model.JournalVoucherId);
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {

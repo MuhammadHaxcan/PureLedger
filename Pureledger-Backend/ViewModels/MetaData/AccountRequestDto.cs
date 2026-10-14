@@ -15,6 +15,19 @@ namespace PureLedger.ViewModels.MetaData
         
         [JsonPropertyName("accountGroupId")]
         public int AccountGroupId { get; set; }
+
+        private int? _linkedBookerId;
+
+        [JsonPropertyName("linkedBookerId")]
+        public int? LinkedBookerId
+        {
+            get => _linkedBookerId;
+            set { _linkedBookerId = value; HasLinkedBookerId = true; }
+        }
+
+        // Older clients omit this field; an explicit null removes the assignment.
+        [JsonIgnore]
+        public bool HasLinkedBookerId { get; private set; }
         
         [JsonPropertyName("accountData")]
         public AccountDataDto? AccountData { get; set; }

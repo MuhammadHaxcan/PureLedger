@@ -9,7 +9,7 @@ namespace PureLedger.Backend.Tests;
 public sealed class AccountReportBookerTests
 {
     [Fact]
-    public async Task AccountReport_FiltersEntriesBeforeGroupingAndCountingAccounts()
+    public async Task AccountReport_AssignedAccountsKeepFullBalances()
     {
         var options = new DbContextOptionsBuilder<LedgerDbContext>()
             .UseInMemoryDatabase($"account-report-booker-{Guid.NewGuid():N}")
@@ -23,8 +23,8 @@ public sealed class AccountReportBookerTests
             CategoryId = 10, ProjectId = 1, AccountTypeId = 1, CategoryName = "Customers"
         });
         context.Accounts.AddRange(
-            new Account { AccountId = 100, CategoryId = 10, AccountGroupId = 1, AccountName = "A" },
-            new Account { AccountId = 200, CategoryId = 10, AccountGroupId = 1, AccountName = "B" });
+            new Account { AccountId = 100, CategoryId = 10, AccountGroupId = 1, AccountName = "A", LinkedBookerId = 11 },
+            new Account { AccountId = 200, CategoryId = 10, AccountGroupId = 1, AccountName = "B", LinkedBookerId = 11 });
         AddEntry(context, 1, 100, 11, debit: 100);
         AddEntry(context, 2, 100, 12, credit: 40);
         AddEntry(context, 3, 100, null, debit: 30);
@@ -39,7 +39,7 @@ public sealed class AccountReportBookerTests
         Assert.Equal(2, allCount);
         Assert.Equal(90m, all.Single(x => x.AccountId == "100").NetBalance);
         Assert.Equal(2, bookerCount);
-        Assert.Equal(100m, booker.Single(x => x.AccountId == "100").NetBalance);
+        Assert.Equal(90m, booker.Single(x => x.AccountId == "100").NetBalance);
         Assert.Equal(50m, booker.Single(x => x.AccountId == "200").NetBalance);
         Assert.Equal(2, pagedCount);
         Assert.Single(page);

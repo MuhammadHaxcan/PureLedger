@@ -10,6 +10,10 @@ import { ACCOUNT_GROUP } from '../../constants/accountGroups';
 const Accounts = () => {
   usePageTitle('Accounts');
   const isSubmittingRef = useRef(false);
+  const bookerRequestRef = useRef(0);
+  const [bookers, setBookers] = useState([]);
+  const [bookersReady, setBookersReady] = useState(false);
+  const [bookerError, setBookerError] = useState('');
   const [accounts, setAccounts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -25,6 +29,7 @@ const Accounts = () => {
     projectId: '',
     categoryId: '',
     accountGroupId: '',
+    linkedBookerId: null,
     accountData: {
       accountDataId: null,
       phoneNumber: '',
@@ -59,6 +64,26 @@ const Accounts = () => {
     loadProjects();
     loadAccountGroups();
   }, []);
+
+  const loadBookers = async () => {
+    const request = ++bookerRequestRef.current;
+    setBookersReady(false);
+    setBookerError('');
+    try {
+      const response = await apiClient.get('/MetaDataApi/bookers');
+      if (request !== bookerRequestRef.current) return;
+      if (!response.data.success) throw new Error('Failed to load bookers');
+      setBookers(response.data.data || []);
+      setBookersReady(true);
+    } catch {
+      if (request === bookerRequestRef.current) setBookerError('Could not load bookers. Retry before saving.');
+    }
+  };
+
+  useEffect(() => {
+    if (showModal) loadBookers();
+    return () => { bookerRequestRef.current += 1; };
+  }, [showModal]);
 
   useEffect(() => {
     if (filterProjectId) {
@@ -174,6 +199,7 @@ const Accounts = () => {
       projectId: '',
       categoryId: '',
       accountGroupId: '',
+      linkedBookerId: null,
       accountData: {
         accountDataId: null,
         phoneNumber: '',
@@ -225,6 +251,7 @@ const Accounts = () => {
           projectId: projectId?.toString() || '',
           categoryId: (acc.categoryId || acc.CategoryId)?.toString() || '',
           accountGroupId: (acc.accountGroupId || acc.AccountGroupId)?.toString() || '',
+          linkedBookerId: acc.linkedBookerId ?? null,
           accountData: accountData ? {
             accountDataId: accountData.accountDataId || accountData.AccountDataId || null,
             phoneNumber: accountData.phoneNumber || accountData.PhoneNumber || '',
@@ -309,12 +336,17 @@ const Accounts = () => {
       const selectedGroupId = Number(formData.accountGroupId);
       const isAccountGroup = selectedGroupId === ACCOUNT_GROUP.ACCOUNT;
       const isProductGroup = selectedGroupId === ACCOUNT_GROUP.PRODUCT;
+      if (isAccountGroup && !bookersReady) {
+        setError('Load bookers successfully before saving.');
+        return;
+      }
 
       const accountData = {
         accountId: editingAccount?.accountId || 0,
         accountName: formData.accountName,
         categoryId: parseInt(formData.categoryId),
         accountGroupId: parseInt(formData.accountGroupId),
+        linkedBookerId: isAccountGroup ? formData.linkedBookerId : null,
         accountData: isAccountGroup ? {
           accountDataId: formData.accountData.accountDataId,
           phoneNumber: formData.accountData.phoneNumber || null,
@@ -449,6 +481,7 @@ const Accounts = () => {
                   <th>Account Name</th>
                   <th>Category</th>
                   <th>Account Group</th>
+                  <th>Linked Booker / Salesperson</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -456,13 +489,13 @@ const Accounts = () => {
               <tbody>
                 {!filterProjectId ? (
                   <tr>
-                    <td colSpan="6" className="text-center text-muted">
+                    <td colSpan="7" className="text-center text-muted">
                       Select a project to view accounts
                     </td>
                   </tr>
                 ) : accounts.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center text-muted">
+                    <td colSpan="7" className="text-center text-muted">
                       No accounts found for the selected filters
                     </td>
                   </tr>
@@ -473,6 +506,7 @@ const Accounts = () => {
                       <td>{account.accountName}</td>
                       <td>{account.categoryName || account.categoryId}</td>
                       <td>{account.accountGroupName || account.accountGroupId}</td>
+                      <td>{account.linkedBookerName || '—'}</td>
                       <td>
                         <Badge bg={account.isEnabled ? 'success' : 'secondary'}>
                           {account.isEnabled ? 'Enabled' : 'Disabled'}
@@ -484,6 +518,7 @@ const Accounts = () => {
                           size="sm"
                           className="me-2"
                           onClick={() => handleEdit(account)}
+                          aria-label={`Edit ${account.accountName}`}
                         >
                           <i className="fas fa-edit"></i>
                         </Button>
@@ -523,7 +558,8 @@ const Accounts = () => {
             <Button variant="secondary" onClick={() => setShowModal(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={handleSubmit}>
+            <Button variant="primary" onClick={handleSubmit}
+              disabled={Number(formData.accountGroupId) === ACCOUNT_GROUP.ACCOUNT && !bookersReady}>
               {editingAccount ? 'Update' : 'Create'}
             </Button>
           </>
@@ -611,7 +647,8 @@ const Accounts = () => {
               <SearchableSelect
                 value={formData.accountGroupId ? parseInt(formData.accountGroupId) : null}
                 onChange={(value) => {
-                  setFormData({ ...formData, accountGroupId: value ? value.toString() : '' });
+                  setFormData({ ...formData, accountGroupId: value ? value.toString() : '',
+                    linkedBookerId: Number(value) === ACCOUNT_GROUP.ACCOUNT ? formData.linkedBookerId : null });
                 }}
                 options={selectableAccountGroups.map(ag => ({ id: ag.id, name: ag.name }))}
                 placeholder="Select Account Group"
@@ -633,9 +670,26 @@ const Accounts = () => {
           </Form.Group>
 
           {/* Account Data Fields (visible when Account Group is "Account") */}
-          {accountGroups.find(ag => ag.id.toString() === formData.accountGroupId)?.name?.toLowerCase().trim() === 'account' && (
+          {Number(formData.accountGroupId) === ACCOUNT_GROUP.ACCOUNT && (
             <div className="mb-3">
               <h5 className="mt-4 mb-3">Account Details</h5>
+              <Form.Group className="mb-3">
+                <Form.Label>Linked Booker / Salesperson</Form.Label>
+                <SearchableSelect
+                  ariaLabel="Linked Booker / Salesperson"
+                  value={formData.linkedBookerId}
+                  onChange={value => setFormData(prev => ({ ...prev, linkedBookerId: value ? Number(value) : null }))}
+                  options={[{ id: null, name: 'Unassigned' }, ...bookers
+                    .filter(b => b.isEnabled || b.bookerID === editingAccount?.linkedBookerId)
+                    .map(b => ({ id: b.bookerID, name: `${b.bookerName}${b.isEnabled ? '' : ' (Disabled)'}` }))]}
+                  placeholder="Search linked booker..."
+                  disabled={!bookersReady || loading}
+                />
+                <Form.Text>Account Report uses this assignment to filter accounts and their full balances.</Form.Text>
+                {bookerError && <Alert variant="danger" className="mt-2">
+                  {bookerError} <Button variant="outline-danger" size="sm" onClick={loadBookers}>Retry bookers</Button>
+                </Alert>}
+              </Form.Group>
               <Form.Group className="mb-3">
                 <Form.Label>Phone Number</Form.Label>
                 <Form.Control

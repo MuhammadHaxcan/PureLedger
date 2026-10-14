@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { todayString } from '../../utils/businessDate';
+import { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -28,24 +29,14 @@ const AccountReport = () => {
         accountId: null,
         bookerId: null
     });
-    const [appliedBookerId, setAppliedBookerId] = useState(null);
+    const [appliedFilters, setAppliedFilters] = useState(null);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [totalRecords, setTotalRecords] = useState(0);
     const pageSize = 2500;
 
-    const observer = useRef();
-    const lastEntryElementRef = useCallback(node => {
-        if (isLoadingMore || generating) return;
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMoreData) {
-                const nextPage = Math.floor(allEntries.length / pageSize);
-                generateReport(nextPage, true);
-            }
-        });
-        if (node) observer.current.observe(node);
-    }, [isLoadingMore, generating, hasMoreData, allEntries.length, pageSize]);
+    const reportRequestRef = useRef(0);
+    useEffect(() => () => { reportRequestRef.current += 1; }, []);
 
     useEffect(() => {
         loadInitData();
@@ -121,70 +112,67 @@ const AccountReport = () => {
         }
     };
 
-    const generateReport = async (page = 0, append = false) => {
+    const generateReport = async () => {
         if (!formData.projectId) {
             setError('Please select a project');
             return;
         }
-
-        if (page === 0) {
-            setGenerating(true);
-            setAllEntries([]);
-            setSearchTerm('');
-        } else {
-            setIsLoadingMore(true);
-        }
-
+        const request = ++reportRequestRef.current;
+        const filters = { ...formData,
+            projectName: projects.find(p => p.id === formData.projectId)?.name,
+            categoryName: categories.find(c => c.id === formData.categoryId)?.name,
+            bookerName: bookers.find(b => Number(b.id) === Number(formData.bookerId))?.name
+        };
+        setGenerating(true);
+        setAllEntries([]);
+        setAppliedFilters(null);
+        setHasMoreData(false);
+        setTotalRecords(0);
+        setSearchTerm('');
         setError('');
-
         try {
             const params = {
-                projectId: formData.projectId.toString(),
-                categoryId: formData.categoryId ? formData.categoryId.toString() : null,
-                accountId: formData.accountId ? formData.accountId.toString() : null,
-                bookerId: formData.bookerId ? formData.bookerId.toString() : null,
-                page: page,
-                pageSize: pageSize
+                projectId: filters.projectId.toString(),
+                categoryId: filters.categoryId ? filters.categoryId.toString() : null,
+                accountId: filters.accountId ? filters.accountId.toString() : null,
+                bookerId: filters.bookerId ? filters.bookerId.toString() : null,
+                pageSize
             };
-
-            const response = await apiClient.get('/ReportingApi/account-report', { params });
-            
-            if (response.data.success && response.data.data) {
+            let page = 0;
+            let entries = [];
+            while (true) {
+                setIsLoadingMore(page > 0);
+                const response = await apiClient.get('/ReportingApi/account-report', { params: { ...params, page } });
+                if (request !== reportRequestRef.current) return;
+                if (!response.data.success || !response.data.data) throw new Error('Failed to generate report');
                 const data = response.data.data;
-                const entries = data.entries || [];
-
-                if (append) {
-                    setAllEntries(prev => [...prev, ...entries]);
-                } else {
-                    setAllEntries(entries);
-                    setAppliedBookerId(formData.bookerId);
-                }
-
+                const nextEntries = data.entries || [];
+                if (data.hasMoreData && nextEntries.length === 0) throw new Error('Incomplete report page. Generate the report again.');
+                entries = [...entries, ...nextEntries];
+                setAllEntries(entries);
+                setAppliedFilters(filters);
                 setHasMoreData(data.hasMoreData || false);
-                setTotalRecords(data.totalRecords || entries.length);
-
-                // Auto-load next page if there's more data
-                if (data.hasMoreData) {
-                    setTimeout(() => {
-                        generateReport(page + 1, true);
-                    }, 100);
-                }
-            } else {
-                setError('Failed to generate report');
-                setHasMoreData(false);
+                setTotalRecords(data.totalRecords ?? entries.length);
+                if (!data.hasMoreData) break;
+                page += 1;
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to generate report');
+            if (request !== reportRequestRef.current) return;
+            setError(err.response?.data?.message || err.message || 'Failed to generate report');
+            // Partial results must not be exported as a complete report.
+            setAllEntries([]);
             setHasMoreData(false);
         } finally {
-            setGenerating(false);
-            setIsLoadingMore(false);
+            if (request === reportRequestRef.current) {
+                setGenerating(false);
+                setIsLoadingMore(false);
+            }
         }
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        generateReport(0, false);
+        generateReport();
     };
 
 
@@ -229,7 +217,7 @@ const AccountReport = () => {
                 Credit: (entry.totalCredit || 0).toFixed(2),
                 Balance: ((entry.totalDebit || 0) - (entry.totalCredit || 0)).toFixed(2)
             }));
-            await exportToCsvAsync(csvData, `AccountReport_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `AccountReport_${todayString()}.csv`);
         } finally {
             setExportingCsv(false);
         }
@@ -238,12 +226,9 @@ const AccountReport = () => {
     const handleExportPdf = async () => {
         setExportingPdf(true);
         try {
-            const selectedProject = projects.find(p => p.id === formData.projectId);
-            const selectedCategory = categories.find(c => c.id === formData.categoryId);
-            const selectedBooker = bookers.find(b => Number(b.id) === Number(appliedBookerId));
             const subtitle = [
-                selectedCategory ? `Category: ${selectedCategory.name}` : null,
-                selectedBooker ? `Booker: ${selectedBooker.name}` : null
+                appliedFilters?.categoryName ? `Category: ${appliedFilters.categoryName}` : null,
+                appliedFilters?.bookerName ? `Booker: ${appliedFilters.bookerName}` : null
             ].filter(Boolean).join(' | ') || null;
 
             const rows = sortedEntries.map(entry => {
@@ -280,8 +265,8 @@ const AccountReport = () => {
                 orientation: 'portrait',
                 format: 'a4',
                 title: 'Account Report',
-                projectName: selectedProject?.name || 'All Projects',
-                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
+                projectName: appliedFilters?.projectName || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(appliedFilters?.projectId),
                 subtitle,
                 generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`,
                 columns,
@@ -290,7 +275,7 @@ const AccountReport = () => {
                 startY: subtitle ? 46 : 40,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `AccountReport_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `AccountReport_${todayString()}.pdf`
             });
         } catch (err) {
             setError(err.response?.data?.message || err.message || 'Failed to export PDF');
@@ -380,6 +365,7 @@ const AccountReport = () => {
                                         disabled={generating}
                                     />
                                 </InputGroup>
+                                <Form.Text>Filters accounts by their assigned salesperson, including their full balances.</Form.Text>
                             </div>
                             <div className="col-md-3 mb-3">
                                 <Form.Label>&nbsp;</Form.Label>
@@ -387,7 +373,7 @@ const AccountReport = () => {
                                     <Button 
                                         type="submit" 
                                         variant="primary" 
-                                        disabled={generating || isLoadingMore || hasMoreData || !formData.projectId}
+                                        disabled={generating || isLoadingMore || !formData.projectId}
                                         title={!formData.projectId ? 'Please select a project' : ''}
                                     >
                                         {generating ? (
@@ -408,6 +394,9 @@ const AccountReport = () => {
                 </Card.Body>
             </Card>
 
+            {appliedFilters && !generating && !error && allEntries.length === 0 && (
+                <Alert variant="info">No accounts match the selected report filters.</Alert>
+            )}
             {allEntries.length > 0 && (
                 <Card className="shadow mb-4">
                     <Card.Header className="py-3 d-flex justify-content-between align-items-center">
@@ -505,9 +494,9 @@ const AccountReport = () => {
                                     ) : (
                                         sortedEntries.map((entry, index) => {
                                             const formattedId = entry.accountId ? `${entry.projectId}-${entry.categoryId}-${entry.accountId}` : '-';
-                                            const isLastEntry = index === sortedEntries.length - 1;
+
                                             return (
-                                                <tr key={index} ref={isLastEntry ? lastEntryElementRef : null}>
+                                                <tr key={index}>
                                                     <td>{formattedId}</td>
                                                     <td>{entry.categoryName || '-'}</td>
                                                     <td>{entry.accountName || '-'}</td>

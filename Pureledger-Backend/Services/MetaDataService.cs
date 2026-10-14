@@ -14,8 +14,6 @@ namespace PureLedger.Services
         private readonly IMemoryCache _cache;
 
         // Cache durations
-        private static readonly TimeSpan StaticDataCacheDuration = TimeSpan.FromHours(1);
-        private static readonly TimeSpan DynamicDataCacheDuration = TimeSpan.FromMinutes(15);
 
         public MetaDataService(
             IUnitOfWork unitOfWork,
@@ -113,11 +111,6 @@ namespace PureLedger.Services
         public async Task<List<Category>> GetAllCategoriesAsync()
         {
             return await _unitOfWork.Categories.GetAllWithDetailsAsync();
-        }
-
-        public async Task<List<Project>> GetAllProjectsForCategoriesAsync()
-        {
-            return await _unitOfWork.Projects.GetAllAsync();
         }
 
         public async Task<List<Project>> GetAllProjectsForCategoriesForUserAsync(int userId)
@@ -267,19 +260,9 @@ namespace PureLedger.Services
             return await _unitOfWork.Accounts.GetByProjectAsync(projectId, categoryId);
         }
 
-        public async Task<List<Category>> GetCategoriesForAccountsAsync()
-        {
-            return await _unitOfWork.Categories.GetAllWithDetailsAsync();
-        }
-
         public async Task<List<AccountGroup>> GetAccountGroupsAsync()
         {
             return await _unitOfWork.AccountGroups.GetAllAsync();
-        }
-
-        public async Task<List<Project>> GetProjectsForAccountsAsync()
-        {
-            return await _unitOfWork.Projects.GetAllAsync();
         }
 
         public async Task<List<Project>> GetProjectsForAccountsForUserAsync(int userId)
@@ -292,24 +275,12 @@ namespace PureLedger.Services
             return await _unitOfWork.Accounts.GetByIdWithDetailsAsync(id);
         }
 
-        public async Task<object> GetAllAccountsWithDetailsAsync()
-        {
-            var accounts = await _unitOfWork.Accounts.GetAllWithDetailsAsync();
-            var categories = await _unitOfWork.Categories.GetAllWithDetailsAsync();
-            var accountGroups = await _unitOfWork.AccountGroups.GetAllAsync();
-            var projects = await _unitOfWork.Projects.GetAllAsync();
-            
-            return new { 
-                Accounts = accounts, 
-                Categories = categories, 
-                AccountGroups = accountGroups, 
-                Projects = projects 
-            };
-        }
-
         public async Task<List<string>> CreateAccountAsync(Account account)
         {
             var errors = new List<string>();
+
+            errors.AddRange(await ValidateLinkedBookerAsync(account));
+            if (errors.Count > 0) return errors;
 
             // Optimized: Use direct database check instead of loading all records
             if (await _unitOfWork.Accounts.ExistsByNameInCategoryAsync(account.AccountName, account.CategoryId))
@@ -375,6 +346,8 @@ namespace PureLedger.Services
             }
 
             var oldCategoryId = existingAccount.CategoryId;
+            errors.AddRange(await ValidateLinkedBookerAsync(account, existingAccount.LinkedBookerId));
+            if (errors.Count > 0) return errors;
             if (existingAccount.AccountGroupId != account.AccountGroupId &&
                 (existingAccount.AccountGroupId == 3 || account.AccountGroupId == 3))
             {
@@ -388,6 +361,7 @@ namespace PureLedger.Services
                 existingAccount.AccountName = account.AccountName;
                 existingAccount.CategoryId = account.CategoryId;
                 existingAccount.AccountGroupId = account.AccountGroupId;
+                existingAccount.LinkedBookerId = account.AccountGroupId == 1 ? account.LinkedBookerId : null;
 
                 var accountGroup = await _unitOfWork.AccountGroups.GetByIdAsync(account.AccountGroupId);
                 if (accountGroup != null)
@@ -496,6 +470,12 @@ namespace PureLedger.Services
                 return (false, new List<int>());
             }
 
+            // A pending approval holds a snapshot of this account; deleting it would leave a request nobody can approve.
+            if ((await _unitOfWork.Accounts.GetPendingApprovalIdsAsync(id)).Any())
+            {
+                return (false, new List<int>());
+            }
+
             // Delete account data and product data if they exist
             if (account.AccountData != null)
             {
@@ -512,6 +492,9 @@ namespace PureLedger.Services
             await _unitOfWork.SaveChangesAsync();
             return (result, new List<int>());
         }
+
+        public Task<List<int>> GetPendingApprovalIdsForAccountAsync(int accountId) =>
+            _unitOfWork.Accounts.GetPendingApprovalIdsAsync(accountId);
 
         public async Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId)
         {
@@ -781,6 +764,11 @@ namespace PureLedger.Services
 
             try
             {
+                if (await _unitOfWork.Accounts.HasLinkedBookerAsync(id))
+                {
+                    errors.Add("This booker is assigned to accounts. Reassign those accounts or disable the booker instead.");
+                    return errors;
+                }
                 var deleted = await _unitOfWork.Bookers.DeleteAsync(id);
                 if (!deleted)
                 {
@@ -800,5 +788,17 @@ namespace PureLedger.Services
             return errors;
         }
         #endregion
+
+        private async Task<List<string>> ValidateLinkedBookerAsync(Account account, int? existingBookerId = null)
+        {
+            if (!account.LinkedBookerId.HasValue) return new();
+            if (account.AccountGroupId != 1)
+                return new() { "Only the Account group can have a linked booker." };
+            var booker = await _unitOfWork.Bookers.GetByIdAsync(account.LinkedBookerId.Value);
+            if (booker == null) return new() { "Select a valid linked booker." };
+            if (!booker.IsEnabled && existingBookerId != booker.BookerID)
+                return new() { "New assignments require an enabled booker." };
+            return new();
+        }
     }
 }

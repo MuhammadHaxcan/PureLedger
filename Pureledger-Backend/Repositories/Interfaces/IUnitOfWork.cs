@@ -41,5 +41,8 @@ namespace PureLedger.Repositories.Interfaces
         
         // Add transaction support
         Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
+
+        /// <summary>Detaches every tracked entity, e.g. before retrying an aborted unit of work.</summary>
+        void ClearTracking();
     }
 }

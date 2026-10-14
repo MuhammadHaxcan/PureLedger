@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Button, Card, Form, Table, InputGroup } from 'react-bootstrap';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -24,7 +25,6 @@ const OldMasterReport = () => {
     const [locations, setLocations] = useState([]);
 
     const [entries, setEntries] = useState([]);
-    const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isAutoLoading, setIsAutoLoading] = useState(false);
@@ -153,7 +153,6 @@ const OldMasterReport = () => {
         if (page === 0) {
             setGenerating(true);
             setEntries([]);
-            setCurrentPage(0);
             setHasMoreData(false);
             setPreviousBalance(0);
             setTotalRecords(0);
@@ -189,7 +188,6 @@ const OldMasterReport = () => {
             const newEntries = data.entries || [];
 
             setEntries(prev => append ? [...prev, ...newEntries] : newEntries);
-            setCurrentPage(page + 1);
             setHasMoreData(data.hasMoreData || false);
 
             if (!append) {
@@ -328,7 +326,7 @@ const OldMasterReport = () => {
                 if (visibleColumns.balance) row['Balance'] = entry.balance || 0;
                 return row;
             });
-            await exportToCsvAsync(csvData, `OldMasterReport_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `OldMasterReport_${todayString()}.csv`);
         } finally {
             setExportingCsv(false);
         }
@@ -391,7 +389,7 @@ const OldMasterReport = () => {
                 startY: 46,
                 fontSize: 8,
                 cellPadding: 2,
-                filename: `OldMasterReport_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `OldMasterReport_${todayString()}.pdf`
             });
         } finally {
             setExportingPdf(false);

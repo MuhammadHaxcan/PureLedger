@@ -61,18 +61,6 @@ namespace PureLedger.Repositories
             return true;
         }
 
-        public async Task<bool> DeleteByCategoryIdAsync(int categoryId)
-        {
-            var userCategories = await _context.UserCategories
-                .Where(uc => uc.CategoryId == categoryId)
-                .ToListAsync();
-
-            if (userCategories.Any())
-                _context.UserCategories.RemoveRange(userCategories);
-
-            return true;
-        }
-
         public async Task<bool> ExistsAsync(int userId, int categoryId)
         {
             return await _context.UserCategories

@@ -21,7 +21,8 @@ public sealed class CreateStockTransferItemRequest
 {
     [Range(1, int.MaxValue)] public int ProductAccountId { get; set; }
     [Range(1, int.MaxValue)] public int Quantity { get; set; }
-    [Range(typeof(decimal), "0", "9999999999.9999")] public decimal? UnitCost { get; set; }
+    // Null uses source carrying cost; an entered price sets destination valuation.
+    [Range(typeof(decimal), "0.0001", "9999999999.9999")] public decimal? UnitCost { get; set; }
 }
 
 public sealed class ReceiveStockTransferRequest

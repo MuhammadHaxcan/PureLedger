@@ -1,4 +1,6 @@
 using PureLedger.Models;
+using PureLedger.Helpers;
+using PureLedger.Exceptions;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels.DeliveryChallan;
@@ -228,7 +230,7 @@ namespace PureLedger.Services
 
         public async Task<DeliveryChallanEntry> CreateSingleDCAsync(
             int journalEntryId, DateOnly dcDate, string? otherReference,
-            int locationId, string? remarks, bool includeForCharges, int forAmount, int? forAccountId = null)
+            int locationId, string? remarks, bool includeForCharges, int forAmount, int? forAccountId = null, string? station = null)
         {
             var sourceEntry = await _unitOfWork.JournalEntries.GetByIdWithDetailsAsync(journalEntryId)
                 ?? throw new InvalidOperationException("Journal entry was not found.");
@@ -245,7 +247,7 @@ namespace PureLedger.Services
                 if (journalEntry.Account?.AccountGroupId != ACCOUNT_GROUP_PRODUCT)
                     throw new InvalidOperationException("Only Product entries can be processed through a Delivery Challan.");
 
-                var deliveryChallan = await CreateDCVoucherInternalAsync(journalEntry.JournalVoucherId, dcDate, otherReference);
+                var deliveryChallan = await CreateDCVoucherInternalAsync(journalEntry.JournalVoucherId, dcDate, otherReference, station);
                 var dcEntry = await CreateDCEntryInternalAsync(deliveryChallan.DeliveryChallanVoucherId, journalEntryId, locationId, remarks, otherReference, dcDate);
 
                 if (includeForCharges && forAmount > 0)
@@ -270,7 +272,7 @@ namespace PureLedger.Services
 
         public async Task<(int deliveryChallanId, List<EntryProcessResult> results)> ProcessBatchDCAsync(
             int journalVoucherId, DateOnly dcDate, string? otherReference,
-            int locationId, string? remarks, bool includeForCharges, int forAmount, int? forAccountId = null)
+            int locationId, string? remarks, bool includeForCharges, int forAmount, int? forAccountId = null, string? station = null)
         {
             await _paymentReceiptClassifier.EnsureNotPaymentReceiptAsync(
                 journalVoucherId, "processed into a Delivery Challan");
@@ -283,7 +285,7 @@ namespace PureLedger.Services
                 if (!unprocessedEntries.Any())
                     throw new InvalidOperationException("No unprocessed entries found for this voucher");
 
-                var deliveryChallan = await CreateDCVoucherInternalAsync(journalVoucherId, dcDate, otherReference);
+                var deliveryChallan = await CreateDCVoucherInternalAsync(journalVoucherId, dcDate, otherReference, station);
                 var results = new List<EntryProcessResult>();
 
                 foreach (var entry in unprocessedEntries)
@@ -291,6 +293,9 @@ namespace PureLedger.Services
                     var result = await ProcessSingleEntryInternalAsync(deliveryChallan.DeliveryChallanVoucherId, entry, locationId, remarks, otherReference, dcDate);
                     results.Add(result);
                 }
+
+                if (!results.Any(result => result.Success))
+                    throw new InvalidOperationException("No entries were processed successfully; the delivery challan was not changed.");
 
                 if (includeForCharges && forAmount > 0)
                     _ = await ProcessForChargesInternalAsync(journalVoucherId, null, forAmount, dcDate, forAccountId);
@@ -419,7 +424,7 @@ namespace PureLedger.Services
 
         #region Private Helper Methods - DC Creation
 
-        private async Task<DeliveryChallanVoucher> CreateDCVoucherInternalAsync(int journalVoucherId, DateOnly dcDate, string? reference)
+        private async Task<DeliveryChallanVoucher> CreateDCVoucherInternalAsync(int journalVoucherId, DateOnly dcDate, string? reference, string? station)
         {
             try
             {
@@ -429,11 +434,15 @@ namespace PureLedger.Services
                 if (await _unitOfWork.IsStockTransferVoucherAsync(journalVoucherId))
                     throw new InvalidOperationException("Stock-transfer delivery challans are immutable here. Use the Stock Transfers screen for cancellation, Closed Short, or complete deletion.");
 
+                var normalizedStation = NormalizeStation(station);
                 var existingDC = await _unitOfWork.DeliveryChallanVouchers.GetByJournalVoucherIdAsync(journalVoucherId);
                 if (existingDC != null)
                 {
                     _logger.LogInformation("Delivery challan already exists for journal voucher {JournalVoucherId}", journalVoucherId);
-                    if (!string.IsNullOrEmpty(reference))
+                    // Missing/null fields from older clients preserve the shared value.
+                    // An explicitly blank station clears it.
+                    if (station != null) existingDC.Station = normalizedStation;
+                    if (station != null || !string.IsNullOrEmpty(reference))
                         _unitOfWork.DeliveryChallanVouchers.Update(existingDC);
                     return existingDC;
                 }
@@ -442,6 +451,7 @@ namespace PureLedger.Services
                 {
                     JournalVoucherId = journalVoucherId,
                     DCDate = dcDate,
+                    Station = normalizedStation,
                     IsCompleted = false
                 };
 
@@ -457,6 +467,16 @@ namespace PureLedger.Services
                 _logger.LogError(ex, "Failed to create delivery challan for journal voucher {JournalVoucherId}", journalVoucherId);
                 throw;
             }
+        }
+
+        private static string? NormalizeStation(string? station)
+        {
+            if (station == null) return null;
+            // Measure what is stored, so padding whitespace cannot cause a spurious rejection.
+            var trimmed = station.Trim();
+            if (trimmed.Length > DeliveryChallanVoucher.StationMaxLength)
+                throw new ArgumentException($"Station must be {DeliveryChallanVoucher.StationMaxLength} characters or fewer.", nameof(station));
+            return trimmed.Length == 0 ? null : trimmed;
         }
 
         private async Task<DeliveryChallanEntry> CreateDCEntryInternalAsync(int deliveryChallanId, int journalEntryId, int locationId, string? remarks, string? otherReference, DateOnly entryDate)
@@ -520,7 +540,7 @@ namespace PureLedger.Services
                 entry.IsProcessed = true;
                 _unitOfWork.JournalEntries.Update(entry);
 
-                var deliveryChallanVoucher = await CreateDCVoucherInternalAsync(journalVoucherId, dcDate, reference);
+                var deliveryChallanVoucher = await CreateDCVoucherInternalAsync(journalVoucherId, dcDate, reference, dcStation);
                 await CreateDCEntryInternalAsync(deliveryChallanVoucher.DeliveryChallanVoucherId, entry.JournalEntryId, dcLocation, dcRemarks, dcOtherRef, dcDate);
 
                 int debitAccountId = await GetDebitAccountIdAsync(originalJV, entry, postToCustomer);
@@ -569,9 +589,9 @@ namespace PureLedger.Services
             var cartageJV = new JournalVoucher
             {
                 ProjectId = projectId,
-                EntryDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EntryDate = BusinessClock.Today,
                 IsCompleted = false,
-                CreditableDate = DateOnly.FromDateTime(DateTime.UtcNow)
+                CreditableDate = BusinessClock.Today
             };
 
             _unitOfWork.JournalVouchers.Add(cartageJV);
@@ -885,7 +905,7 @@ namespace PureLedger.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process entry {EntryId} for delivery challan {DeliveryChallanId}", entry.JournalEntryId, deliveryChallanId);
-                return new EntryProcessResult { EntryId = entry.JournalEntryId, Success = false, Message = ex.Message };
+                return new EntryProcessResult { EntryId = entry.JournalEntryId, Success = false, Message = ExceptionClassifier.SafeMessage(ex, "This entry could not be processed.") };
             }
         }
 

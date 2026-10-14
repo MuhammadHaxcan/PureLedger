@@ -6,6 +6,7 @@ using Xunit;
 
 namespace PureLedger.Backend.Tests;
 
+[Collection("PostgreSQL integration")]
 public sealed class ProjectImgMigrationTests
 {
     [PostgresFact]
@@ -15,7 +16,8 @@ public sealed class ProjectImgMigrationTests
         var options = new DbContextOptionsBuilder<LedgerDbContext>().UseNpgsql(connection).Options;
         await using var context = new LedgerDbContext(options);
 
-        Assert.Contains("20260928215754_AddProjectImg", await context.Database.GetAppliedMigrationsAsync());
+        Assert.NotEmpty(await context.Database.GetAppliedMigrationsAsync());
+        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         await using (var command = context.Database.GetDbConnection().CreateCommand())
         {
             await context.Database.OpenConnectionAsync();

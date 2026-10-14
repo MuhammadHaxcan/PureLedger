@@ -68,14 +68,6 @@ namespace PureLedger.Repositories
             return deliveryChallanVoucher;
         }
 
-        public async Task<AccountData?> GetAccountDataByAccountNameAsync(string accountName)
-        {
-            return await _context.AccountDatas
-                .Include(ad => ad.Account)
-                .Where(ad => ad.Account.AccountName == accountName)
-                .FirstOrDefaultAsync();
-        }
-
         public async Task<bool> DeleteAsync(int deliveryChallanVoucherId)
         {
             var voucher = await _context.DeliveryChallanVouchers

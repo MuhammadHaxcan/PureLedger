@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using PureLedger.Helpers;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PureLedger.Models
@@ -22,7 +23,7 @@ namespace PureLedger.Models
         public int LocationId { get; set; }
 
         [Required]
-        public DateOnly EntryDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly EntryDate { get; set; } = BusinessClock.Today;
 
         [StringLength(500)]
         public string? Remarks { get; set; }

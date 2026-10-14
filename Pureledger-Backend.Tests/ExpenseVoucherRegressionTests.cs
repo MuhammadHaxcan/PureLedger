@@ -101,7 +101,7 @@ public sealed class ExpenseVoucherRegressionTests
     [Theory]
     [InlineData(VoucherKind.Expense, "Pending Approvals")]
     [InlineData(VoucherKind.StockTransfer, "Stock Transfers")]
-    [InlineData(VoucherKind.PaymentReceipt, "Error deleting entry")]
+    [InlineData(VoucherKind.PaymentReceipt, "cannot be deleted one row at a time")]
     public async Task ExpenseAndStockTransfer_RejectIndividualDeleteWithoutChangingRows(
         VoucherKind kind, string expectedMessage)
     {
@@ -121,7 +121,7 @@ public sealed class ExpenseVoucherRegressionTests
     [Theory]
     [InlineData(VoucherKind.Expense, "Pending Approvals")]
     [InlineData(VoucherKind.StockTransfer, "Stock Transfers")]
-    [InlineData(VoucherKind.PaymentReceipt, "Error updating entry")]
+    [InlineData(VoucherKind.PaymentReceipt, "generic voucher workflow")]
     public async Task ProtectedAggregates_RejectIndividualUpdateWithoutChangingRows(
         VoucherKind kind, string expectedMessage)
     {
@@ -211,6 +211,48 @@ public sealed class ExpenseVoucherRegressionTests
 
         Assert.Contains(selected, x => x.JournalVoucherId == ordinaryProduct.JournalVoucherId);
         Assert.DoesNotContain(selected, x => x.JournalVoucherId == paymentReceipt.JournalVoucherId);
+    }
+
+    [Fact]
+    public async Task IndividualEdit_CannotIntroduceExpenseAccountIntoOrdinaryVoucher()
+    {
+        await using var context = CreateContext();
+        await SeedMastersAsync(context);
+        var voucher = await AddVoucherAsync(context, VoucherKind.Ordinary);
+        var entry = voucher.JournalEntries.OrderBy(x => x.JournalEntryId).First();
+        var model = UpdateModel(entry, "Switch to expense");
+        model.AccountId = 3;
+
+        var result = await CreateJournalService(context).UpdateEntryAsync(model);
+
+        Assert.False(result.Success);
+        Assert.Contains("Expense account cannot be introduced", result.ErrorMessage);
+        context.ChangeTracker.Clear();
+        Assert.Equal(1, (await context.JournalEntries.FindAsync(entry.JournalEntryId))!.AccountId);
+        Assert.Empty(context.ApprovalVouchers);
+    }
+
+    [Fact]
+    public async Task ExpenseRevision_CannotMoveVoucherToAnotherProject()
+    {
+        await using var context = CreateContext();
+        await SeedMastersAsync(context);
+        context.Projects.Add(new Project { ProjectId = 2, ProjectName = "Other Project" });
+        await context.SaveChangesAsync();
+        var voucher = await AddVoucherAsync(context, VoucherKind.Expense);
+        var model = BalancedModel(accountIds: [3, 2]);
+        model.ProjectId = 2;
+        model.VoucherVersion = voucher.RowVersion;
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateApprovalService(context).SubmitManualExpenseAsync(model, voucher.JournalVoucherId, userId: 1));
+        Assert.Contains("cannot change the voucher's project", error.Message);
+
+        context.ChangeTracker.Clear();
+        var stored = await context.JournalVouchers.FindAsync(voucher.JournalVoucherId);
+        Assert.True(stored!.IsCompleted);
+        Assert.Equal(1, stored.ProjectId);
+        Assert.Empty(context.ApprovalVouchers);
     }
 
     private static LedgerDbContext CreateContext()

@@ -330,24 +330,4 @@ export const fileToBase64 = (file) => {
     });
 };
 
-// Helper function to validate image file
-export const validateImageFile = (file, maxSizeMB = 5) => {
-    const maxSize = maxSizeMB * 1024 * 1024; // Convert to bytes
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-
-    if (!file) {
-        return { valid: false, error: 'No file selected' };
-    }
-
-    if (!allowedTypes.includes(file.type)) {
-        return { valid: false, error: 'Invalid file type. Please select an image file (JPEG, PNG, GIF, or WebP)' };
-    }
-
-    if (file.size > maxSize) {
-        return { valid: false, error: `File size exceeds ${maxSizeMB}MB limit` };
-    }
-
-    return { valid: true };
-};
-
 export default apiClient;

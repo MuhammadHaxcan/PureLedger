@@ -8,6 +8,8 @@ const AuthContext = createContext(null);
 // Module-level flag to prevent duplicate session restoration (React StrictMode runs useEffect twice)
 let isRestoringSession = false;
 
+// The hook is deliberately colocated with its provider; splitting it would touch every importer.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {
@@ -83,6 +85,89 @@ export const AuthProvider = ({ children }) => {
         if (user.isAdmin) return true;
         if (!permissionList || permissionList.length === 0) return true;
         return permissionList.some(perm => permissions.includes(perm));
+    };
+
+    // Build navigation menu structure from user access
+    const buildNavigationMenu = (isAdmin, controllers, actions) => {
+        const navigationItems = [
+            {
+                title: 'Home',
+                icon: 'fas fa-home',
+                controller: 'Home',
+                items: [
+                    { action: 'Entry', title: 'New Entry', icon: 'fas fa-plus-circle', path: '/home/entry' },
+                    { action: 'PaymentAndReceipt', title: 'Payment & Receipt', icon: 'fas fa-money-check-alt', path: '/home/payment-and-receipt' },
+                    { action: 'VoucherEntry', title: 'Edit Entry', icon: 'fas fa-edit', path: '/home/voucher-entry' },
+                    { action: 'BaseVouchers', title: 'Base Vouchers', icon: 'fas fa-layer-group', path: '/home/base-vouchers' },
+                    { action: 'ModifiedEntries', title: 'Modified Entries', icon: 'fas fa-history', path: '/home/modified-entries' },
+                    { action: 'Recipes', title: 'Recipes', icon: 'fas fa-book-open', path: '/home/recipes' },
+                    { action: 'PendingApprovals', title: 'Pending Approvals', icon: 'fas fa-clipboard-check', path: '/approvals/pending' },
+                ],
+            },
+            {
+                title: 'Metadata',
+                icon: 'fas fa-database',
+                controller: 'MetaData',
+                items: [
+                    { action: 'Projects', title: 'Projects', icon: 'fas fa-project-diagram', path: '/metadata/projects' },
+                    { action: 'Categories', title: 'Categories', icon: 'fas fa-sitemap', path: '/metadata/categories' },
+                    { action: 'Accounts', title: 'Accounts', icon: 'fas fa-users', path: '/metadata/accounts' },
+                    { action: 'Locations', title: 'Locations', icon: 'fas fa-map-marker-alt', path: '/metadata/locations' },
+                    { action: 'Bookers', title: 'Bookers', icon: 'fas fa-user-tie', path: '/metadata/bookers' },
+                ],
+            },
+            {
+                title: 'Delivery',
+                icon: 'fas fa-truck',
+                controller: 'DeliveryChallan',
+                items: [
+                    { action: 'ProcessDC', title: 'Delivery Challan', icon: 'fas fa-truck', path: '/delivery/process-dc' },
+                    { action: 'StockTransfers', title: 'Stock Transfers', icon: 'fas fa-exchange-alt', path: '/stock-transfers' },
+                ],
+            },
+            {
+                title: 'Reports',
+                icon: 'fas fa-chart-bar',
+                controller: 'Reporting',
+                items: [
+                    { action: 'SingleDoc', title: 'Single Document', icon: 'fas fa-file-alt', path: '/reporting/single-doc' },
+                    { action: 'AgingReport', title: 'Aging Report', icon: 'fas fa-calendar-alt', path: '/reporting/aging-report' },
+                    { action: 'AccountReport', title: 'Account Report', icon: 'fas fa-user-circle', path: '/reporting/account-report' },
+                    { action: 'MasterReport', title: 'Master Report', icon: 'fas fa-file-invoice', path: '/reporting/master-report' },
+                    { action: 'UserReport', title: 'User Report', icon: 'fas fa-file-alt', path: '/reporting/user-report' },
+                    { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
+                    { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
+                    { action: 'OldMasterReport', title: 'Old Master Report', icon: 'fas fa-history', path: '/reporting/old-master-report' },
+                    { action: 'PaymentReceiptVoucherReport', title: 'P&R Voucher Report', icon: 'fas fa-receipt', path: '/reporting/payment-receipt-vouchers' },
+                ],
+            },
+        ];
+
+        const hasAccess = (controller, action = null) => {
+            if (isAdmin) return true;
+
+            const hasControllerAccess = controllers.includes(controller);
+
+            if (action) {
+                const hasSpecificAction = actions[controller]?.includes(action) || false;
+                return hasControllerAccess || hasSpecificAction;
+            }
+
+            const hasAnyAction = actions[controller] && actions[controller].length > 0;
+            return hasControllerAccess || hasAnyAction;
+        };
+
+        // Filter navigation items based on access
+        return navigationItems
+            .map(item => {
+                const accessibleItems = item.items.filter(subItem => hasAccess(item.controller, subItem.action));
+                if (accessibleItems.length === 0) return null;
+                return {
+                    ...item,
+                    items: accessibleItems,
+                };
+            })
+            .filter(item => item !== null);
     };
 
     // Fetch user access and rebuild navigation menu (used on login and refresh)
@@ -271,89 +356,6 @@ export const AuthProvider = ({ children }) => {
 
         restoreSession();
     }, [fetchAccessAndMenu]);
-
-    // Build navigation menu structure from user access
-    const buildNavigationMenu = (isAdmin, controllers, actions) => {
-        const navigationItems = [
-            {
-                title: 'Home',
-                icon: 'fas fa-home',
-                controller: 'Home',
-                items: [
-                    { action: 'Entry', title: 'New Entry', icon: 'fas fa-plus-circle', path: '/home/entry' },
-                    { action: 'PaymentAndReceipt', title: 'Payment & Receipt', icon: 'fas fa-money-check-alt', path: '/home/payment-and-receipt' },
-                    { action: 'VoucherEntry', title: 'Edit Entry', icon: 'fas fa-edit', path: '/home/voucher-entry' },
-                    { action: 'BaseVouchers', title: 'Base Vouchers', icon: 'fas fa-layer-group', path: '/home/base-vouchers' },
-                    { action: 'ModifiedEntries', title: 'Modified Entries', icon: 'fas fa-history', path: '/home/modified-entries' },
-                    { action: 'Recipes', title: 'Recipes', icon: 'fas fa-book-open', path: '/home/recipes' },
-                    { action: 'PendingApprovals', title: 'Pending Approvals', icon: 'fas fa-clipboard-check', path: '/approvals/pending' },
-                ],
-            },
-            {
-                title: 'Metadata',
-                icon: 'fas fa-database',
-                controller: 'MetaData',
-                items: [
-                    { action: 'Projects', title: 'Projects', icon: 'fas fa-project-diagram', path: '/metadata/projects' },
-                    { action: 'Categories', title: 'Categories', icon: 'fas fa-sitemap', path: '/metadata/categories' },
-                    { action: 'Accounts', title: 'Accounts', icon: 'fas fa-users', path: '/metadata/accounts' },
-                    { action: 'Locations', title: 'Locations', icon: 'fas fa-map-marker-alt', path: '/metadata/locations' },
-                    { action: 'Bookers', title: 'Bookers', icon: 'fas fa-user-tie', path: '/metadata/bookers' },
-                ],
-            },
-            {
-                title: 'Delivery',
-                icon: 'fas fa-truck',
-                controller: 'DeliveryChallan',
-                items: [
-                    { action: 'ProcessDC', title: 'Delivery Challan', icon: 'fas fa-truck', path: '/delivery/process-dc' },
-                    { action: 'StockTransfers', title: 'Stock Transfers', icon: 'fas fa-exchange-alt', path: '/stock-transfers' },
-                ],
-            },
-            {
-                title: 'Reports',
-                icon: 'fas fa-chart-bar',
-                controller: 'Reporting',
-                items: [
-                    { action: 'SingleDoc', title: 'Single Document', icon: 'fas fa-file-alt', path: '/reporting/single-doc' },
-                    { action: 'AgingReport', title: 'Aging Report', icon: 'fas fa-calendar-alt', path: '/reporting/aging-report' },
-                    { action: 'AccountReport', title: 'Account Report', icon: 'fas fa-user-circle', path: '/reporting/account-report' },
-                    { action: 'MasterReport', title: 'Master Report', icon: 'fas fa-file-invoice', path: '/reporting/master-report' },
-                    { action: 'UserReport', title: 'User Report', icon: 'fas fa-file-alt', path: '/reporting/user-report' },
-                    { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
-                    { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
-                    { action: 'OldMasterReport', title: 'Old Master Report', icon: 'fas fa-history', path: '/reporting/old-master-report' },
-                    { action: 'PaymentReceiptVoucherReport', title: 'P&R Voucher Report', icon: 'fas fa-receipt', path: '/reporting/payment-receipt-vouchers' },
-                ],
-            },
-        ];
-
-        const hasAccess = (controller, action = null) => {
-            if (isAdmin) return true;
-
-            const hasControllerAccess = controllers.includes(controller);
-
-            if (action) {
-                const hasSpecificAction = actions[controller]?.includes(action) || false;
-                return hasControllerAccess || hasSpecificAction;
-            }
-
-            const hasAnyAction = actions[controller] && actions[controller].length > 0;
-            return hasControllerAccess || hasAnyAction;
-        };
-
-        // Filter navigation items based on access
-        return navigationItems
-            .map(item => {
-                const accessibleItems = item.items.filter(subItem => hasAccess(item.controller, subItem.action));
-                if (accessibleItems.length === 0) return null;
-                return {
-                    ...item,
-                    items: accessibleItems,
-                };
-            })
-            .filter(item => item !== null);
-    };
 
     const findFirstAccessibleRoute = (isAdmin, controllers, actions) => {
         if (isAdmin) {

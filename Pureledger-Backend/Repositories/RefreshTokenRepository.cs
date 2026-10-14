@@ -21,16 +21,6 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync(rt => rt.Token == token);
         }
 
-        public async Task<RefreshToken?> GetActiveTokenByUserIdAsync(int userId)
-        {
-            return await _context.RefreshTokens
-                .Where(rt => rt.UserId == userId &&
-                            !rt.IsRevoked &&
-                            rt.ExpiryDate > DateTime.UtcNow)
-                .OrderByDescending(rt => rt.CreatedDate)
-                .FirstOrDefaultAsync();
-        }
-
         public async Task<List<RefreshToken>> GetAllActiveTokensByUserIdAsync(int userId)
         {
             return await _context.RefreshTokens
@@ -80,16 +70,6 @@ namespace PureLedger.Repositories
             }
 
             return true;
-        }
-
-        public async Task DeleteExpiredTokensAsync()
-        {
-            var expiredTokens = await _context.RefreshTokens
-                .Where(rt => rt.ExpiryDate < DateTime.UtcNow)
-                .ToListAsync();
-
-            if (expiredTokens.Count > 0)
-                _context.RefreshTokens.RemoveRange(expiredTokens);
         }
     }
 }

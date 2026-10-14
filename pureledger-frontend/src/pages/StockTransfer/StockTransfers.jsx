@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -17,6 +18,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import SearchableSelect from '../../components/SearchableSelect';
 import apiClient from '../../services/api';
+import { transferCarryingValue } from '../../utils/stockTransferCost';
 import { ACCOUNT_GROUP } from '../../constants/accountGroups';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { useAuth } from '../../contexts/AuthContext';
@@ -25,12 +27,13 @@ import {
   resolveLastSelectedProject,
 } from '../../utils/lastSelectedProject';
 import './StockTransfers.css';
+import { calculateAllocations } from '../../utils/chargeAllocation';
 
 const API = '/StockTransferApi';
 const PAGE_SIZE = 2500;
 const ACTIVE_STATUSES = ['Pending', 'PartiallyReceived'];
 const FINAL_STATUSES = ['Received', 'Cancelled', 'ClosedShort'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayString();
 const money = (value) => Number(value || 0).toLocaleString(undefined, {
   minimumFractionDigits: 2,
   maximumFractionDigits: 4,
@@ -45,6 +48,7 @@ const blankItem = () => ({
   unitCostOverridden: false,
   suggestedUnitCost: null,
   availableQuantity: null,
+  inventoryValue: null,
   accounts: [],
 });
 const blankCharge = () => ({
@@ -52,7 +56,7 @@ const blankCharge = () => ({
   amount: '',
   description: '',
   targetType: 'Products',
-  allocationMethod: 'ByValue',
+  allocationMethod: 'Equal',
   targetAccountId: '',
   allocations: {},
 });
@@ -95,12 +99,11 @@ const normalizeTransfer = (transfer) => {
   const receivedQuantity = items.reduce((sum, item) => sum + item.receivedQuantity, 0);
   const remainingQuantity = items.reduce((sum, item) => sum + item.remainingQuantity, 0);
   const remainingValue = items.reduce((sum, item) => sum + (item.lineState === 'Pending' ? item.baseValue : 0), 0);
-  const dispatchJvId = Number(transfer.dispatchJvId ?? transfer.dispatchJournalVoucherId ?? transfer.id);
+  const dispatchJvId = Number(transfer.dispatchJvId ?? transfer.id);
   return {
     ...transfer,
     id: dispatchJvId,
     dispatchJvId,
-    dispatchJournalVoucherId: dispatchJvId,
     transferNumber: transfer.transferNumber || `JV ${dispatchJvId}`,
     rowVersion: transfer.rowVersion ?? transfer.version,
     status,
@@ -110,45 +113,6 @@ const normalizeTransfer = (transfer) => {
     totalRemainingQuantity: Number(transfer.totalRemainingQuantity ?? remainingQuantity),
     remainingValue: Number(transfer.remainingValue ?? remainingValue),
   };
-};
-
-const calculateAllocations = (charge, selectedItems) => {
-  const amount = round4(charge.amount);
-  const selected = selectedItems;
-
-  if (charge.allocationMethod === 'Manual') {
-    return Object.fromEntries(selected.map((item) => [
-      item.productAccountId,
-      round4(charge.allocations[item.productAccountId] || 0),
-    ]));
-  }
-
-  const weights = selected.map((item) => ({
-    productAccountId: item.productAccountId,
-    weight: charge.allocationMethod === 'Equal'
-      ? 1
-      : charge.allocationMethod === 'ByQuantity'
-        ? item.quantity
-        : charge.allocationMethod === 'ByRate'
-          ? item.unitCost
-          : item.baseValue,
-  }));
-  const totalWeight = weights.reduce((sum, item) => sum + item.weight, 0);
-  if (!totalWeight || !amount) {
-    return Object.fromEntries(weights.map((item) => [item.productAccountId, 0]));
-  }
-
-  const result = Object.fromEntries(weights.map((item) => [
-    item.productAccountId,
-    round4(amount * item.weight / totalWeight),
-  ]));
-  const allocated = round4(Object.values(result).reduce((sum, value) => sum + value, 0));
-  const residue = round4(amount - allocated);
-  if (residue) {
-    const largest = [...weights].sort((a, b) => b.weight - a.weight)[0];
-    result[largest.productAccountId] = round4(result[largest.productAccountId] + residue);
-  }
-  return result;
 };
 
 export default function StockTransfers() {
@@ -446,6 +410,7 @@ export default function StockTransfers() {
           productAccountId: '',
           accounts,
           availableQuantity: null,
+          inventoryValue: null,
           suggestedUnitCost: null,
           unitCost: '',
           unitCostOverridden: false,
@@ -458,12 +423,7 @@ export default function StockTransfers() {
   };
 
   const getAvailability = async (draft, item) => {
-    const originalItem = editing?.items?.find((candidate) =>
-      candidate.productAccountId === Number(item.productAccountId));
-    const excludeDispatchJvId = originalItem
-      && String(draft.sourceLocationId) === String(editing.sourceLocationId)
-      ? editing.id
-      : undefined;
+    const excludeDispatchJvId = editing?.id;
     const response = await apiClient.get(`${API}/availability`, {
       params: {
         projectId: draft.projectId,
@@ -481,7 +441,7 @@ export default function StockTransfers() {
       ...form,
       items: form.items.map((item, itemIndex) =>
         itemIndex === index
-          ? { ...item, productAccountId, availableQuantity: null, suggestedUnitCost: null }
+          ? { ...item, productAccountId, availableQuantity: null, inventoryValue: null, suggestedUnitCost: null, unitCost: '', unitCostOverridden: false }
           : item),
     };
     setForm(draft);
@@ -489,11 +449,14 @@ export default function StockTransfers() {
     try {
       const availability = await getAvailability(draft, draft.items[index]);
       setForm((previous) => {
+        if (previous.projectId !== draft.projectId || previous.sourceLocationId !== draft.sourceLocationId
+          || previous.transferDate !== draft.transferDate || previous.items[index]?.productAccountId !== productAccountId) return previous;
         const items = [...previous.items];
         items[index] = {
           ...items[index],
           productAccountId,
           availableQuantity: availability.availableQuantity,
+          inventoryValue: availability.inventoryValue ?? null,
           suggestedUnitCost: availability.suggestedUnitCost,
           unitCost: availability.suggestedUnitCost ?? '',
           unitCostOverridden: false,
@@ -509,18 +472,18 @@ export default function StockTransfers() {
     if (!draft.projectId || !draft.sourceLocationId) return;
     const results = await Promise.all(draft.items.map(async (item) =>
       item.productAccountId ? getAvailability(draft, item) : null));
-    setForm((previous) => ({
+    setForm((previous) => previous.projectId !== draft.projectId || previous.sourceLocationId !== draft.sourceLocationId
+      || previous.transferDate !== draft.transferDate ? previous : ({
       ...previous,
       items: previous.items.map((item, index) => {
         const availability = results[index];
-        if (!availability) return item;
+        if (!availability || item.productAccountId !== draft.items[index]?.productAccountId) return item;
         return {
           ...item,
           availableQuantity: availability.availableQuantity,
+          inventoryValue: availability.inventoryValue ?? null,
           suggestedUnitCost: availability.suggestedUnitCost,
-          unitCost: item.unitCostOverridden
-            ? item.unitCost
-            : availability.suggestedUnitCost ?? '',
+          unitCost: item.unitCostOverridden ? item.unitCost : availability.suggestedUnitCost ?? '',
         };
       }),
     }));
@@ -528,6 +491,10 @@ export default function StockTransfers() {
 
   const updateHeader = async (field, value) => {
     const draft = { ...form, [field]: value };
+    if (field === 'sourceLocationId' || field === 'transferDate') {
+      draft.items = draft.items.map(item => ({ ...item, availableQuantity: null, inventoryValue: null,
+        unitCost: item.unitCostOverridden ? item.unitCost : '', suggestedUnitCost: null }));
+    }
     setForm(draft);
     if (field === 'sourceLocationId' || field === 'transferDate') {
       try {
@@ -568,12 +535,8 @@ export default function StockTransfers() {
     if (rows.some((item) => !Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0)) {
       return 'Every product requires a positive whole quantity.';
     }
-    if (rows.some((item) => item.unitCost === '' || Number(item.unitCost) < 0)) {
-      return 'Every product requires an actual transfer cost.';
-    }
-    if (rows.some((item) => item.availableQuantity != null
-      && Number(item.quantity) > Number(item.availableQuantity))) {
-      return 'A product quantity exceeds source availability.';
+    if (rows.some((item) => item.unitCost === '' || Number(item.unitCost) <= 0)) {
+      return 'Every product requires a positive transfer cost.';
     }
     return null;
   };
@@ -596,7 +559,7 @@ export default function StockTransfers() {
       items: form.items.filter((item) => item.productAccountId).map((item) => ({
         productAccountId: Number(item.productAccountId),
         quantity: Number(item.quantity),
-        unitCost: Number(item.unitCost),
+        unitCost: item.unitCostOverridden ? Number(item.unitCost) : null,
       })),
     };
     setLoading(true);
@@ -667,10 +630,10 @@ export default function StockTransfers() {
           productAccountId: item.productAccountId,
           quantity: item.quantity,
           unitCost: item.unitCost,
+          unitCostOverridden: Number(item.unitCost) !== Number(availability.suggestedUnitCost),
           suggestedUnitCost: availability.suggestedUnitCost ?? null,
-          unitCostOverridden: availability.suggestedUnitCost == null
-            || Math.abs(Number(item.unitCost) - Number(availability.suggestedUnitCost)) > 0.0001,
           availableQuantity: Number(availability.availableQuantity || 0),
+          inventoryValue: availability.inventoryValue ?? null,
           accounts,
         };
       }));
@@ -1297,7 +1260,7 @@ export default function StockTransfers() {
                         <th>Product</th>
                         <th>Available</th>
                         <th>Whole quantity</th>
-                        <th title="Cost posted to the dispatch and receipt JVs">Transfer cost</th>
+                        <th title="Suggested from source cost; an entered price sets destination valuation">Transfer cost</th>
                         <th>Base value</th>
                         <th />
                       </tr>
@@ -1334,7 +1297,6 @@ export default function StockTransfers() {
                               type="number"
                               min="1"
                               step="1"
-                              max={item.availableQuantity ?? undefined}
                               value={item.quantity}
                               onChange={(event) => updateItem(index, 'quantity', event.target.value)}
                             />
@@ -1343,36 +1305,22 @@ export default function StockTransfers() {
                             <div className="cost-input-stack">
                               <Form.Control
                                 type="number"
-                                min="0"
+                                min="0.0001"
                                 step="0.0001"
                                 value={item.unitCost}
                                 onChange={(event) => updateItem(index, 'unitCost', event.target.value)}
+                                aria-label="Transfer cost"
                               />
                               {item.unitCostOverridden && item.suggestedUnitCost != null && (
-                                <Button
-                                  type="button"
-                                  variant="link"
-                                  size="sm"
-                                  className="p-0 text-warning text-decoration-none"
-                                  onClick={() => setForm((previous) => ({
-                                    ...previous,
-                                    items: previous.items.map((candidate, itemIndex) =>
-                                      itemIndex === index
-                                        ? {
-                                          ...candidate,
-                                          unitCost: candidate.suggestedUnitCost,
-                                          unitCostOverridden: false,
-                                        }
-                                        : candidate),
-                                  }))}
-                                >
-                                  <i className="fas fa-undo me-1" />
-                                  Override · use suggested
+                                <Button type="button" variant="link" size="sm" className="p-0 text-decoration-none"
+                                  onClick={() => setForm(previous => ({ ...previous, items: previous.items.map((candidate, itemIndex) =>
+                                    itemIndex === index ? { ...candidate, unitCost: candidate.suggestedUnitCost, unitCostOverridden: false } : candidate) }))}>
+                                  Use suggested
                                 </Button>
                               )}
                             </div>
                           </td>
-                          <td className="fw-semibold">{money(Number(item.quantity) * Number(item.unitCost))}</td>
+                          <td className="fw-semibold">{money(transferCarryingValue(item))}</td>
                           <td>
                             <Button
                               size="sm"
@@ -1396,7 +1344,7 @@ export default function StockTransfers() {
               <Card.Footer className="d-flex justify-content-between align-items-center">
                 <strong>
                   Total base value: {money(form.items.reduce(
-                    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unitCost || 0),
+                    (sum, item) => sum + transferCarryingValue(item),
                     0,
                   ))}
                 </strong>

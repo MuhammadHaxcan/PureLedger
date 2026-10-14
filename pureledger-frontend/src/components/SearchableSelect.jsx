@@ -175,7 +175,7 @@ const SearchableSelect = ({
     setSelectedIndex(-1);
   };
 
-  const handleOptionClick = (option, index) => {
+  const handleOptionClick = (option) => {
     handleSelect(option);
   };
 

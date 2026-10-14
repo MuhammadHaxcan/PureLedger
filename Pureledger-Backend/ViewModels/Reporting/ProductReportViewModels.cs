@@ -3,19 +3,6 @@ using System.Collections.Generic;
 
 namespace PureLedger.ViewModels.Reporting
 {
-    public class ProductReportPageViewModel
-    {
-        public List<ProjectViewModel> Projects { get; set; } = new List<ProjectViewModel>();
-        public List<CategoryViewModel> Categories { get; set; } = new List<CategoryViewModel>();
-        public List<LocationViewModel> Locations { get; set; } = new List<LocationViewModel>();
-    }
-
-    public class LocationViewModel
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-    }
-
     public class ProductReportRequest
     {
         public DateOnly? StartDate { get; set; }
@@ -46,8 +33,8 @@ namespace PureLedger.ViewModels.Reporting
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
         public decimal Balance { get; set; }  // TotalDebit - TotalCredit
-        public int TotalDebitQty { get; set; } // Current-period physical stock in, including transfer receipts/returns
-        public int TotalCreditQty { get; set; } // Current-period physical stock out, including transfer dispatches
+        public int TotalDebitQty { get; set; } // Commercial inward globally; physical inward at one location
+        public int TotalCreditQty { get; set; } // Commercial outward globally; physical outward at one location
         public int NetQuantity { get; set; } // TotalDebitQty - TotalCreditQty
         public int BalanceQuantity { get; set; } // Sum of available stock across filtered products
         public decimal TotalCOGS { get; set; }
@@ -69,12 +56,15 @@ namespace PureLedger.ViewModels.Reporting
         public decimal PreviousAvgRate { get; set; }
         public bool HasPreviousBalance { get; set; }
 
-        // Current period quantity includes transfers; monetary debit/credit excludes
-        // transfer base postings but includes product receiving charges.
+        // Global quantity excludes flagged internal transfers; warehouse quantity includes them.
+        // Monetary debit/credit includes transfers at one warehouse and excludes their base postings globally.
+        // Product receiving charges remain in debit; margin and COGS always exclude transfer credits.
         public int TotalDebitQty { get; set; }
         public int TotalCreditQty { get; set; }
         public int QtyBalance { get; set; }
         public decimal AverageRate { get; set; }
+        // Warehouse values include entered receipt prices and receiving charges;
+        // an override can change valuation without changing commercial debit/credit.
         public decimal InventoryValue { get; set; }
         public int PhysicalOutwardQuantity { get; set; }
         public int TransferOutwardQuantity { get; set; }
@@ -137,22 +127,5 @@ namespace PureLedger.ViewModels.Reporting
         public int Quantity { get; set; }
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
-    }
-
-    /// <summary>
-    /// DTO for database-level product aggregation - eliminates loading all entries into memory
-    /// </summary>
-    public class ProductAggregateDto
-    {
-        public int ProductId { get; set; }
-        public string ProductName { get; set; } = string.Empty;
-        public int PrevDebitQty { get; set; }
-        public int PrevCreditQty { get; set; }
-        public decimal PrevDebit { get; set; }
-        public decimal PrevCredit { get; set; }
-        public int CurrentDebitQty { get; set; }
-        public int CurrentCreditQty { get; set; }
-        public decimal CurrentDebit { get; set; }
-        public decimal CurrentCredit { get; set; }
     }
 }

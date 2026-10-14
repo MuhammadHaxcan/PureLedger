@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -6,6 +7,7 @@ import SortableHeader from '../../components/SortableHeader';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import useSortableData from '../../hooks/useSortableData';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import AgingFifoModal from './AgingFifoModal';
 
 const AgingReport = () => {
   usePageTitle('Aging Report');
@@ -18,61 +20,40 @@ const AgingReport = () => {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
-    referenceDate: new Date().toISOString().split('T')[0],
+    referenceDate: todayString(),
     projectId: null,
     categoryId: null
   });
-  const [currentPage, setCurrentPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [totalRecords, setTotalRecords] = useState(0);
-  const [isAutoLoading, setIsAutoLoading] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState(null);
+  const [reportComplete, setReportComplete] = useState(false);
+  const [fifoTarget, setFifoTarget] = useState(null);
   const pageSize = 2500;
-  const observerRef = useRef(null);
-  const loadingRef = useRef(null);
+  const reportRequest = useRef({ runId: 0, controller: null });
+  const categoryRequest = useRef(null);
+  const modalSequence = useRef(0);
 
   useEffect(() => {
     loadInitData();
+    const request = reportRequest.current;
+    return () => {
+      request.runId += 1;
+      request.controller?.abort();
+      categoryRequest.current?.abort();
+    };
   }, []);
 
   useEffect(() => {
     if (formData.projectId) {
       loadCategories(formData.projectId);
     } else {
+      categoryRequest.current?.abort();
       setCategories([]);
       setFormData(prev => ({ ...prev, categoryId: null }));
     }
   }, [formData.projectId]);
-
-  // Auto-load more data when scrolling to bottom
-  useEffect(() => {
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
-
-    if (hasMoreData && !isLoadingMore && !isAutoLoading && allEntries.length > 0) {
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && hasMoreData && !isLoadingMore && !isAutoLoading) {
-            setIsAutoLoading(true);
-            const nextPage = currentPage + 1;
-            generateReport(nextPage, true);
-          }
-        },
-        { threshold: 0.1 }
-      );
-
-      if (loadingRef.current) {
-        observerRef.current.observe(loadingRef.current);
-      }
-    }
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [hasMoreData, isLoadingMore, isAutoLoading, allEntries.length, currentPage]);
 
   const loadInitData = async () => {
     try {
@@ -91,8 +72,12 @@ const AgingReport = () => {
   };
 
   const loadCategories = async (projectId) => {
+    categoryRequest.current?.abort();
+    const controller = new AbortController();
+    categoryRequest.current = controller;
     try {
-      const response = await apiClient.get(`/ReportingApi/categories-by-project/${projectId}`);
+      const response = await apiClient.get(`/ReportingApi/categories-by-project/${projectId}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       if (response.data.success) {
         // Ensure categories have consistent id format (convert string ids to numbers)
         const categoriesData = (response.data.data || []).map(c => ({
@@ -102,97 +87,84 @@ const AgingReport = () => {
         setCategories(categoriesData);
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error('Error loading categories:', error);
       setCategories([]);
     }
   };
 
-  const generateReport = async (page = 0, append = false) => {
-    if (!formData.referenceDate) {
+  const generateReport = async (filters = formData) => {
+    if (!filters.referenceDate) {
       setError('Please select a reference date');
       return;
     }
 
-    if (!formData.categoryId) {
+    if (!filters.projectId) {
+      setError('Please select a project');
+      return;
+    }
+
+    if (!filters.categoryId) {
       setError('Please select a category');
       return;
     }
 
-    if (page === 0) {
-      setLoading(true);
-      setAllEntries([]);
-      setCurrentPage(0);
-      setError('');
-    } else {
-      setIsLoadingMore(true);
-    }
+    const request = reportRequest.current;
+    request.controller?.abort();
+    request.runId += 1;
+    const runId = request.runId;
+    const controller = new AbortController();
+    request.controller = controller;
+    const snapshot = {
+      ...filters,
+      projectName: filters.projectName ?? projects.find(p => p.id === filters.projectId)?.name ?? '',
+      categoryName: filters.categoryName ?? categories.find(c => c.id === filters.categoryId)?.name ?? ''
+    };
+    setAppliedFilters(snapshot);
+    setFifoTarget(null);
+    setLoading(true); setIsLoadingMore(false); setAllEntries([]);
+    setTotalRecords(0); setHasMoreData(false); setReportComplete(false); setError('');
 
     try {
-      const response = await apiClient.get('/ReportingApi/aging-report', {
-        params: {
-          referenceDate: formData.referenceDate,
-          projectId: formData.projectId || null,
-          categoryId: formData.categoryId,
-          page: page,
-          pageSize: pageSize
+      for (let page = 0; ; page += 1) {
+        const response = await apiClient.get('/ReportingApi/aging-report', {
+          params: { referenceDate: snapshot.referenceDate, projectId: snapshot.projectId,
+            categoryId: snapshot.categoryId, page, pageSize }, signal: controller.signal
+        });
+        if (controller.signal.aborted || request.runId !== runId) return;
+        if (!response.data.success) throw new Error(response.data.message || 'Failed to generate report');
+        const raw = response.data.data;
+        const report = Array.isArray(raw) ? { entries: raw, totalRecords: raw.length, hasMoreData: false } : raw;
+        if (!Array.isArray(report?.entries)) throw new Error('Invalid aging report response');
+        if (report.hasMoreData && report.entries.length === 0) throw new Error('No entries returned for an unfinished report');
+        setAllEntries(prev => page === 0 ? report.entries : [...prev, ...report.entries]);
+        setTotalRecords(report.totalRecords ?? report.entries.length);
+        setHasMoreData(!!report.hasMoreData);
+        setLoading(false);
+        if (!report.hasMoreData) {
+          setReportComplete(true);
+          if (page === 0 && report.entries.length === 0) setError('No data found for the selected criteria');
+          break;
         }
-      });
-
-      if (response.data.success) {
-        const reportData = response.data.data;
-        if (reportData && reportData.entries && Array.isArray(reportData.entries)) {
-          if (append) {
-            setAllEntries(prev => [...prev, ...reportData.entries]);
-          } else {
-            setAllEntries(reportData.entries);
-          }
-          setHasMoreData(reportData.hasMoreData || false);
-          setTotalRecords(reportData.totalRecords || reportData.entries.length);
-          setCurrentPage(page + 1);
-
-          // Auto-load next page if there's more data (not using scroll-based loading)
-          if (reportData.hasMoreData) {
-            setIsAutoLoading(true);
-            setTimeout(() => {
-              generateReport(page + 1, true);
-            }, 100);
-          } else {
-            setIsAutoLoading(false);
-          }
-        } else if (Array.isArray(reportData)) {
-          if (append) {
-            setAllEntries(prev => [...prev, ...reportData]);
-          } else {
-            setAllEntries(reportData);
-          }
-          setHasMoreData(false);
-          setTotalRecords(reportData.length);
-          setCurrentPage(page + 1);
-        } else {
-          setAllEntries([]);
-          setHasMoreData(false);
-          setTotalRecords(0);
-          if (!reportData || !reportData.entries || reportData.entries.length === 0) {
-            setError('No data found for the selected criteria');
-          }
-        }
-      } else {
-        setError(response.data.message || 'Failed to generate report');
-        setHasMoreData(false);
-        setIsAutoLoading(false);
+        setIsLoadingMore(true);
       }
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to generate report');
+      if (controller.signal.aborted || request.runId !== runId) return;
+      setError(`Report is incomplete. ${error.response?.data?.message || error.message || 'Failed to generate report'}. Generate again to retry.`);
       setHasMoreData(false);
-      setIsAutoLoading(false);
     } finally {
-      setLoading(false);
-      setIsLoadingMore(false);
+      if (!controller.signal.aborted && request.runId === runId) {
+        setLoading(false); setIsLoadingMore(false);
+      }
     }
   };
 
   const handleGenerate = () => {
-    generateReport(0, false);
+    generateReport();
+  };
+
+  const openFifo = (row, scope) => {
+    if (appliedFilters) setFifoTarget({ ...row, accountId: Number(row.accountId), scope, filters: appliedFilters, openId: ++modalSequence.current });
   };
 
   const formatCurrency = (value) => {
@@ -220,6 +192,7 @@ const AgingReport = () => {
   const totalTotalDue = sortedEntries.reduce((sum, row) => sum + (parseFloat(row.totalDue) || 0), 0);
 
   const handleExportCsv = async () => {
+    if (!reportComplete) return;
     setExportingCsv(true);
     try {
       const csvData = sortedEntries.map(entry => ({
@@ -227,17 +200,18 @@ const AgingReport = () => {
         'Due Till Date': (entry.dueTillDate || 0).toFixed(2),
         'Total Due': (entry.totalDue || 0).toFixed(2)
       }));
-      await exportToCsvAsync(csvData, `AgingReport_${formData.referenceDate || 'report'}.csv`);
+      await exportToCsvAsync(csvData, `AgingReport_${appliedFilters.referenceDate || 'report'}.csv`);
     } finally {
       setExportingCsv(false);
     }
   };
 
   const handleExportPdf = async () => {
+    if (!reportComplete) return;
     setExportingPdf(true);
     try {
-      const selectedProject = projects.find(p => p.id === formData.projectId);
-      const selectedCategory = categories.find(c => c.id === formData.categoryId);
+      const selectedProject = { name: appliedFilters.projectName };
+      const selectedCategory = { name: appliedFilters.categoryName };
 
       const rows = sortedEntries.map(entry => ({
         account: entry.accountName || entry.accountId || 'N/A',
@@ -257,7 +231,7 @@ const AgingReport = () => {
         { header: 'Total Due', dataKey: 'totalDue' }
       ];
 
-      let subtitle = `Reference Date: ${formData.referenceDate}`;
+      let subtitle = `Reference Date: ${appliedFilters.referenceDate}`;
       if (selectedCategory) {
         subtitle += `\nCategory: ${selectedCategory.name}`;
       }
@@ -275,7 +249,7 @@ const AgingReport = () => {
         startY: selectedCategory ? 52 : 46,
         fontSize: 9,
         cellPadding: 2,
-        filename: `AgingReport_${formData.referenceDate || new Date().toISOString().split('T')[0]}.pdf`
+        filename: `AgingReport_${appliedFilters.referenceDate}.pdf`
       });
     } finally {
       setExportingPdf(false);
@@ -300,11 +274,13 @@ const AgingReport = () => {
           <Form onSubmit={(e) => { e.preventDefault(); handleGenerate(); }}>
             <div className="row mb-3">
               <div className="col-md-3 mb-3">
-                <Form.Label>Reference Date <span className="text-danger">*</span></Form.Label>
+                <Form.Label htmlFor="aging-reference-date">Reference Date <span className="text-danger">*</span></Form.Label>
                 <InputGroup>
                   <InputGroup.Text><i className="fas fa-calendar-alt"></i></InputGroup.Text>
                   <Form.Control
                     type="date"
+                    id="aging-reference-date"
+                    aria-label="Reference Date"
                     value={formData.referenceDate}
                     onChange={(e) => setFormData({ ...formData, referenceDate: e.target.value })}
                     required
@@ -317,6 +293,7 @@ const AgingReport = () => {
                 <InputGroup>
                   <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
                   <SearchableSelect
+                    ariaLabel="Project"
                     value={formData.projectId}
                     onChange={(value) => {
                       setFormData({ ...formData, projectId: value ? parseInt(value) : null, categoryId: null });
@@ -333,6 +310,7 @@ const AgingReport = () => {
                 <InputGroup>
                   <InputGroup.Text><i className="fas fa-list"></i></InputGroup.Text>
                   <SearchableSelect
+                    ariaLabel="Category"
                     value={formData.categoryId}
                     onChange={(value) => setFormData({ ...formData, categoryId: value ? parseInt(value) : null })}
                     options={categories.map(c => ({ id: c.id, name: c.name }))}
@@ -382,7 +360,7 @@ const AgingReport = () => {
                   {allEntries.length} of {totalRecords} accounts
                 </span>
               )}
-              {!hasMoreData && allEntries.length > 0 && (
+              {reportComplete && allEntries.length > 0 && (
                 <>
                   <Button 
                     variant="outline-success" 
@@ -424,6 +402,7 @@ const AgingReport = () => {
             </div>
           </Card.Header>
           <Card.Body>
+            <p className="text-muted small">{appliedFilters?.projectName} · {appliedFilters?.categoryName} · Reference date: {appliedFilters?.referenceDate}. Select an account or balance to view its FIFO breakdown.</p>
             <div className="row mb-3">
               <div className="col-12">
                 <Form.Label>Search</Form.Label>
@@ -462,14 +441,14 @@ const AgingReport = () => {
                       </td>
                     </tr>
                   ) : (
-                    sortedEntries.map((row, index) => (
-                      <tr key={index}>
-                        <td>{row.accountName || row.accountId || 'N/A'}</td>
+                    sortedEntries.map(row => (
+                      <tr key={row.accountId}>
+                        <td><Button variant="link" size="sm" className="p-0 text-start" aria-label={`View full ledger FIFO for ${row.accountName}`} onClick={() => openFifo(row, 'full')}>{row.accountName || row.accountId || 'N/A'}</Button></td>
                         <td className={`text-end ${(row.dueTillDate || 0) < 0 ? 'text-danger' : ''}`}>
-                          {formatCurrency(row.dueTillDate)}
+                          <Button variant="link" size="sm" className="p-0 text-reset" aria-label={`View due till date breakdown for ${row.accountName}`} onClick={() => openFifo(row, 'due')}>{formatCurrency(row.dueTillDate)}</Button>
                         </td>
                         <td className={`text-end ${(row.totalDue || 0) < 0 ? 'text-danger' : ''}`}>
-                          {formatCurrency(row.totalDue)}
+                          <Button variant="link" size="sm" className="p-0 text-reset" aria-label={`View total due FIFO for ${row.accountName}`} onClick={() => openFifo(row, 'full')}>{formatCurrency(row.totalDue)}</Button>
                         </td>
                       </tr>
                     ))
@@ -485,8 +464,8 @@ const AgingReport = () => {
               </Table>
             </div>
             </div>
-            {(isLoadingMore || isAutoLoading) && hasMoreData && (
-              <div className="text-center mt-3" ref={loadingRef}>
+            {isLoadingMore && hasMoreData && (
+              <div className="text-center mt-3">
                 <div className="spinner-border spinner-border-sm text-primary" role="status">
                   <span className="visually-hidden">Loading more records...</span>
                 </div>
@@ -495,6 +474,7 @@ const AgingReport = () => {
           </Card.Body>
         </Card>
       )}
+      <AgingFifoModal target={fifoTarget} onHide={() => setFifoTarget(null)} onRefreshReport={() => generateReport(appliedFilters)} />
     </div>
   );
 };

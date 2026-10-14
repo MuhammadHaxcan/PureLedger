@@ -3,10 +3,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace PureLedger.ViewModels.DeliveryChallan
 {
-    public class DeliveryChallanViewModels
-    {
-    }
-
     public class ProcessPendingForChargesViewModel
     {
         [Required]

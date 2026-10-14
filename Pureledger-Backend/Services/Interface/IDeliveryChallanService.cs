@@ -56,7 +56,8 @@ namespace PureLedger.Services.Interface
             string? remarks,
             bool includeForCharges,
             int forAmount,
-            int? forAccountId = null);
+            int? forAccountId = null,
+            string? station = null);
 
         Task<(int deliveryChallanId, List<EntryProcessResult> results)> ProcessBatchDCAsync(
             int journalVoucherId,
@@ -66,7 +67,8 @@ namespace PureLedger.Services.Interface
             string? remarks,
             bool includeForCharges,
             int forAmount,
-            int? forAccountId = null);
+            int? forAccountId = null,
+            string? station = null);
 
         Task<DeliveryChallanVoucher> ProcessCartageAsync(CartageViewModel model);
 

@@ -60,13 +60,14 @@ describe('PaymentReceiptPrint', () => {
     it('uses the Journal Voucher print structure without category or approval audit metadata', () => {
         render(<PaymentReceiptPrint voucherData={voucherData} voucherId="41" />);
 
-        expect(screen.getByText('Journal Voucher #41')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Journal Voucher' })).toBeInTheDocument();
+        expect(screen.getByText('#41')).toBeInTheDocument();
         const voucherTable = screen.getAllByRole('table').find(table => (
             within(table).queryByRole('columnheader', { name: 'Account' })
         ));
         expect(voucherTable).toBeTruthy();
         expect(within(voucherTable).queryByRole('columnheader', { name: 'Category' })).not.toBeInTheDocument();
-        expect(within(voucherTable).getByRole('columnheader', { name: 'Instrument' })).toBeInTheDocument();
+        expect(within(voucherTable).getByRole('columnheader', { name: 'Payment mode' })).toBeInTheDocument();
         expect(within(voucherTable).getByRole('columnheader', { name: 'Reference/Cheque No.' })).toBeInTheDocument();
         expect(screen.queryByText('Approval audit', { exact: false })).not.toBeInTheDocument();
         expect(screen.queryByText('submitter_user')).not.toBeInTheDocument();
@@ -82,8 +83,8 @@ describe('PaymentReceiptPrint', () => {
 
         const cashCell = screen.getByText('Cash');
         const cashRow = cashCell.closest('tr');
-        expect(cashRow.children[3]).toHaveTextContent('');
-        expect(cashRow.children[4]).toHaveTextContent('');
+        expect(cashRow.children[2]).toBeEmptyDOMElement();
+        expect(cashRow.children[4]).toBeEmptyDOMElement();
     });
 
     it('hides the credit-side account name when printing debit only', () => {
@@ -125,8 +126,8 @@ describe('PaymentReceiptPrint', () => {
                 ? `${side === 'debit' ? 'Debit' : 'Credit'} Account ${description.at(-1)}`
                 : '');
             expect(row.cells[side === 'debit' ? 5 : 6]).toHaveTextContent(/\d+\.00/);
-            if (description === 'Debit A') expect(row.cells[3]).toHaveTextContent('A1');
-            if (description === 'Debit B') expect(row.cells[3]).toHaveTextContent('B1');
+            if (description === 'Debit A') expect(row.cells[4]).toHaveTextContent('A1');
+            if (description === 'Debit B') expect(row.cells[4]).toHaveTextContent('B1');
         });
         const totalCells = table.querySelector('tfoot tr').cells;
         expect(totalCells[totalCells.length - 2]).toHaveTextContent('300.00');

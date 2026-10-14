@@ -1,8 +1,10 @@
+import { todayString } from '../../utils/businessDate';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Form, Spinner, Table } from 'react-bootstrap';
 import paymentReceiptApi from '../../services/paymentReceiptApi';
 import paymentReceiptVoucherApi from '../../services/paymentReceiptVoucherApi';
 import approvalApi from '../../services/approvalApi';
+import { usePermissions } from '../../hooks/usePermissions';
 import { normalizePaymentInstrumentType, PAYMENT_INSTRUMENTS } from '../../constants/paymentInstruments';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
@@ -11,11 +13,7 @@ import {
 } from '../../utils/lastSelectedProject';
 import './PaymentReceipt.css';
 
-const today = () => {
-    const now = new Date();
-    const offset = now.getTimezoneOffset();
-    return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
-};
+const today = () => todayString();
 
 const clientId = () => (
     window.crypto?.randomUUID?.() || `pr_${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -103,6 +101,7 @@ const PaymentReceiptForm = ({
     initialData = null,
     onSubmitted,
 }) => {
+    const { canAccessReporting } = usePermissions();
     const isRevision = mode === 'revision';
     const isPending = mode === 'pending';
     const [projects, setProjects] = useState([]);
@@ -114,6 +113,7 @@ const PaymentReceiptForm = ({
     const [snapshotVersion, setSnapshotVersion] = useState(null);
     const [rowVersion, setRowVersion] = useState(null);
     const [pendingApprovalId, setPendingApprovalId] = useState(null);
+    const [postedVoucherId, setPostedVoucherId] = useState(null);
     const [duplicateWarnings, setDuplicateWarnings] = useState([]);
     const [errors, setErrors] = useState([]);
     const [fieldErrors, setFieldErrors] = useState({});
@@ -124,6 +124,7 @@ const PaymentReceiptForm = ({
     const [success, setSuccess] = useState('');
     const [focusRowId, setFocusRowId] = useState(null);
     const warningVersion = useRef(0);
+    const submitting = useRef(false);
     const invalidateWarnings = useCallback(() => {
         warningVersion.current += 1;
         setDuplicateWarnings([]);
@@ -371,8 +372,10 @@ const PaymentReceiptForm = ({
 
     const submit = async (event) => {
         event.preventDefault();
+        if (submitting.current || readOnly) return;
         setSuccess('');
         if (!validate()) return;
+        submitting.current = true;
         setSaving(true);
         try {
             const payload = buildPayload();
@@ -388,9 +391,13 @@ const PaymentReceiptForm = ({
             warningVersion.current += 1;
             setSnapshotVersion(data.snapshotVersion ?? snapshotVersion);
             setRowVersion(data.voucherVersion ?? data.rowVersion ?? rowVersion);
-            setPendingApprovalId(data.approvalVoucherId ?? data.approvalId ?? pendingApprovalId);
+            const isApproved = String(data.status || '').toLowerCase() === 'approved';
+            setPendingApprovalId(isApproved ? null :
+                (data.pendingApprovalId ?? data.approvalVoucherId ?? data.approvalId ?? pendingApprovalId));
+            setPostedVoucherId(isApproved ? data.journalVoucherId : null);
             setDuplicateWarnings(warningsOf(data));
-            const message = response.data?.message || (
+            const message = data.message || (
+                isApproved ? `Payment & Receipt ${isRevision ? 'revision' : 'voucher'} posted and automatically approved. JV-${data.journalVoucherId}` :
                 isRevision ? 'Voucher revision submitted for approval.' :
                 isPending ? 'Pending Payment & Receipt request updated.' :
                 'Payment & Receipt request submitted for approval.'
@@ -403,6 +410,7 @@ const PaymentReceiptForm = ({
         } catch (error) {
             setErrors(errorMessages(error, 'Failed to save the Payment & Receipt request.'));
         } finally {
+            submitting.current = false;
             setSaving(false);
         }
     };
@@ -431,6 +439,16 @@ const PaymentReceiptForm = ({
                 </Alert>
             )}
             {success && <Alert variant="success" dismissible onClose={() => setSuccess('')}>{success}</Alert>}
+            {postedVoucherId && (
+                <Alert variant="success">
+                    Posted voucher: JV-{postedVoucherId}
+                    {canAccessReporting && (
+                        <a className="ms-3" href={`/reporting/print-voucher?voucherId=${postedVoucherId}`} target="_blank" rel="noreferrer">
+                            <i className="fas fa-print me-1"></i>Print P&amp;R
+                        </a>
+                    )}
+                </Alert>
+            )}
             {readOnly && pendingApprovalId && (
                 <Alert variant="info">
                     <i className="fas fa-lock me-2"></i>
@@ -702,7 +720,7 @@ const PaymentReceiptForm = ({
                 <div className="d-flex justify-content-end mb-3">
                     <Button type="submit" variant="primary" disabled={saving}>
                         {saving ? <><Spinner size="sm" className="me-2" />Saving…</> :
-                            <><i className="fas fa-save me-1"></i>{isPending ? 'Save Pending Request' : 'Submit for Approval'}</>}
+                            <><i className="fas fa-save me-1"></i>{isPending ? 'Save Pending Request' : 'Submit Payment & Receipt'}</>}
                     </Button>
                 </div>
             )}
@@ -715,6 +733,8 @@ const PaymentReceiptForm = ({
                             setRows([blankRow(), blankRow()]);
                             invalidateWarnings();
                             setPendingApprovalId(null);
+                            setPostedVoucherId(null);
+                            setRowVersion(null);
                             setSnapshotVersion(null);
                             setReadOnly(false);
                             setSuccess('');

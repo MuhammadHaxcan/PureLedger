@@ -171,27 +171,5 @@ namespace PureLedger.Repositories
             
             return accessibleActions;
         }
-
-        public async Task<List<string>> GetAllControllersAsync()
-        {
-            return await _context.UserControllerAccess
-                .Select(uca => uca.Controller)
-                .Distinct()
-                .ToListAsync();
-        }
-
-        public async Task<Dictionary<string, List<string>>> GetAllControllerActionsAsync()
-        {
-            return await _context.UserControllerAccess
-                .Where(uca => uca.Action != null)
-                .GroupBy(uca => uca.Controller)
-                .ToDictionaryAsync(
-                    g => g.Key,
-                    g => g.Select(uca => uca.Action!)
-                          .Where(a => !string.IsNullOrEmpty(a))
-                          .Distinct()
-                          .ToList()
-                );
-        }
     }
 }

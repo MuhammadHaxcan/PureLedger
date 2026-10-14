@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using PureLedger.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Services.Interface;
@@ -71,5 +72,5 @@ public sealed class ApprovalApiController : ControllerBase
         Ok(await _service.RejectAsync(id, request.Reason ?? string.Empty, request.SnapshotVersion, RequireUser(), _currentUser.IsCurrentUserAdmin()));
 
     private int RequireUser() =>
-        _currentUser.GetCurrentUserId() ?? throw new UnauthorizedAccessException("User is not authenticated.");
+        _currentUser.GetCurrentUserId() ?? throw new NotAuthenticatedException();
 }

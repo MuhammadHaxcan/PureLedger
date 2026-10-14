@@ -85,15 +85,5 @@ export const ACTION_PERMISSIONS = {
     // For now, page access is sufficient
 };
 
-// Helper to get permission from route path
-export const getPermissionFromPath = (path) => {
-    return PAGE_PERMISSIONS[path]?.[0] || null;
-};
-
-// Helper to check if path requires admin
-export const isAdminRoute = (path) => {
-    return path.startsWith('/admin/');
-};
-
 export default PERMISSIONS;
 

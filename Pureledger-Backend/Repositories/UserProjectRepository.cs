@@ -61,18 +61,6 @@ namespace PureLedger.Repositories
             return true;
         }
 
-        public async Task<bool> DeleteByProjectIdAsync(int projectId)
-        {
-            var userProjects = await _context.UserProjects
-                .Where(up => up.ProjectId == projectId)
-                .ToListAsync();
-
-            if (userProjects.Any())
-                _context.UserProjects.RemoveRange(userProjects);
-
-            return true;
-        }
-
         public async Task<bool> ExistsAsync(int userId, int projectId)
         {
             return await _context.UserProjects

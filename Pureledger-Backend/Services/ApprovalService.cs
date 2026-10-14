@@ -1,4 +1,6 @@
 using System.Data;
+using PureLedger.Helpers;
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using PureLedger.Data;
 using PureLedger.Models;
@@ -70,20 +72,27 @@ public sealed class ApprovalService : IApprovalService
                 return null;
         }
 
-        var isAdmin = await _context.Users.AsNoTracking().Where(x => x.UserId == userId)
-            .Select(x => x.IsAdmin).SingleOrDefaultAsync();
-        await EnsureProjectAccessAsync(model.ProjectId, userId, isAdmin);
-        var hidden = await HiddenCategoriesAsync(userId, isAdmin);
-        if (model.Entries.Any(x => x.CategoryId.HasValue && hidden.Contains(x.CategoryId.Value)))
-            throw new UnauthorizedAccessException("The voucher contains a category you cannot access.");
-
         await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
+            var isAdmin = await ApprovalPostingUser.IsAdminAsync(_context, userId);
+            await EnsureProjectAccessAsync(model.ProjectId, userId, isAdmin);
+            var hidden = await HiddenCategoriesAsync(userId, isAdmin);
+            if (model.Entries.Any(x => x.CategoryId.HasValue && hidden.Contains(x.CategoryId.Value)))
+                throw new UnauthorizedAccessException("The voucher contains a category you cannot access.");
             JournalVoucher? voucher = null;
             if (editingVoucherId.HasValue)
             {
                 voucher = await LockVoucherAsync(editingVoucherId.Value);
+                // Legacy vouchers may have a null token. The first mutation rotates it,
+                // so a second editor holding that null version is then rejected.
+                if (!VersionsMatch(model.VoucherVersion, voucher.RowVersion))
+                    throw new ApprovalConflictException("The voucher changed after it was loaded. Reload and try again.");
+                // The requested project was authorized above; the stored voucher must live in that same project.
+                if (voucher.ProjectId != model.ProjectId)
+                    throw new InvalidOperationException("An Expense revision cannot change the voucher's project.");
+                if (voucher.JournalEntries.Any(x => hidden.Contains(x.CategoryId)))
+                    throw new UnauthorizedAccessException("The voucher contains a category you cannot access.");
                 await EnsureManualRevisionEligibleAsync(voucher);
                 if (await _context.ApprovalVouchers.AnyAsync(x =>
                         x.JournalVoucherId == voucher.JournalVoucherId && x.Status == ApprovalStatuses.Pending))
@@ -100,7 +109,7 @@ public sealed class ApprovalService : IApprovalService
                 ProjectId = model.ProjectId,
                 BookerId = model.BookerId,
                 CreditDays = model.CreditDays,
-                SubmittedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                SubmittedDate = BusinessClock.Today,
                 PostedByUserId = userId
             };
             _context.ApprovalVouchers.Add(approval);
@@ -110,17 +119,21 @@ public sealed class ApprovalService : IApprovalService
             if (voucher != null)
             {
                 voucher.IsCompleted = false;
+                voucher.RowVersion = RandomNumberGenerator.GetBytes(16);
                 var children = await GetEditableChildrenAsync(voucher.JournalVoucherId);
                 foreach (var child in children) child.IsCompleted = false;
             }
 
             await _context.SaveChangesAsync();
+            if (isAdmin)
+                voucher = await ApproveExpenseCoreAsync(approval, userId, isAdmin);
             await transaction.CommitAsync();
             return new ApprovalSubmissionResult
             {
-                IsPending = true,
+                IsPending = !isAdmin,
+                AutoApproved = isAdmin,
                 ApprovalVoucherId = approval.ApprovalVoucherId,
-                JournalVoucherId = voucher?.JournalVoucherId,
+                JournalVoucherId = approval.JournalVoucherId,
                 ProjectId = approval.ProjectId
             };
         }
@@ -377,41 +390,7 @@ public sealed class ApprovalService : IApprovalService
                 await tx.CommitAsync();
                 return result;
             }
-            await EnsureApprovalAccessAsync(approval, userId, isAdmin);
-            await ValidateSnapshotAsync(approval);
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            JournalVoucher voucher;
-            if (approval.RequestKind == ApprovalRequestKinds.New)
-            {
-                voucher = new JournalVoucher
-                {
-                    ProjectId = approval.ProjectId,
-                    BookerId = approval.BookerId,
-                    EntryDate = today,
-                    CreditableDate = today.AddDays(approval.CreditDays),
-                    IsCompleted = true,
-                    IsBaseVoucher = false,
-                    PendingForCharges = false
-                };
-                _context.JournalVouchers.Add(voucher);
-                await _context.SaveChangesAsync();
-            }
-            else
-            {
-                if (!approval.JournalVoucherId.HasValue)
-                    throw new ApprovalConflictException("The revision is no longer linked to its voucher.");
-                voucher = await LockVoucherAsync(approval.JournalVoucherId.Value);
-                await EnsureRevisionGraphStillValidAsync(voucher);
-                await LockEditableChildrenAsync(voucher.JournalVoucherId);
-                await DeleteEditableGraphAsync(voucher.JournalVoucherId);
-            }
-
-            ApplyExpenseSnapshot(voucher, approval, today);
-            approval.JournalVoucherId = voucher.JournalVoucherId;
-            approval.Status = ApprovalStatuses.Approved;
-            approval.DecisionDate = today;
-            approval.DecisionByUserId = userId;
-            await _context.SaveChangesAsync();
+            var voucher = await ApproveExpenseCoreAsync(approval, userId, isAdmin);
             await tx.CommitAsync();
             return new { status = approval.Status, journalVoucherId = voucher.JournalVoucherId };
         }
@@ -443,11 +422,12 @@ public sealed class ApprovalService : IApprovalService
                 await EnsureRevisionGraphStillValidAsync(voucher);
                 await LockEditableChildrenAsync(voucher.JournalVoucherId);
                 voucher.IsCompleted = true;
+                voucher.RowVersion = RandomNumberGenerator.GetBytes(16);
                 foreach (var child in await GetEditableChildrenAsync(voucher.JournalVoucherId))
                     child.IsCompleted = true;
             }
             approval.Status = ApprovalStatuses.Rejected;
-            approval.DecisionDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            approval.DecisionDate = BusinessClock.Today;
             approval.DecisionByUserId = userId;
             approval.RejectionReason = reason.Trim();
             await _context.SaveChangesAsync();
@@ -460,6 +440,57 @@ public sealed class ApprovalService : IApprovalService
             throw;
         }
     }
+
+    // Both submission and explicit approval own their transaction. Keep the accounting
+    // operation shared without starting a nested transaction here.
+    private async Task<JournalVoucher> ApproveExpenseCoreAsync(ApprovalVoucher approval, int userId, bool isAdmin)
+    {
+        if (approval.Status != ApprovalStatuses.Pending || approval.VoucherType != ApprovalVoucherType.ManualExpense)
+            throw new ApprovalConflictException("This Expense request cannot be approved.");
+        await EnsureApprovalAccessAsync(approval, userId, isAdmin);
+        await ValidateSnapshotAsync(approval);
+        var today = BusinessClock.Today;
+        JournalVoucher voucher;
+        if (approval.RequestKind == ApprovalRequestKinds.New)
+        {
+            voucher = new JournalVoucher
+            {
+                ProjectId = approval.ProjectId,
+                BookerId = approval.BookerId,
+                EntryDate = today,
+                CreditableDate = today.AddDays(approval.CreditDays),
+                IsCompleted = true,
+                IsBaseVoucher = false,
+                PendingForCharges = false
+            };
+            _context.JournalVouchers.Add(voucher);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            if (!approval.JournalVoucherId.HasValue)
+                throw new ApprovalConflictException("The revision is no longer linked to its voucher.");
+            voucher = await LockVoucherAsync(approval.JournalVoucherId.Value);
+            if (voucher.ProjectId != approval.ProjectId)
+                throw new ApprovalConflictException("The revision no longer matches its voucher's project.");
+            await EnsureRevisionGraphStillValidAsync(voucher);
+            await LockEditableChildrenAsync(voucher.JournalVoucherId);
+            await DeleteEditableGraphAsync(voucher.JournalVoucherId);
+        }
+        ApplyExpenseSnapshot(voucher, approval, today);
+        voucher.RowVersion = RandomNumberGenerator.GetBytes(16);
+        approval.JournalVoucherId = voucher.JournalVoucherId;
+        approval.Status = ApprovalStatuses.Approved;
+        approval.DecisionDate = today;
+        approval.DecisionByUserId = userId;
+        await _context.SaveChangesAsync();
+        return voucher;
+    }
+
+    private static bool VersionsMatch(byte[]? expected, byte[]? actual) =>
+        expected == null || actual == null
+            ? expected == null && actual == null
+            : CryptographicOperations.FixedTimeEquals(expected, actual);
 
     private async Task ValidateModelAsync(JournalEntryViewModel model, bool requireExpense)
     {
@@ -630,16 +661,18 @@ public sealed class ApprovalService : IApprovalService
         await ApplyNormalRowsAsync(voucher, model);
         approval.JournalVoucherId = voucher.JournalVoucherId;
         approval.Status = ApprovalStatuses.PostedNormally;
-        approval.DecisionDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        approval.DecisionDate = BusinessClock.Today;
         approval.DecisionByUserId = userId;
         return voucher;
     }
 
     private async Task ApplyNormalRowsAsync(JournalVoucher voucher, JournalEntryViewModel model)
     {
-        var groups = await _context.Accounts.AsNoTracking()
-            .Where(x => model.Entries.Select(e => e.AccountId ?? 0).Contains(x.AccountId))
-            .ToDictionaryAsync(x => x.AccountId, x => x.AccountGroupId);
+        var accountIds = model.Entries.Select(e => e.AccountId ?? 0).Distinct().ToList();
+        var accounts = await _context.Accounts.AsNoTracking()
+            .Where(x => accountIds.Contains(x.AccountId))
+            .ToDictionaryAsync(x => x.AccountId);
+        var groups = accounts.ToDictionary(x => x.Key, x => x.Value.AccountGroupId);
         var existing = voucher.JournalEntries.ToDictionary(x => x.JournalEntryId);
         var retained = new HashSet<int>();
         foreach (var row in model.Entries)
@@ -697,10 +730,12 @@ public sealed class ApprovalService : IApprovalService
             _context.JournalEntries.Remove(removed);
         }
         voucher.ProjectId = model.ProjectId;
-        voucher.BookerId = model.BookerId;
+        voucher.BookerId = JournalVoucherBooker.Resolve(
+            model.Entries.Select(row => accounts.GetValueOrDefault(row.AccountId ?? 0)), model.BookerId);
         voucher.EntryDate = model.EntryDate;
         voucher.CreditableDate = model.DueDate;
         voucher.IsBaseVoucher = model.IsBaseVoucher;
+        voucher.RowVersion = RandomNumberGenerator.GetBytes(16);
     }
 
     private async Task DeleteDceAsync(int entryId)
@@ -819,9 +854,7 @@ public sealed class ApprovalService : IApprovalService
 
     private async Task<ApprovalVoucher> LockApprovalAsync(int id)
     {
-        var approval = await _context.ApprovalVouchers
-            .FromSqlInterpolated($"SELECT * FROM \"ApprovalVouchers\" WHERE \"ApprovalVoucherId\" = {id} FOR UPDATE")
-            .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Approval request was not found.");
+        var approval = await RowLocks.LockApprovalVoucherAsync(_context, id) ?? throw new InvalidOperationException("Approval request was not found.");
         if (approval.Status != ApprovalStatuses.Pending)
             throw new ApprovalConflictException("This approval request has already been decided.");
         await _context.Entry(approval).Collection(x => x.Entries).LoadAsync();
@@ -830,9 +863,7 @@ public sealed class ApprovalService : IApprovalService
 
     private async Task<JournalVoucher> LockVoucherAsync(int id)
     {
-        var voucher = await _context.JournalVouchers
-            .FromSqlInterpolated($"SELECT * FROM \"JournalVouchers\" WHERE \"JournalVoucherId\" = {id} FOR UPDATE")
-            .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Voucher was not found.");
+        var voucher = await RowLocks.LockJournalVoucherAsync(_context, id) ?? throw new InvalidOperationException("Voucher was not found.");
         await _context.Entry(voucher).Collection(x => x.JournalEntries).LoadAsync();
         return voucher;
     }

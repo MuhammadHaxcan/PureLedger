@@ -19,12 +19,5 @@ namespace PureLedger.Repositories
             _context.RecipeItems.Add(recipeItem);
             return recipeItem;
         }
-        
-        public async Task<List<RecipeItem>> GetByRecipeIdAsync(int recipeId)
-        {
-            return await _context.RecipeItems
-                .Where(ri => ri.RecipeId == recipeId)
-                .ToListAsync();
-        }
     }
 }

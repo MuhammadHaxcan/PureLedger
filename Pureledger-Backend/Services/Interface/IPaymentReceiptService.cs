@@ -26,6 +26,10 @@ public interface IPaymentReceiptClassifier
     Task<bool> HasAnyInstrumentDetailsAsync(int journalVoucherId);
     Task<bool> IsStructurallyValidAsync(int journalVoucherId);
     Task<bool> IsApprovedAsync(int journalVoucherId);
+    /// <summary>Set-based form of <see cref="IsStructurallyValidAsync"/>, for filtering and paging in the database.</summary>
+    Task<IQueryable<JournalVoucher>> WhereStructurallyValidAsync(IQueryable<JournalVoucher> vouchers);
+    /// <summary>Set-based form of <see cref="IsApprovedAsync"/>.</summary>
+    Task<IQueryable<JournalVoucher>> WhereApprovedAsync(IQueryable<JournalVoucher> vouchers);
     Task EnsureNotPaymentReceiptAsync(int journalVoucherId, string operation);
     Task<VoucherType> ResolvePrintableTypeAsync(int journalVoucherId, VoucherType requestedType);
 }

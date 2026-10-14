@@ -128,6 +128,7 @@ namespace PureLedger.Attributes
                 // AgingReport action
                 ["report-data"] = "AgingReport",
                 ["aging-report"] = "AgingReport",
+                ["aging-report-fifo"] = "AgingReport",
                 // AccountReport action
                 ["account-report"] = "AccountReport",
                 ["account-report-init"] = "AccountReport",

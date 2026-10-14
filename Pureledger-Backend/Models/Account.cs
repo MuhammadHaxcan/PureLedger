@@ -25,6 +25,9 @@ namespace PureLedger.Models
         [Required]
         public bool IsEnabled { get; set; } = true; // Default to enabled (true = enabled, false = disabled)
 
+        public int? LinkedBookerId { get; set; }
+        public virtual Booker? LinkedBooker { get; set; }
+
 
         public virtual AccountData? AccountData { get; set; }
         public virtual ProductData? ProductData { get; set; }

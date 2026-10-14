@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +44,7 @@ describe('Expense full-voucher revision', () => {
                             dueDate: '2026-08-01',
                             creditDays: 1,
                             bookerId: 1,
+                            voucherVersion: 'AQID',
                             requireQuantity: false,
                             isBaseVoucher: false,
                             entries: [
@@ -96,6 +97,31 @@ describe('Expense full-voucher revision', () => {
         expect(await screen.findByText('Expense account required')).toBeInTheDocument();
         expect(screen.getByText(/must retain at least one Expense account/i)).toBeInTheDocument();
         expect(apiClient.post).not.toHaveBeenCalled();
+    });
+
+    it.each(['Approved', 'PendingApproval'])('handles %s with an audit ID and preserves the editor version', async (status) => {
+        const user = userEvent.setup();
+        const getMetadata = apiClient.get.getMockImplementation();
+        apiClient.get.mockImplementation(async (url) => url === '/HomeApi/product-details/1'
+            ? { data: { success: true, data: { accountGroupId: 3, accountTypeName: 'Expense', pkg: null } } }
+            : getMetadata(url));
+        apiClient.post.mockResolvedValue({ data: {
+            success: true, status, approvalVoucherId: 7, voucherId: 41,
+            shouldPrint: status === 'Approved', message: status === 'Approved' ? 'Expense posted and automatically approved.' : 'Voucher submitted for approval.',
+        } });
+        const print = vi.spyOn(window, 'open').mockImplementation(() => null);
+        render(<MemoryRouter initialEntries={['/home/entry?voucherId=41']}><Routes>
+            <Route path="/home/entry" element={<HomeEntry />} />
+        </Routes></MemoryRouter>);
+        const submit = await screen.findByRole('button', { name: 'Update and Print' });
+        await waitFor(() => expect(submit).not.toBeDisabled());
+        await user.click(submit);
+        await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
+        expect(apiClient.post.mock.calls[0][1].voucherVersion).toBe('AQID');
+        if (status === 'Approved')
+            expect(print).toHaveBeenCalledWith('/reporting/print-voucher?voucherId=41&type=JV', '_blank');
+        else expect(print).not.toHaveBeenCalled();
+        print.mockRestore();
     });
 
     it('restores the last project on the shared Journal Entry and Expense creation page', async () => {

@@ -24,12 +24,7 @@ public sealed class ApprovalGuardService : IApprovalGuardService
     {
         if (lockVoucher)
         {
-            var locked = _context.Database.IsNpgsql()
-                ? await _context.JournalVouchers
-                    .FromSqlInterpolated($"SELECT * FROM \"JournalVouchers\" WHERE \"JournalVoucherId\" = {journalVoucherId} FOR UPDATE")
-                    .SingleOrDefaultAsync()
-                : await _context.JournalVouchers
-                    .SingleOrDefaultAsync(x => x.JournalVoucherId == journalVoucherId);
+            var locked = await RowLocks.LockJournalVoucherAsync(_context, journalVoucherId);
             if (locked == null) throw new InvalidOperationException($"Voucher {journalVoucherId} was not found.");
         }
         if (await IsVoucherPendingAsync(journalVoucherId))

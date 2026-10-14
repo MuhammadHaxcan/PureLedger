@@ -325,6 +325,42 @@ public sealed class PaymentReceiptTests
     }
 
     [Fact]
+    public async Task Report_PagesAndTotalsOnlyApprovedStructurallyValidVouchers()
+    {
+        await using var context = CreateContext();
+        await SeedMastersAsync(context);
+        var start = new DateOnly(2026, 7, 1);
+        for (var i = 0; i < 4; i++) await AddPaymentReceiptAsync(context, true, true, start.AddDays(i));
+        await AddPaymentReceiptAsync(context, true, false, start.AddDays(5));           // never approved
+        var broken = await AddPaymentReceiptAsync(context, true, true, start.AddDays(6));
+        broken.IsBaseVoucher = true;                                                   // structurally invalid
+        await context.SaveChangesAsync();
+
+        async Task<JsonElement> PageAsync(int page)
+        {
+            var response = await CreateService(context).GetReportAsync(
+                new PaymentReceiptReportRequest { ProjectId = 1, Page = page, PageSize = 2 }, userId: 1, isAdmin: true);
+            return JsonDocument.Parse(JsonSerializer.Serialize(response)).RootElement;
+        }
+
+        var first = await PageAsync(1);
+        var second = await PageAsync(2);
+        var third = await PageAsync(3);
+
+        Assert.Equal(4, first.GetProperty("totalVouchers").GetInt32());
+        Assert.Equal(400m, first.GetProperty("totalDebit").GetDecimal());
+        Assert.Equal(400m, first.GetProperty("totalCredit").GetDecimal());
+        Assert.Equal(2, first.GetProperty("vouchers").GetArrayLength());
+        Assert.Equal(2, second.GetProperty("vouchers").GetArrayLength());
+        Assert.Equal(0, third.GetProperty("vouchers").GetArrayLength());
+        // Newest first, and the two excluded vouchers never appear.
+        var ids = first.GetProperty("vouchers").EnumerateArray().Concat(second.GetProperty("vouchers").EnumerateArray())
+            .Select(v => v.GetProperty("journalVoucherId").GetInt32()).ToList();
+        Assert.Equal(ids.OrderByDescending(x => x), ids);
+        Assert.DoesNotContain(broken.JournalVoucherId, ids);
+    }
+
+    [Fact]
     public async Task ReportInitialization_IncludesProjectOnAccountOptions()
     {
         await using var context = CreateContext();
@@ -672,6 +708,10 @@ public sealed class PaymentReceiptTests
         context.Accounts.AddRange(
             new Account { AccountId = 1, CategoryId = 1, AccountGroupId = 1, AccountName = "Cash", IsEnabled = true },
             new Account { AccountId = 2, CategoryId = 1, AccountGroupId = 1, AccountName = "Bank", IsEnabled = true });
+        // Existing pending-flow tests submit as an ordinary user. Submission policy
+        // now resolves the actual user record instead of trusting the role argument.
+        context.Users.Add(new User { UserId = 1, Username = "submitter", FullName = "Submitter", PasswordHash = "test" });
+        context.UserProjects.Add(new UserProject { UserId = 1, ProjectId = 1 });
         await context.SaveChangesAsync();
     }
 
@@ -679,7 +719,12 @@ public sealed class PaymentReceiptTests
         LedgerDbContext context, bool completed, bool approved)
     {
         await SeedMastersAsync(context);
-        var date = new DateOnly(2026, 7, 1);
+        return await AddPaymentReceiptAsync(context, completed, approved, new DateOnly(2026, 7, 1));
+    }
+
+    private static async Task<JournalVoucher> AddPaymentReceiptAsync(
+        LedgerDbContext context, bool completed, bool approved, DateOnly date)
+    {
         var voucher = new JournalVoucher
         {
             ProjectId = 1,

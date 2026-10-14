@@ -57,3 +57,25 @@ public sealed class StockTransferCategoryTests
         return new LedgerDbContext(options);
     }
 }
+
+public sealed class StockTransferAllocationTests
+{
+    [Fact]
+    public void AllocateByWeight_FiveEqualShares_NeverNegativeAndSumsExactly()
+    {
+        var weights = Enumerable.Range(1, 5).ToDictionary(i => i, _ => 1m);
+        var result = StockTransferService.AllocateByWeight(0.0003m, weights);
+        Assert.All(result.Values, v => Assert.True(v >= 0));
+        Assert.Equal(0.0003m, result.Values.Sum());
+        Assert.Equal(new[] { 3, 4, 5 }, result.Where(x => x.Value == 0.0001m).Select(x => x.Key).OrderBy(x => x));
+    }
+
+    [Fact]
+    public void AllocateByWeight_SkewedWeights_SumsExactly()
+    {
+        var weights = new Dictionary<int, decimal> { [1] = 1, [2] = 1, [3] = 1, [4] = 1, [5] = 996 };
+        var result = StockTransferService.AllocateByWeight(100m, weights);
+        Assert.All(result.Values, v => Assert.True(v >= 0));
+        Assert.Equal(100m, result.Values.Sum());
+    }
+}

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PureLedger.Helpers;
 using Npgsql;
 using PureLedger.Data;
 using PureLedger.Models;
@@ -13,6 +14,7 @@ namespace PureLedger.Backend.Tests;
 /// Set PURELEDGER_TEST_POSTGRES to its connection string. These tests never
 /// create/drop a database and roll back or delete every row that they create.
 /// </summary>
+[Collection("PostgreSQL integration")]
 public sealed class PaymentReceiptPostgresIntegrationTests
 {
     [PostgresTheory]
@@ -35,7 +37,7 @@ public sealed class PaymentReceiptPostgresIntegrationTests
             var accounts = candidates.GroupBy(x => x.ProjectId).FirstOrDefault(x => x.Count() >= 2)?.Take(2).ToList()
                 ?? throw new InvalidOperationException("The isolated test database needs two enabled group-1 accounts in one project.");
             var userId = await context.Users.AsNoTracking().Select(x => x.UserId).FirstAsync();
-            var date = DateOnly.FromDateTime(DateTime.UtcNow);
+            var date = BusinessClock.Today;
             var version = Guid.NewGuid();
             var approval = new ApprovalVoucher
             {
@@ -101,14 +103,15 @@ public sealed class PaymentReceiptPostgresIntegrationTests
     {
         await using var context = CreateContext();
         var migrations = await context.Database.GetAppliedMigrationsAsync();
-        Assert.Contains("20260925150131_NewFeaturesOnRestoredBaseline", migrations);
+        Assert.NotEmpty(migrations);
+        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         var master = await context.Accounts.AsNoTracking()
             .Where(x => x.IsEnabled && x.AccountGroupId == 1)
             .Select(x => new { x.AccountId, x.CategoryId, ProjectId = x.Category!.ProjectId })
             .FirstAsync();
 
         await using var transaction = await context.Database.BeginTransactionAsync();
-        var date = DateOnly.FromDateTime(DateTime.UtcNow);
+        var date = BusinessClock.Today;
         var voucher = new JournalVoucher
         {
             ProjectId = master.ProjectId,
@@ -149,7 +152,7 @@ public sealed class PaymentReceiptPostgresIntegrationTests
             await using (var setup = CreateContext())
             {
                 var projectId = await setup.Projects.AsNoTracking().Select(x => x.ProjectId).FirstAsync();
-                var date = DateOnly.FromDateTime(DateTime.UtcNow);
+                var date = BusinessClock.Today;
                 var voucher = new JournalVoucher
                 {
                     ProjectId = projectId,

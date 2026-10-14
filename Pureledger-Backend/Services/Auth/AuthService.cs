@@ -1,4 +1,6 @@
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
+using System.Data;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.ViewModels;
@@ -35,29 +37,32 @@ namespace PureLedger.Services.Auth
 
         #region User Authentication and Validation
 
-        public async Task<bool> ValidateUserAsync(LoginViewModel model)
+        public async Task<User?> AuthenticateUserAsync(LoginViewModel model)
         {
             try
             {
-                var user = await GetUserByUsernameAsync(model.Username);
+                if (string.IsNullOrWhiteSpace(model.Username) || string.IsNullOrEmpty(model.Password))
+                    return null;
+
+                var user = await _unitOfWork.Users.GetByLoginWithAccessAsync(model.Username);
                 if (user == null || !user.IsActive)
-                    return false;
+                    return null;
 
                 // Check if user belongs to the current subroute
                 var subroute = _httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
                 if (user.Subroute != subroute && !user.IsAdmin)
-                    return false;
+                    return null;
 
                 var result = CheckPassword(user, model.Password);
                 if (result)
                     await UpdateLastLoginAsync(user);
 
-                return result;
+                return result ? user : null;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error validating user login");
-                return false;
+                return null;
             }
         }
 
@@ -156,46 +161,6 @@ namespace PureLedger.Services.Auth
             }
         }
 
-        public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
-        {
-            try
-            {
-                var secretKey = _configuration["Jwt:SecretKey"] ?? "YourSuperSecretKeyThatShouldBeAtLeast32CharactersLong!";
-                var issuer = _configuration["Jwt:Issuer"] ?? "PureLedger";
-                var audience = _configuration["Jwt:Audience"] ?? "PureLedger";
-
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-                var tokenHandler = new JwtSecurityTokenHandler();
-
-                var validationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = key,
-                    ValidateIssuer = true,
-                    ValidIssuer = issuer,
-                    ValidateAudience = true,
-                    ValidAudience = audience,
-                    ValidateLifetime = false, // Don't validate lifetime for expired tokens
-                    ClockSkew = TimeSpan.Zero
-                };
-
-                var principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
-
-                if (validatedToken is not JwtSecurityToken jwtSecurityToken ||
-                    !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    throw new SecurityTokenException("Invalid token");
-                }
-
-                return principal;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Token validation failed for expired token");
-                return null;
-            }
-        }
-
         #endregion
 
         #region Refresh Token Management
@@ -221,40 +186,6 @@ namespace PureLedger.Services.Auth
         public async Task<RefreshToken?> GetRefreshTokenAsync(string token)
         {
             return await _unitOfWork.RefreshTokens.GetByTokenAsync(token);
-        }
-
-        public async Task<bool> ValidateRefreshTokenAsync(string token)
-        {
-            var refreshToken = await _unitOfWork.RefreshTokens.GetByTokenAsync(token);
-
-            if (refreshToken == null)
-                return false;
-
-            if (refreshToken.IsRevoked)
-            {
-                _logger.LogWarning("Attempted to use revoked refresh token for user {UserId}", refreshToken.UserId);
-                return false;
-            }
-
-            if (refreshToken.IsExpired)
-            {
-                _logger.LogWarning("Attempted to use expired refresh token for user {UserId}", refreshToken.UserId);
-                return false;
-            }
-
-            return true;
-        }
-
-        public async Task<RefreshToken?> RefreshAccessTokenAsync(string accessToken, string refreshToken)
-        {
-            var storedRefreshToken = await _unitOfWork.RefreshTokens.GetByTokenAsync(refreshToken);
-
-            if (storedRefreshToken == null || !storedRefreshToken.IsActive)
-            {
-                return null;
-            }
-
-            return storedRefreshToken;
         }
 
         public async Task<bool> RevokeRefreshTokenAsync(string token)
@@ -326,11 +257,12 @@ namespace PureLedger.Services.Auth
 
         #region User Management
 
-        public async Task<bool> CreateUserAsync(UserViewModel model)
-        {
-            if (await _unitOfWork.Users.UsernameExistsAsync(model.Username))
-                return false;
+        public Task<bool> CreateUserAsync(UserViewModel model) =>
+            RetryOnSerializationConflictAsync(() => CreateUserCoreAsync(model));
 
+        // Returns null when PostgreSQL aborted the transaction with a serialization conflict.
+        private async Task<bool?> CreateUserCoreAsync(UserViewModel model)
+        {
             var subroute = _httpContextAccessor.HttpContext?.Items["Subroute"]?.ToString() ?? "Default";
             var newUser = new User
             {
@@ -344,9 +276,19 @@ namespace PureLedger.Services.Auth
                 CreatedDate = DateTime.UtcNow
             };
 
-            await using var transaction = await _unitOfWork.BeginTransactionAsync();
+            // Serializable makes the uniqueness check and the insert one atomic decision: of two
+            // concurrent creates with the same username/email, one fails with a serialization conflict
+            // and is retried, so it then sees the committed row and reports the duplicate.
+            await using var transaction = await _unitOfWork.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
+                if (await _unitOfWork.Users.LoginIdentifierExistsAsync(model.Username) ||
+                    await _unitOfWork.Users.LoginIdentifierExistsAsync(model.Email ?? string.Empty))
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
                 _unitOfWork.Users.Add(newUser);
                 // The generated user ID is required by the access rows below.
                 await _unitOfWork.SaveChangesAsync();
@@ -394,6 +336,12 @@ namespace PureLedger.Services.Auth
                 await transaction.CommitAsync();
                 return true;
             }
+            catch (Exception ex) when (IsSerializationConflict(ex))
+            {
+                // PostgreSQL can abort the transaction at COMMIT, leaving nothing to roll back.
+                try { await transaction.RollbackAsync(); } catch (InvalidOperationException) { }
+                return null;
+            }
             catch
             {
                 await transaction.RollbackAsync();
@@ -401,22 +349,59 @@ namespace PureLedger.Services.Auth
             }
         }
 
-        public async Task<bool> UpdateUserAsync(UserViewModel model)
+        private async Task<bool> RetryOnSerializationConflictAsync(Func<Task<bool?>> attempt)
+        {
+            const int maxAttempts = 3;
+            for (var i = 1; i <= maxAttempts; i++)
+            {
+                var result = await attempt();
+                if (result.HasValue) return result.Value;
+                // Drop entities left over from the aborted attempt before re-reading.
+                _unitOfWork.ClearTracking();
+                _logger.LogWarning("User save hit a serialization conflict (attempt {Attempt} of {Max})", i, maxAttempts);
+            }
+            throw new InvalidOperationException("The user could not be saved because of concurrent changes. Please try again.");
+        }
+
+        private static bool IsSerializationConflict(Exception ex)
+        {
+            if (ex is PostgresException pg &&
+                (pg.SqlState == PostgresErrorCodes.SerializationFailure || pg.SqlState == PostgresErrorCodes.DeadlockDetected))
+                return true;
+            return ex.InnerException != null && IsSerializationConflict(ex.InnerException);
+        }
+
+        public Task<bool> UpdateUserAsync(UserViewModel model) =>
+            RetryOnSerializationConflictAsync(() => UpdateUserCoreAsync(model));
+
+        // Returns null when PostgreSQL aborted the transaction with a serialization conflict.
+        private async Task<bool?> UpdateUserCoreAsync(UserViewModel model)
         {
             var user = await _unitOfWork.Users.GetByIdWithAccessAsync(model.UserId);
             if (user == null)
                 return false;
 
-            await using var transaction = await _unitOfWork.BeginTransactionAsync();
+            await using var transaction = await _unitOfWork.BeginTransactionAsync(IsolationLevel.Serializable);
             try
             {
+                // Only a changed email can introduce a collision. Checking an unchanged one would block
+                // every update (deactivation, role, password) of a user whose legacy email is duplicated.
+                var requestedEmail = string.IsNullOrWhiteSpace(model.Email) ? null : model.Email.Trim();
+                var emailChanged = !string.Equals(requestedEmail, user.Email?.Trim(), StringComparison.OrdinalIgnoreCase);
+                if (emailChanged && requestedEmail != null &&
+                    await _unitOfWork.Users.LoginIdentifierExistsAsync(requestedEmail, user.UserId))
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
+
                 // Track if we need to invalidate tokens
                 bool shouldInvalidateTokens = false;
                 var invalidationReasons = new List<string>();
 
                 // Update user properties
                 user.FullName = model.FullName;
-                user.Email = model.Email;
+                user.Email = requestedEmail;
 
                 // Only update these if the current user is an admin
                 if (IsCurrentUserAdmin())
@@ -564,6 +549,12 @@ namespace PureLedger.Services.Auth
                 await transaction.CommitAsync();
                 return true;
             }
+            catch (Exception ex) when (IsSerializationConflict(ex))
+            {
+                // PostgreSQL can abort the transaction at COMMIT, leaving nothing to roll back.
+                try { await transaction.RollbackAsync(); } catch (InvalidOperationException) { }
+                return null;
+            }
             catch
             {
                 await transaction.RollbackAsync();
@@ -589,14 +580,6 @@ namespace PureLedger.Services.Auth
             if (deleted)
                 await _unitOfWork.SaveChangesAsync();
             return deleted;
-        }
-
-        public async Task<bool> IsSubrouteAdminAsync(string username, string subroute)
-        {
-            var users = await _unitOfWork.Users.GetBySubrouteAsync(subroute);
-            var user = users.FirstOrDefault(u => u.Username == username);
-
-            return user?.IsAdmin ?? false;
         }
 
         public async Task<List<User>> GetUsersBySubrouteAsync(string subroute)

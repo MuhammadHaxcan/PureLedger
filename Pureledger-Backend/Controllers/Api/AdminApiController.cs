@@ -247,7 +247,7 @@ namespace PureLedger.Controllers.Api
                     });
                 }
 
-                return BadRequest(new { success = false, message = "Error creating user. Username may already exist." });
+                return BadRequest(new { success = false, message = "Error creating user. Username or email may already be in use." });
             }
             catch (Exception ex)
             {
@@ -345,7 +345,7 @@ namespace PureLedger.Controllers.Api
                     });
                 }
 
-                return BadRequest(new { success = false, message = "Error updating user" });
+                return BadRequest(new { success = false, message = "Error updating user. Email may already be in use." });
             }
             catch (Exception ex)
             {
@@ -464,7 +464,7 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, message = "Profile updated successfully", data = model });
                 }
 
-                return BadRequest(new { success = false, message = "Error updating profile" });
+                return BadRequest(new { success = false, message = "Error updating profile. Email may already be in use." });
             }
             catch (Exception ex)
             {
@@ -554,7 +554,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving project cartage settings: {Message}", ex.Message);
-                return StatusCode(500, new { success = false, message = $"Error saving settings: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error saving settings" });
             }
         }
 

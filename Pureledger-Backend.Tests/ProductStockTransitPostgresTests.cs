@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PureLedger.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 using PureLedger.Data;
 using PureLedger.Models;
@@ -11,6 +12,7 @@ using Xunit;
 namespace PureLedger.Backend.Tests;
 
 // Run only against a disposable, migrated database named by PURELEDGER_TEST_POSTGRES.
+[Collection("PostgreSQL integration")]
 public sealed class ProductStockTransitPostgresTests
 {
     [PostgresFact]
@@ -54,7 +56,7 @@ public sealed class ProductStockTransitPostgresTests
                 new AppSetting { SettingKey = $"StockTransfer:{projectId}:InTransitCategoryId", SettingValue = transitCategory.CategoryId.ToString() },
                 new AppSetting { SettingKey = $"StockTransfer:{projectId}:InTransitAccountId", SettingValue = transit.AccountId.ToString() });
 
-            var purchaseDate = DateOnly.FromDateTime(DateTime.Today).AddDays(-3);
+            var purchaseDate = BusinessClock.Today.AddDays(-3);
             var dispatchDate = purchaseDate.AddDays(1);
             var receiptDate = dispatchDate.AddDays(1);
             var purchase = new JournalVoucher {
@@ -118,10 +120,10 @@ public sealed class ProductStockTransitPostgresTests
                 ProjectId = projectId.ToString(), EndDate = dispatchDate, ExcludeNilProducts = true
             });
             Assert.Equal(4, pendingReport.ProductSummaries.Single(x => x.ProductId == productA.AccountId).InTransitQuantity);
-            Assert.Equal((10, 4, 6), pendingReport.ProductSummaries
+            Assert.Equal((10, 0, 6), pendingReport.ProductSummaries
                 .Where(x => x.ProductId == productA.AccountId)
                 .Select(x => (x.TotalDebitQty, x.TotalCreditQty, x.QtyBalance)).Single());
-            Assert.Equal((15, 6, 9), (pendingReport.Totals.TotalDebitQty,
+            Assert.Equal((15, 0, 9), (pendingReport.Totals.TotalDebitQty,
                 pendingReport.Totals.TotalCreditQty, pendingReport.Totals.BalanceQuantity));
             await DeleteAsync(pendingId);
             Assert.Equal(0, (await reporting.GetProductStockBreakdownAsync(projectId, productA.AccountId, dispatchDate)).InTransitQuantity);
@@ -139,10 +141,10 @@ public sealed class ProductStockTransitPostgresTests
             var partialReport = await reporting.GetProductReportAsync(new ProductReportRequest {
                 ProjectId = projectId.ToString(), EndDate = receiptDate, ExcludeNilProducts = true
             });
-            Assert.Equal((14, 4, 10), partialReport.ProductSummaries
+            Assert.Equal((10, 0, 10), partialReport.ProductSummaries
                 .Where(x => x.ProductId == productA.AccountId)
                 .Select(x => (x.TotalDebitQty, x.TotalCreditQty, x.QtyBalance)).Single());
-            Assert.Equal((19, 6, 13), (partialReport.Totals.TotalDebitQty,
+            Assert.Equal((15, 0, 13), (partialReport.Totals.TotalDebitQty,
                 partialReport.Totals.TotalCreditQty, partialReport.Totals.BalanceQuantity));
             await DeleteAsync(partialId);
             foreach (var asOf in new[] { dispatchDate, receiptDate }) {

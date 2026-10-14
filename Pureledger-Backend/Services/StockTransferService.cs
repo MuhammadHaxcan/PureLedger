@@ -1,6 +1,8 @@
 using System.Data;
+using PureLedger.Helpers;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using PureLedger.Data;
 using PureLedger.Models;
@@ -28,6 +30,7 @@ public sealed class StockTransferService : IStockTransferService
     private static readonly string[] StockReferenceTypes =
         { ReceiptReferenceType, ChargeReferenceType, CancellationReferenceType };
 
+    private const int ProjectionBatchSize = 200;
     private const int NormalAccountGroup = 1;
     private const int ProductAccountGroup = 2;
     private const int ExpenseAccountGroup = 3;
@@ -103,6 +106,9 @@ public sealed class StockTransferService : IStockTransferService
     public async Task<object> GetAvailabilityAsync(int projectId, int sourceLocationId, int productAccountId,
         DateOnly? asOfDate, int? excludeDispatchJvId, int userId, bool isAdmin)
     {
+        await using var transaction = _context.Database.IsRelational()
+            ? await _context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead)
+            : null;
         await EnsureProjectAccessAsync(projectId, userId, isAdmin);
         var product = await GetProjectAccountAsync(projectId, productAccountId, ProductAccountGroup);
         var hidden = await GetHiddenCategoryIdsAsync(userId, isAdmin);
@@ -116,17 +122,15 @@ public sealed class StockTransferService : IStockTransferService
             var graph = await LoadGraphAsync(rootId);
             await EnsureProjectAccessAsync(graph.Root.ProjectId, userId, isAdmin);
             EnsureGraphCategoryAccess(graph, hidden);
-            if (graph.Root.ProjectId != projectId ||
-                graph.SourceLocationId != sourceLocationId ||
-                DeriveStatus(graph, null) != "Pending" ||
-                graph.ProductEntries.All(x => x.AccountId != productAccountId))
+            if (graph.Root.ProjectId != projectId || DeriveStatus(graph, null) != "Pending")
                 throw new StockTransferValidationException(
-                    "Only the matching Pending dispatch can be excluded from availability.");
+                    "Only a Pending dispatch in the selected project can be excluded from availability.");
             excludeDispatchJvId = rootId;
         }
 
         var value = await GetAvailabilityCoreAsync(projectId, sourceLocationId, productAccountId,
-            asOfDate ?? DateOnly.FromDateTime(DateTime.Today), excludeDispatchJvId);
+            asOfDate ?? BusinessClock.Today, excludeDispatchJvId);
+        if (transaction != null) await transaction.CommitAsync();
         return new
         {
             productAccountId,
@@ -200,7 +204,7 @@ public sealed class StockTransferService : IStockTransferService
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            await RollbackIfActiveAsync(transaction, ex);
             ThrowTranslated(ex);
             throw;
         }
@@ -225,9 +229,7 @@ public sealed class StockTransferService : IStockTransferService
             if (request.TransferDate.Year != root.EntryDate.Year)
                 throw new StockTransferValidationException("Changing the dispatch year requires delete and recreate.");
 
-            var excludedDispatchJvId = graph.SourceLocationId == request.SourceLocationId
-                ? root.JournalVoucherId
-                : (int?)null;
+            var excludedDispatchJvId = root.JournalVoucherId;
             var prepared = await PrepareDispatchAsync(request, hidden, excludedDispatchJvId);
             // Existing transfers retain the transit account/category snapshot posted on
             // their root JV even if project settings later change.
@@ -257,7 +259,7 @@ public sealed class StockTransferService : IStockTransferService
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            await RollbackIfActiveAsync(transaction, ex);
             ThrowTranslated(ex);
             throw;
         }
@@ -295,14 +297,9 @@ public sealed class StockTransferService : IStockTransferService
 
         var rootIds = await roots.OrderByDescending(x => x.EntryDate).ThenByDescending(x => x.JournalVoucherId)
             .Select(x => x.JournalVoucherId).ToListAsync();
-        var projections = new List<TransferProjection>();
-        foreach (var id in rootIds)
-        {
-            var projection = await GetProjectionAsync(id, request.AsOfDate);
-            if (projection == null || projection.AllCategoryIds.Any(hidden.Contains)) continue;
-            if (!Matches(projection, request)) continue;
-            projections.Add(projection);
-        }
+        var projections = (await GetProjectionsAsync(rootIds, request.AsOfDate))
+            .Where(x => !x.AllCategoryIds.Any(hidden.Contains) && Matches(x, request))
+            .ToList();
 
         var page = Math.Max(0, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 2500);
@@ -351,7 +348,7 @@ public sealed class StockTransferService : IStockTransferService
             var status = DeriveStatus(graph, null);
             if (status is not ("Pending" or "PartiallyReceived"))
                 throw new StockTransferValidationException("This transfer is not open for receiving.");
-            if (request.ReceiptDate < root.EntryDate || request.ReceiptDate > DateOnly.FromDateTime(DateTime.Today))
+            if (request.ReceiptDate < root.EntryDate || request.ReceiptDate > BusinessClock.Today)
                 throw new StockTransferValidationException("Receipt date must be between dispatch date and today.");
 
             var selected = request.SelectedProductAccountIds.Distinct().ToList();
@@ -409,7 +406,7 @@ public sealed class StockTransferService : IStockTransferService
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            await RollbackIfActiveAsync(transaction, ex);
             ThrowTranslated(ex);
             throw;
         }
@@ -429,7 +426,7 @@ public sealed class StockTransferService : IStockTransferService
             var pending = BuildLines(graph, null).Where(x => x.State == "Pending").ToList();
             if (pending.Count == 0) throw new StockTransferValidationException("This transfer has no pending products to cancel.");
 
-            var cancellationDate = DateOnly.FromDateTime(DateTime.Today);
+            var cancellationDate = BusinessClock.Today;
             var cancellation = NewVoucher(root.ProjectId, cancellationDate);
             _context.JournalVouchers.Add(cancellation);
             await _context.SaveChangesAsync();
@@ -470,7 +467,7 @@ public sealed class StockTransferService : IStockTransferService
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            await RollbackIfActiveAsync(transaction, ex);
             ThrowTranslated(ex);
             throw;
         }
@@ -495,6 +492,26 @@ public sealed class StockTransferService : IStockTransferService
             if (external)
                 throw new StockTransferValidationException("The transfer graph has an external voucher reference and cannot be safely deleted.");
 
+            // Removing a receipt or cancellation must not remove stock already used
+            // by a later sale or onward dispatch, including backdated postings.
+            foreach (var productId in graph.ProductEntries.Select(e => e.AccountId).Distinct())
+            {
+                var costing = await new ProductInventoryCosting(_context).CalculateAsync(
+                    root.ProjectId, DateOnly.MaxValue, productId: productId);
+                foreach (var warehouse in costing.Movements.GroupBy(m => m.LocationId))
+                {
+                    int originalQuantity = 0, remainingQuantity = 0;
+                    foreach (var movement in warehouse)
+                    {
+                        originalQuantity += movement.QuantityChange;
+                        if (!graphIds.Contains(movement.Entry.JournalVoucherId)) remainingQuantity += movement.QuantityChange;
+                        if (remainingQuantity < Math.Min(0, originalQuantity))
+                            throw new StockTransferConflictException(
+                                "This transfer supplied stock used by a later posting. Reverse the dependent sale or transfer before deleting it.");
+                    }
+                }
+            }
+
             var refs = await _context.JournalVoucherReferences
                 .Where(x => graphIds.Contains(x.MainVoucherId) || graphIds.Contains(x.ReferencedVoucherId)).ToListAsync();
             _context.JournalVoucherReferences.RemoveRange(refs);
@@ -517,7 +534,7 @@ public sealed class StockTransferService : IStockTransferService
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync();
+            await RollbackIfActiveAsync(transaction, ex);
             ThrowTranslated(ex);
             throw;
         }
@@ -542,16 +559,24 @@ public sealed class StockTransferService : IStockTransferService
         var result = new List<PreparedLine>();
         foreach (var item in request.Items)
         {
-            var availability = await GetAvailabilityCoreAsync(request.ProjectId, request.SourceLocationId,
-                item.ProductAccountId, request.TransferDate, excludedDispatchJvId);
+            var history = await new ProductInventoryCosting(_context).CalculateAsync(request.ProjectId,
+                DateOnly.MaxValue, productId: item.ProductAccountId, excludedDispatchId: excludedDispatchJvId);
+            var position = history.Position(item.ProductAccountId, request.SourceLocationId,
+                excludedDispatchJvId.HasValue ? request.TransferDate : request.TransferDate.AddDays(1),
+                excludedDispatchJvId);
+            var availability = new Availability(position.Quantity, position.Value,
+                position.SuggestedRate > 0 ? RoundMoney(position.SuggestedRate) : null);
             var available = availability.Quantity;
-            if (available < item.Quantity)
-                throw new StockTransferConflictException($"Insufficient source stock for {products[item.ProductAccountId].AccountName}. Available: {available}, requested: {item.Quantity}.");
             var suggested = availability.SuggestedCost;
-            var cost = item.UnitCost ?? suggested;
-            if (!cost.HasValue)
-                throw new StockTransferValidationException($"Enter a unit cost for {products[item.ProductAccountId].AccountName}; no source average exists.");
-            result.Add(new PreparedLine(products[item.ProductAccountId], item.Quantity, RoundMoney(cost.Value)));
+            var cost = item.UnitCost.HasValue ? RoundMoney(item.UnitCost.Value) : suggested;
+            if (!cost.HasValue || cost <= 0)
+                throw new StockTransferValidationException($"Enter a positive transfer cost for {products[item.ProductAccountId].AccountName}.");
+            var value = cost == suggested && available > 0 && availability.Value > 0
+                ? ProductInventoryCosting.CarryingValue(available, availability.Value, item.Quantity)
+                : RoundMoney(cost.Value * item.Quantity);
+            if (value <= 0)
+                throw new StockTransferValidationException("The transfer value is below the supported monetary precision.");
+            result.Add(new PreparedLine(products[item.ProductAccountId], item.Quantity, cost.Value, value));
         }
         return result;
     }
@@ -560,13 +585,13 @@ public sealed class StockTransferService : IStockTransferService
         List<PreparedLine> lines, TransitSettings settings)
     {
         var number = TransferNumber(root);
-        var total = RoundMoney(lines.Sum(x => x.Quantity * x.UnitCost));
+        var total = RoundMoney(lines.Sum(x => x.BaseValue));
         var transit = NewEntry(root.JournalVoucherId, settings.Account, 0, 0, total, 0,
             $"{number} stock in transit; {Clean(request.Notes)}");
         _context.JournalEntries.Add(transit);
         foreach (var line in lines)
         {
-            var amount = RoundMoney(line.Quantity * line.UnitCost);
+            var amount = line.BaseValue;
             _context.JournalEntries.Add(NewEntry(root.JournalVoucherId, line.Product, line.Quantity, line.UnitCost,
                 0, amount, $"{number} dispatch from source; {Clean(request.Notes)}"));
         }
@@ -650,7 +675,7 @@ public sealed class StockTransferService : IStockTransferService
                 throw new StockTransferValidationException("Manual allocations contain duplicate or unselected products.");
             result = ids.ToDictionary(id => id,
                 id => RoundMoney(request.Allocations.SingleOrDefault(x => x.ProductAccountId == id)?.Amount ?? 0));
-            if (Math.Abs(result.Values.Sum() - amount) > 0.0001m)
+            if (result.Values.Any(value => value < 0) || result.Values.Sum() != amount)
                 throw new StockTransferValidationException("Manual product allocations must equal the charge amount to four decimal places.");
             return result;
         }
@@ -667,157 +692,152 @@ public sealed class StockTransferService : IStockTransferService
         });
         var totalWeight = weights.Values.Sum();
         if (totalWeight <= 0) throw new StockTransferValidationException("Selected products have no allocatable value or quantity.");
-        result = ids.ToDictionary(id => id, id => RoundMoney(amount * weights[id] / totalWeight));
-        var residue = RoundMoney(amount - result.Values.Sum());
-        var largest = weights.OrderByDescending(x => x.Value).ThenBy(x => x.Key).First().Key;
-        result[largest] = RoundMoney(result[largest] + residue);
-        return result;
+        return AllocateByWeight(amount, weights);
+    }
+
+    /// <summary>
+    /// Splits an amount in whole 0.0001 units: every share is floored, then the leftover units go to the
+    /// largest fractional remainders (ties: larger weight, then higher id). Shares are never negative and sum exactly to the amount.
+    /// </summary>
+    public static Dictionary<int, decimal> AllocateByWeight(decimal amount, IReadOnlyDictionary<int, decimal> weights)
+    {
+        const decimal unit = 0.0001m;
+        var totalWeight = weights.Values.Sum();
+        var totalUnits = decimal.Round(amount / unit, 0, MidpointRounding.AwayFromZero);
+        var shares = weights.Select(x =>
+        {
+            var exact = totalUnits * x.Value / totalWeight;
+            var floor = decimal.Floor(exact);
+            return (x.Key, Weight: x.Value, Floor: floor, Fraction: exact - floor);
+        }).ToList();
+        var leftover = (int)(totalUnits - shares.Sum(x => x.Floor));
+        var bonus = shares.OrderByDescending(x => x.Fraction).ThenByDescending(x => x.Weight).ThenByDescending(x => x.Key)
+            .Take(leftover).Select(x => x.Key).ToHashSet();
+        return shares.ToDictionary(x => x.Key, x => (x.Floor + (bonus.Contains(x.Key) ? 1 : 0)) * unit);
     }
 
     private async Task<Availability> GetAvailabilityCoreAsync(int projectId, int locationId, int productAccountId,
         DateOnly asOf, int? excludedDispatchJvId = null)
     {
-        var rows = await _context.JournalEntries.AsNoTracking()
-            .Where(x => x.AccountId == productAccountId && x.IsProcessed && x.JournalVoucher!.IsCompleted &&
-                        !x.JournalVoucher.IsBaseVoucher &&
-                        x.JournalVoucher.ProjectId == projectId && x.JournalVoucher.EntryDate <= asOf &&
-                        (!excludedDispatchJvId.HasValue ||
-                         x.JournalVoucherId != excludedDispatchJvId.Value) &&
-                        _context.DeliveryChallanEntries.Any(d => d.JournalEntryId == x.JournalEntryId && d.LocationId == locationId))
-            .OrderBy(x => x.JournalVoucher!.EntryDate).ThenBy(x => x.JournalEntryId)
-            .Select(x => new
-            {
-                Date = x.JournalVoucher!.EntryDate,
-                x.JournalEntryId,
-                x.Quantity,
-                x.Debit,
-                x.Credit,
-                x.JournalVoucher.IsStockTransfer
-            })
-            .ToListAsync();
-
-        // Product-target charge JVs have no DCE; derive their destination through
-        // charge -> receipt -> matching receipt product DCE.
-        var landed = await (
-            from chargeEntry in _context.JournalEntries.AsNoTracking()
-            join chargeVoucher in _context.JournalVouchers.AsNoTracking() on chargeEntry.JournalVoucherId equals chargeVoucher.JournalVoucherId
-            join chargeRef in _context.JournalVoucherReferences.AsNoTracking() on chargeVoucher.JournalVoucherId equals chargeRef.ReferencedVoucherId
-            join receiptEntry in _context.JournalEntries.AsNoTracking()
-                on new { VoucherId = chargeRef.MainVoucherId, chargeEntry.AccountId }
-                equals new { VoucherId = receiptEntry.JournalVoucherId, receiptEntry.AccountId }
-            join dce in _context.DeliveryChallanEntries.AsNoTracking() on receiptEntry.JournalEntryId equals dce.JournalEntryId
-            where chargeRef.ReferenceType == ChargeReferenceType && chargeVoucher.IsStockTransfer &&
-                  chargeVoucher.IsCompleted && chargeVoucher.ProjectId == projectId &&
-                  chargeVoucher.EntryDate <= asOf && chargeEntry.AccountId == productAccountId &&
-                  chargeEntry.Quantity == 0 && chargeEntry.Debit > 0 && receiptEntry.Quantity > 0 &&
-                  receiptEntry.Debit > 0 && dce.LocationId == locationId
-            select new { Date = chargeVoucher.EntryDate, chargeEntry.JournalEntryId, Amount = chargeEntry.Debit }).ToListAsync();
-
-        var events = rows.Select(x => new InventoryEvent(x.Date, x.JournalEntryId, x.Quantity, x.Debit, x.Credit,
-                x.IsStockTransfer, false))
-            .Concat(landed.Select(x => new InventoryEvent(x.Date, x.JournalEntryId, 0, x.Amount, 0, true, true)))
-            .OrderBy(x => x.Date).ThenBy(x => x.EntryId).ToList();
-        var quantity = 0;
-        decimal value = 0;
-        foreach (var movement in events)
-        {
-            if (movement.IsLandedCharge)
-            {
-                value = RoundMoney(value + movement.Debit);
-                continue;
-            }
-            if (movement.Debit > 0)
-            {
-                quantity += movement.Quantity;
-                value = RoundMoney(value + movement.Debit);
-                continue;
-            }
-            if (movement.Credit <= 0) continue;
-            var outgoingCost = movement.IsStockTransfer
-                ? movement.Credit
-                : quantity > 0 ? RoundMoney(value / quantity * movement.Quantity) : 0;
-            quantity -= movement.Quantity;
-            value = RoundMoney(value - outgoingCost);
-        }
-        return new Availability(quantity, value, quantity > 0 ? RoundMoney(value / quantity) : null);
+        var costing = await new ProductInventoryCosting(_context).CalculateAsync(
+            projectId, asOf, productId: productAccountId, excludedDispatchId: excludedDispatchJvId);
+        var position = costing.Position(productAccountId, locationId,
+            excludedDispatchJvId.HasValue ? asOf : null, excludedDispatchJvId);
+        return new Availability(position.Quantity, position.Value,
+            position.SuggestedRate > 0 ? RoundMoney(position.SuggestedRate) : null);
     }
 
-    private async Task<TransferGraph> LoadGraphAsync(int rootId)
+    private async Task<TransferGraph> LoadGraphAsync(int rootId) =>
+        (await LoadGraphsAsync(new List<int> { rootId }))[rootId];
+
+    /// <summary>
+    /// Loads and validates many transfer graphs with a fixed number of queries (a handful per call, independent
+    /// of how many roots are passed). The checks are the same as for a single graph; only the loading is batched.
+    /// </summary>
+    private async Task<Dictionary<int, TransferGraph>> LoadGraphsAsync(IReadOnlyList<int> rootIds)
     {
-        var root = await LoadVoucherAsync(rootId)
-                   ?? throw new StockTransferValidationException("Stock transfer was not found.");
-        if (!root.IsStockTransfer) throw new StockTransferValidationException("Voucher is not a stock transfer.");
+        var graphs = new Dictionary<int, TransferGraph>();
+        if (rootIds.Count == 0) return graphs;
+        var rootIdList = rootIds.Distinct().ToList();
 
-        var rootRefs = await _context.JournalVoucherReferences.AsNoTracking()
-            .Where(x => x.MainVoucherId == rootId && StockReferenceTypes.Contains(x.ReferenceType!)).ToListAsync();
-        if (rootRefs.Any(x => x.ReferenceType == ChargeReferenceType))
-            throw new StockTransferValidationException("Malformed transfer graph: dispatch cannot directly own a charge.");
-        if (rootRefs.Count(x => x.ReferenceType == CancellationReferenceType) > 1)
-            throw new StockTransferValidationException("Malformed transfer graph: multiple cancellation vouchers.");
-        var childIds = rootRefs.Select(x => x.ReferencedVoucherId).ToList();
-        var children = await LoadVouchersAsync(childIds);
-        if (children.Count != childIds.Distinct().Count() ||
-            children.Any(x => !x.IsStockTransfer || x.ProjectId != root.ProjectId))
-            throw new StockTransferValidationException("Malformed transfer graph: cross-project or unflagged child.");
+        var roots = (await LoadVouchersAsync(rootIdList)).ToDictionary(x => x.JournalVoucherId);
+        var allRootRefs = (await _context.JournalVoucherReferences.AsNoTracking()
+            .Where(x => rootIdList.Contains(x.MainVoucherId) && StockReferenceTypes.Contains(x.ReferenceType!))
+            .ToListAsync()).ToLookup(x => x.MainVoucherId);
 
-        var receiptIds = rootRefs.Where(x => x.ReferenceType == ReceiptReferenceType).Select(x => x.ReferencedVoucherId).ToHashSet();
-        var childStockRefs = await _context.JournalVoucherReferences.AsNoTracking()
-            .Where(x => childIds.Contains(x.MainVoucherId) && StockReferenceTypes.Contains(x.ReferenceType!)).ToListAsync();
-        if (childStockRefs.Any(x => !receiptIds.Contains(x.MainVoucherId) ||
-                                    x.ReferenceType != ChargeReferenceType))
-            throw new StockTransferValidationException(
-                "Malformed transfer graph: only receipts can own stock-transfer charge references.");
-        var chargeRefs = childStockRefs;
-        var chargeIds = chargeRefs.Select(x => x.ReferencedVoucherId).ToList();
-        var charges = await LoadVouchersAsync(chargeIds);
-        if (charges.Count != chargeIds.Distinct().Count() ||
-            charges.Any(x => !x.IsStockTransfer || x.ProjectId != root.ProjectId))
-            throw new StockTransferValidationException("Malformed transfer graph: invalid charge voucher.");
-        if (chargeIds.Count > 0 && await _context.JournalVoucherReferences.AsNoTracking()
-                .AnyAsync(x => chargeIds.Contains(x.MainVoucherId) &&
-                               StockReferenceTypes.Contains(x.ReferenceType!)))
-            throw new StockTransferValidationException(
-                "Malformed transfer graph: charge vouchers cannot own stock-transfer children.");
+        var childIdAll = rootIdList.SelectMany(id => allRootRefs[id]).Select(x => x.ReferencedVoucherId).Distinct().ToList();
+        var childById = (await LoadVouchersAsync(childIdAll)).ToDictionary(x => x.JournalVoucherId);
+        var childStockRefs = (await _context.JournalVoucherReferences.AsNoTracking()
+            .Where(x => childIdAll.Contains(x.MainVoucherId) && StockReferenceTypes.Contains(x.ReferenceType!))
+            .ToListAsync()).ToLookup(x => x.MainVoucherId);
 
-        var graphIds = childIds.Concat(chargeIds).Append(rootId).ToHashSet();
-        if (await _context.JournalEntryInstrumentDetails.AsNoTracking()
-                .AnyAsync(x => graphIds.Contains(x.JournalEntry.JournalVoucherId)))
-            throw new StockTransferValidationException(
-                "Payment & Receipt vouchers cannot participate in a stock-transfer graph.");
-        var multipleParents = await _context.JournalVoucherReferences.AsNoTracking()
-            .Where(x => graphIds.Contains(x.ReferencedVoucherId) && StockReferenceTypes.Contains(x.ReferenceType!))
-            .GroupBy(x => x.ReferencedVoucherId).Where(x => x.Count() > 1).AnyAsync();
-        if (multipleParents) throw new StockTransferValidationException("Malformed transfer graph: a child has multiple stock-transfer parents.");
+        var chargeIdAll = childIdAll.SelectMany(id => childStockRefs[id]).Select(x => x.ReferencedVoucherId).Distinct().ToList();
+        var chargeById = (await LoadVouchersAsync(chargeIdAll)).ToDictionary(x => x.JournalVoucherId);
+        var chargeOwnedRefs = (await _context.JournalVoucherReferences.AsNoTracking()
+            .Where(x => chargeIdAll.Contains(x.MainVoucherId) && StockReferenceTypes.Contains(x.ReferenceType!))
+            .Select(x => x.MainVoucherId).Distinct().ToListAsync()).ToHashSet();
 
-        var dcs = await _context.DeliveryChallanVouchers.AsNoTracking()
+        var everyId = rootIdList.Concat(childIdAll).Concat(chargeIdAll).Distinct().ToList();
+        var parentsByReferenced = (await _context.JournalVoucherReferences.AsNoTracking()
+            .Where(x => everyId.Contains(x.ReferencedVoucherId) && StockReferenceTypes.Contains(x.ReferenceType!))
+            .Select(x => x.ReferencedVoucherId).ToListAsync()).GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+        var vouchersWithInstruments = (await _context.JournalEntryInstrumentDetails.AsNoTracking()
+            .Where(x => everyId.Contains(x.JournalEntry.JournalVoucherId))
+            .Select(x => x.JournalEntry.JournalVoucherId).Distinct().ToListAsync()).ToHashSet();
+        var dcsByVoucher = (await _context.DeliveryChallanVouchers.AsNoTracking()
             .Include(x => x.Entries).ThenInclude(x => x.Location)
-            .Where(x => graphIds.Contains(x.JournalVoucherId)).AsSplitQuery().ToListAsync();
-        var products = root.JournalEntries.Where(IsDispatchProduct).ToList();
-        if (products.Count == 0 || products.Select(x => x.AccountId).Distinct().Count() != products.Count)
-            throw new StockTransferValidationException("Malformed dispatch: product credits must be non-empty and unique.");
-        var transit = root.JournalEntries.Where(x => x.Account?.AccountGroupId == NormalAccountGroup &&
-                                                     x.Quantity == 0 && x.Debit > 0 && x.Credit == 0).ToList();
-        if (transit.Count != 1) throw new StockTransferValidationException("Malformed dispatch: expected one transit debit.");
-        var rootDc = dcs.Where(x => x.JournalVoucherId == rootId).ToList();
-        if (rootDc.Count != 1) throw new StockTransferValidationException("Malformed dispatch: expected one delivery challan.");
-        var dcEntries = rootDc[0].Entries;
-        var sourceIds = products.Select(product =>
-        {
-            var dce = dcEntries.Where(x => x.JournalEntryId == product.JournalEntryId).ToList();
-            if (dce.Count != 1) throw new StockTransferValidationException("Malformed dispatch: each product requires one source location.");
-            return dce[0].LocationId;
-        }).Distinct().ToList();
-        var route = dcEntries.Where(x => x.JournalEntryId == transit[0].JournalEntryId).ToList();
-        if (sourceIds.Count != 1 || route.Count != 1 || sourceIds[0] == route[0].LocationId)
-            throw new StockTransferValidationException("Malformed dispatch location routing.");
+            .Where(x => everyId.Contains(x.JournalVoucherId)).AsSplitQuery().ToListAsync())
+            .ToLookup(x => x.JournalVoucherId);
 
-        var all = new List<JournalVoucher> { root };
-        all.AddRange(children);
-        all.AddRange(charges);
-        var graph = new TransferGraph(root, products, transit[0], sourceIds[0], route[0].LocationId,
-            rootRefs, chargeRefs, all, dcs);
-        ValidateCompleteGraph(graph);
-        return graph;
+        foreach (var rootId in rootIdList)
+        {
+            if (!roots.TryGetValue(rootId, out var root))
+                throw new StockTransferValidationException("Stock transfer was not found.");
+            if (!root.IsStockTransfer) throw new StockTransferValidationException("Voucher is not a stock transfer.");
+
+            var rootRefs = allRootRefs[rootId].ToList();
+            if (rootRefs.Any(x => x.ReferenceType == ChargeReferenceType))
+                throw new StockTransferValidationException("Malformed transfer graph: dispatch cannot directly own a charge.");
+            if (rootRefs.Count(x => x.ReferenceType == CancellationReferenceType) > 1)
+                throw new StockTransferValidationException("Malformed transfer graph: multiple cancellation vouchers.");
+            var childIds = rootRefs.Select(x => x.ReferencedVoucherId).ToList();
+            var children = childIds.Distinct().Where(childById.ContainsKey).Select(id => childById[id]).ToList();
+            if (children.Count != childIds.Distinct().Count() ||
+                children.Any(x => !x.IsStockTransfer || x.ProjectId != root.ProjectId))
+                throw new StockTransferValidationException("Malformed transfer graph: cross-project or unflagged child.");
+
+            var receiptIds = rootRefs.Where(x => x.ReferenceType == ReceiptReferenceType).Select(x => x.ReferencedVoucherId).ToHashSet();
+            var chargeRefs = childIds.Distinct().SelectMany(id => childStockRefs[id]).ToList();
+            if (chargeRefs.Any(x => !receiptIds.Contains(x.MainVoucherId) ||
+                                    x.ReferenceType != ChargeReferenceType))
+                throw new StockTransferValidationException(
+                    "Malformed transfer graph: only receipts can own stock-transfer charge references.");
+            var chargeIds = chargeRefs.Select(x => x.ReferencedVoucherId).ToList();
+            var charges = chargeIds.Distinct().Where(chargeById.ContainsKey).Select(id => chargeById[id]).ToList();
+            if (charges.Count != chargeIds.Distinct().Count() ||
+                charges.Any(x => !x.IsStockTransfer || x.ProjectId != root.ProjectId))
+                throw new StockTransferValidationException("Malformed transfer graph: invalid charge voucher.");
+            if (chargeIds.Any(chargeOwnedRefs.Contains))
+                throw new StockTransferValidationException(
+                    "Malformed transfer graph: charge vouchers cannot own stock-transfer children.");
+
+            var graphIds = childIds.Concat(chargeIds).Append(rootId).ToHashSet();
+            if (graphIds.Any(vouchersWithInstruments.Contains))
+                throw new StockTransferValidationException(
+                    "Payment & Receipt vouchers cannot participate in a stock-transfer graph.");
+            if (graphIds.Any(id => parentsByReferenced.TryGetValue(id, out var parents) && parents > 1))
+                throw new StockTransferValidationException("Malformed transfer graph: a child has multiple stock-transfer parents.");
+
+            var dcs = graphIds.SelectMany(id => dcsByVoucher[id]).ToList();
+            var products = root.JournalEntries.Where(IsDispatchProduct).ToList();
+            if (products.Count == 0 || products.Select(x => x.AccountId).Distinct().Count() != products.Count)
+                throw new StockTransferValidationException("Malformed dispatch: product credits must be non-empty and unique.");
+            var transit = root.JournalEntries.Where(x => x.Account?.AccountGroupId == NormalAccountGroup &&
+                                                         x.Quantity == 0 && x.Debit > 0 && x.Credit == 0).ToList();
+            if (transit.Count != 1) throw new StockTransferValidationException("Malformed dispatch: expected one transit debit.");
+            var rootDc = dcs.Where(x => x.JournalVoucherId == rootId).ToList();
+            if (rootDc.Count != 1) throw new StockTransferValidationException("Malformed dispatch: expected one delivery challan.");
+            var dcEntries = rootDc[0].Entries;
+            var sourceIds = products.Select(product =>
+            {
+                var dce = dcEntries.Where(x => x.JournalEntryId == product.JournalEntryId).ToList();
+                if (dce.Count != 1) throw new StockTransferValidationException("Malformed dispatch: each product requires one source location.");
+                return dce[0].LocationId;
+            }).Distinct().ToList();
+            var route = dcEntries.Where(x => x.JournalEntryId == transit[0].JournalEntryId).ToList();
+            if (sourceIds.Count != 1 || route.Count != 1 || sourceIds[0] == route[0].LocationId)
+                throw new StockTransferValidationException("Malformed dispatch location routing.");
+
+            var all = new List<JournalVoucher> { root };
+            all.AddRange(children);
+            all.AddRange(charges);
+            var graph = new TransferGraph(root, products, transit[0], sourceIds[0], route[0].LocationId,
+                rootRefs, chargeRefs, all, dcs);
+            ValidateCompleteGraph(graph);
+                    graphs[rootId] = graph;
+        }
+
+        return graphs;
     }
 
     private void ValidateCompleteGraph(TransferGraph graph)
@@ -1013,11 +1033,41 @@ public sealed class StockTransferService : IStockTransferService
     {
         var graph = await LoadGraphAsync(rootId);
         if (asOf.HasValue && graph.Root.EntryDate > asOf.Value) return null;
-        var lines = BuildLines(graph, asOf);
         var project = await _context.Projects.AsNoTracking().SingleAsync(x => x.ProjectId == graph.Root.ProjectId);
         var locations = await _context.Locations.AsNoTracking()
             .Where(x => x.LocationId == graph.SourceLocationId || x.LocationId == graph.DestinationLocationId)
             .ToDictionaryAsync(x => x.LocationId);
+        return BuildProjection(graph, asOf, project, locations);
+    }
+
+    // Projections for a list are built from batch-loaded graphs, so a page of results costs a fixed number of
+    // queries per chunk of roots instead of a dozen per transfer.
+    private async Task<List<TransferProjection>> GetProjectionsAsync(IReadOnlyList<int> rootIds, DateOnly? asOf)
+    {
+        var projections = new List<TransferProjection>();
+        foreach (var chunk in rootIds.Chunk(ProjectionBatchSize))
+        {
+            var graphs = await LoadGraphsAsync(chunk);
+            var projectIds = graphs.Values.Select(x => x.Root.ProjectId).Distinct().ToList();
+            var locationIds = graphs.Values.SelectMany(x => new[] { x.SourceLocationId, x.DestinationLocationId }).Distinct().ToList();
+            var projects = await _context.Projects.AsNoTracking()
+                .Where(x => projectIds.Contains(x.ProjectId)).ToDictionaryAsync(x => x.ProjectId);
+            var locations = await _context.Locations.AsNoTracking()
+                .Where(x => locationIds.Contains(x.LocationId)).ToDictionaryAsync(x => x.LocationId);
+            foreach (var rootId in chunk)
+            {
+                var graph = graphs[rootId];
+                if (asOf.HasValue && graph.Root.EntryDate > asOf.Value) continue;
+                projections.Add(BuildProjection(graph, asOf, projects[graph.Root.ProjectId], locations));
+            }
+        }
+        return projections;
+    }
+
+    private TransferProjection BuildProjection(TransferGraph graph, DateOnly? asOf, Project project,
+        IReadOnlyDictionary<int, Location> locations)
+    {
+        var lines = BuildLines(graph, asOf);
         var receipts = graph.RootReferences.Where(x => x.ReferenceType == ReceiptReferenceType)
             .Select(x => graph.AllVouchers.Single(v => v.JournalVoucherId == x.ReferencedVoucherId))
             .Where(x => !asOf.HasValue || x.EntryDate <= asOf.Value).OrderBy(x => x.EntryDate).ToList();
@@ -1090,7 +1140,6 @@ public sealed class StockTransferService : IStockTransferService
         {
             id = x.Root.JournalVoucherId,
             dispatchJvId = x.Root.JournalVoucherId,
-            dispatchJournalVoucherId = x.Root.JournalVoucherId,
             x.TransferNumber,
             projectId = x.Root.ProjectId,
             x.ProjectName,
@@ -1221,11 +1270,7 @@ public sealed class StockTransferService : IStockTransferService
 
     private async Task<JournalVoucher> LockRootAsync(int rootId)
     {
-        var root = _context.Database.IsRelational()
-            ? await _context.JournalVouchers
-                .FromSqlInterpolated($"SELECT * FROM \"JournalVouchers\" WHERE \"JournalVoucherId\" = {rootId} FOR UPDATE")
-                .SingleOrDefaultAsync()
-            : await _context.JournalVouchers.SingleOrDefaultAsync(x => x.JournalVoucherId == rootId);
+        var root = await RowLocks.LockJournalVoucherAsync(_context, rootId);
         if (root == null || !root.IsStockTransfer)
             throw new StockTransferValidationException("Stock transfer was not found.");
         return root;
@@ -1394,7 +1439,7 @@ public sealed class StockTransferService : IStockTransferService
         if (request.ProjectId <= 0) throw new StockTransferValidationException("Project is required.");
         if (request.SourceLocationId == request.DestinationLocationId)
             throw new StockTransferValidationException("Source and destination locations must differ.");
-        if (request.TransferDate > DateOnly.FromDateTime(DateTime.Today))
+        if (request.TransferDate > BusinessClock.Today)
             throw new StockTransferValidationException("Transfer date cannot be in the future.");
         if (request.Items.Count == 0) throw new StockTransferValidationException("Add at least one product.");
         if (request.Items.Any(x => x.Quantity <= 0))
@@ -1438,6 +1483,14 @@ public sealed class StockTransferService : IStockTransferService
         return null;
     }
 
+    private static async Task RollbackIfActiveAsync(IDbContextTransaction transaction, Exception original)
+    {
+        // PostgreSQL may already have ended the transaction after a failed commit.
+        // Preserve the serialization error so callers receive a refresh conflict.
+        try { await transaction.RollbackAsync(); }
+        catch (InvalidOperationException) when (IsDatabaseConflict(original)) { }
+    }
+
     private static void ThrowTranslated(Exception ex)
     {
         if (ex is StockTransferValidationException or StockTransferConflictException or UnauthorizedAccessException) return;
@@ -1453,11 +1506,9 @@ public sealed class StockTransferService : IStockTransferService
         return ex.InnerException != null && IsDatabaseConflict(ex.InnerException);
     }
 
-    private sealed record PreparedLine(Account Product, int Quantity, decimal UnitCost);
+    private sealed record PreparedLine(Account Product, int Quantity, decimal UnitCost, decimal BaseValue);
     private sealed record TransitSettings(Category Category, Account Account);
     private sealed record Availability(int Quantity, decimal Value, decimal? SuggestedCost);
-    private sealed record InventoryEvent(DateOnly Date, int EntryId, int Quantity, decimal Debit, decimal Credit,
-        bool IsStockTransfer, bool IsLandedCharge);
     private sealed record LineOutcome(
         JournalEntry Entry,
         string State,

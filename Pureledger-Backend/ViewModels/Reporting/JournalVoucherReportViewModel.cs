@@ -19,6 +19,7 @@ namespace PureLedger.ViewModels.Reporting
 
         //Particular Document Detail
         public DateOnly? DueDate { get; set; }
+        public string? Station { get; set; }
         public string? Adda { get; set; }
         public decimal? Builty { get; set; }
         public string? Remarks { get; set; }

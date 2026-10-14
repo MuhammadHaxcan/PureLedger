@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup, Modal } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -126,6 +127,7 @@ const ProductReport = () => {
             request.controller?.abort();
             request.controller = new AbortController();
             request.requestedPages = new Set();
+            request.filters = { ...formData, excludeNilProducts };
             runId = request.runId;
             setGenerating(true);
             setAllProducts([]);
@@ -144,19 +146,24 @@ const ProductReport = () => {
         setError('');
 
         try {
+            const filters = request.filters;
             const params = {
-                projectId: formData.projectId.toString(),
-                startDate: formData.startDate || null,
-                endDate: formData.endDate || null,
-                categoryId: formData.categoryId ? formData.categoryId.toString() : '',
-                locationId: formData.locationId ? formData.locationId.toString() : '',
-                excludeNilProducts: excludeNilProducts,
+                projectId: filters.projectId.toString(),
+                startDate: filters.startDate || null,
+                endDate: filters.endDate || null,
+                categoryId: filters.categoryId ? filters.categoryId.toString() : '',
+                locationId: filters.locationId ? filters.locationId.toString() : '',
+                excludeNilProducts: filters.excludeNilProducts,
                 page: page,
                 pageSize: pageSize
             };
             const requestedFilters = {
                 projectId: Number(params.projectId),
+                projectName: projects.find(p => Number(p.id) === Number(params.projectId))?.name || '',
+                categoryName: categories.find(c => Number(c.id) === Number(params.categoryId))?.name || '',
                 locationId: params.locationId ? Number(params.locationId) : null,
+                locationName: locations.find(l => Number(l.id) === Number(params.locationId))?.name || '',
+                startDate: params.startDate || null,
                 endDate: params.endDate || null
             };
 
@@ -311,6 +318,12 @@ const ProductReport = () => {
         ? allProducts.reduce((sum, product) => sum + (product.qtyBalance || 0), 0)
         : totals?.balanceQuantity ?? null;
     const showStockBreakdownActions = !!appliedReportFilters && !appliedReportFilters.locationId;
+    const quantityExplanation = appliedReportFilters?.locationId
+        ? 'Debit and credit quantities include stock movements into and out of this location.'
+        : 'Debit and credit quantities exclude stock-transfer movements.';
+    const amountExplanation = appliedReportFilters?.locationId
+        ? 'Total Debit and Total Credit include posted transfers for this location. Transfer credits are excluded from COGS and margin.'
+        : 'Total Debit and Total Credit exclude internal transfer amounts. Product receiving charges remain in Total Debit.';
     const breakdownLocations = (() => {
         if (!stockBreakdown) return [];
         const rows = new Map((stockBreakdown.locations || []).map(location => [location.locationId, {
@@ -339,7 +352,12 @@ const ProductReport = () => {
         setExportingCsv(true);
         try {
             const csvData = sortedProducts.map(product => {
-                const row = { Product: product.productName || '' };
+                const row = {
+                    Product: product.productName || '',
+                    Location: appliedReportFilters?.locationName || 'All locations',
+                    'Quantity basis': quantityExplanation,
+                    'Amount basis': amountExplanation
+                };
                 if (visibleColumns.debitQty) row['Debit Qty'] = (product.totalDebitQty || 0).toFixed(2);
                 if (visibleColumns.creditQty) row['Credit Qty'] = (product.totalCreditQty || 0).toFixed(2);
                 if (visibleColumns.balanceQty) row['Balance Qty'] = (product.qtyBalance || 0).toFixed(2);
@@ -352,8 +370,8 @@ const ProductReport = () => {
                 if (visibleColumns.marginPct) row['Margin %'] = `${(product.marginPercentage || 0).toFixed(2)}%`;
                 return row;
             });
-            const dateRange = formData.startDate && formData.endDate
-                ? `${formData.startDate}_to_${formData.endDate}`
+            const dateRange = appliedReportFilters?.startDate && appliedReportFilters?.endDate
+                ? `${appliedReportFilters.startDate}_to_${appliedReportFilters.endDate}`
                 : 'report';
             await exportToCsvAsync(csvData, `ProductReport_${dateRange}.csv`);
         } finally {
@@ -364,9 +382,9 @@ const ProductReport = () => {
     const handleExportPdf = async () => {
         setExportingPdf(true);
         try {
-            const selectedProject = projects.find(p => p.id === formData.projectId);
-            const selectedCategory = categories.find(c => c.id === formData.categoryId);
-            const selectedLocation = locations.find(l => l.id === formData.locationId);
+            const selectedProject = { name: appliedReportFilters?.projectName };
+            const selectedCategory = { name: appliedReportFilters?.categoryName };
+            const selectedLocation = { name: appliedReportFilters?.locationName };
 
             const rows = sortedProducts.map(product => {
                 const row = { product: product.productName || '' };
@@ -414,15 +432,18 @@ const ProductReport = () => {
             ];
 
             let subtitle = '';
-            if (formData.startDate) {
-                subtitle += `Date Range: ${formData.startDate} to ${formData.endDate || formData.startDate}`;
+            if (appliedReportFilters?.startDate) {
+                subtitle += `Date Range: ${appliedReportFilters.startDate} to ${appliedReportFilters.endDate || appliedReportFilters.startDate}`;
             }
-            if (selectedCategory) {
+            if (selectedCategory.name) {
                 subtitle += (subtitle ? '\n' : '') + `Category: ${selectedCategory.name}`;
             }
-            if (selectedLocation) {
+            if (selectedLocation.name) {
                 subtitle += (subtitle ? '\n' : '') + `Location: ${selectedLocation.name}`;
             }
+            subtitle += (subtitle ? '\n' : '') + quantityExplanation;
+            subtitle += '\n' + amountExplanation;
+            subtitle += '\nSales use the warehouse average cost on their posting date.';
             const generatedInfo = `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords}`;
 
             await generatePdfAsync({
@@ -435,10 +456,10 @@ const ProductReport = () => {
                 columns,
                 rows,
                 rowsPerPage: 20,
-                startY: selectedCategory || selectedLocation ? 56 : 46,
+                startY: 66,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `ProductReport_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `ProductReport_${todayString()}.pdf`
             });
         } finally {
             setExportingPdf(false);
@@ -685,6 +706,13 @@ const ProductReport = () => {
                     </Card.Header>
                     <Card.Body>
                         <div className="row mb-3">
+                            <div className="col-12 small text-muted mb-3">
+                                <div>{quantityExplanation}</div>
+                                <div>{amountExplanation}</div>
+                                <div>Balance quantity is net warehouse stock and can be negative. When a warehouse is negative, all-location average cost uses positive-stock warehouses. Transit enters destination cost when received.</div>
+                                <div>Stock shortages use provisional source cost; later receipts settle cost differences as valuation adjustments.</div>
+                                <div>Sales use the warehouse average cost on their posting date.</div>
+                            </div>
                             <div className="col-12">
                                 <Form.Label>Search</Form.Label>
                                 <InputGroup>
@@ -697,10 +725,6 @@ const ProductReport = () => {
                                     />
                                 </InputGroup>
                             </div>
-                        </div>
-                        <div className="small text-muted px-3 pt-2">
-                            Debit Qty and Credit Qty include stock transfers. Bal Qty is available stock for the selected location or all locations.
-                            Total Debit and Total Credit exclude transfer cost; product receiving charges remain in Total Debit.
                         </div>
                         <div className="report-table-container">
                             <div className="table-responsive">

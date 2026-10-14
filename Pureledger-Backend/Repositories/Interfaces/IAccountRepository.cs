@@ -15,20 +15,16 @@ namespace PureLedger.Repositories.Interfaces
         Task<object?> GetProductDetailsAsync(int accountId);
         Task<List<Account>> GetAllAsync();
         Task<Account?> GetByIdWithCategoryAsync(int id);
-        Task<List<Account>> GetByCategoryIdWithCategoryAsync(int categoryId);
-        Task<List<Account>> GetAccountsWithEntriesInProjectAsync(int projectId);
-        Task<IEnumerable<Account>> GetAccountsByCategoryAndProjectAsync(int categoryId, int projectId);
         Task<List<Account>> GetByProjectAsync(int projectId, int? categoryId = null);
         Task<List<int>> GetAssociatedJournalVoucherIds(int accountId);
+        /// <summary>Ids of pending approval requests whose rows use the account.</summary>
+        Task<List<int>> GetPendingApprovalIdsAsync(int accountId);
 
         /// <summary>
         /// Checks if an account with the given name exists in the specified category (case-insensitive)
         /// </summary>
         Task<bool> ExistsByNameInCategoryAsync(string name, int categoryId, int? excludeId = null);
 
-        /// <summary>
-        /// Checks if the account has any associated journal entries
-        /// </summary>
-        Task<bool> HasAssociatedJournalEntriesAsync(int accountId);
+        Task<bool> HasLinkedBookerAsync(int bookerId);
     }
 }

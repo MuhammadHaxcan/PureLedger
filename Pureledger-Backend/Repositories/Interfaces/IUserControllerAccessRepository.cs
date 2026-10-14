@@ -15,7 +15,5 @@ namespace PureLedger.Repositories.Interfaces
         Task<bool> HasActionAccessAsync(int userId, string controller, string action);
         Task<List<string>> GetUserControllersAsync(int userId);
         Task<Dictionary<string, List<string>>> GetUserActionsAsync(int userId);
-        Task<List<string>> GetAllControllersAsync();
-        Task<Dictionary<string, List<string>>> GetAllControllerActionsAsync();
     }
 }

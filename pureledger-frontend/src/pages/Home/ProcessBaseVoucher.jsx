@@ -1,3 +1,4 @@
+import { addDays, todayString } from '../../utils/businessDate';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, Form, Button, Alert, Table } from 'react-bootstrap';
@@ -23,9 +24,9 @@ const ProcessBaseVoucher = () => {
     const [accountEntryIncluded, setAccountEntryIncluded] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasSubmitted, setHasSubmitted] = useState(false);
-    const [derivedEntryDate, setDerivedEntryDate] = useState(new Date().toISOString().split('T')[0]);
+    const [derivedEntryDate, setDerivedEntryDate] = useState(todayString());
     const [creditDays, setCreditDays] = useState(0);
-    const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+    const [dueDate, setDueDate] = useState(todayString());
 
     usePageTitle(
         'Process Base Voucher',
@@ -36,9 +37,7 @@ const ProcessBaseVoucher = () => {
     useEffect(() => {
         if (derivedEntryDate) {
             const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
-            const date = new Date(derivedEntryDate);
-            date.setDate(date.getDate() + days);
-            setDueDate(date.toISOString().split('T')[0]);
+            setDueDate(addDays(derivedEntryDate, days));
         }
     }, [derivedEntryDate, creditDays]);
 

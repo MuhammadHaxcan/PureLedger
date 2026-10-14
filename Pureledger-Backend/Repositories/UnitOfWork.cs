@@ -84,6 +84,8 @@ namespace PureLedger.Repositories
         public Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted) =>
             _dbContext.Database.BeginTransactionAsync(isolationLevel);
 
+        public void ClearTracking() => _dbContext.ChangeTracker.Clear();
+
         public void Dispose()
         {
             _dbContext?.Dispose();

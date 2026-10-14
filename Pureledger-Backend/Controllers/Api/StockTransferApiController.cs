@@ -78,10 +78,6 @@ public sealed class StockTransferApiController : ControllerBase
     public Task<IActionResult> Delete(int anyLinkedJvId, [FromBody] DeleteStockTransferRequest request) =>
         ExecuteAsync((u, a) => _service.DeleteAsync(anyLinkedJvId, request, u, a));
 
-    // Compatibility aliases for clients built against the first unshipped prototype.
-    [HttpPost]
-    public Task<IActionResult> CreateAlias([FromBody] CreateStockTransferRequest request) => Dispatch(request);
-
     private async Task<IActionResult> ExecuteAsync(Func<int, bool, Task<object>> action)
     {
         var userId = _currentUser.GetCurrentUserId();
@@ -102,6 +98,11 @@ public sealed class StockTransferApiController : ControllerBase
         catch (UnauthorizedAccessException ex)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { success = false, message = ex.Message });
+        }
+        catch (InventoryIntegrityException ex)
+        {
+            _logger.LogWarning(ex, "Stock transfer blocked by voucher {VoucherId}", ex.JournalVoucherId);
+            return UnprocessableEntity(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {

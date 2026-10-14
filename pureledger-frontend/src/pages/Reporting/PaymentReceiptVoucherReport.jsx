@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Badge, Button, Card, Form, InputGroup, Pagination, Spinner, Table } from 'react-bootstrap';
 import { usePageTitle } from '../../hooks/usePageTitle';
@@ -290,7 +291,7 @@ const PaymentReceiptVoucherReport = () => {
         setExporting('csv');
         setError('');
         try {
-            await exportToCsvAsync(toRows(await fetchAll()), `PaymentReceiptVouchers_${new Date().toISOString().slice(0, 10)}.csv`);
+            await exportToCsvAsync(toRows(await fetchAll()), `PaymentReceiptVouchers_${todayString()}.csv`);
         } catch (requestError) {
             setError(requestError.message || 'Failed to export CSV.');
         } finally {
@@ -329,7 +330,7 @@ const PaymentReceiptVoucherReport = () => {
                 rows,
                 fontSize: 7,
                 cellPadding: 1.5,
-                filename: `PaymentReceiptVouchers_${new Date().toISOString().slice(0, 10)}.pdf`,
+                filename: `PaymentReceiptVouchers_${todayString()}.pdf`,
             });
         } catch (requestError) {
             setError(requestError.message || 'Failed to export PDF.');

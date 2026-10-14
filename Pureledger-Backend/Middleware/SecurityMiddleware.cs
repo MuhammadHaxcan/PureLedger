@@ -87,9 +87,28 @@ namespace PureLedger.Middleware {
                         "USER_INACTIVE");
                     return false;
                 }
+
+                SyncRoleClaim(context.User, user.IsAdmin, userId);
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// The JWT role claim can be up to the access-token lifetime old. The user was just loaded from the
+        /// database, so make the principal reflect the current role: a demoted admin loses admin rights on
+        /// the next request (approvals, settings, [Authorize(Roles)]) and a promoted user gains them.
+        /// </summary>
+        private void SyncRoleClaim(ClaimsPrincipal principal, bool isAdminNow, int userId) {
+            if (principal.IsInRole("Admin") == isAdminNow || principal.Identity is not ClaimsIdentity identity) {
+                return;
+            }
+
+            foreach (var stale in identity.FindAll(identity.RoleClaimType).ToList()) {
+                identity.RemoveClaim(stale);
+            }
+            identity.AddClaim(new Claim(identity.RoleClaimType, isAdminNow ? "Admin" : "User"));
+            _logger.LogInformation("User {UserId} role claim refreshed from database: {Role}", userId, isAdminNow ? "Admin" : "User");
         }
 
         private static async Task WriteSecurityErrorAsync(

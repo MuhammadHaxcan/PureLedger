@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, Badge, Modal, InputGroup, Nav, Tab } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -11,6 +12,16 @@ const ProcessDC = () => {
   
   // Ref to prevent duplicate submissions
   const isSubmittingRef = useRef(false);
+  const challanRequestRef = useRef(0);
+  const challanAbortRef = useRef(null);
+  const [challanLoading, setChallanLoading] = useState(false);
+  const [challanLookupError, setChallanLookupError] = useState('');
+  const challanReady = !challanLoading && !challanLookupError;
+
+  useEffect(() => () => {
+    challanRequestRef.current += 1;
+    challanAbortRef.current?.abort();
+  }, []);
   
   // State for filter form
   const [filter, setFilter] = useState({
@@ -41,7 +52,7 @@ const ProcessDC = () => {
     journalVoucherId: null,
     journalEntryId: null,
     challanId: null,
-    dcDate: new Date().toISOString().split('T')[0],
+    dcDate: todayString(),
     locationId: null,
     station: '',
     otherRef: '',
@@ -78,7 +89,7 @@ const ProcessDC = () => {
   const [selectedVoucherForProducts, setSelectedVoucherForProducts] = useState(null);
   const [forChargesForm, setForChargesForm] = useState({
     forAmount: '',
-    dcDate: new Date().toISOString().split('T')[0],
+    dcDate: todayString(),
     selectedForAccountId: null,
     otherRef: ''
   });
@@ -208,32 +219,16 @@ const ProcessDC = () => {
 
   const checkForChargesAvailability = async (projectId) => {
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:209',message:'checkForChargesAvailability called',data:{projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      
       const response = await apiClient.get('/DeliveryChallanApi/check-for-charges-available', {
         params: { projectId }
       });
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:216',message:'checkForChargesAvailability response received',data:{success:response.data.success,available:response.data.available,categoryId:response.data.categoryId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      
       if (response.data.success) {
         setForChargesAvailable(response.data.available || false);
         if (response.data.categoryId) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:221',message:'CategoryId found, calling loadForAccounts',data:{categoryId:response.data.categoryId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          
           setForChargesCategory(response.data.categoryId);
           await loadForAccounts(response.data.categoryId);
         } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:227',message:'No categoryId in response',data:{responseData:response.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          
           setForChargesCategory(null);
           setForAccounts([]);
         }
@@ -243,10 +238,6 @@ const ProcessDC = () => {
         setForAccounts([]);
       }
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:235',message:'Error in checkForChargesAvailability',data:{error:error.message,response:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      
       console.error('Error checking FOR charges:', error);
       setForChargesAvailable(false);
       setForChargesCategory(null);
@@ -255,38 +246,18 @@ const ProcessDC = () => {
   };
 
   const loadForAccounts = async (categoryId) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:234',message:'loadForAccounts called',data:{categoryId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    
     if (!categoryId) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:236',message:'loadForAccounts: no categoryId, returning empty',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
-      
       setForAccounts([]);
       return;
     }
     try {
       const response = await apiClient.get(`/DeliveryChallanApi/accounts-by-category/${categoryId}`);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:242',message:'loadForAccounts response received',data:{success:response.data.success,accountCount:response.data.data?.length,accounts:response.data.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
-      
       if (response.data.success) {
         const accounts = response.data.data || [];
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:246',message:'Setting forAccounts state',data:{accountCount:accounts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
-        
         setForAccounts(accounts);
       }
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:252',message:'Error in loadForAccounts',data:{error:error.message,response:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
-      
       console.error('Error loading FOR accounts:', error);
       setForAccounts([]);
     }
@@ -344,50 +315,70 @@ const ProcessDC = () => {
     }
   };
 
-  const handleOpenDCModal = async (voucherId, entryId) => {
-    const freshForm = {
+  const closeDCModal = () => {
+    challanRequestRef.current += 1;
+    challanAbortRef.current?.abort();
+    setShowDCModal(false);
+  };
+
+  const loadExistingChallan = async (voucherId, entryId) => {
+    const requestId = ++challanRequestRef.current;
+    challanAbortRef.current?.abort();
+    const controller = new AbortController();
+    challanAbortRef.current = controller;
+    setChallanLoading(true);
+    setChallanLookupError('');
+    try {
+      const response = await apiClient.get(`/DeliveryChallanApi/check-existing-challan/${voucherId}`, {
+        signal: controller.signal,
+      });
+      if (requestId !== challanRequestRef.current) return;
+      if (!response.data.success || typeof response.data.exists !== 'boolean' ||
+          (response.data.exists && !response.data.challan)) {
+        throw new Error('Failed to load the delivery challan.');
+      }
+      if (response.data.exists) {
+        setExistingChallan(response.data);
+        setDcForm(prev => prev.journalVoucherId === voucherId && prev.journalEntryId === entryId ? {
+          ...prev,
+          challanId: response.data.challanId,
+          dcDate: response.data.challan.challanDate
+            ? String(response.data.challan.challanDate).slice(0, 10) : prev.dcDate,
+          locationId: response.data.challan.locationId || null,
+          station: response.data.challan.station || '',
+          otherRef: response.data.challan.otherRef || '',
+        } : prev);
+      }
+    } catch (lookupError) {
+      if (requestId !== challanRequestRef.current || controller.signal.aborted) return;
+      setChallanLookupError(lookupError.response?.data?.message || 'Could not load the saved challan details. Retry before processing.');
+    } finally {
+      if (requestId === challanRequestRef.current) setChallanLoading(false);
+    }
+  };
+
+  const handleOpenDCModal = (voucherId, entryId) => {
+    setDcForm({
       journalVoucherId: voucherId,
       journalEntryId: entryId,
       challanId: null,
-      dcDate: new Date().toISOString().split('T')[0],
+      dcDate: todayString(),
       locationId: null,
       station: '',
       otherRef: '',
       remarks: '',
       includeForCharges: false,
       forAmount: 0,
-      selectedForAccountId: null
-    };
-    setDcForm(freshForm);
+      selectedForAccountId: null,
+    });
     setExistingChallan(null);
     setShowDCModal(true);
-
-    // Load FOR accounts if category is configured but accounts not loaded
-    if (forChargesCategory && forAccounts.length === 0) {
-      await loadForAccounts(forChargesCategory);
-    }
-
-    // Check for existing challan
-    try {
-      const response = await apiClient.get(`/DeliveryChallanApi/check-existing-challan/${voucherId}`);
-      if (response.data.success && response.data.exists) {
-        setExistingChallan(response.data);
-        setDcForm(prev => ({
-          ...prev,
-          challanId: response.data.challanId,
-          dcDate: response.data.challan?.challanDate 
-            ? new Date(response.data.challan.challanDate).toISOString().split('T')[0]
-            : new Date().toISOString().split('T')[0],
-          locationId: response.data.challan?.locationId || null,
-          otherRef: response.data.challan?.otherRef || ''
-        }));
-      }
-    } catch (error) {
-      console.error('Error checking existing challan:', error);
-    }
+    void loadExistingChallan(voucherId, entryId);
+    if (forChargesCategory && forAccounts.length === 0) void loadForAccounts(forChargesCategory);
   };
 
   const handlePostSingle = async () => {
+    if (!challanReady) return;
     if (!dcForm.journalEntryId) {
       setError('No entry selected to process.');
       return;
@@ -422,6 +413,7 @@ const ProcessDC = () => {
         LocationId: dcForm.locationId,
         DCDate: dcForm.dcDate,
         Remarks: dcForm.remarks,
+        Station: dcForm.station,
         OtherReference: dcForm.otherRef,
         IncludeForCharges: dcForm.includeForCharges && forChargesAvailable,
         ForAmount: dcForm.includeForCharges ? dcForm.forAmount : 0,
@@ -432,7 +424,7 @@ const ProcessDC = () => {
 
       if (response.data.success) {
         setSuccess(response.data.message || 'Entry processed successfully.');
-        setShowDCModal(false);
+        closeDCModal();
         
         const journalVoucherId = response.data.data?.journalVoucherId;
         if (journalVoucherId) {
@@ -452,6 +444,7 @@ const ProcessDC = () => {
   };
 
   const handlePostAll = async () => {
+    if (!challanReady) return;
     if (!dcForm.journalVoucherId) {
       setError('No voucher selected.');
       return;
@@ -486,6 +479,7 @@ const ProcessDC = () => {
         LocationId: dcForm.locationId,
         DCDate: dcForm.dcDate,
         Remarks: dcForm.remarks,
+        Station: dcForm.station,
         OtherReference: dcForm.otherRef,
         IncludeForCharges: dcForm.includeForCharges && forChargesAvailable,
         ForAmount: dcForm.includeForCharges ? dcForm.forAmount : 0,
@@ -496,7 +490,7 @@ const ProcessDC = () => {
 
       if (response.data.success) {
         setSuccess(response.data.message || 'Entries processed successfully.');
-        setShowDCModal(false);
+        closeDCModal();
         
         const journalVoucherId = response.data.data?.journalVoucherId;
         if (journalVoucherId) {
@@ -516,6 +510,7 @@ const ProcessDC = () => {
   };
 
   const handleOpenCartageModal = () => {
+    if (!challanReady) return;
     if (!dcForm.locationId) {
       setError('Please select a location first.');
       return;
@@ -532,6 +527,7 @@ const ProcessDC = () => {
   };
 
   const handleAddCartage = async () => {
+    if (!challanReady) return;
     if (!cartageForm.transporterId) {
       setError('Please select a transporter.');
       return;
@@ -577,7 +573,7 @@ const ProcessDC = () => {
       if (response.data.success) {
         setSuccess(response.data.message || 'Cartage added and delivery challan processed successfully.');
         setShowCartageModal(false);
-        setShowDCModal(false);
+        closeDCModal();
         
         const journalVoucherId = response.data.data?.journalVoucherId;
         if (journalVoucherId) {
@@ -689,7 +685,7 @@ const ProcessDC = () => {
     setSelectedVoucherForForCharges(voucher);
     setForChargesForm({
       forAmount: '',
-      dcDate: new Date().toISOString().split('T')[0],
+      dcDate: todayString(),
       selectedForAccountId: null
     });
     // Load FOR accounts if not already loaded
@@ -1152,13 +1148,20 @@ const ProcessDC = () => {
       </Tab.Container>
 
       {/* Delivery Challan Modal */}
-      <Modal show={showDCModal} onHide={() => setShowDCModal(false)} size="lg">
+      <Modal show={showDCModal} onHide={() => { if (!processing) closeDCModal(); }} size="lg">
         <Modal.Header closeButton className="bg-primary text-white">
           <Modal.Title>
             <i className="fas fa-truck me-2"></i>Create Delivery Challan
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {challanLoading && <p role="status">Loading saved challan details...</p>}
+          {challanLookupError && <Alert variant="danger" role="alert">
+            {challanLookupError}
+            <Button variant="outline-danger" size="sm" className="ms-2"
+              onClick={() => loadExistingChallan(dcForm.journalVoucherId, dcForm.journalEntryId)}>Retry</Button>
+          </Alert>}
+
           {existingChallan && (
             <Alert variant="info">
               <i className="fas fa-info-circle me-2"></i>
@@ -1212,11 +1215,14 @@ const ProcessDC = () => {
                 </InputGroup>
               </div>
               <div className="col-md-4 mb-3">
-                <Form.Label>Station</Form.Label>
+                <Form.Label htmlFor="dc-station">Station</Form.Label>
                 <InputGroup>
                   <InputGroup.Text><i className="fas fa-warehouse"></i></InputGroup.Text>
                   <Form.Control
                     type="text"
+                    id="dc-station"
+                    maxLength={250}
+                    disabled={!challanReady || processing}
                     value={dcForm.station}
                     onChange={(e) => setDcForm({ ...dcForm, station: e.target.value })}
                   />
@@ -1262,10 +1268,6 @@ const ProcessDC = () => {
                         <SearchableSelect
                           value={dcForm.selectedForAccountId}
                           onChange={(value) => {
-                            // #region agent log
-                            fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:1207',message:'FOR account selected',data:{selectedAccountId:value,forAccountsCount:forAccounts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                            // #endregion
-                            
                             setDcForm({ ...dcForm, selectedForAccountId: value ? parseInt(value) : null });
                           }}
                           options={forAccounts.map(a => ({ id: a.id || a.accountId, name: a.name || a.accountName }))}
@@ -1273,12 +1275,6 @@ const ProcessDC = () => {
                           disabled={forAccounts.length === 0}
                         />
                       </InputGroup>
-                      {/* #region agent log */}
-                      {(() => {
-                        fetch('http://127.0.0.1:7242/ingest/2d00183d-1e1f-48f7-9f4e-7f6abde35502',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ProcessDC.jsx:1217',message:'FOR account dropdown render',data:{forAccountsCount:forAccounts.length,forChargesCategory,forChargesAvailable,accounts:forAccounts},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                        return null;
-                      })()}
-                      {/* #endregion */}
                     </div>
                     <div className="mt-2">
                       <Form.Label>FOR Charges Amount</Form.Label>
@@ -1303,18 +1299,18 @@ const ProcessDC = () => {
           <Button
             variant="info"
             onClick={handleOpenCartageModal}
-            disabled={!dcForm.locationId || processing}
+            disabled={!challanReady || !dcForm.locationId || processing}
             title={!dcForm.locationId ? 'Please select a location first' : ''}
           >
             <i className="fas fa-shipping-fast me-1"></i> Add Cartage
           </Button>
-          <Button variant="secondary" onClick={() => setShowDCModal(false)} disabled={processing}>
+          <Button variant="secondary" onClick={closeDCModal} disabled={processing}>
             <i className="fas fa-times me-1"></i> Cancel
           </Button>
           <Button
             variant="primary"
             onClick={handlePostSingle}
-            disabled={processing || !dcForm.journalEntryId || !dcForm.locationId}
+            disabled={!challanReady || processing || !dcForm.journalEntryId || !dcForm.locationId}
           >
             {processing ? (
               <>
@@ -1330,7 +1326,7 @@ const ProcessDC = () => {
           <Button
             variant="success"
             onClick={handlePostAll}
-            disabled={processing || !dcForm.journalVoucherId || !dcForm.locationId}
+            disabled={!challanReady || processing || !dcForm.journalVoucherId || !dcForm.locationId}
           >
             {processing ? (
               <>
@@ -1414,7 +1410,7 @@ const ProcessDC = () => {
           <Button
             variant="primary"
             onClick={handleAddCartage}
-            disabled={processing || !cartageForm.transporterId || !cartageForm.amount || parseFloat(cartageForm.amount) <= 0}
+            disabled={processing || !challanReady || !cartageForm.transporterId || !cartageForm.amount || parseFloat(cartageForm.amount) <= 0}
           >
             {processing ? (
               <>

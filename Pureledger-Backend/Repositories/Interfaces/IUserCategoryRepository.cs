@@ -10,7 +10,6 @@ namespace PureLedger.Repositories.Interfaces
         UserCategory Add(UserCategory userCategory);
         Task<bool> DeleteAsync(int id);
         Task<bool> DeleteByUserIdAsync(int userId);
-        Task<bool> DeleteByCategoryIdAsync(int categoryId);
         Task<bool> ExistsAsync(int userId, int categoryId);
     }
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PureLedger.Models;
 using PureLedger.Repositories.Interfaces;
 using PureLedger.Services.Interface;
@@ -12,7 +12,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 namespace PureLedger.Services {
-    public class ReportingService : IReportingService {
+    public partial class ReportingService : IReportingService {
         private readonly IUnitOfWork _unitOfWork;
         private readonly IApprovalGuardService _approvalGuard;
         private readonly IPaymentReceiptClassifier _paymentReceiptClassifier;
@@ -96,6 +96,7 @@ namespace PureLedger.Services {
                 CustomerCity = parsedCustomerInfo.City,
 
                 Adda = locationNames,
+                Station = dcVoucher.Station,
                 ForChargesAmount = forChargesAmount,
                 ForChargesEntries = forChargesEntries,
                 CartageAmount = cartageAmount,
@@ -785,229 +786,117 @@ namespace PureLedger.Services {
         }
 
         public async Task<ProductReportViewModel> GetProductReportAsync(ProductReportRequest request) {
-            if (string.IsNullOrEmpty(request.ProjectId)) {
+            if (string.IsNullOrEmpty(request.ProjectId))
                 return new ProductReportViewModel();
-            }
 
             int projectId = int.Parse(request.ProjectId);
             int? categoryId = !string.IsNullOrEmpty(request.CategoryId) ? int.Parse(request.CategoryId) : null;
             int? accountId = !string.IsNullOrEmpty(request.AccountId) ? int.Parse(request.AccountId) : null;
             int? locationId = !string.IsNullOrEmpty(request.LocationId) ? int.Parse(request.LocationId) : null;
-
-            DateOnly startDate = request.StartDate ?? DateOnly.MinValue;
-            DateOnly endDate = request.EndDate ?? DateOnly.MaxValue;
-
+            var startDate = request.StartDate ?? DateOnly.MinValue;
+            var endDate = request.EndDate ?? DateOnly.MaxValue;
+            if (startDate > endDate)
+                throw new ArgumentException("Start date must not be after end date.");
             int page = Math.Max(0, request.Page);
             int pageSize = Math.Clamp(request.PageSize, 1, 2500);
 
-            // Select products from their complete as-of position before paging. A
-            // product can have stock (including transit) without period activity.
-            var allHistoricalEntries = await _unitOfWork.JournalEntries.GetAllEntriesForProductReportAsync(
-                DateOnly.MinValue, endDate, projectId, categoryId, accountId, locationId);
-            var transitMovements = locationId.HasValue
-                ? new List<ProductTransitMovementDto>()
-                : await _unitOfWork.JournalEntries.GetProductTransitMovementsAsync(
-                    projectId, endDate, categoryId, accountId);
-            var transitByProduct = transitMovements.GroupBy(x => x.ProductId)
-                .ToDictionary(x => x.Key, x => x.Sum(movement => movement.Quantity));
-            var productIds = allHistoricalEntries.Select(x => x.Entry.AccountId)
-                .Distinct().OrderBy(id => id).ToList();
-            var productGroups = allHistoricalEntries
-                .GroupBy(x => x.Entry.AccountId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+            // Stock, transit, receipts and charges must share one committed snapshot.
+            await using var transaction = _context.Database.IsRelational()
+                ? await _context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead)
+                : null;
+            var costing = await new ProductInventoryCosting(_context).CalculateAsync(
+                projectId, endDate, categoryId, accountId);
+            var summaries = new List<ProductSummaryViewModel>();
+            decimal totalSalesCredit = 0;
+            foreach (var productGroup in costing.Movements.GroupBy(m => m.Entry.AccountId)) {
+                var productId = productGroup.Key;
+                var selected = productGroup.Where(m => !locationId.HasValue || m.LocationId == locationId).ToList();
+                var previous = selected.Where(m => m.Entry.JournalVoucher!.EntryDate < startDate).ToList();
+                var current = selected.Where(m => m.Entry.JournalVoucher!.EntryDate >= startDate).ToList();
+                var opening = costing.Position(productId, locationId, startDate);
+                var closing = costing.Position(productId, locationId);
 
-            var productSummaries = new List<ProductSummaryViewModel>();
+                // Display commercial activity globally and physical movements at a warehouse.
+                int DebitQuantity(IEnumerable<InventoryMovement> movements) => movements
+                    .Where(m => m.Entry.Debit > 0 && (locationId.HasValue || !m.Entry.JournalVoucher!.IsStockTransfer))
+                    .Sum(m => m.Entry.Quantity);
+                int CreditQuantity(IEnumerable<InventoryMovement> movements) => movements
+                    .Where(m => m.Entry.Credit > 0 && (locationId.HasValue || !m.Entry.JournalVoucher!.IsStockTransfer))
+                    .Sum(m => m.Entry.Quantity);
+                decimal DebitAmount(IEnumerable<InventoryMovement> movements) => movements
+                    .Where(m => locationId.HasValue || !m.Entry.JournalVoucher!.IsStockTransfer || m.Entry.Quantity == 0)
+                    .Sum(m => m.Entry.Debit);
+                decimal CreditAmount(IEnumerable<InventoryMovement> movements) => movements
+                    .Where(m => locationId.HasValue || !m.Entry.JournalVoucher!.IsStockTransfer).Sum(m => m.Entry.Credit);
 
-            decimal totalDebit = 0;
-            decimal totalCredit = 0;
-            int totalDebitQty = 0;
-            int totalCreditQty = 0;
-            decimal totalCOGS = 0;
-            decimal totalMargin = 0;
-
-            foreach (var productId in productIds) {
-                if (!productGroups.ContainsKey(productId))
+                if (current.Count == 0 && !closing.HasStockPosition)
                     continue;
-
-                var productEntries = productGroups[productId];
-
-                if (!productEntries.Any())
+                if (request.ExcludeNilProducts && !closing.HasStockPosition)
                     continue;
-
-                var productName = productEntries.First().Entry.Account?.AccountName ?? "Unknown Product";
-
-                var entriesBeforeStartDate = productEntries
-                    .Where(x => x.Entry.JournalVoucher.EntryDate < startDate)
-                    .ToList();
-
-                var entriesInDateRange = productEntries
-                    .Where(x => x.Entry.JournalVoucher.EntryDate >= startDate &&
-                               x.Entry.JournalVoucher.EntryDate <= endDate)
-                    .ToList();
-
-                var prevDebitEntries = entriesBeforeStartDate.Where(x => x.Entry.Debit > 0).ToList();
-                var prevCommercialDebitEntries = prevDebitEntries
-                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer || x.Entry.Quantity == 0)
-                    .ToList();
-                var prevPhysicalCreditEntries = entriesBeforeStartDate.Where(x => x.Entry.Credit > 0).ToList();
-                var prevSaleCreditEntries = prevPhysicalCreditEntries
-                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer).ToList();
-
-                int prevDebitQty = prevDebitEntries.Sum(x => x.Entry.Quantity);
-                int prevCreditQty = prevPhysicalCreditEntries.Sum(x => x.Entry.Quantity);
-                int prevQtyBalance = prevDebitQty - prevCreditQty;
-
-                // Quantity-bearing transfer debits are internal receipts/returns, not
-                // purchases. Quantity-zero product debits are landed charges and remain
-                // part of the product's commercial cost.
-                decimal prevTotalDebit = prevCommercialDebitEntries.Sum(x => x.Entry.Debit);
-                decimal prevTotalCredit = prevSaleCreditEntries.Sum(x => x.Entry.Credit);
-
-                var currentDebitEntries = entriesInDateRange.Where(x => x.Entry.Debit > 0).ToList();
-                var currentCommercialDebitEntries = currentDebitEntries
-                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer || x.Entry.Quantity == 0)
-                    .ToList();
-                var currentPhysicalCreditEntries = entriesInDateRange.Where(x => x.Entry.Credit > 0).ToList();
-                var currentSaleCreditEntries = currentPhysicalCreditEntries
-                    .Where(x => !x.Entry.JournalVoucher.IsStockTransfer).ToList();
-
-                int currentPhysicalDebitQty = currentDebitEntries.Sum(x => x.Entry.Quantity);
-                int currentPhysicalCreditQty = currentPhysicalCreditEntries.Sum(x => x.Entry.Quantity);
-                decimal currentDebit = currentCommercialDebitEntries.Sum(x => x.Entry.Debit);
-                decimal currentCredit = currentSaleCreditEntries.Sum(x => x.Entry.Credit);
-
-                int totalProductDebitQty = prevDebitQty + currentPhysicalDebitQty;
-                int totalProductCreditQty = prevCreditQty + currentPhysicalCreditQty;
-                int qtyBalance = totalProductDebitQty - totalProductCreditQty;
-
-                decimal prevAvgRate;
-                decimal averageRate;
-                decimal inventoryValue;
-                decimal cogs;
-                if (!productEntries.Any(x => x.Entry.JournalVoucher.IsStockTransfer))
-                {
-                    // Preserve the established report calculation exactly for historical
-                    // products that have no transfer movements.
-                    prevAvgRate = prevDebitQty > 0 ? prevTotalDebit / prevDebitQty : 0;
-                    averageRate = totalProductDebitQty > 0
-                        ? (prevTotalDebit + currentDebit) / totalProductDebitQty
-                        : prevAvgRate;
-                    cogs = averageRate * currentPhysicalCreditQty;
-                    inventoryValue = averageRate * qtyBalance;
-                }
-                else
-                {
-                    // Keep the established period-average formula. An all-warehouse
-                    // transfer is neutral to the cost base; within one warehouse its
-                    // receipt/return supplies both quantity and posted cost.
-                    var previousCostDebits = locationId.HasValue
-                        ? prevDebitEntries
-                        : prevCommercialDebitEntries;
-                    var currentCostDebits = locationId.HasValue
-                        ? currentDebitEntries
-                        : currentCommercialDebitEntries;
-                    int previousCostQuantity = previousCostDebits.Sum(x => x.Entry.Quantity);
-                    int totalCostQuantity = previousCostQuantity +
-                        currentCostDebits.Sum(x => x.Entry.Quantity);
-                    decimal previousCost = previousCostDebits.Sum(x => x.Entry.Debit);
-                    decimal totalCost = previousCost + currentCostDebits.Sum(x => x.Entry.Debit);
-                    prevAvgRate = previousCostQuantity > 0
-                        ? previousCost / previousCostQuantity : 0;
-                    averageRate = totalCostQuantity > 0
-                        ? totalCost / totalCostQuantity : prevAvgRate;
-                    cogs = averageRate * currentSaleCreditEntries.Sum(x => x.Entry.Quantity);
-                    // Preserve the posted transfer value when it differs from the
-                    // report's average rate. Only ordinary outward quantity incurs COGS.
-                    var allSaleQuantity = productEntries
-                        .Where(x => x.Entry.Credit > 0 && !x.Entry.JournalVoucher.IsStockTransfer)
-                        .Sum(x => x.Entry.Quantity);
-                    inventoryValue = productEntries.Sum(x => x.Entry.Debit) -
-                        productEntries.Where(x => x.Entry.Credit > 0 &&
-                                                  x.Entry.JournalVoucher.IsStockTransfer)
-                            .Sum(x => x.Entry.Credit) - averageRate * allSaleQuantity;
-                }
-                decimal margin = currentCredit - cogs;
-                decimal marginPercentage = currentCredit > 0 ? (margin / currentCredit) * 100 : 0;
-
-                var summary = new ProductSummaryViewModel {
+                var debit = DebitAmount(current);
+                var credit = CreditAmount(current);
+                var cogs = current.Sum(m => m.SaleCost);
+                // Warehouse credits include dispatches, but only sales earn margin.
+                var salesCredit = current.Where(m => !m.Entry.JournalVoucher!.IsStockTransfer)
+                    .Sum(m => m.Entry.Credit);
+                totalSalesCredit += salesCredit;
+                var margin = salesCredit - cogs;
+                summaries.Add(new ProductSummaryViewModel {
                     ProductId = productId,
-                    ProductName = productName,
-                    PreviousDebitQty = prevDebitQty,
-                    PreviousCreditQty = prevCreditQty,
-                    PreviousBalance = prevQtyBalance,
-                    PreviousDebit = prevTotalDebit,
-                    PreviousCredit = prevTotalCredit,
-                    PreviousAvgRate = prevAvgRate,
-                    // Quantity columns describe physical warehouse movements, including
-                    // transfers; monetary debit/credit columns remain commercial amounts.
-                    TotalDebitQty = currentPhysicalDebitQty,
-                    TotalCreditQty = currentPhysicalCreditQty,
-                    QtyBalance = qtyBalance,
-                    AverageRate = averageRate,
-                    InventoryValue = inventoryValue,
-                    PhysicalOutwardQuantity = currentPhysicalCreditQty,
-                    TransferOutwardQuantity = currentPhysicalCreditEntries
-                        .Where(x => x.Entry.JournalVoucher.IsStockTransfer).Sum(x => x.Entry.Quantity),
-                    TransferInwardQuantity = currentDebitEntries
-                        .Where(x => x.Entry.JournalVoucher.IsStockTransfer && x.Entry.Quantity > 0).Sum(x => x.Entry.Quantity),
-                    InTransitQuantity = transitByProduct.GetValueOrDefault(productId),
-                    TotalDebit = currentDebit,
-                    TotalCredit = currentCredit,
-                    Balance = currentDebit - currentCredit,
+                    ProductName = productGroup.First().Entry.Account?.AccountName ?? "Unknown Product",
+                    PreviousDebitQty = DebitQuantity(previous),
+                    PreviousCreditQty = CreditQuantity(previous),
+                    PreviousBalance = opening.Quantity,
+                    PreviousDebit = DebitAmount(previous),
+                    PreviousCredit = CreditAmount(previous),
+                    PreviousAvgRate = opening.AverageRate,
+                    HasPreviousBalance = previous.Any(m => m.Entry.Quantity != 0),
+                    TotalDebitQty = DebitQuantity(current),
+                    TotalCreditQty = CreditQuantity(current),
+                    QtyBalance = closing.Quantity,
+                    AverageRate = closing.AverageRate,
+                    InventoryValue = closing.Value,
+                    PhysicalOutwardQuantity = current.Where(m => m.Entry.Credit > 0).Sum(m => m.Entry.Quantity),
+                    TransferOutwardQuantity = current.Where(m => m.IsDispatch).Sum(m => m.Entry.Quantity),
+                    TransferInwardQuantity = current.Where(m => m.Entry.JournalVoucher!.IsStockTransfer && m.Entry.Debit > 0)
+                        .Sum(m => m.Entry.Quantity),
+                    InTransitQuantity = closing.TransitQuantity,
+                    TotalDebit = debit,
+                    TotalCredit = credit,
+                    Balance = debit - credit,
                     COGS = cogs,
                     Margin = margin,
-                    MarginPercentage = marginPercentage,
-                    HasPreviousBalance = prevDebitQty > 0 || prevCreditQty > 0
-                };
-
-                // Preserve period-activity rows while also showing carried stock.
-                if (entriesInDateRange.Count == 0 && qtyBalance == 0 && summary.InTransitQuantity == 0)
-                    continue;
-                productSummaries.Add(summary);
-
-                totalDebit += currentDebit;
-                totalCredit += currentCredit;
-                totalDebitQty += currentPhysicalDebitQty;
-                totalCreditQty += currentPhysicalCreditQty;
-                totalCOGS += cogs;
-                totalMargin += margin;
+                    MarginPercentage = salesCredit > 0 ? margin / salesCredit * 100 : 0
+                });
             }
 
-            if (request.ExcludeNilProducts) {
-                productSummaries = productSummaries.Where(p => p.QtyBalance != 0 || p.InTransitQuantity != 0).ToList();
-
-                // Recalculate totals from filtered products
-                totalDebit = productSummaries.Sum(p => p.TotalDebit);
-                totalCredit = productSummaries.Sum(p => p.TotalCredit);
-                totalDebitQty = productSummaries.Sum(p => p.TotalDebitQty);
-                totalCreditQty = productSummaries.Sum(p => p.TotalCreditQty);
-                totalCOGS = productSummaries.Sum(p => p.COGS);
-                totalMargin = productSummaries.Sum(p => p.Margin);
-            }
-
-            var totalCount = productSummaries.Count;
-            decimal totalMarginPercentage = totalCredit > 0 ? (totalMargin / totalCredit) * 100 : 0;
-
-            return new ProductReportViewModel {
-                ProductSummaries = productSummaries.Skip(page * pageSize).Take(pageSize)
-                    .OrderBy(p => p.ProductName).ToList(),
+            // Filter and aggregate before paging; opening stock is never period net activity.
+            var totalDebit = summaries.Sum(p => p.TotalDebit);
+            var totalCredit = summaries.Sum(p => p.TotalCredit);
+            var totalMargin = summaries.Sum(p => p.Margin);
+            var totalCount = summaries.Count;
+            var result = new ProductReportViewModel {
+                ProductSummaries = summaries.OrderBy(p => p.ProductName).ThenBy(p => p.ProductId)
+                    .Skip((int)Math.Min((long)page * pageSize, int.MaxValue)).Take(pageSize).ToList(),
                 Totals = new ProductReportTotalsViewModel {
                     TotalDebit = totalDebit,
                     TotalCredit = totalCredit,
                     Balance = totalDebit - totalCredit,
-                    TotalDebitQty = totalDebitQty,
-                    TotalCreditQty = totalCreditQty,
-                    NetQuantity = totalDebitQty - totalCreditQty,
-                    BalanceQuantity = productSummaries.Sum(p => p.QtyBalance),
-                    TotalCOGS = totalCOGS,
+                    TotalDebitQty = summaries.Sum(p => p.TotalDebitQty),
+                    TotalCreditQty = summaries.Sum(p => p.TotalCreditQty),
+                    NetQuantity = summaries.Sum(p => p.TotalDebitQty - p.TotalCreditQty),
+                    BalanceQuantity = summaries.Sum(p => p.QtyBalance),
+                    TotalCOGS = summaries.Sum(p => p.COGS),
                     TotalMargin = totalMargin,
-                    MarginPercentage = totalMarginPercentage
+                    MarginPercentage = totalSalesCredit > 0 ? totalMargin / totalSalesCredit * 100 : 0
                 },
                 TotalRecords = totalCount,
                 Page = page,
                 PageSize = pageSize,
-                HasMoreData = (page + 1) * pageSize < totalCount
+                HasMoreData = ((long)page + 1) * pageSize < totalCount
             };
+            if (transaction != null) await transaction.CommitAsync();
+            return result;
         }
 
         public async Task<ProductStockBreakdownViewModel> GetProductStockBreakdownAsync(
@@ -1136,34 +1025,11 @@ namespace PureLedger.Services {
             return await _unitOfWork.ProjectCartageSettings.GetByProjectIdAsync(projectId);
         }
 
-        public async Task<JournalVoucher?> GetJournalVoucherAsync(int journalVoucherId) {
-            return await _unitOfWork.JournalVouchers.GetWithEntriesAsync(journalVoucherId);
-        }
-
         public async Task<List<Booker>> GetAllBookersAsync() {
             return await _unitOfWork.Bookers.GetAllAsync();
         }
 
         #region Missed Entries
-
-        public async Task<List<MissedEntryViewModel>> GetFilteredMissedEntriesAsync(
-            DateOnly? startDate,
-            DateOnly? endDate,
-            int? projectId) {
-            var entries = await _unitOfWork.MissedEntries.GetFilteredEntriesAsync(startDate, endDate, projectId);
-
-            return entries.Select(e => new MissedEntryViewModel {
-                MissedEntryId = e.MissedEntryId,
-                CustomerName = e.CustomerAccount?.AccountName ?? "Unknown Customer",
-                ProductName = e.ProductAccount?.AccountName ?? "Unknown Product",
-                ProjectName = e.Project?.ProjectName ?? "Unknown Project",
-                MissedDate = e.MissedDate,
-                Quantity = e.Quantity,
-                Rate = e.Rate,
-                Discount = e.Discount,
-                Description = e.Description
-            }).ToList();
-        }
 
         public async Task<object> GetMissedEntriesSummaryAsync(
     DateOnly? startDate,

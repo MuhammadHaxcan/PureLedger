@@ -1,3 +1,4 @@
+import { addDays, todayString } from '../../utils/businessDate';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, Form, Button, Table, Alert, Modal } from 'react-bootstrap';
@@ -56,9 +57,10 @@ const HomeEntry = () => {
     const [projects, setProjects] = useState([]);
     const [bookers, setBookers] = useState([]);
     const [selectedProjectId, setSelectedProjectId] = useState(null);
-    const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+    const [voucherVersion, setVoucherVersion] = useState(null);
+    const [entryDate, setEntryDate] = useState(todayString());
     const [creditDays, setCreditDays] = useState(0);
-    const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+    const [dueDate, setDueDate] = useState(todayString());
     const [bookerId, setBookerId] = useState(null);
     const [requireQuantity, setRequireQuantity] = useState(true);
     const [isBaseVoucher, setIsBaseVoucher] = useState(false);
@@ -167,9 +169,7 @@ const HomeEntry = () => {
     useEffect(() => {
         if (entryDate) {
             const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
-            const date = new Date(entryDate);
-            date.setDate(date.getDate() + days);
-            setDueDate(date.toISOString().split('T')[0]);
+            setDueDate(addDays(entryDate, days));
         }
     }, [entryDate, creditDays]);
 
@@ -226,15 +226,16 @@ const HomeEntry = () => {
                     isManualExpenseVoucher,
                 } = response.data;
                 setIsEditingManualExpenseVoucher(Boolean(isManualExpenseVoucher));
+                setVoucherVersion(model.voucherVersion ?? null);
                 setProjects(projData || []);
                 setBookers(bookData || []);
                 const bookersAvailable = (bookData || []).length > 0;
                 setHasBookers(bookersAvailable);
                 setBookersLoaded(true);
                 setSelectedProjectId(projId);
-                setEntryDate(model.entryDate || new Date().toISOString().split('T')[0]);
+                setEntryDate(model.entryDate || todayString());
                 setCreditDays(model.creditDays !== undefined && model.creditDays !== null ? model.creditDays : '');
-                setDueDate(model.dueDate || new Date().toISOString().split('T')[0]);
+                setDueDate(model.dueDate || todayString());
                 setBookerId(model.bookerId);
                 setRequireQuantity(model.requireQuantity !== false);
                 setIsBaseVoucher(model.isBaseVoucher || false);
@@ -356,7 +357,7 @@ const HomeEntry = () => {
                     ? approval.creditDays
                     : 0
             );
-            setEntryDate(new Date().toISOString().split('T')[0]);
+            setEntryDate(todayString());
             setRequireQuantity(true);
             setIsBaseVoucher(false);
             setSaveAsRecipe(false);
@@ -892,6 +893,7 @@ const HomeEntry = () => {
         try {
             const model = {
                 projectId: selectedProjectId,
+                voucherVersion: isVoucherEditMode ? voucherVersion : null,
                 entryDate: entryDate,
                 dueDate: dueDate,
                 creditDays: creditDays !== '' && creditDays !== null ? (parseInt(creditDays) || 0) : 0,
@@ -954,8 +956,9 @@ const HomeEntry = () => {
 
             if (response.data.success) {
                 const isPendingApproval =
-                    String(response.data.status || '').toLowerCase() === 'pendingapproval' ||
-                    Boolean(response.data.approvalVoucherId);
+                    response.data.isPending ?? ['pending', 'pendingapproval'].includes(
+                        String(response.data.status || '').toLowerCase()
+                    );
                 const successMessage = response.data.message || (isPendingApproval
                     ? 'Voucher submitted for approval'
                     : (isVoucherEditMode ? 'Journal voucher updated successfully' : 'Journal entry created successfully'));
@@ -1000,7 +1003,7 @@ const HomeEntry = () => {
                             totalAmount: 0
                         }]);
                         setBookerId(bookers.length > 0 ? bookers[0].id : null);
-                        setEntryDate(new Date().toISOString().split('T')[0]);
+                        setEntryDate(todayString());
                         setCreditDays(0);
                         setSuccess('');
                     }

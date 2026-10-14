@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
+using PureLedger.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Models;
+using PureLedger.Services;
 using PureLedger.Services.Interface;
 using PureLedger.ViewModels.Reporting;
 using System.Linq;
@@ -83,9 +85,9 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 if (ex is ApprovalConflictException)
-                    return Conflict(new { success = false, message = ex.Message });
+                    return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
                 if (ex is PaymentReceiptIntegrityException)
-                    return Conflict(new { success = false, message = ex.Message });
+                    return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
                 if (ex is UnauthorizedAccessException)
                     return StatusCode(StatusCodes.Status403Forbidden,
                         new { success = false, message = "You do not have access to this Payment & Receipt voucher." });
@@ -170,9 +172,9 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 if (ex is ApprovalConflictException)
-                    return Conflict(new { success = false, message = ex.Message });
+                    return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
                 if (ex is PaymentReceiptIntegrityException)
-                    return Conflict(new { success = false, message = ex.Message });
+                    return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
                 if (ex is UnauthorizedAccessException)
                     return StatusCode(StatusCodes.Status403Forbidden,
                         new { success = false, message = "You do not have access to this Payment & Receipt voucher." });
@@ -376,6 +378,34 @@ namespace PureLedger.Controllers.Api
 
         #region Aging Report
 
+        [HttpGet("aging-report-fifo")]
+        public async Task<IActionResult> GetAgingFifo(
+            [FromQuery] AgingFifoRequest request,
+            [FromServices] PureLedger.Services.Auth.IAuthService authService,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var userId = RequireUser();
+                if (!_currentUserService.IsCurrentUserAdmin() &&
+                    (!await authService.HasProjectAccessAsync(userId, request.ProjectId) ||
+                     (!await authService.HasControllerAccessAsync(userId, "Reporting") &&
+                      !await authService.HasActionAccessAsync(userId, "Reporting", "AgingReport"))))
+                    return Forbid();
+                var report = await _reportingService.GetAgingFifoAsync(request, cancellationToken);
+                return Ok(new { success = true, data = report });
+            }
+            catch (ArgumentException ex) when (ExceptionClassifier.IsApplicationRaised(ex)) { return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) }); }
+            catch (KeyNotFoundException ex) when (ExceptionClassifier.IsApplicationRaised(ex)) { return NotFound(new { success = false, message = ExceptionClassifier.UserMessage(ex) }); }
+            catch (NotAuthenticatedException) { return Unauthorized(); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading aging FIFO for account {AccountId}", request.AccountId);
+                return StatusCode(500, new { success = false, message = "Error loading FIFO breakdown" });
+            }
+        }
+
         [HttpGet("aging-report")]
         public async Task<IActionResult> GetAgingReport([FromQuery] AgingReportRequest request)
         {
@@ -395,7 +425,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating aging report");
-                return StatusCode(500, new { success = false, message = $"Error generating report: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error generating report" });
             }
         }
 
@@ -422,7 +452,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating account report");
-                return StatusCode(500, new { success = false, message = $"Error generating report: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error generating report" });
             }
         }
 
@@ -441,7 +471,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating master report");
-                return StatusCode(500, new { success = false, message = $"Error generating report: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error generating report" });
             }
         }
 
@@ -470,10 +500,19 @@ namespace PureLedger.Controllers.Api
                 var report = await _reportingService.GetProductReportAsync(request);
                 return Ok(new { success = true, data = report });
             }
+            catch (Exception ex) when (ex is ArgumentException or FormatException or OverflowException)
+            {
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
+            }
+            catch (InventoryIntegrityException ex)
+            {
+                _logger.LogWarning(ex, "Product report blocked by stock-transfer voucher {VoucherId}", ex.JournalVoucherId);
+                return UnprocessableEntity(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating product report");
-                return StatusCode(500, new { success = false, message = $"Error generating report: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error generating report" });
             }
         }
 
@@ -488,13 +527,18 @@ namespace PureLedger.Controllers.Api
                 var breakdown = await _reportingService.GetProductStockBreakdownAsync(projectId, productId, endDate);
                 return Ok(new { success = true, data = breakdown });
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
-            catch (KeyNotFoundException ex)
+            catch (KeyNotFoundException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
-                return NotFound(new { success = false, message = ex.Message });
+                return NotFound(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
+            }
+            catch (InventoryIntegrityException ex)
+            {
+                _logger.LogWarning(ex, "Stock breakdown blocked by stock-transfer voucher {VoucherId}", ex.JournalVoucherId);
+                return UnprocessableEntity(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {
@@ -669,7 +713,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading categories for project {ProjectId}", projectId);
-                return StatusCode(500, new { success = false, message = $"Error loading categories: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error loading categories" });
             }
         }
 
@@ -695,10 +739,10 @@ namespace PureLedger.Controllers.Api
                 var report = await _reportingService.GetUserReportAsync(request, userId.Value);
                 return Ok(new { success = true, data = report });
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid argument for user report");
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -708,7 +752,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating user report");
-                return StatusCode(500, new { success = false, message = $"Error generating report: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error generating report" });
             }
         }
 
@@ -733,7 +777,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading categories for project {ProjectId}", projectId);
-                return StatusCode(500, new { success = false, message = $"Error loading categories: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error loading categories" });
             }
         }
 
@@ -749,7 +793,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading accounts for category {CategoryId}", categoryId);
-                return StatusCode(500, new { success = false, message = $"Error loading accounts: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error loading accounts" });
             }
         }
 
@@ -771,14 +815,14 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading bookers");
-                return StatusCode(500, new { success = false, message = $"Error loading bookers: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error loading bookers" });
             }
         }
 
         #endregion
 
         private int RequireUser() => _currentUserService.GetCurrentUserId()
-            ?? throw new UnauthorizedAccessException("User is not authenticated.");
+            ?? throw new NotAuthenticatedException();
     }
 }
 

@@ -10,7 +10,6 @@ namespace PureLedger.Repositories.Interfaces
         UserProject Add(UserProject userProject);
         Task<bool> DeleteAsync(int id);
         Task<bool> DeleteByUserIdAsync(int userId);
-        Task<bool> DeleteByProjectIdAsync(int projectId);
         Task<bool> ExistsAsync(int userId, int projectId);
     }
 }

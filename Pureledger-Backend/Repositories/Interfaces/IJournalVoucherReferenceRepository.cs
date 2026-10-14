@@ -13,6 +13,5 @@ namespace PureLedger.Repositories.Interfaces
         Task<List<JournalVoucherReference>> GetByMainVoucherIdAndTypeAsync(int mainVoucherId, string referenceType);
         JournalVoucherReference Update(JournalVoucherReference reference);
         Task<bool> DeleteAsync(int id);
-        Task<int> DeleteByVoucherIdAsync(int voucherId);
     }
 }

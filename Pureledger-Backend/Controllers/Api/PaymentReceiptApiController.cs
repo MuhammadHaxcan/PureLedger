@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using PureLedger.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using PureLedger.Attributes;
 using PureLedger.Services.Interface;
@@ -39,6 +40,6 @@ public sealed class PaymentReceiptApiController : ControllerBase
         Ok(await _service.SubmitAsync(request, UserId(), IsAdmin()));
 
     private int UserId() => _currentUser.GetCurrentUserId()
-        ?? throw new UnauthorizedAccessException("User is not authenticated.");
+        ?? throw new NotAuthenticatedException();
     private bool IsAdmin() => _currentUser.IsCurrentUserAdmin();
 }

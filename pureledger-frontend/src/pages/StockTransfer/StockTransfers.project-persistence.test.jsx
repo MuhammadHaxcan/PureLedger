@@ -102,7 +102,7 @@ describe('Stock Transfer project persistence', () => {
     await waitFor(() => expect(categoryInput).toBeEnabled());
   });
 
-  it('keeps suggested Transfer cost editable without a separate source average column', async () => {
+  it('suggests source cost and permits a lower or higher transfer price', async () => {
     render(
       <MemoryRouter>
         <StockTransfers />
@@ -123,8 +123,44 @@ describe('Stock Transfer project persistence', () => {
     expect(screen.queryByRole('columnheader', { name: 'Source avg cost' })).not.toBeInTheDocument();
     const costInput = transferCostHeader.closest('table').querySelector('tbody tr td:nth-child(5) input');
     await waitFor(() => expect(costInput).toHaveValue(42));
+    expect(costInput).not.toHaveAttribute('readonly');
+    expect(costInput).toHaveAccessibleName('Transfer cost');
     fireEvent.change(costInput, { target: { value: '50' } });
     expect(costInput).toHaveValue(50);
+    fireEvent.change(costInput, { target: { value: '30' } });
+    expect(costInput).toHaveValue(30);
+  });
+
+  it.each([[null, 2, 5], [50, 2, 5], [30, 2, 5], [null, 12, 5], [50, 12, 5], [50, 12, 0], [null, 12, -4]])('submits price %s and quantity %s with availability %s', async (price, quantity, availableQuantity) => {
+    const defaultGet = apiClient.get.getMockImplementation();
+    apiClient.get.mockImplementation((url, config) => {
+      if (url === '/StockTransferApi/settings') return Promise.resolve({ data: { isConfigured: true } });
+      if (url === '/StockTransferApi/availability') return Promise.resolve({ data: { availableQuantity, suggestedUnitCost: 42 } });
+      return defaultGet(url, config);
+    });
+    apiClient.post.mockResolvedValue({ data: { transferNumber: 'ST-test' } });
+    render(<MemoryRouter><StockTransfers /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByPlaceholderText('Search project')).toHaveValue('Main Project'));
+    fireEvent.change(screen.getByPlaceholderText('Search source').parentElement.querySelector('select'), { target: { value: '10' } });
+    fireEvent.change(screen.getByPlaceholderText('Search destination').parentElement.querySelector('select'), { target: { value: '20' } });
+    const category = screen.getByPlaceholderText('Search category');
+    await waitFor(() => expect(category.parentElement.querySelector('select option[value="100"]')).toBeInTheDocument());
+    fireEvent.change(category.parentElement.querySelector('select'), { target: { value: '100' } });
+    const product = screen.getByPlaceholderText('Select product');
+    await waitFor(() => expect(product.parentElement.querySelector('select option[value="500"]')).toBeInTheDocument());
+    fireEvent.change(product.parentElement.querySelector('select'), { target: { value: '500' } });
+    const cost = screen.getByRole('spinbutton', { name: 'Transfer cost' });
+    await waitFor(() => expect(cost).toHaveValue(42));
+    const row = cost.closest('tr');
+    const quantityInput = row.querySelector('td:nth-child(4) input');
+    expect(quantityInput).not.toHaveAttribute('max');
+    fireEvent.change(quantityInput, { target: { value: String(quantity) } });
+    if (price != null) fireEvent.change(cost, { target: { value: String(price) } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Dispatch transfer' })).toBeEnabled());
+    fireEvent.submit(cost.closest('form'));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/StockTransferApi/dispatch', expect.objectContaining({
+      items: [{ productAccountId: 500, quantity, unitCost: price }]
+    })));
   });
 
   it('places the separate history dates before the other filters', async () => {

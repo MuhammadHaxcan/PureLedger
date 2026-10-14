@@ -42,23 +42,6 @@ namespace PureLedger.Repositories
             return await _context.Projects.FindAsync(id);
         }
 
-        public async Task<Project?> GetByIdForUserAsync(int id, int userId)
-        {
-            // Check if user is admin
-            var user = await _context.Users.FindAsync(userId);
-            if (user?.IsAdmin == true)
-            {
-                return await GetByIdAsync(id);
-            }
-
-            // Return project only if user has access to it
-            return await _context.Projects
-                .AsNoTracking()
-                .Where(p => p.ProjectId == id &&
-                           _context.UserProjects.Any(up => up.UserId == userId && up.ProjectId == p.ProjectId))
-                .FirstOrDefaultAsync();
-        }
-
         public Project Add(Project project)
         {
             _context.Projects.Add(project);
@@ -69,20 +52,6 @@ namespace PureLedger.Repositories
         {
             _context.Projects.Update(project);
             return project;
-        }
-
-        public async Task<bool> UserHasAccessToProjectAsync(int userId, int projectId)
-        {
-            // Check if user is admin
-            var user = await _context.Users.FindAsync(userId);
-            if (user?.IsAdmin == true)
-            {
-                return true;
-            }
-
-            // Check if user has explicit access to the project
-            return await _context.UserProjects
-                .AnyAsync(up => up.UserId == userId && up.ProjectId == projectId);
         }
 
         public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)

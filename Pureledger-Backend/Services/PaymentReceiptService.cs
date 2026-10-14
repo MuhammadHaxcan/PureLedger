@@ -1,4 +1,5 @@
 using System.Data;
+using PureLedger.Helpers;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -36,7 +37,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
         {
             projects = projects.Select(x => new { id = x.ProjectId, name = x.ProjectName }),
             instrumentTypes = Enum.GetNames<PaymentInstrumentType>(),
-            defaultEntryDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            defaultEntryDate = BusinessClock.Today
         };
     }
 
@@ -150,28 +151,41 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
 
     public async Task<object> SubmitAsync(PaymentReceiptSubmissionRequest request, int userId, bool isAdmin)
     {
-        await ValidateAsync(request, userId, isAdmin, null);
-        if (request.Entries.Any(x => x.OriginalJournalEntryId.HasValue))
-            throw new InvalidOperationException("A new request cannot reference posted journal entries.");
-        var warnings = await FindDuplicateWarningsAsync(request.Entries, null, null);
-        var approval = new ApprovalVoucher
+        await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
         {
-            VoucherType = ApprovalVoucherType.PaymentReceipt,
-            Status = ApprovalStatuses.Pending,
-            RequestKind = ApprovalRequestKinds.New,
-            ProjectId = request.ProjectId,
-            BookerId = null,
-            CreditDays = 0,
-            SubmittedDate = DateOnly.FromDateTime(DateTime.UtcNow),
-            RequestedEntryDate = request.EntryDate,
-            SnapshotVersion = Guid.NewGuid(),
-            HadDuplicateWarningsAtSubmission = warnings.Count > 0,
-            PostedByUserId = userId
-        };
-        _context.ApprovalVouchers.Add(approval);
-        ReplaceSnapshot(approval, request.Entries);
-        await _context.SaveChangesAsync();
-        return SubmissionResponse(approval, warnings);
+            isAdmin = await ApprovalPostingUser.IsAdminAsync(_context, userId);
+            await ValidateAsync(request, userId, isAdmin, null);
+            if (request.Entries.Any(x => x.OriginalJournalEntryId.HasValue))
+                throw new InvalidOperationException("A new request cannot reference posted journal entries.");
+            var warnings = await FindDuplicateWarningsAsync(request.Entries, null, null);
+            var approval = new ApprovalVoucher
+            {
+                VoucherType = ApprovalVoucherType.PaymentReceipt,
+                Status = ApprovalStatuses.Pending,
+                RequestKind = ApprovalRequestKinds.New,
+                ProjectId = request.ProjectId,
+                BookerId = null,
+                CreditDays = 0,
+                SubmittedDate = BusinessClock.Today,
+                RequestedEntryDate = request.EntryDate,
+                SnapshotVersion = Guid.NewGuid(),
+                HadDuplicateWarningsAtSubmission = warnings.Count > 0,
+                PostedByUserId = userId
+            };
+            _context.ApprovalVouchers.Add(approval);
+            ReplaceSnapshot(approval, request.Entries);
+            await _context.SaveChangesAsync();
+            if (isAdmin)
+                warnings = await ApproveCoreAsync(approval, approval.SnapshotVersion, userId, isAdmin);
+            await tx.CommitAsync();
+            return SubmissionResponse(approval, warnings, autoApproved: isAdmin);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<object?> GetPostedAsync(int journalVoucherId, int userId, bool isAdmin)
@@ -254,6 +268,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
         await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
+            isAdmin = await ApprovalPostingUser.IsAdminAsync(_context, userId);
             var voucher = await LockVoucherAsync(journalVoucherId);
             if (!await _classifier.IsApprovedAsync(journalVoucherId))
                 throw new PaymentReceiptIntegrityException("Only completed, approved Payment & Receipt vouchers can be revised.");
@@ -276,7 +291,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
                 ProjectId = voucher.ProjectId,
                 BookerId = null,
                 CreditDays = 0,
-                SubmittedDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                SubmittedDate = BusinessClock.Today,
                 RequestedEntryDate = request.EntryDate,
                 SnapshotVersion = Guid.NewGuid(),
                 HadDuplicateWarningsAtSubmission = warnings.Count > 0,
@@ -287,8 +302,10 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
             voucher.IsCompleted = false;
             voucher.RowVersion = NewVersion();
             await _context.SaveChangesAsync();
+            if (isAdmin)
+                warnings = await ApproveCoreAsync(approval, approval.SnapshotVersion, userId, isAdmin);
             await tx.CommitAsync();
-            return SubmissionResponse(approval, warnings);
+            return SubmissionResponse(approval, warnings, autoApproved: isAdmin);
         }
         catch
         {
@@ -336,6 +353,22 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
 
     public async Task<object> ApproveAsync(ApprovalVoucher approval, Guid? reviewedSnapshotVersion, int userId, bool isAdmin)
     {
+        var warnings = await ApproveCoreAsync(approval, reviewedSnapshotVersion, userId, isAdmin);
+        return new
+        {
+            status = approval.Status,
+            journalVoucherId = approval.JournalVoucherId,
+            duplicateWarnings = warnings,
+            resolvedVoucherType = VoucherType.PaymentReceipt.ToString()
+        };
+    }
+
+    // The caller owns the transaction for both explicit and automatic approval.
+    private async Task<IReadOnlyList<PaymentReceiptDuplicateWarning>> ApproveCoreAsync(
+        ApprovalVoucher approval, Guid? reviewedSnapshotVersion, int userId, bool isAdmin)
+    {
+        if (approval.Status != ApprovalStatuses.Pending || approval.VoucherType != ApprovalVoucherType.PaymentReceipt)
+            throw new ApprovalConflictException("This Payment & Receipt request cannot be approved.");
         EnsureSnapshot(approval, reviewedSnapshotVersion);
         await EnsureApprovalAccessAsync(approval, userId, isAdmin);
         ValidateApprovalSnapshot(approval);
@@ -392,18 +425,12 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
         voucher.RowVersion = NewVersion();
         approval.JournalVoucherId = voucher.JournalVoucherId;
         approval.Status = ApprovalStatuses.Approved;
-        approval.DecisionDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        approval.DecisionDate = BusinessClock.Today;
         approval.DecisionByUserId = userId;
         approval.HadDuplicateWarningsAtDecision = warnings.Count > 0;
         approval.SnapshotVersion = Guid.NewGuid();
         await _context.SaveChangesAsync();
-        return new
-        {
-            status = approval.Status,
-            journalVoucherId = voucher.JournalVoucherId,
-            duplicateWarnings = warnings,
-            resolvedVoucherType = VoucherType.PaymentReceipt.ToString()
-        };
+        return warnings;
     }
 
     public async Task<object> RejectAsync(ApprovalVoucher approval, string reason, Guid? reviewedSnapshotVersion, int userId, bool isAdmin)
@@ -420,7 +447,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
             voucher.RowVersion = NewVersion();
         }
         approval.Status = ApprovalStatuses.Rejected;
-        approval.DecisionDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        approval.DecisionDate = BusinessClock.Today;
         approval.DecisionByUserId = userId;
         approval.RejectionReason = reason.Trim();
         approval.SnapshotVersion = Guid.NewGuid();
@@ -476,14 +503,13 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
                 EF.Functions.ILike(e.Account!.AccountName, $"%{searchText}%") ||
                 (searchInstrument.HasValue && e.InstrumentDetail!.InstrumentType == searchInstrument.Value) ||
                 (e.InstrumentDetail!.ReferenceNumber != null && EF.Functions.ILike(e.InstrumentDetail.ReferenceNumber, $"%{searchText}%")))));
-        var ids = await matching.OrderByDescending(x => x.EntryDate).ThenByDescending(x => x.JournalVoucherId)
-            .Select(x => x.JournalVoucherId).ToListAsync();
-        var validIds = new List<int>();
-        foreach (var id in ids)
-            if (await _classifier.IsApprovedAsync(id)) validIds.Add(id);
+        // Eligibility, count, totals and paging all run in the database; only the requested page is loaded.
+        var approved = await _classifier.WhereApprovedAsync(matching);
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 500);
-        var pageIds = validIds.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var totalVouchers = await approved.CountAsync();
+        var pageIds = await approved.OrderByDescending(x => x.EntryDate).ThenByDescending(x => x.JournalVoucherId)
+            .Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.JournalVoucherId).ToListAsync();
         var vouchers = await _context.JournalVouchers.AsNoTracking().AsSplitQuery()
             .Where(x => pageIds.Contains(x.JournalVoucherId))
             .Include(x => x.Project)
@@ -491,14 +517,15 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
             .Include(x => x.JournalEntries).ThenInclude(x => x.Category)
             .Include(x => x.JournalEntries).ThenInclude(x => x.InstrumentDetail)
             .OrderByDescending(x => x.EntryDate).ThenByDescending(x => x.JournalVoucherId).ToListAsync();
-        var allTotals = await _context.JournalEntries.AsNoTracking().Where(x => validIds.Contains(x.JournalVoucherId))
+        var approvedIds = approved.Select(x => x.JournalVoucherId);
+        var allTotals = await _context.JournalEntries.AsNoTracking().Where(x => approvedIds.Contains(x.JournalVoucherId))
             .GroupBy(_ => 1).Select(g => new { debit = g.Sum(x => x.Debit), credit = g.Sum(x => x.Credit) })
             .SingleOrDefaultAsync();
         return new
         {
             page,
             pageSize,
-            totalVouchers = validIds.Count,
+            totalVouchers,
             totalDebit = allTotals?.debit ?? 0,
             totalCredit = allTotals?.credit ?? 0,
             vouchers = vouchers.Select(v => new
@@ -643,7 +670,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
             else if (isNew || changed)
             {
                 entry.IsEdited = true;
-                entry.ModifiedDateTime = DateOnly.FromDateTime(DateTime.UtcNow);
+                entry.ModifiedDateTime = BusinessClock.Today;
             }
             detailChanges.Add(new InstrumentDetailChange(entry, entry.InstrumentDetail, row));
         }
@@ -722,11 +749,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
 
     private async Task<ApprovalVoucher> LockApprovalAsync(int id)
     {
-        var approval = _context.Database.ProviderName?.StartsWith("Npgsql", StringComparison.Ordinal) == true
-            ? await _context.ApprovalVouchers
-                .FromSqlInterpolated($"SELECT * FROM \"ApprovalVouchers\" WHERE \"ApprovalVoucherId\" = {id} FOR UPDATE")
-                .SingleOrDefaultAsync()
-            : await _context.ApprovalVouchers.SingleOrDefaultAsync(x => x.ApprovalVoucherId == id);
+        var approval = await RowLocks.LockApprovalVoucherAsync(_context, id);
         if (approval == null)
             throw new InvalidOperationException("Approval request was not found.");
         if (approval.Status != ApprovalStatuses.Pending)
@@ -737,11 +760,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
 
     private async Task<JournalVoucher> LockVoucherAsync(int id)
     {
-        var voucher = _context.Database.ProviderName?.StartsWith("Npgsql", StringComparison.Ordinal) == true
-            ? await _context.JournalVouchers
-                .FromSqlInterpolated($"SELECT * FROM \"JournalVouchers\" WHERE \"JournalVoucherId\" = {id} FOR UPDATE")
-                .SingleOrDefaultAsync()
-            : await _context.JournalVouchers.SingleOrDefaultAsync(x => x.JournalVoucherId == id);
+        var voucher = await RowLocks.LockJournalVoucherAsync(_context, id);
         if (voucher == null)
             throw new InvalidOperationException("Voucher was not found.");
         await _context.Entry(voucher).Collection(x => x.JournalEntries).LoadAsync();
@@ -815,13 +834,23 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
         }
     }
 
-    private static object SubmissionResponse(ApprovalVoucher approval, IReadOnlyList<PaymentReceiptDuplicateWarning> warnings) => new
+    private object SubmissionResponse(ApprovalVoucher approval, IReadOnlyList<PaymentReceiptDuplicateWarning> warnings,
+        bool autoApproved = false) => new
     {
-        status = "PendingApproval",
+        status = approval.Status == ApprovalStatuses.Approved ? ApprovalStatuses.Approved : "PendingApproval",
+        isPending = approval.Status == ApprovalStatuses.Pending,
+        autoApproved,
         approvalVoucherId = approval.ApprovalVoucherId,
+        pendingApprovalId = approval.Status == ApprovalStatuses.Pending ? (int?)approval.ApprovalVoucherId : null,
         journalVoucherId = approval.JournalVoucherId,
+        voucherVersion = _context.JournalVouchers.Local
+            .FirstOrDefault(x => x.JournalVoucherId == approval.JournalVoucherId)?.RowVersion,
         snapshotVersion = approval.SnapshotVersion,
         duplicateWarnings = warnings,
+        message = autoApproved
+            ? $"Payment & Receipt {(approval.RequestKind == ApprovalRequestKinds.Revision ? "revision" : "voucher")} posted and automatically approved. JV-{approval.JournalVoucherId}"
+            : null,
+        canPrint = approval.Status == ApprovalStatuses.Approved,
         shouldPrint = false
     };
 

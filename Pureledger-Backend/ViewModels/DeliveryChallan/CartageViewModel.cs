@@ -1,3 +1,4 @@
+using PureLedger.Models;
 namespace PureLedger.ViewModels.DeliveryChallan;
 using System.ComponentModel.DataAnnotations;
 
@@ -25,6 +26,7 @@ public class CartageViewModel
 
     public string? DcRemarks { get; set; }
 
+    [StringLength(DeliveryChallanVoucher.StationMaxLength)]
     public string? DcStation { get; set; }
 
     public string? DcOtherRef { get; set; }

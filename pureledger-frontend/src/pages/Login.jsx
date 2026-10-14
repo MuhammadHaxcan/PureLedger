@@ -1,30 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Container, Card, Form, Button, Alert, InputGroup } from 'react-bootstrap';
+import { Container, Card, Form, Button, InputGroup } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 const Login = () => {
   usePageTitle('Login');
-  const [username, setUsername] = useState('');
+  // Keep the existing storage key for remembered usernames and email addresses.
+  const [username, setUsername] = useState(() => localStorage.getItem('rememberedUsername') || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => Boolean(localStorage.getItem('rememberedUsername')));
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const { showError } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  // Load remembered username on mount
-  useEffect(() => {
-    const rememberedUsername = localStorage.getItem('rememberedUsername');
-    if (rememberedUsername) {
-      setUsername(rememberedUsername);
-      setRememberMe(true);
-    }
-  }, []);
 
   // Check for session expired parameter on mount
   useEffect(() => {
@@ -41,13 +33,14 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
 
-    const result = await login(username, password);
+    const identifier = username.trim();
+    const result = await login(identifier, password);
     setLoading(false);
 
     if (result.success) {
       // Handle remember me functionality
       if (rememberMe) {
-        localStorage.setItem('rememberedUsername', username);
+        localStorage.setItem('rememberedUsername', identifier);
       } else {
         localStorage.removeItem('rememberedUsername');
       }
@@ -56,7 +49,7 @@ const Login = () => {
       const redirectTo = result.redirectTo || '/';
       navigate(redirectTo);
     } else {
-      showError(result.message || 'Invalid username or password');
+      showError(result.message || 'Invalid username/email or password');
     }
   };
 
@@ -68,23 +61,29 @@ const Login = () => {
             <i className="fas fa-book-open me-2"></i>PureLedger
           </Card.Title>
           <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Username</Form.Label>
+            <Form.Group className="mb-3" controlId="login-identifier">
+              <Form.Label>Username or email</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Enter username"
+                placeholder="Enter username or email"
+                name="username"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 autoFocus
               />
             </Form.Group>
-            <Form.Group className="mb-3">
+            <Form.Group className="mb-3" controlId="login-password">
               <Form.Label>Password</Form.Label>
               <InputGroup>
                 <Form.Control
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter password"
+                  name="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -100,6 +99,7 @@ const Login = () => {
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Check
+                id="login-remember-me"
                 type="checkbox"
                 label="Remember me"
                 checked={rememberMe}

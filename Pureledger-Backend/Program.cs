@@ -25,6 +25,9 @@ using PureLedger.Services.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Calendar dates (entry, receipt, decision) follow this zone, not the server clock. Default: Asia/Karachi.
+PureLedger.Helpers.BusinessClock.Configure(builder.Configuration["Business:TimeZoneId"]);
+
 builder.Host.UseSerilog((context, services, configuration) =>
 {
     configuration

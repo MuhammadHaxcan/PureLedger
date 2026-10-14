@@ -14,6 +14,22 @@ describe('PrintVoucher', () => {
     apiClient.get.mockResolvedValue({ data: { success: true, data: null } });
   });
 
+  it.each([
+    ['DC', 'Karachi', 1],
+    ['DC', '', 0],
+    ['DC', '  ', 0],
+    ['DC', null, 0],
+    ['INV', 'Karachi', 0],
+    ['JV', 'Karachi', 0],
+  ])('prints Station only once on a nonblank DC (%s, %s)', (type, station, count) => {
+    render(<PrintVoucher voucherType={type} voucherId="17" voucherData={{
+      createdDate: '2026-10-10', entries: [], station,
+    }} />);
+    expect(screen.queryAllByText('Station:')).toHaveLength(count);
+    if (count) expect(screen.getByText('Karachi')).toBeInTheDocument();
+    else expect(screen.queryByText('Karachi')).not.toBeInTheDocument();
+  });
+
   it('can transition from no voucher data to a rendered journal voucher', () => {
     const { container, rerender } = render(
       <PrintVoucher voucherData={null} voucherType="JV" voucherId="17" />,
@@ -34,7 +50,8 @@ describe('PrintVoucher', () => {
       />,
     );
 
-    expect(screen.getByText('Journal Voucher #17')).toBeInTheDocument();
+    expect(screen.getByText('Journal Voucher', { selector: 'h1' })).toBeInTheDocument();
+    expect(screen.getByText('#17')).toBeInTheDocument();
     expect(screen.getByText('Cash Account')).toBeInTheDocument();
   });
 

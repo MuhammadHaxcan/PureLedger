@@ -1,4 +1,5 @@
 ﻿using System;
+using PureLedger.Helpers;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -17,7 +18,7 @@ namespace PureLedger.Models
         public int ProjectId { get; set; }
 
         [Required(ErrorMessage = "Entry date is required")]
-        public DateOnly EntryDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly EntryDate { get; set; } = BusinessClock.Today;
 
         [Required(ErrorMessage = "Creditable date is required")]
         [DateAfter("EntryDate", ErrorMessage = "Creditable date must be after entry date")]

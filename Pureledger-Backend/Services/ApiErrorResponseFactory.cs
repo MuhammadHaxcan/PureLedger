@@ -69,16 +69,32 @@ namespace PureLedger.Services
                     apiException.StatusCode >= 500 ? CreateErrorId() : null);
             }
 
-            if (exception is UnauthorizedAccessException)
+            if (exception is NotAuthenticatedException)
             {
+                // 401 means "sign in again"; the client refreshes its token on it.
                 level = "Warning";
-                return Create(context, StatusCodes.Status401Unauthorized, "You are not authorized to perform this action.", new[] { "You are not authorized to perform this action." }, "UNAUTHORIZED");
+                return Create(context, StatusCodes.Status401Unauthorized, "Your session has expired. Please log in again.", new[] { "Your session has expired. Please log in again." }, "UNAUTHORIZED");
             }
 
-            if (exception is ArgumentException argumentException)
+            if (exception is UnauthorizedAccessException accessDenied)
+            {
+                // An access denial for a signed-in user is 403; answering 401 would make the client
+                // treat it as an expired session and replay the request.
+                level = "Warning";
+                var denied = ExceptionClassifier.IsApplicationRaised(accessDenied)
+                    ? ExceptionClassifier.UserMessage(accessDenied)
+                    : "You do not have permission to perform this action.";
+                return Create(context, StatusCodes.Status403Forbidden, denied, new[] { denied }, "FORBIDDEN");
+            }
+
+            // The same exception types are thrown by the framework, EF Core and Npgsql. Only messages the
+            // application raised deliberately are shown; anything else falls through to the generic 500.
+            var applicationRaised = ExceptionClassifier.IsApplicationRaised(exception);
+
+            if (exception is ArgumentException argumentException && applicationRaised)
             {
                 level = "Warning";
-                return Create(context, StatusCodes.Status400BadRequest, "Invalid request parameters.", new[] { argumentException.Message }, "INVALID_REQUEST");
+                return Create(context, StatusCodes.Status400BadRequest, "Invalid request parameters.", new[] { ExceptionClassifier.UserMessage(argumentException) }, "INVALID_REQUEST");
             }
 
             if (exception is ApprovalConflictException approvalConflict)
@@ -94,13 +110,13 @@ namespace PureLedger.Services
                     new[] { paymentReceiptIntegrity.Message }, "PAYMENT_RECEIPT_INTEGRITY");
             }
 
-            if (exception is InvalidOperationException invalidOperationException)
+            if (exception is InvalidOperationException invalidOperationException && applicationRaised)
             {
                 level = "Warning";
                 return Create(context, StatusCodes.Status400BadRequest, "Invalid operation.", new[] { invalidOperationException.Message }, "INVALID_OPERATION");
             }
 
-            if (exception is KeyNotFoundException keyNotFoundException)
+            if (exception is KeyNotFoundException keyNotFoundException && applicationRaised)
             {
                 level = "Warning";
                 return Create(context, StatusCodes.Status404NotFound, "The requested resource was not found.", new[] { keyNotFoundException.Message }, "NOT_FOUND");

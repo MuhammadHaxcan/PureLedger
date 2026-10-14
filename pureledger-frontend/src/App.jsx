@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ToastContainer } from 'react-toastify';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { DataProvider } from './contexts/DataContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppErrorBoundary from './components/AppErrorBoundary';
@@ -62,7 +61,6 @@ function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <DataProvider>
           <Router>
           <AppErrorBoundary>
           <Routes>
@@ -162,7 +160,6 @@ function App() {
         </Routes>
         </AppErrorBoundary>
       </Router>
-      </DataProvider>
     </AuthProvider>
     <ToastContainer hideProgressBar />
     </ToastProvider>

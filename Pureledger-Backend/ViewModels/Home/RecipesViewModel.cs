@@ -14,11 +14,4 @@ namespace PureLedger.ViewModels.Home
         public string RecipeName { get; set; } = string.Empty;
         public string ProjectName { get; set; } = string.Empty;
     }
-
-    public class RecipeItemViewModel
-    {
-        public int RecipeItemId { get; set; }
-        public string CategoryName { get; set; } = string.Empty;
-        public string AccountName { get; set; } = string.Empty;
-    }
 }

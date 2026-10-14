@@ -588,84 +588,6 @@ namespace PureLedger.Repositories
             return (totals?.Debit ?? 0m, totals?.Credit ?? 0m);
         }
 
-        public async Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int? locationId)
-        {
-
-            var query = _context.JournalEntries
-                .AsNoTracking()
-                .Include(je => je.JournalVoucher)
-                .Include(je => je.Account)
-                .Include(je => je.Category)
-                .Where(je =>
-                    je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted &&
-                    !je.JournalVoucher.IsBaseVoucher &&
-                    je.IsProcessed &&
-                    je.Account.AccountGroupId == 2 &&
-                    je.JournalVoucher.EntryDate <= endDate);
-
-            if (startDate != DateOnly.MinValue)
-            {
-                query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
-            }
-
-            if (categoryId.HasValue)
-            {
-                query = query.Where(je => je.CategoryId == categoryId.Value);
-            }
-
-            if (accountId.HasValue)
-            {
-                query = query.Where(je => je.AccountId == accountId.Value);
-            }
-
-            if (locationId.HasValue)
-            {
-                var selectedLocationId = locationId.Value;
-                query = query.Where(je =>
-                    _context.DeliveryChallanEntries.Any(dce =>
-                        dce.JournalEntryId == je.JournalEntryId && dce.LocationId == selectedLocationId) ||
-                    (je.JournalVoucher.IsStockTransfer && je.Quantity == 0 && je.Debit > 0 &&
-                     _context.JournalVoucherReferences.Any(chargeRef =>
-                         chargeRef.ReferencedVoucherId == je.JournalVoucherId &&
-                         chargeRef.ReferenceType == "StockTransferCharge" &&
-                         _context.JournalEntries.Any(receiptEntry =>
-                             receiptEntry.JournalVoucherId == chargeRef.MainVoucherId &&
-                             receiptEntry.AccountId == je.AccountId &&
-                             receiptEntry.Quantity > 0 && receiptEntry.Debit > 0 &&
-                             _context.DeliveryChallanEntries.Any(receiptDce =>
-                                 receiptDce.JournalEntryId == receiptEntry.JournalEntryId &&
-                                 receiptDce.LocationId == selectedLocationId)))));
-            }
-
-            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
-                        .ThenBy(je => je.JournalVoucherId)
-                        .ThenBy(je => je.JournalEntryId);
-
-            var entriesWithDC = await query
-                .GroupJoin(
-                    _context.DeliveryChallanEntries.Include(dce => dce.Location),
-                    je => je.JournalEntryId,
-                    dce => dce.JournalEntryId,
-                    (je, dces) => new { JournalEntry = je, DCEntries = dces })
-                .SelectMany(
-                    x => x.DCEntries.DefaultIfEmpty(),
-                    (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
-                .ToListAsync();
-
-            // A damaged or legacy challan can assign one journal entry more than once.
-            // Keep its movement once; the stock breakdown reports the assignment issue.
-            var results = entriesWithDC.GroupBy(x => x.JournalEntry.JournalEntryId)
-                .Select(group => (group.First().JournalEntry, group.First().DCEntry)).ToList();
-            return results;
-        }
-
         public async Task<List<ProductTransitMovementDto>> GetProductTransitMovementsAsync(
             int projectId, DateOnly endDate, int? categoryId = null, int? productId = null)
         {
@@ -827,9 +749,11 @@ namespace PureLedger.Repositories
 
             if (bookerId.HasValue)
             {
-                query = query.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
+                query = query.Where(je => je.Account.AccountGroupId == 1 &&
+                    je.Account.LinkedBookerId == bookerId.Value);
             }
 
+            // Select assigned accounts, then include their full eligible transaction history.
             // Group by account + project + category id so repository returns IDs directly
             var groupedQuery = query
                 .GroupBy(je => new {
@@ -874,24 +798,12 @@ namespace PureLedger.Repositories
             // Base query conditions (common to both queries)
             IQueryable<JournalEntry> BuildBaseQuery(bool includeCreditableDateFilter)
             {
-                var baseQuery = _context.JournalEntries
-                    .AsNoTracking()
-                    .Include(je => je.JournalVoucher)
-                    .Include(je => je.Account)
-                    .Where(je =>
-                        accountIds.Contains(je.AccountId) &&
-                        je.CategoryId == categoryId &&
-                        je.JournalVoucher.IsCompleted &&
-                        !je.JournalVoucher.IsBaseVoucher);
+                var baseQuery = AgingReportQuery.EligibleEntries(_context, categoryId, projectId)
+                    .Where(je => accountIds.Contains(je.AccountId));
 
                 if (includeCreditableDateFilter)
                 {
                     baseQuery = baseQuery.Where(je => je.JournalVoucher.CreditableDate <= referenceDate);
-                }
-
-                if (projectId.HasValue)
-                {
-                    baseQuery = baseQuery.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
                 }
 
                 return baseQuery;
@@ -924,6 +836,7 @@ namespace PureLedger.Repositories
             // Get paginated account list
             var pagedAccountList = await allAccountsQuery
                 .OrderBy(g => g.AccountName)
+                .ThenBy(g => g.AccountId)
                 .Skip(page * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -956,81 +869,6 @@ namespace PureLedger.Repositories
 
             return (agingReportEntries, totalCount);
         }
-
-        public async Task<(List<int> ProductIds, int TotalCount)> GetProductIdsForReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int? locationId,
-    int page,
-    int pageSize)
-{
-    var query = _context.JournalEntries
-        .AsNoTracking()
-        .Include(je => je.JournalVoucher)
-        .Include(je => je.Account)
-        .Where(je =>
-            je.JournalVoucher.ProjectId == projectId &&
-            je.JournalVoucher.IsCompleted &&
-            !je.JournalVoucher.IsBaseVoucher &&
-            je.IsProcessed &&
-            je.Account.AccountGroupId == 2 &&
-            je.JournalVoucher.EntryDate <= endDate);
-
-    if (startDate != DateOnly.MinValue)
-    {
-        query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
-    }
-
-    if (categoryId.HasValue)
-    {
-        query = query.Where(je => je.CategoryId == categoryId.Value);
-    }
-
-    if (accountId.HasValue)
-    {
-        query = query.Where(je => je.AccountId == accountId.Value);
-    }
-
-    // Apply location filter using SQL subquery instead of loading IDs into memory
-    if (locationId.HasValue)
-    {
-        var selectedLocationId = locationId.Value;
-        query = query.Where(je =>
-            _context.DeliveryChallanEntries.Any(dce =>
-                dce.JournalEntryId == je.JournalEntryId && dce.LocationId == selectedLocationId) ||
-            (je.JournalVoucher.IsStockTransfer && je.Quantity == 0 && je.Debit > 0 &&
-             _context.JournalVoucherReferences.Any(chargeRef =>
-                 chargeRef.ReferencedVoucherId == je.JournalVoucherId &&
-                 chargeRef.ReferenceType == "StockTransferCharge" &&
-                 _context.JournalEntries.Any(receiptEntry =>
-                     receiptEntry.JournalVoucherId == chargeRef.MainVoucherId &&
-                     receiptEntry.AccountId == je.AccountId &&
-                     receiptEntry.Quantity > 0 && receiptEntry.Debit > 0 &&
-                     _context.DeliveryChallanEntries.Any(receiptDce =>
-                         receiptDce.JournalEntryId == receiptEntry.JournalEntryId &&
-                         receiptDce.LocationId == selectedLocationId)))));
-    }
-
-    // Get distinct product IDs
-    var distinctProductIds = await query
-        .Select(je => je.AccountId)
-        .Distinct()
-        .OrderBy(id => id)
-        .ToListAsync();
-
-    int totalCount = distinctProductIds.Count;
-
-    // Apply pagination to product IDs
-    var pagedProductIds = distinctProductIds
-        .Skip(page * pageSize)
-        .Take(pageSize)
-        .ToList();
-
-    return (pagedProductIds, totalCount);
-}
 
         /// <summary>
         /// Batch fetch entries for multiple voucher IDs and a specific account - fixes N+1 query issue

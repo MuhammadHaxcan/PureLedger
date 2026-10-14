@@ -32,11 +32,12 @@ const SignatureCanvas = ({ onSave, onCancel, initialImage = null, initialName = 
         ctx.lineJoin = 'round';
     }, [initialImage]);
 
-    useEffect(() => {
-        if (initialName) {
-            setSignatureName(initialName);
-        }
-    }, [initialName]);
+    // Adopt a changed initialName during render instead of syncing it from an effect.
+    const [lastInitialName, setLastInitialName] = useState(initialName);
+    if (initialName !== lastInitialName) {
+        setLastInitialName(initialName);
+        if (initialName) setSignatureName(initialName);
+    }
 
     const getCoordinates = (e) => {
         const canvas = canvasRef.current;

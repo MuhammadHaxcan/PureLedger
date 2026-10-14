@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -17,40 +17,21 @@ const AccessDenied = () => {
         canAccessProcessDC,
         canAccessStockTransfers
     } = usePermissions();
-    const [firstAccessibleRoute, setFirstAccessibleRoute] = useState('/home/entry');
-
-    useEffect(() => {
+    const resolveFirstAccessibleRoute = () => {
         // Find first accessible route from navigation menu
-        if (navigationMenu && navigationMenu.length > 0) {
-            const firstItem = navigationMenu[0];
-            if (firstItem.items && firstItem.items.length > 0) {
-                setFirstAccessibleRoute(firstItem.items[0].path);
-            }
-        } else {
-            // Fallback: check permissions directly
-            if (canAccessHomeEntry || canAccessHome) {
-                setFirstAccessibleRoute('/home/entry');
-            } else if (canAccessMetaData) {
-                setFirstAccessibleRoute('/metadata/projects');
-            } else if (canAccessReporting) {
-                setFirstAccessibleRoute('/reporting/single-doc');
-            } else if (canAccessProcessDC) {
-                setFirstAccessibleRoute('/delivery/process-dc');
-            } else if (canAccessStockTransfers) {
-                setFirstAccessibleRoute('/stock-transfers');
-            } else {
-                setFirstAccessibleRoute('/account/access-denied');
-            }
+        const firstItem = navigationMenu?.[0];
+        if (firstItem) {
+            return firstItem.items?.[0]?.path ?? '/home/entry';
         }
-    }, [
-        navigationMenu,
-        canAccessHomeEntry,
-        canAccessHome,
-        canAccessMetaData,
-        canAccessReporting,
-        canAccessProcessDC,
-        canAccessStockTransfers
-    ]);
+        // Fallback: check permissions directly
+        if (canAccessHomeEntry || canAccessHome) return '/home/entry';
+        if (canAccessMetaData) return '/metadata/projects';
+        if (canAccessReporting) return '/reporting/single-doc';
+        if (canAccessProcessDC) return '/delivery/process-dc';
+        if (canAccessStockTransfers) return '/stock-transfers';
+        return '/account/access-denied';
+    };
+    const firstAccessibleRoute = resolveFirstAccessibleRoute();
 
     const attemptedPath = location.state?.from?.pathname || location.pathname;
 

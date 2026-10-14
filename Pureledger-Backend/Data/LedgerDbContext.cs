@@ -51,6 +51,16 @@ namespace PureLedger.Data
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<Account>()
+                .HasOne(a => a.LinkedBooker)
+                .WithMany()
+                .HasForeignKey(a => a.LinkedBookerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Account>().HasIndex(a => a.LinkedBookerId);
+            modelBuilder.Entity<Account>().ToTable(t => t.HasCheckConstraint(
+                "CK_Accounts_LinkedBooker_AccountGroup",
+                "\"LinkedBookerId\" IS NULL OR \"AccountGroupId\" = 1"));
+
             // JournalEntries to Category relationship - use NO ACTION to break cascade path
             modelBuilder.Entity<JournalEntry>()
                 .HasOne(je => je.Category)

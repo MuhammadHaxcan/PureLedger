@@ -114,24 +114,6 @@ namespace PureLedger.Repositories.Interfaces
 
         #region Product Report Queries
 
-        Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
-            DateOnly startDate,
-            DateOnly endDate,
-            int projectId,
-            int? categoryId,
-            int? accountId,
-            int? locationId);
-
-        Task<(List<int> ProductIds, int TotalCount)> GetProductIdsForReportAsync(
-            DateOnly startDate,
-            DateOnly endDate,
-            int projectId,
-            int? categoryId,
-            int? accountId,
-            int? locationId,
-            int page,
-            int pageSize);
-
         Task<List<ProductStockLocationMovementDto>> GetProductStockLocationMovementsAsync(
             int projectId,
             int productId,

@@ -259,9 +259,9 @@ describe('ProductReport stock breakdown', () => {
                 return Promise.resolve({ data: { success: true, data: {
                     ...reportData,
                     productSummaries: [{ ...reportData.productSummaries[0],
-                        totalCreditQty: 50, qtyBalance: 0, inTransitQuantity: 10 }],
-                    totals: { ...reportData.totals, totalCreditQty: 50,
-                        netQuantity: 0, balanceQuantity: 0 }
+                        totalCreditQty: 0, qtyBalance: 0, inTransitQuantity: 50, averageRate: 0 }],
+                    totals: { ...reportData.totals, totalCreditQty: 0,
+                        netQuantity: 50, balanceQuantity: 0 }
                 } } });
             }
             return defaultGet(url, config);
@@ -275,19 +275,21 @@ describe('ProductReport stock breakdown', () => {
         await user.click(screen.getByRole('button', { name: 'Export CSV' }));
         await user.click(screen.getByRole('button', { name: 'Export PDF' }));
 
+        expect(screen.getByText(/Balance quantity is net warehouse stock and can be negative/)).toBeInTheDocument();
+        expect(screen.queryByText(/Debit Qty and Credit Qty include stock transfers/)).not.toBeInTheDocument();
         expect(exportToCsvAsync).toHaveBeenCalledWith(
-            [expect.objectContaining({ Product: 'Product A', 'Debit Qty': '50.00', 'Credit Qty': '50.00', 'Balance Qty': '0.00' })],
+            [expect.objectContaining({ Product: 'Product A', 'Debit Qty': '50.00', 'Credit Qty': '0.00', 'Balance Qty': '0.00', 'Avg Rate': '0.00', 'Amount basis': expect.stringContaining('exclude internal transfer amounts') })],
             expect.stringContaining('ProductReport_')
         );
         expect(generatePdfAsync).toHaveBeenCalledWith(expect.objectContaining({
             rows: expect.arrayContaining([
-                expect.objectContaining({ product: 'Product A', debitQty: '50.00', creditQty: '50.00', balanceQty: '0.00' }),
-                expect.objectContaining({ product: 'TOTAL', debitQty: '50.00', creditQty: '50.00', balanceQty: '0.00' })
+                expect.objectContaining({ product: 'Product A', debitQty: '50.00', creditQty: '0.00', balanceQty: '0.00' }),
+                expect.objectContaining({ product: 'TOTAL', debitQty: '50.00', creditQty: '0.00', balanceQty: '0.00' })
             ])
         }));
     });
 
-    it('shows and exports transfer quantities with the physical balance after a receipt', async () => {
+    it('excludes transfer quantities globally while showing the physical balance after a receipt', async () => {
         const defaultGet = apiClient.get.getMockImplementation();
         apiClient.get.mockImplementation((url, config) => {
             if (url === '/ReportingApi/product-report') {
@@ -295,13 +297,13 @@ describe('ProductReport stock breakdown', () => {
                     ...reportData,
                     productSummaries: [{
                         ...reportData.productSummaries[0],
-                        totalDebitQty: 5, totalCreditQty: 2, qtyBalance: 3,
+                        totalDebitQty: 3, totalCreditQty: 0, qtyBalance: 3,
                         transferOutwardQuantity: 2, transferInwardQuantity: 2,
                         totalDebit: 860, totalCredit: 0
                     }],
                     totals: {
                         ...reportData.totals,
-                        totalDebitQty: 5, totalCreditQty: 2,
+                        totalDebitQty: 3, totalCreditQty: 0,
                         netQuantity: 3, balanceQuantity: 3,
                         totalDebit: 860, totalCredit: 0
                     }
@@ -317,21 +319,21 @@ describe('ProductReport stock breakdown', () => {
 
         const cells = [...document.querySelectorAll('#productReportTable tbody tr:first-child td')]
             .map(cell => cell.textContent.trim());
-        expect(cells.slice(0, 4)).toEqual(['Product A', '5.00', '2.00', '3.00']);
+        expect(cells.slice(0, 4)).toEqual(['Product A', '3.00', '0.00', '3.00']);
         const footerCells = [...document.querySelectorAll('#productReportTable tfoot tr td')]
             .map(cell => cell.textContent.trim());
-        expect(footerCells.slice(0, 4)).toEqual(['TOTAL', '5.00', '2.00', '3.00']);
+        expect(footerCells.slice(0, 4)).toEqual(['TOTAL', '3.00', '0.00', '3.00']);
 
         await user.click(screen.getByRole('button', { name: 'Export CSV' }));
         await user.click(screen.getByRole('button', { name: 'Export PDF' }));
         expect(exportToCsvAsync).toHaveBeenCalledWith(
-            [expect.objectContaining({ Product: 'Product A', 'Debit Qty': '5.00', 'Credit Qty': '2.00', 'Balance Qty': '3.00' })],
+            [expect.objectContaining({ Product: 'Product A', 'Debit Qty': '3.00', 'Credit Qty': '0.00', 'Balance Qty': '3.00' })],
             expect.stringContaining('ProductReport_')
         );
         expect(generatePdfAsync).toHaveBeenCalledWith(expect.objectContaining({
             rows: expect.arrayContaining([
-                expect.objectContaining({ product: 'Product A', debitQty: '5.00', creditQty: '2.00', balanceQty: '3.00' }),
-                expect.objectContaining({ product: 'TOTAL', debitQty: '5.00', creditQty: '2.00', balanceQty: '3.00' })
+                expect.objectContaining({ product: 'Product A', debitQty: '3.00', creditQty: '0.00', balanceQty: '3.00' }),
+                expect.objectContaining({ product: 'TOTAL', debitQty: '3.00', creditQty: '0.00', balanceQty: '3.00' })
             ])
         }));
     });
@@ -407,6 +409,58 @@ describe('ProductReport stock breakdown', () => {
                 expect.objectContaining({ Product: 'Product B' })],
             expect.stringContaining('ProductReport_')
         );
+    });
+
+    it('keeps generated warehouse semantics and export metadata when draft location changes', async () => {
+        const user = userEvent.setup();
+        render(<ProductReport />);
+        await chooseOption(user, 'Project', 'Project One');
+        await chooseOption(user, 'Location', 'Warehouse X');
+        await user.click(screen.getByRole('button', { name: 'Generate Report' }));
+        await screen.findByText('Product A');
+        await chooseOption(user, 'Location', 'All Locations');
+        expect(screen.getByText('Debit and credit quantities include stock movements into and out of this location.')).toBeInTheDocument();
+        expect(screen.getByText(/Total Debit and Total Credit include posted transfers for this location/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'View stock locations for Product A' })).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+        await user.click(screen.getByRole('button', { name: 'Export PDF' }));
+        expect(exportToCsvAsync).toHaveBeenCalledWith([expect.objectContaining({
+            Location: 'Warehouse X', 'Quantity basis': expect.stringContaining('this location'),
+            'Amount basis': expect.stringContaining('include posted transfers for this location')
+        })], expect.any(String));
+        expect(generatePdfAsync).toHaveBeenCalledWith(expect.objectContaining({
+            subtitle: expect.stringMatching(/Location: Warehouse X[\s\S]*include posted transfers for this location/)
+        }));
+    });
+
+    it('freezes paging parameters while users edit the next report filters', async () => {
+        const defaultGet = apiClient.get.getMockImplementation();
+        let releaseSecond;
+        apiClient.get.mockImplementation((url, config) => {
+            if (url !== '/ReportingApi/product-report') return defaultGet(url, config);
+            if (config.params.page === 0) return Promise.resolve({ data: { success: true, data: {
+                ...reportData, totalRecords: 3, hasMoreData: true
+            } } });
+            if (config.params.page === 1) return new Promise(resolve => { releaseSecond = () => resolve({ data: { success: true, data: {
+                ...reportData, productSummaries: [{ ...reportData.productSummaries[0], productId: 101, productName: 'Product B' }],
+                totalRecords: 3, hasMoreData: true
+            } } }); });
+            return Promise.resolve({ data: { success: true, data: {
+                ...reportData, productSummaries: [{ ...reportData.productSummaries[0], productId: 102, productName: 'Product C' }],
+                totalRecords: 3, hasMoreData: false
+            } } });
+        });
+        const user = userEvent.setup();
+        render(<ProductReport />);
+        await chooseOption(user, 'Project', 'Project One');
+        await user.click(screen.getByRole('button', { name: 'Generate Report' }));
+        await waitFor(() => expect(releaseSecond).toBeTypeOf('function'));
+        await chooseOption(user, 'Location', 'Warehouse X');
+        await act(async () => releaseSecond());
+        await screen.findByText('Product C');
+        const calls = apiClient.get.mock.calls.filter(([url]) => url === '/ReportingApi/product-report');
+        expect(calls.map(([, config]) => config.params.locationId)).toEqual(['', '', '']);
+        expect(screen.getByText('Debit and credit quantities exclude stock-transfer movements.')).toBeInTheDocument();
     });
 
     it('cancels a scheduled next-page request when the report is closed', async () => {

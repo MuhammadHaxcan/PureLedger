@@ -480,6 +480,8 @@ namespace PureLedger.Controllers.Api
                         projectName = a.Category?.Project?.ProjectName,
                         a.AccountGroupId,
                         accountGroupName = a.AccountGroup?.AccountGroupName,
+                        linkedBookerId = a.LinkedBookerId,
+                        linkedBookerName = a.LinkedBooker?.BookerName,
                         a.IsEnabled
                     })
                 });
@@ -515,6 +517,9 @@ namespace PureLedger.Controllers.Api
                         accountName = account.AccountName,
                         categoryId = account.CategoryId,
                         accountGroupId = account.AccountGroupId,
+                        linkedBookerId = account.LinkedBookerId,
+                        linkedBookerName = account.LinkedBooker?.BookerName,
+                        linkedBookerIsEnabled = account.LinkedBooker?.IsEnabled,
                         isEnabled = account.IsEnabled,
                         accountData = account.AccountData == null ? null : new
                         {
@@ -578,6 +583,7 @@ namespace PureLedger.Controllers.Api
                     AccountName = accountDto.AccountName,
                     CategoryId = accountDto.CategoryId,
                     AccountGroupId = accountDto.AccountGroupId,
+                    LinkedBookerId = accountDto.LinkedBookerId,
                     IsEnabled = true
                 };
 
@@ -658,6 +664,9 @@ namespace PureLedger.Controllers.Api
                     AccountName = accountDto.AccountName,
                     CategoryId = hasAssociations ? existingAccount.CategoryId : accountDto.CategoryId,
                     AccountGroupId = hasAssociations ? existingAccount.AccountGroupId : accountDto.AccountGroupId,
+                    LinkedBookerId = accountDto.HasLinkedBookerId ? accountDto.LinkedBookerId
+                        : (hasAssociations ? existingAccount.AccountGroupId : accountDto.AccountGroupId) == 1
+                            ? existingAccount.LinkedBookerId : null,
                     IsEnabled = existingAccount.IsEnabled
                 };
 
@@ -727,6 +736,10 @@ namespace PureLedger.Controllers.Api
                 var accountToDelete = await _metaDataService.GetAccountByIdAsync(id);
                 var categoryId = accountToDelete?.CategoryId ?? 0;
 
+                var pendingApprovalIds = await _metaDataService.GetPendingApprovalIdsForAccountAsync(id);
+                if (pendingApprovalIds.Any())
+                    return BadRequest(new { success = false, message = PendingApprovalDeleteMessage(pendingApprovalIds) });
+
                 var (success, associatedVoucherIds) = await _metaDataService.DeleteAccountAsync(id);
                 if (!success)
                 {
@@ -790,6 +803,11 @@ namespace PureLedger.Controllers.Api
             }
         }
 
+        private static string PendingApprovalDeleteMessage(IReadOnlyCollection<int> approvalIds) =>
+            "This account cannot be deleted because it is used in pending approval request(s) " +
+            string.Join(", ", approvalIds.Take(5).Select(x => "#" + x)) + (approvalIds.Count > 5 ? " and more" : string.Empty) +
+            ". Approve or reject them first.";
+
         [HttpGet("accounts/{id}/can-delete")]
         public async Task<IActionResult> CanDeleteAccount(int id)
         {
@@ -805,6 +823,12 @@ namespace PureLedger.Controllers.Api
                 if (associatedVoucherIds.Any())
                 {
                     return Ok(new { canDelete = false, message = "This account cannot be deleted because it is associated with journal vouchers." });
+                }
+
+                var pendingApprovalIds = await _metaDataService.GetPendingApprovalIdsForAccountAsync(id);
+                if (pendingApprovalIds.Any())
+                {
+                    return Ok(new { canDelete = false, message = PendingApprovalDeleteMessage(pendingApprovalIds) });
                 }
 
                 return Ok(new { canDelete = true });
@@ -1206,7 +1230,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading accounts for project {ProjectId}, category {CategoryId}", projectId, categoryId);
-                return StatusCode(500, new { success = false, message = $"Error loading accounts: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error loading accounts" });
             }
         }
 
@@ -1261,7 +1285,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error loading categories for project {ProjectId}", projectId);
-                return StatusCode(500, new { success = false, message = $"Error loading categories: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error loading categories" });
             }
         }
 

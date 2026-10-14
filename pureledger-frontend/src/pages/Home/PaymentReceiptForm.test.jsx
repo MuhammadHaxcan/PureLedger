@@ -6,6 +6,10 @@ import paymentReceiptApi from '../../services/paymentReceiptApi';
 import paymentReceiptVoucherApi from '../../services/paymentReceiptVoucherApi';
 import approvalApi from '../../services/approvalApi';
 
+vi.mock('../../hooks/usePermissions', () => ({
+    usePermissions: () => ({ canAccessReporting: true }),
+}));
+
 vi.mock('../../services/paymentReceiptApi', () => ({
     default: {
         getInitialization: vi.fn(),
@@ -41,6 +45,13 @@ vi.mock('../../services/paymentReceiptVoucherApi', () => ({
 }));
 
 describe('PaymentReceiptForm', () => {
+    const postedData = {
+        projectId: 1, entryDate: '2026-07-31', voucherVersion: 'AQID',
+        entries: [
+            { categoryId: 2, categoryName: 'Cash', accountId: 3, accountName: 'Cash', instrumentType: 'Cash', debit: 100, credit: 0 },
+            { categoryId: 2, categoryName: 'Cash', accountId: 4, accountName: 'Bank', instrumentType: 'Cash', debit: 0, credit: 100 },
+        ],
+    };
     beforeEach(() => {
         vi.clearAllMocks();
         localStorage.clear();
@@ -297,5 +308,43 @@ describe('PaymentReceiptForm', () => {
         expect(approvalApi.getPaymentReceiptInitialization).not.toHaveBeenCalled();
         expect(screen.getByLabelText(/Entry Date/)).not.toBeDisabled();
         expect(screen.getByLabelText('Project')).toBeDisabled();
+    });
+
+    it.each(['create', 'revision'])('shows the posted result and printing after auto-approval in %s mode', async (mode) => {
+        const user = userEvent.setup();
+        const submitApi = mode === 'revision' ? paymentReceiptVoucherApi.submitRevision : paymentReceiptApi.submit;
+        submitApi.mockResolvedValue({ data: {
+            status: 'Approved', autoApproved: true, approvalVoucherId: 7,
+            journalVoucherId: 42, pendingApprovalId: null, voucherVersion: 'BAUG',
+        } });
+        render(<PaymentReceiptForm mode={mode} journalVoucherId={mode === 'revision' ? 20 : null} initialData={postedData} />);
+        await user.click(await screen.findByRole('button', { name: 'Submit Payment & Receipt' }));
+        await screen.findByText(/posted and automatically approved.*JV-42/i);
+        expect(screen.getByRole('link', { name: 'Print P&R' })).toHaveAttribute('href', '/reporting/print-voucher?voucherId=42');
+        expect(screen.queryByText(/submitted as approval|already pending as approval/i)).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Entry 1 debit')).toBeDisabled();
+        if (mode === 'create') {
+            await user.click(screen.getByRole('button', { name: 'Start Another P&R' }));
+            expect(screen.queryByRole('link', { name: 'Print P&R' })).not.toBeInTheDocument();
+            expect(screen.getByLabelText('Entry 1 debit')).not.toBeDisabled();
+        }
+    });
+
+    it('keeps an ordinary submission pending and offers no printing', async () => {
+        const user = userEvent.setup();
+        paymentReceiptApi.submit.mockResolvedValue({ data: { status: 'PendingApproval', approvalVoucherId: 7 } });
+        render(<PaymentReceiptForm initialData={postedData} />);
+        await user.click(await screen.findByRole('button', { name: 'Submit Payment & Receipt' }));
+        await screen.findByText(/submitted as approval #7/i);
+        expect(screen.queryByRole('link', { name: 'Print P&R' })).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Entry 1 debit')).toBeDisabled();
+    });
+
+    it('sends one submission while an earlier request is still running', async () => {
+        const user = userEvent.setup();
+        paymentReceiptApi.submit.mockImplementation(() => new Promise(() => {}));
+        render(<PaymentReceiptForm initialData={postedData} />);
+        await user.dblClick(await screen.findByRole('button', { name: 'Submit Payment & Receipt' }));
+        expect(paymentReceiptApi.submit).toHaveBeenCalledTimes(1);
     });
 });

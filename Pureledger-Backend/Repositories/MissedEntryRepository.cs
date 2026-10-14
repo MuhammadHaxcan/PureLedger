@@ -34,18 +34,6 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<MissedEntry>> GetByProductAccountIdAsync(int productAccountId)
-        {
-            return await _dbContext.MissedEntries
-                .AsNoTracking()
-                .Include(m => m.CustomerAccount)
-                .Include(m => m.ProductAccount)
-                .Include(m => m.Project)
-                .Where(m => m.ProductAccountId == productAccountId)
-                .OrderByDescending(m => m.MissedDate)
-                .ToListAsync();
-        }
-
         public async Task<List<MissedEntry>> GetByDateRangeAsync(DateOnly startDate, DateOnly endDate)
         {
             return await _dbContext.MissedEntries
