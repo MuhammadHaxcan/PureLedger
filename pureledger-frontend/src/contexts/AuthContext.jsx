@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import apiClient, { setXsrfToken, clearXsrfToken } from '../services/api';
 import { PERMISSIONS, PAGE_PERMISSIONS } from '../constants/permissions';
 import { useToast } from './ToastContext';
@@ -8,6 +8,8 @@ const AuthContext = createContext(null);
 // Module-level flag to prevent duplicate session restoration (React StrictMode runs useEffect twice)
 let isRestoringSession = false;
 
+// The hook is deliberately colocated with its provider; splitting it would touch every importer.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {
@@ -17,18 +19,13 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-    const { showSessionExpired, showLoginSuccess, showLogoutSuccess, showAuthError } = useToast();
+    const { showLoginSuccess, showLogoutSuccess } = useToast();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [userAccess, setUserAccess] = useState({ controllers: [], actions: {} });
     const [navigationMenu, setNavigationMenu] = useState([]);
     const [permissions, setPermissions] = useState([]);
-
-    // Removed - JWT refresh token handles session expiration
-    // Access tokens refresh every ~29 minutes, refresh tokens expire after 7 days
-    // const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
-    // const [lastActivityTime, setLastActivityTime] = useState(Date.now());
 
     // Build permissions array from userAccess
     const buildPermissions = useMemo(() => {
@@ -43,12 +40,14 @@ export const AuthProvider = ({ children }) => {
             // Map controller to page permissions
             const controllerPages = {
                 'Home': [PERMISSIONS.HOME_ENTRY, PERMISSIONS.HOME_VOUCHER_ENTRY, PERMISSIONS.HOME_BASE_VOUCHERS,
-                PERMISSIONS.HOME_MODIFIED_ENTRIES, PERMISSIONS.HOME_RECIPES],
+                PERMISSIONS.HOME_MODIFIED_ENTRIES, PERMISSIONS.HOME_RECIPES, PERMISSIONS.HOME_PENDING_APPROVALS,
+                PERMISSIONS.HOME_PAYMENT_AND_RECEIPT],
                 'MetaData': [PERMISSIONS.METADATA_PROJECTS, PERMISSIONS.METADATA_CATEGORIES, PERMISSIONS.METADATA_ACCOUNTS,
                 PERMISSIONS.METADATA_LOCATIONS, PERMISSIONS.METADATA_BOOKERS],
                 'Reporting': [PERMISSIONS.REPORTING_SINGLE_DOC, PERMISSIONS.REPORTING_AGING_REPORT, PERMISSIONS.REPORTING_ACCOUNT_REPORT,
-                PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_USER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES, PERMISSIONS.REPORTING_OLD_MASTER_REPORT],
-                'DeliveryChallan': [PERMISSIONS.DELIVERY_PROCESS_DC],
+                PERMISSIONS.REPORTING_MASTER_REPORT, PERMISSIONS.REPORTING_USER_REPORT, PERMISSIONS.REPORTING_PRODUCT_REPORT, PERMISSIONS.REPORTING_MISSED_ENTRIES, PERMISSIONS.REPORTING_OLD_MASTER_REPORT,
+                PERMISSIONS.REPORTING_PAYMENT_RECEIPT_VOUCHER_REPORT],
+                'DeliveryChallan': [PERMISSIONS.DELIVERY_PROCESS_DC, PERMISSIONS.DELIVERY_STOCK_TRANSFERS],
             };
 
             if (controllerPages[controller]) {
@@ -74,49 +73,6 @@ export const AuthProvider = ({ children }) => {
         setPermissions(buildPermissions);
     }, [buildPermissions]);
 
-    // Session timeout removed - JWT refresh mechanism handles this automatically
-    // Access tokens refresh every ~29 minutes, refresh tokens expire after 7 days
-    // Backend can revoke tokens server-side if needed
-    /*
-    useEffect(() => {
-        if (!isAuthenticated) return;
-
-        const checkInactivity = () => {
-            const currentTime = Date.now();
-            const timeSinceLastActivity = currentTime - lastActivityTime;
-
-            if (timeSinceLastActivity > SESSION_TIMEOUT) {
-                console.log('Session expired due to inactivity');
-                showSessionExpired();
-                setTimeout(() => {
-                    logout();
-                    window.location.href = '/login?sessionExpired=true';
-                }, 2000); // Show toast for 2 seconds before redirect
-            }
-        };
-
-        // Check inactivity every minute
-        const intervalId = setInterval(checkInactivity, 60000);
-
-        // Track user activity
-        const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
-        const updateActivity = () => {
-            setLastActivityTime(Date.now());
-        };
-
-        activityEvents.forEach(event => {
-            document.addEventListener(event, updateActivity);
-        });
-
-        return () => {
-            clearInterval(intervalId);
-            activityEvents.forEach(event => {
-                document.removeEventListener(event, updateActivity);
-            });
-        };
-    }, [isAuthenticated, lastActivityTime]);
-    */
-
     // Permission checking functions
     const hasPermission = (permission) => {
         if (!user) return false;
@@ -129,6 +85,89 @@ export const AuthProvider = ({ children }) => {
         if (user.isAdmin) return true;
         if (!permissionList || permissionList.length === 0) return true;
         return permissionList.some(perm => permissions.includes(perm));
+    };
+
+    // Build navigation menu structure from user access
+    const buildNavigationMenu = (isAdmin, controllers, actions) => {
+        const navigationItems = [
+            {
+                title: 'Home',
+                icon: 'fas fa-home',
+                controller: 'Home',
+                items: [
+                    { action: 'Entry', title: 'New Entry', icon: 'fas fa-plus-circle', path: '/home/entry' },
+                    { action: 'PaymentAndReceipt', title: 'Payment & Receipt', icon: 'fas fa-money-check-alt', path: '/home/payment-and-receipt' },
+                    { action: 'VoucherEntry', title: 'Edit Entry', icon: 'fas fa-edit', path: '/home/voucher-entry' },
+                    { action: 'BaseVouchers', title: 'Base Vouchers', icon: 'fas fa-layer-group', path: '/home/base-vouchers' },
+                    { action: 'ModifiedEntries', title: 'Modified Entries', icon: 'fas fa-history', path: '/home/modified-entries' },
+                    { action: 'Recipes', title: 'Recipes', icon: 'fas fa-book-open', path: '/home/recipes' },
+                    { action: 'PendingApprovals', title: 'Pending Approvals', icon: 'fas fa-clipboard-check', path: '/approvals/pending' },
+                ],
+            },
+            {
+                title: 'Metadata',
+                icon: 'fas fa-database',
+                controller: 'MetaData',
+                items: [
+                    { action: 'Projects', title: 'Projects', icon: 'fas fa-project-diagram', path: '/metadata/projects' },
+                    { action: 'Categories', title: 'Categories', icon: 'fas fa-sitemap', path: '/metadata/categories' },
+                    { action: 'Accounts', title: 'Accounts', icon: 'fas fa-users', path: '/metadata/accounts' },
+                    { action: 'Locations', title: 'Locations', icon: 'fas fa-map-marker-alt', path: '/metadata/locations' },
+                    { action: 'Bookers', title: 'Bookers', icon: 'fas fa-user-tie', path: '/metadata/bookers' },
+                ],
+            },
+            {
+                title: 'Delivery',
+                icon: 'fas fa-truck',
+                controller: 'DeliveryChallan',
+                items: [
+                    { action: 'ProcessDC', title: 'Delivery Challan', icon: 'fas fa-truck', path: '/delivery/process-dc' },
+                    { action: 'StockTransfers', title: 'Stock Transfers', icon: 'fas fa-exchange-alt', path: '/stock-transfers' },
+                ],
+            },
+            {
+                title: 'Reports',
+                icon: 'fas fa-chart-bar',
+                controller: 'Reporting',
+                items: [
+                    { action: 'SingleDoc', title: 'Single Document', icon: 'fas fa-file-alt', path: '/reporting/single-doc' },
+                    { action: 'AgingReport', title: 'Aging Report', icon: 'fas fa-calendar-alt', path: '/reporting/aging-report' },
+                    { action: 'AccountReport', title: 'Account Report', icon: 'fas fa-user-circle', path: '/reporting/account-report' },
+                    { action: 'MasterReport', title: 'Master Report', icon: 'fas fa-file-invoice', path: '/reporting/master-report' },
+                    { action: 'UserReport', title: 'User Report', icon: 'fas fa-file-alt', path: '/reporting/user-report' },
+                    { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
+                    { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
+                    { action: 'OldMasterReport', title: 'Old Master Report', icon: 'fas fa-history', path: '/reporting/old-master-report' },
+                    { action: 'PaymentReceiptVoucherReport', title: 'P&R Voucher Report', icon: 'fas fa-receipt', path: '/reporting/payment-receipt-vouchers' },
+                ],
+            },
+        ];
+
+        const hasAccess = (controller, action = null) => {
+            if (isAdmin) return true;
+
+            const hasControllerAccess = controllers.includes(controller);
+
+            if (action) {
+                const hasSpecificAction = actions[controller]?.includes(action) || false;
+                return hasControllerAccess || hasSpecificAction;
+            }
+
+            const hasAnyAction = actions[controller] && actions[controller].length > 0;
+            return hasControllerAccess || hasAnyAction;
+        };
+
+        // Filter navigation items based on access
+        return navigationItems
+            .map(item => {
+                const accessibleItems = item.items.filter(subItem => hasAccess(item.controller, subItem.action));
+                if (accessibleItems.length === 0) return null;
+                return {
+                    ...item,
+                    items: accessibleItems,
+                };
+            })
+            .filter(item => item !== null);
     };
 
     // Fetch user access and rebuild navigation menu (used on login and refresh)
@@ -318,85 +357,6 @@ export const AuthProvider = ({ children }) => {
         restoreSession();
     }, [fetchAccessAndMenu]);
 
-    // Build navigation menu structure from user access
-    const buildNavigationMenu = (isAdmin, controllers, actions) => {
-        const navigationItems = [
-            {
-                title: 'Home',
-                icon: 'fas fa-home',
-                controller: 'Home',
-                items: [
-                    { action: 'Entry', title: 'New Entry', icon: 'fas fa-plus-circle', path: '/home/entry' },
-                    { action: 'VoucherEntry', title: 'Edit Entry', icon: 'fas fa-edit', path: '/home/voucher-entry' },
-                    { action: 'BaseVouchers', title: 'Base Vouchers', icon: 'fas fa-layer-group', path: '/home/base-vouchers' },
-                    { action: 'ModifiedEntries', title: 'Modified Entries', icon: 'fas fa-history', path: '/home/modified-entries' },
-                    { action: 'Recipes', title: 'Recipes', icon: 'fas fa-book-open', path: '/home/recipes' },
-                ],
-            },
-            {
-                title: 'Metadata',
-                icon: 'fas fa-database',
-                controller: 'MetaData',
-                items: [
-                    { action: 'Projects', title: 'Projects', icon: 'fas fa-project-diagram', path: '/metadata/projects' },
-                    { action: 'Categories', title: 'Categories', icon: 'fas fa-sitemap', path: '/metadata/categories' },
-                    { action: 'Accounts', title: 'Accounts', icon: 'fas fa-users', path: '/metadata/accounts' },
-                    { action: 'Locations', title: 'Locations', icon: 'fas fa-map-marker-alt', path: '/metadata/locations' },
-                    { action: 'Bookers', title: 'Bookers', icon: 'fas fa-user-tie', path: '/metadata/bookers' },
-                ],
-            },
-            {
-                title: 'Delivery',
-                icon: 'fas fa-truck',
-                controller: 'DeliveryChallan',
-                items: [
-                    { action: 'ProcessDC', title: 'Delivery Challan', icon: 'fas fa-truck', path: '/delivery/process-dc' },
-                ],
-            },
-            {
-                title: 'Reports',
-                icon: 'fas fa-chart-bar',
-                controller: 'Reporting',
-                items: [
-                    { action: 'SingleDoc', title: 'Single Document', icon: 'fas fa-file-alt', path: '/reporting/single-doc' },
-                    { action: 'AgingReport', title: 'Aging Report', icon: 'fas fa-calendar-alt', path: '/reporting/aging-report' },
-                    { action: 'AccountReport', title: 'Account Report', icon: 'fas fa-user-circle', path: '/reporting/account-report' },
-                    { action: 'MasterReport', title: 'Master Report', icon: 'fas fa-file-invoice', path: '/reporting/master-report' },
-                    { action: 'UserReport', title: 'User Report', icon: 'fas fa-file-alt', path: '/reporting/user-report' },
-                    { action: 'ProductReport', title: 'Product Report', icon: 'fas fa-box', path: '/reporting/product-report' },
-                    { action: 'MissedEntriesReport', title: 'Missed Entries', icon: 'fas fa-exclamation-circle', path: '/reporting/missed-entries' },
-                    { action: 'OldMasterReport', title: 'Old Master Report', icon: 'fas fa-history', path: '/reporting/old-master-report' },
-                ],
-            },
-        ];
-
-        const hasAccess = (controller, action = null) => {
-            if (isAdmin) return true;
-
-            const hasControllerAccess = controllers.includes(controller);
-
-            if (action) {
-                const hasSpecificAction = actions[controller]?.includes(action) || false;
-                return hasControllerAccess || hasSpecificAction;
-            }
-
-            const hasAnyAction = actions[controller] && actions[controller].length > 0;
-            return hasControllerAccess || hasAnyAction;
-        };
-
-        // Filter navigation items based on access
-        return navigationItems
-            .map(item => {
-                const accessibleItems = item.items.filter(subItem => hasAccess(item.controller, subItem.action));
-                if (accessibleItems.length === 0) return null;
-                return {
-                    ...item,
-                    items: accessibleItems,
-                };
-            })
-            .filter(item => item !== null);
-    };
-
     const findFirstAccessibleRoute = (isAdmin, controllers, actions) => {
         if (isAdmin) {
             return '/home/entry';
@@ -405,10 +365,12 @@ export const AuthProvider = ({ children }) => {
         // Check Home controller
         if (controllers.includes('Home') || (actions.Home && actions.Home.length > 0)) {
             if (actions.Home?.includes('Entry')) return '/home/entry';
+            if (actions.Home?.includes('PaymentAndReceipt')) return '/home/payment-and-receipt';
             if (actions.Home?.includes('VoucherEntry')) return '/home/voucher-entry';
             if (actions.Home?.includes('BaseVouchers')) return '/home/base-vouchers';
             if (actions.Home?.includes('ModifiedEntries')) return '/home/modified-entries';
             if (actions.Home?.includes('Recipes')) return '/home/recipes';
+            if (actions.Home?.includes('PendingApprovals')) return '/approvals/pending';
             return '/home/entry';
         }
 
@@ -432,11 +394,14 @@ export const AuthProvider = ({ children }) => {
             if (actions.Reporting?.includes('ProductReport')) return '/reporting/product-report';
             if (actions.Reporting?.includes('MissedEntriesReport')) return '/reporting/missed-entries';
             if (actions.Reporting?.includes('OldMasterReport')) return '/reporting/old-master-report';
+            if (actions.Reporting?.includes('PaymentReceiptVoucherReport')) return '/reporting/payment-receipt-vouchers';
             return '/reporting/single-doc';
         }
 
         // Check DeliveryChallan controller
         if (controllers.includes('DeliveryChallan') || (actions.DeliveryChallan && actions.DeliveryChallan.length > 0)) {
+            if (actions.DeliveryChallan?.includes('StockTransfers') &&
+                !actions.DeliveryChallan?.includes('ProcessDC')) return '/stock-transfers';
             return '/delivery/process-dc';
         }
 
@@ -508,7 +473,7 @@ export const AuthProvider = ({ children }) => {
         // Call logout endpoint to revoke refresh token and clear server-side cookies
         try {
             await apiClient.post('/AccountApi/logout', {});
-        } catch (error) {
+        } catch {
             // Ignore errors - we've already cleared local state
             console.log('Logout API call completed (may have failed, but local state is cleared)');
         }

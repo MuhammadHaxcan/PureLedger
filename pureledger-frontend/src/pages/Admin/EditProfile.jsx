@@ -5,7 +5,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const EditProfile = () => {
-    usePageTitle('Edit Profile');
+    usePageTitle('Edit Profile', 'Edit Your Profile');
     const navigate = useNavigate();
     const isSubmittingRef = useRef(false);
     const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ const EditProfile = () => {
                     accessPermissions: userData.accessPermissions || []
                 });
             }
-        } catch (err) {
+        } catch {
             setError('Failed to load profile');
         } finally {
             setLoading(false);
@@ -112,10 +112,6 @@ const EditProfile = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-user-edit me-2"></i>Edit Your Profile</h2>
-            </div>
-
             {success && (
                 <div className="alert alert-success alert-dismissible fade show" role="alert">
                     <i className="fas fa-check-circle me-2"></i>{success}

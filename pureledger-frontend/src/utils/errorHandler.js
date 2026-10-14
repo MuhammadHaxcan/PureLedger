@@ -1,40 +1,102 @@
 /**
- * Utility functions for handling and displaying errors consistently
+ * Utility functions for handling and displaying errors consistently.
+ * The API now uses a shared error envelope:
+ * success, message, errors, statusCode, errorCode, errorId, correlationId.
  */
 
-/**
- * Extract error message from error object
- * @param {Error|Object} error - The error object from API call
- * @returns {string} - User-friendly error message
- */
-export const getErrorMessage = (error) => {
-  if (!error) return 'An unexpected error occurred.';
-  
-  // If error has a message property
-  if (error.message) {
-    return error.message;
+const DEFAULT_ERROR_MESSAGE = 'An unexpected error occurred. Please try again.';
+
+const flattenErrors = (errors) => {
+  if (!errors) return [];
+
+  if (Array.isArray(errors)) {
+    return errors
+      .flatMap((error) => flattenErrors(error))
+      .filter(Boolean);
   }
-  
-  // If error has errors array
-  if (Array.isArray(error.errors) && error.errors.length > 0) {
-    return error.errors[0];
+
+  if (typeof errors === 'object') {
+    return Object.entries(errors).flatMap(([field, value]) => {
+      const values = flattenErrors(value);
+      return values.length > 0 ? values.map((msg) => `${field}: ${msg}`) : [`${field}: ${String(value)}`];
+    });
   }
-  
-  // If error is a string
+
+  const message = String(errors).trim();
+  return message ? [message] : [];
+};
+
+const appendReference = (message, errorId) => {
+  if (!errorId || !message || message.includes(errorId)) return message;
+  return `${message} Reference: ${errorId}`;
+};
+
+export const normalizeApiError = (error, fallbackMessage = DEFAULT_ERROR_MESSAGE) => {
+  if (!error) {
+    return {
+      message: fallbackMessage,
+      errors: [fallbackMessage],
+      statusCode: null,
+      errorCode: null,
+      errorId: null,
+      correlationId: null,
+      isNetworkError: false,
+      isServerError: false,
+      isClientError: false,
+      raw: error,
+    };
+  }
+
   if (typeof error === 'string') {
-    return error;
+    return {
+      message: error,
+      errors: [error],
+      statusCode: null,
+      errorCode: null,
+      errorId: null,
+      correlationId: null,
+      isNetworkError: false,
+      isServerError: false,
+      isClientError: false,
+      raw: error,
+    };
   }
-  
-  // If error.response exists (axios error)
-  if (error.response?.data) {
-    const errorData = error.response.data;
-    if (errorData.message) return errorData.message;
-    if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
-      return errorData.errors[0];
-    }
+
+  const data = error.response?.data || error.data || {};
+  const statusCode = error.statusCode || error.response?.status || data.statusCode || null;
+  const errorId = error.errorId || data.errorId || null;
+  const correlationId = error.correlationId || data.correlationId || error.config?.metadata?.correlationId || null;
+  const errorCode = error.errorCode || data.errorCode || null;
+  const errors = flattenErrors(error.errors || data.errors);
+  const responseMessage = data.message || error.message || fallbackMessage;
+  const isNetworkError = error.isNetworkError === true || (!error.response && !statusCode && error.name !== 'Error');
+  const isServerError = error.isServerError === true || (statusCode >= 500 && statusCode < 600);
+  const isClientError = error.isClientError === true || (statusCode >= 400 && statusCode < 500);
+
+  let message = responseMessage || fallbackMessage;
+  if (isNetworkError) {
+    message = 'Network error. Please check your connection and try again.';
+  } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+    message = 'Request timed out. Please try again.';
+  } else if (isServerError) {
+    message = appendReference(message || 'Server error. Please try again later.', errorId);
   }
-  
-  return 'An unexpected error occurred. Please try again.';
+
+  return {
+    ...error,
+    message,
+    errors: errors.length > 0 ? errors : [message],
+    statusCode,
+    errorCode,
+    errorId,
+    correlationId,
+    isNetworkError,
+    isServerError,
+    isClientError,
+    needsRefresh: error.needsRefresh ?? data.needsRefresh,
+    xsrfToken: error.xsrfToken ?? data.xsrfToken,
+    raw: error,
+  };
 };
 
 /**
@@ -43,46 +105,7 @@ export const getErrorMessage = (error) => {
  * @returns {string[]} - Array of error messages
  */
 export const getAllErrorMessages = (error) => {
-  if (!error) return ['An unexpected error occurred.'];
-  
-  // If error has errors array
-  if (Array.isArray(error.errors) && error.errors.length > 0) {
-    return error.errors;
-  }
-  
-  // If error.response exists (axios error)
-  if (error.response?.data) {
-    const errorData = error.response.data;
-    if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
-      return errorData.errors;
-    }
-    if (errorData.message) {
-      return [errorData.message];
-    }
-  }
-  
-  // If error has a message property
-  if (error.message) {
-    return [error.message];
-  }
-  
-  // If error is a string
-  if (typeof error === 'string') {
-    return [error];
-  }
-  
-  return ['An unexpected error occurred. Please try again.'];
-};
-
-/**
- * Check if error is a specific status code
- * @param {Error|Object} error - The error object
- * @param {number} statusCode - The status code to check
- * @returns {boolean}
- */
-export const isErrorStatus = (error, statusCode) => {
-  return error?.statusCode === statusCode || 
-         error?.response?.status === statusCode;
+  return normalizeApiError(error).errors;
 };
 
 /**
@@ -91,78 +114,16 @@ export const isErrorStatus = (error, statusCode) => {
  * @returns {boolean}
  */
 export const isNetworkError = (error) => {
-  return error?.isNetworkError === true || !error?.response;
+  return normalizeApiError(error).isNetworkError === true;
 };
 
-/**
- * Check if error is a server error (5xx)
- * @param {Error|Object} error - The error object
- * @returns {boolean}
- */
-export const isServerError = (error) => {
-  return error?.isServerError === true || 
-         (error?.response?.status >= 500 && error?.response?.status < 600);
+export const getErrorReference = (error) => {
+  const normalized = normalizeApiError(error);
+  return {
+    errorId: normalized.errorId,
+    correlationId: normalized.correlationId,
+    statusCode: normalized.statusCode,
+    errorCode: normalized.errorCode,
+  };
 };
-
-/**
- * Check if error is a client error (4xx)
- * @param {Error|Object} error - The error object
- * @returns {boolean}
- */
-export const isClientError = (error) => {
-  return error?.isClientError === true || 
-         (error?.response?.status >= 400 && error?.response?.status < 500);
-};
-
-/**
- * Check if error is access denied (403)
- * @param {Error|Object} error - The error object
- * @returns {boolean}
- */
-export const isAccessDenied = (error) => {
-  return isErrorStatus(error, 403);
-};
-
-/**
- * Check if error is unauthorized (401)
- * @param {Error|Object} error - The error object
- * @returns {boolean}
- */
-export const isUnauthorized = (error) => {
-  return isErrorStatus(error, 401);
-};
-
-/**
- * Get user-friendly error message based on error type
- * @param {Error|Object} error - The error object
- * @returns {string} - User-friendly error message
- */
-export const getUserFriendlyErrorMessage = (error) => {
-  if (isNetworkError(error)) {
-    return 'Network error. Please check your connection and try again.';
-  }
-  
-  if (isServerError(error)) {
-    return 'Server error. Please try again later or contact support if the problem persists.';
-  }
-  
-  if (isAccessDenied(error)) {
-    return 'You do not have permission to access this resource. Please contact your administrator.';
-  }
-  
-  if (isUnauthorized(error)) {
-    return 'Your session has expired. Please log in again.';
-  }
-  
-  if (isErrorStatus(error, 404)) {
-    return 'The requested resource was not found.';
-  }
-  
-  if (isErrorStatus(error, 400)) {
-    return getErrorMessage(error) || 'Invalid request. Please check your input and try again.';
-  }
-  
-  return getErrorMessage(error);
-};
-
 

@@ -4,6 +4,9 @@ namespace PureLedger.Services.Interface
 {
     public interface ISharedProcessingService
     {
+        // Mutation methods participate in the caller's unit of work.
+        // The owning service must call SaveChangesAsync after the workflow is complete.
+
         #region Entry Processing Status
 
         Task<bool> DetermineEntryProcessedStatusAsync(JournalEntry entry);

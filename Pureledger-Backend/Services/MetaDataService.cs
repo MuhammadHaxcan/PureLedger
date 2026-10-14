@@ -14,8 +14,6 @@ namespace PureLedger.Services
         private readonly IMemoryCache _cache;
 
         // Cache durations
-        private static readonly TimeSpan StaticDataCacheDuration = TimeSpan.FromHours(1);
-        private static readonly TimeSpan DynamicDataCacheDuration = TimeSpan.FromMinutes(15);
 
         public MetaDataService(
             IUnitOfWork unitOfWork,
@@ -55,7 +53,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Projects.AddAsync(project);
+                _unitOfWork.Projects.Add(project);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -69,13 +67,6 @@ namespace PureLedger.Services
 
             return errors;
         }
-
-        //public async Task<Project> CreateProjectAsync(Project project)
-        //{
-        //    await _unitOfWork.Projects.AddAsync(project);
-        //    await _unitOfWork.SaveChangesAsync();
-        //    return project;
-        //}
 
         public async Task<List<string>> UpdateProjectAsync(Project project)
         {
@@ -122,11 +113,6 @@ namespace PureLedger.Services
             return await _unitOfWork.Categories.GetAllWithDetailsAsync();
         }
 
-        public async Task<List<Project>> GetAllProjectsForCategoriesAsync()
-        {
-            return await _unitOfWork.Projects.GetAllAsync();
-        }
-
         public async Task<List<Project>> GetAllProjectsForCategoriesForUserAsync(int userId)
         {
             try
@@ -166,7 +152,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Categories.AddAsync(category);
+                _unitOfWork.Categories.Add(category);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -257,7 +243,8 @@ namespace PureLedger.Services
             }
 
             // Delete the category
-            var result = await _unitOfWork.Categories.DeleteAsync(category);
+            var result = _unitOfWork.Categories.Delete(category);
+            await _unitOfWork.SaveChangesAsync();
             return (result, new List<int>());
         }
         #endregion
@@ -273,19 +260,9 @@ namespace PureLedger.Services
             return await _unitOfWork.Accounts.GetByProjectAsync(projectId, categoryId);
         }
 
-        public async Task<List<Category>> GetCategoriesForAccountsAsync()
-        {
-            return await _unitOfWork.Categories.GetAllWithDetailsAsync();
-        }
-
         public async Task<List<AccountGroup>> GetAccountGroupsAsync()
         {
             return await _unitOfWork.AccountGroups.GetAllAsync();
-        }
-
-        public async Task<List<Project>> GetProjectsForAccountsAsync()
-        {
-            return await _unitOfWork.Projects.GetAllAsync();
         }
 
         public async Task<List<Project>> GetProjectsForAccountsForUserAsync(int userId)
@@ -298,24 +275,12 @@ namespace PureLedger.Services
             return await _unitOfWork.Accounts.GetByIdWithDetailsAsync(id);
         }
 
-        public async Task<object> GetAllAccountsWithDetailsAsync()
-        {
-            var accounts = await _unitOfWork.Accounts.GetAllWithDetailsAsync();
-            var categories = await _unitOfWork.Categories.GetAllWithDetailsAsync();
-            var accountGroups = await _unitOfWork.AccountGroups.GetAllAsync();
-            var projects = await _unitOfWork.Projects.GetAllAsync();
-            
-            return new { 
-                Accounts = accounts, 
-                Categories = categories, 
-                AccountGroups = accountGroups, 
-                Projects = projects 
-            };
-        }
-
         public async Task<List<string>> CreateAccountAsync(Account account)
         {
             var errors = new List<string>();
+
+            errors.AddRange(await ValidateLinkedBookerAsync(account));
+            if (errors.Count > 0) return errors;
 
             // Optimized: Use direct database check instead of loading all records
             if (await _unitOfWork.Accounts.ExistsByNameInCategoryAsync(account.AccountName, account.CategoryId))
@@ -339,9 +304,14 @@ namespace PureLedger.Services
                     {
                         account.AccountData = null;
                     }
+                    else if (account.AccountGroupId == 3)
+                    {
+                        account.AccountData = null;
+                        account.ProductData = null;
+                    }
                 }
 
-                await _unitOfWork.Accounts.AddAsync(account);
+                _unitOfWork.Accounts.Add(account);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -376,6 +346,14 @@ namespace PureLedger.Services
             }
 
             var oldCategoryId = existingAccount.CategoryId;
+            errors.AddRange(await ValidateLinkedBookerAsync(account, existingAccount.LinkedBookerId));
+            if (errors.Count > 0) return errors;
+            if (existingAccount.AccountGroupId != account.AccountGroupId &&
+                (existingAccount.AccountGroupId == 3 || account.AccountGroupId == 3))
+            {
+                errors.Add("Accounts cannot be reclassified to or from the Expense group.");
+                return errors;
+            }
 
             try
             {
@@ -383,6 +361,7 @@ namespace PureLedger.Services
                 existingAccount.AccountName = account.AccountName;
                 existingAccount.CategoryId = account.CategoryId;
                 existingAccount.AccountGroupId = account.AccountGroupId;
+                existingAccount.LinkedBookerId = account.AccountGroupId == 1 ? account.LinkedBookerId : null;
 
                 var accountGroup = await _unitOfWork.AccountGroups.GetByIdAsync(account.AccountGroupId);
                 if (accountGroup != null)
@@ -418,7 +397,7 @@ namespace PureLedger.Services
                         // Remove ProductData if it exists
                         if (existingAccount.ProductData != null)
                         {
-                            await _unitOfWork.ProductDatas.DeleteAsync(existingAccount.ProductData);
+                            _unitOfWork.ProductDatas.Delete(existingAccount.ProductData);
                             existingAccount.ProductData = null;
                         }
                     }
@@ -445,8 +424,21 @@ namespace PureLedger.Services
 
                         if (existingAccount.AccountData != null)
                         {
-                            await _unitOfWork.AccountDatas.DeleteAsync(existingAccount.AccountData);
+                            _unitOfWork.AccountDatas.Delete(existingAccount.AccountData);
                             existingAccount.AccountData = null;
+                        }
+                    }
+                    else if (account.AccountGroupId == 3)
+                    {
+                        if (existingAccount.AccountData != null)
+                        {
+                            _unitOfWork.AccountDatas.Delete(existingAccount.AccountData);
+                            existingAccount.AccountData = null;
+                        }
+                        if (existingAccount.ProductData != null)
+                        {
+                            _unitOfWork.ProductDatas.Delete(existingAccount.ProductData);
+                            existingAccount.ProductData = null;
                         }
                     }
                 }
@@ -478,21 +470,31 @@ namespace PureLedger.Services
                 return (false, new List<int>());
             }
 
+            // A pending approval holds a snapshot of this account; deleting it would leave a request nobody can approve.
+            if ((await _unitOfWork.Accounts.GetPendingApprovalIdsAsync(id)).Any())
+            {
+                return (false, new List<int>());
+            }
+
             // Delete account data and product data if they exist
             if (account.AccountData != null)
             {
-                await _unitOfWork.AccountDatas.DeleteAsync(account.AccountData);
+                _unitOfWork.AccountDatas.Delete(account.AccountData);
             }
 
             if (account.ProductData != null)
             {
-                await _unitOfWork.ProductDatas.DeleteAsync(account.ProductData);
+                _unitOfWork.ProductDatas.Delete(account.ProductData);
             }
 
             // Delete the account itself
-            var result = await _unitOfWork.Accounts.DeleteAsync(account);
+            var result = _unitOfWork.Accounts.Delete(account);
+            await _unitOfWork.SaveChangesAsync();
             return (result, new List<int>());
         }
+
+        public Task<List<int>> GetPendingApprovalIdsForAccountAsync(int accountId) =>
+            _unitOfWork.Accounts.GetPendingApprovalIdsAsync(accountId);
 
         public async Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId)
         {
@@ -554,7 +556,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Locations.AddAsync(location);
+                _unitOfWork.Locations.Add(location);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -593,7 +595,7 @@ namespace PureLedger.Services
                 existingLocation.Phone = location.Phone;
                 existingLocation.Region = location.Region;
 
-                await _unitOfWork.Locations.UpdateAsync(existingLocation);
+                _unitOfWork.Locations.Update(existingLocation);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -628,6 +630,7 @@ namespace PureLedger.Services
                     return errors;
                 }
 
+                await _unitOfWork.SaveChangesAsync();
                 _cache.Remove(CacheKeys.AllLocations);
             }
             catch (DbUpdateException ex)
@@ -668,7 +671,7 @@ namespace PureLedger.Services
 
             try
             {
-                await _unitOfWork.Bookers.AddAsync(booker);
+                _unitOfWork.Bookers.Add(booker);
                 await _unitOfWork.SaveChangesAsync();
 
                 // Invalidate cache
@@ -761,6 +764,11 @@ namespace PureLedger.Services
 
             try
             {
+                if (await _unitOfWork.Accounts.HasLinkedBookerAsync(id))
+                {
+                    errors.Add("This booker is assigned to accounts. Reassign those accounts or disable the booker instead.");
+                    return errors;
+                }
                 var deleted = await _unitOfWork.Bookers.DeleteAsync(id);
                 if (!deleted)
                 {
@@ -768,6 +776,7 @@ namespace PureLedger.Services
                     return errors;
                 }
 
+                await _unitOfWork.SaveChangesAsync();
                 _cache.Remove(CacheKeys.AllBookers);
             }
             catch (DbUpdateException ex)
@@ -779,5 +788,17 @@ namespace PureLedger.Services
             return errors;
         }
         #endregion
+
+        private async Task<List<string>> ValidateLinkedBookerAsync(Account account, int? existingBookerId = null)
+        {
+            if (!account.LinkedBookerId.HasValue) return new();
+            if (account.AccountGroupId != 1)
+                return new() { "Only the Account group can have a linked booker." };
+            var booker = await _unitOfWork.Bookers.GetByIdAsync(account.LinkedBookerId.Value);
+            if (booker == null) return new() { "Select a valid linked booker." };
+            if (!booker.IsEnabled && existingBookerId != booker.BookerID)
+                return new() { "New assignments require an enabled booker." };
+            return new();
+        }
     }
 }

@@ -1,3 +1,4 @@
+using PureLedger.Models;
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -11,6 +12,9 @@ namespace PureLedger.ViewModels.DeliveryChallan
         [Required] 
         public int LocationId { get; set; }
         
+        [StringLength(DeliveryChallanVoucher.StationMaxLength)]
+        public string? Station { get; set; }
+
         [StringLength(500)]
         public string? Remarks { get; set; }
         

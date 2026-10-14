@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Card, Form, InputGroup, Alert, Button } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -7,6 +7,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
+import './BaseVouchers.css';
 
 const BaseVouchers = () => {
     usePageTitle('Base Vouchers');
@@ -20,7 +21,6 @@ const BaseVouchers = () => {
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [loadingVouchers, setLoadingVouchers] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [isAutoLoading, setIsAutoLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -168,22 +168,17 @@ const BaseVouchers = () => {
                 setCurrentPage(page + 1);
 
                 if (response.data.hasMoreData) {
-                    setIsAutoLoading(true);
                     setTimeout(() => {
                         loadBaseVouchers(page + 1, true);
                     }, 100);
-                } else {
-                    setIsAutoLoading(false);
                 }
             } else {
                 setError('Failed to load base vouchers');
                 setHasMoreData(false);
-                setIsAutoLoading(false);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load base vouchers');
             setHasMoreData(false);
-            setIsAutoLoading(false);
         } finally {
             setLoadingVouchers(false);
             setIsLoadingMore(false);
@@ -247,13 +242,6 @@ const BaseVouchers = () => {
         return new Intl.NumberFormat('en-PK').format(value || 0);
     };
 
-    const formatCurrency = (value) => {
-        return new Intl.NumberFormat('en-PK', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(value || 0);
-    };
-
     const handleDateFilterChange = (filterType) => {
         setDateFilterType(filterType);
         if (filterType === 'custom') {
@@ -283,15 +271,6 @@ const BaseVouchers = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2 className="mb-0">
-                    <i className="fas fa-layer-group me-2"></i>Base Vouchers
-                </h2>
-                <Link to="/home/entry" className="btn btn-primary">
-                    <i className="fas fa-plus me-1"></i> Create New Base Voucher
-                </Link>
-            </div>
-
             {success && (
                 <Alert variant="success" dismissible onClose={() => setSuccess('')}>
                     <i className="fas fa-check-circle me-2"></i>{success}
@@ -317,8 +296,8 @@ const BaseVouchers = () => {
                         loadBaseVouchers(0, false);
                         loadSummaryStats(projectId, startDate, endDate);
                     }}>
-                        <div className="row mb-3">
-                            <div className="col-md-2 mb-3">
+                        <div className="base-vouchers-filter-grid mb-3">
+                            <div className="base-vouchers-filter-field">
                                 <Form.Label className="small text-muted">Quick Filter</Form.Label>
                                 <Form.Select
                                     size="sm"
@@ -334,7 +313,7 @@ const BaseVouchers = () => {
                                     ))}
                                 </Form.Select>
                             </div>
-                            <div className="col-md-2 mb-3">
+                            <div className="base-vouchers-filter-field">
                                 <Form.Label className="small">Since</Form.Label>
                                 <InputGroup size="sm">
                                     <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
@@ -351,7 +330,7 @@ const BaseVouchers = () => {
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-2 mb-3">
+                            <div className="base-vouchers-filter-field">
                                 <Form.Label className="small">To</Form.Label>
                                 <InputGroup size="sm">
                                     <InputGroup.Text style={{ fontSize: '0.875rem' }}><i className="fas fa-calendar-alt"></i></InputGroup.Text>
@@ -368,9 +347,9 @@ const BaseVouchers = () => {
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-3 mb-3">
-                                <Form.Label>Project <span className="text-danger">*</span></Form.Label>
-                                <InputGroup>
+                            <div className="base-vouchers-filter-field base-vouchers-project-filter">
+                                <Form.Label className="small">Project <span className="text-danger">*</span></Form.Label>
+                                <InputGroup size="sm">
                                     <InputGroup.Text><i className="fas fa-project-diagram"></i></InputGroup.Text>
                                     <SearchableSelect
                                         value={projectId}
@@ -381,7 +360,7 @@ const BaseVouchers = () => {
                                     />
                                 </InputGroup>
                             </div>
-                            <div className="col-md-3 mb-3 d-flex align-items-center" style={{ paddingTop: '2rem' }}>
+                            <div className="base-vouchers-filter-check">
                                 <Form.Check
                                     type="checkbox"
                                     id="hideFullyProcessed"
@@ -391,13 +370,12 @@ const BaseVouchers = () => {
                                     disabled={loadingVouchers}
                                 />
                             </div>
-                        </div>
-                        <div className="row">
-                            <div className="col-md-3 mb-3">
+                            <div className="base-vouchers-filter-action">
                                 <div className="d-grid">
                                     <Button
                                         type="submit"
                                         variant="primary"
+                                        size="sm"
                                         disabled={loadingVouchers || isLoadingMore || hasMoreData || !projectId}
                                         title={!projectId ? 'Please select a project' : ''}
                                     >
@@ -414,7 +392,9 @@ const BaseVouchers = () => {
                                     </Button>
                                 </div>
                             </div>
-                            {(startDate || endDate) && (
+                        </div>
+                        {(startDate || endDate) && (
+                            <div className="row">
                                 <div className="col-md-2 mb-3 d-flex align-items-end">
                                     <Button
                                         variant="outline-secondary"
@@ -428,8 +408,8 @@ const BaseVouchers = () => {
                                         <i className="fas fa-times me-1"></i>Clear Dates
                                     </Button>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </Form>
                 </Card.Body>
             </Card>
@@ -511,11 +491,11 @@ const BaseVouchers = () => {
                                                     {summaryStats.mostOrderedProducts && summaryStats.mostOrderedProducts.length > 0 ? (
                                                         <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
                                                             <table className="table table-sm table-hover mb-0">
-                                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
+                                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--table-header-bg)', zIndex: 1 }}>
                                                                     <tr>
-                                                                        <th className="border-0 ps-3 text-start" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Product</th>
-                                                                        <th className="border-0 text-end" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Qty</th>
-                                                                        <th className="border-0 text-end pe-3" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Entries</th>
+                                                                        <th className="border-0 ps-3 text-start" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Product</th>
+                                                                        <th className="border-0 text-end" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Qty</th>
+                                                                        <th className="border-0 text-end pe-3" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Entries</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -550,11 +530,11 @@ const BaseVouchers = () => {
                                                     {summaryStats.mostPendingProducts && summaryStats.mostPendingProducts.length > 0 ? (
                                                         <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
                                                             <table className="table table-sm table-hover mb-0">
-                                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>
+                                                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--table-header-bg)', zIndex: 1 }}>
                                                                     <tr>
-                                                                        <th className="border-0 ps-3 text-start" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Product</th>
-                                                                        <th className="border-0 text-end" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Pending Qty</th>
-                                                                        <th className="border-0 text-end pe-3" style={{ fontSize: '0.8rem', color: '#6c757d' }}>Entries</th>
+                                                                        <th className="border-0 ps-3 text-start" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Product</th>
+                                                                        <th className="border-0 text-end" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Pending Qty</th>
+                                                                        <th className="border-0 text-end pe-3" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Entries</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>

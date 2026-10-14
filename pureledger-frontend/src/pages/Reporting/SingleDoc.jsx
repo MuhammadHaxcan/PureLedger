@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { isPaymentReceiptVoucherType } from '../../utils/voucherType';
 
 const SingleDoc = () => {
   usePageTitle('Single Document');
@@ -25,9 +26,11 @@ const SingleDoc = () => {
       });
 
       if (response.data.success && response.data.exists) {
+        const resolvedType = response.data.resolvedVoucherType || response.data.type || voucherType;
         // Always open voucher in new tab (print-only page without header)
-        const filterParam = voucherType === 'JV' ? `&filter=${filter}` : '';
-        const url = `/reporting/print-voucher?voucherId=${voucherId}&type=${voucherType}${filterParam}`;
+        const supportsDebitCreditFilter = resolvedType === 'JV' || isPaymentReceiptVoucherType(resolvedType);
+        const filterParam = supportsDebitCreditFilter ? `&filter=${filter}` : '';
+        const url = `/reporting/print-voucher?voucherId=${voucherId}&type=${resolvedType}${filterParam}`;
         window.open(url, '_blank');
         setError('');
       } else {
@@ -42,12 +45,6 @@ const SingleDoc = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-file-alt me-2"></i>Single Document
-        </h2>
-      </div>
-
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           <i className="fas fa-exclamation-circle me-2"></i>{error}

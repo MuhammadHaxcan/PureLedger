@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using PureLedger.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using PureLedger.Attributes;
@@ -23,6 +24,7 @@ namespace PureLedger.Controllers.Api
         private readonly JournalEntryValidationService _journalEntryValidationService;
         private readonly ICurrentUserService _currentUserService;
         private readonly IMemoryCache _cache;
+        private readonly IApprovalService _approvalService;
 
         public HomeApiController(
             JournalEntryService journalService,
@@ -30,13 +32,15 @@ namespace PureLedger.Controllers.Api
             ICurrentUserService currentUserService,
             IMemoryCache cache,
             ILogger<HomeApiController> logger,
-            ISharedProcessingService sharedProcessingService)
+            ISharedProcessingService sharedProcessingService,
+            IApprovalService approvalService)
         {
             _journalService = journalService;
             _journalEntryValidationService = journalEntryValidationService;
             _currentUserService = currentUserService;
             _cache = cache;
             _logger = logger;
+            _approvalService = approvalService;
         }
 
         #endregion
@@ -75,6 +79,31 @@ namespace PureLedger.Controllers.Api
         {
             try
             {
+                var userId = _currentUserService.GetCurrentUserId();
+                if (!userId.HasValue) return Unauthorized(new { success = false, message = "User not authenticated" });
+
+                var approvalResult = await _approvalService.SubmitManualExpenseAsync(
+                    model, editingVoucherId, userId.Value);
+                if (approvalResult != null)
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        status = approvalResult.IsPending ? "PendingApproval" : ApprovalStatuses.Approved,
+                        isPending = approvalResult.IsPending,
+                        autoApproved = approvalResult.AutoApproved,
+                        approvalVoucherId = approvalResult.ApprovalVoucherId,
+                        voucherId = approvalResult.JournalVoucherId,
+                        projectId = approvalResult.ProjectId,
+                        message = approvalResult.IsPending
+                            ? "Voucher submitted for approval."
+                            : $"Expense voucher posted and automatically approved. JV-{approvalResult.JournalVoucherId}",
+                        shouldPrint = !approvalResult.IsPending && action == "submit_print",
+                        printUrl = !approvalResult.IsPending && action == "submit_print"
+                            ? $"/api/reporting/print-voucher/{approvalResult.JournalVoucherId}?type=JV" : null
+                    });
+                }
+
                 if (!editingVoucherId.HasValue)
                 {
                     var validationErrors = await _journalEntryValidationService.ValidateAsync(model);
@@ -97,6 +126,31 @@ namespace PureLedger.Controllers.Api
                     shouldPrint = action == "submit_print",
                     printUrl = action == "submit_print" ? $"/api/reporting/print-voucher/{journalVoucher.JournalVoucherId}?type=JV" : null
                 });
+            }
+            catch (NotAuthenticatedException ex)
+            {
+                return Unauthorized(new { success = false, message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                // 403, not 401: the client treats 401 as an expired session and would refresh and replay the POST.
+                return StatusCode(StatusCodes.Status403Forbidden, new { success = false, message = ExceptionClassifier.UserMessage(ex) });
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+            {
+                return Conflict(new { success = false, message = "The voucher changed while it was being saved. Reload and try again." });
+            }
+            catch (Exception ex) when (
+                ex is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.SerializationFailure } ||
+                ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.SerializationFailure })
+            {
+                return Conflict(new { success = false, message = "The voucher changed while it was being saved. Reload and try again." });
+            }
+            catch (InvalidOperationException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
+            {
+                if (ex is ApprovalConflictException)
+                    return Conflict(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {
@@ -123,7 +177,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving voucher {VoucherId}", id);
-                return StatusCode(500, new { success = false, message = "An error occurred while loading the voucher.", detailedError = ex.Message });
+                return StatusCode(500, new { success = false, message = "An error occurred while loading the voucher." });
             }
         }
 
@@ -138,6 +192,10 @@ namespace PureLedger.Controllers.Api
                     return NotFound(new { success = false, message = "Voucher not found" });
 
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
+            {
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {
@@ -493,10 +551,14 @@ namespace PureLedger.Controllers.Api
 
                 return Ok(new { success = true, message = $"Successfully created derived voucher JV-{derivedVoucherId}", voucherId = derivedVoucherId });
             }
+            catch (InvalidOperationException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
+            {
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating derived voucher from base voucher {Id}", model.BaseVoucherId);
-                return StatusCode(500, new { success = false, message = ex.Message });
+                return StatusCode(500, new { success = false, message = "An error occurred while creating the derived voucher." });
             }
         }
 
@@ -607,10 +669,10 @@ namespace PureLedger.Controllers.Api
                     selectedProjectId = projectId
                 });
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException ex) when (ExceptionClassifier.IsApplicationRaised(ex))
             {
                 _logger.LogWarning(ex, "Invalid recipe or project: {Message}", ex.Message);
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = ExceptionClassifier.UserMessage(ex) });
             }
             catch (Exception ex)
             {

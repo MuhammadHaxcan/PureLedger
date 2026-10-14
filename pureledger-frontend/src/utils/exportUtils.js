@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Papa from 'papaparse';
 
@@ -31,11 +31,11 @@ export const generatePdfAsync = async (config, onProgress) => {
         title,
         subtitle,
         projectName,
+        logoDataUrl,
         dateRange,
         generatedInfo,
         columns,
         rows,
-        rowsPerPage = 14,
         startY = 46,
         fontSize = 9,
         cellPadding = 2,
@@ -43,6 +43,7 @@ export const generatePdfAsync = async (config, onProgress) => {
     } = config;
 
     const doc = new jsPDF(orientation, 'mm', format);
+    let headerBottom = 20;
 
     if (onProgress) onProgress(0.1);
     await delay(10);
@@ -85,6 +86,18 @@ export const generatePdfAsync = async (config, onProgress) => {
             doc.text(generatedInfo, 14, yPos);
             yPos += 6;
         }
+        headerBottom = yPos;
+    }
+
+    if (logoDataUrl) {
+        const properties = doc.getImageProperties(logoDataUrl);
+        const maxWidth = 34;
+        const maxHeight = 22;
+        const scale = Math.min(maxWidth / properties.width, maxHeight / properties.height);
+        const width = properties.width * scale;
+        const height = properties.height * scale;
+        doc.addImage(logoDataUrl, properties.fileType, doc.internal.pageSize.width - 14 - width, 10, width, height);
+        headerBottom = Math.max(headerBottom, 10 + height + 4);
     }
 
     if (onProgress) onProgress(0.3);
@@ -93,7 +106,7 @@ export const generatePdfAsync = async (config, onProgress) => {
     autoTable(doc, {
         columns,
         body: rows,
-        startY: startY,
+        startY: Math.max(startY, headerBottom + 2),
         margin: { top: 20 },
         styles: { fontSize, cellPadding },
         headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },

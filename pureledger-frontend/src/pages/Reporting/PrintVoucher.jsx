@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import apiClient from '../../services/api';
 import '../../App.css';
 import './PrintVoucher.css';
+import JournalVoucherPrint from './JournalVoucherPrint';
 
-const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) => {
+const InvoiceChallanPrint = ({ voucherData, voucherType, voucherId }) => {
   const [activeSignature, setActiveSignature] = useState(null);
-  const normalizedFilter = (filter || 'all').toLowerCase();
   const wasOpenedByWindow = useRef(!!window.opener); // Capture at mount (opener becomes null after parent closes)
   // Get base URL for static files (remove /api from API_BASE_URL)
   const getBaseUrl = () => {
@@ -89,11 +89,8 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     fetchActiveSignature();
   }, []);
 
-  if (!voucherData) return null;
-
   const isDC = voucherType === 'DC';
   const isInv = voucherType === 'INV';
-  const isJV = voucherType === 'JV';
   const documentTitle = isInv ? 'Invoice' : isDC ? 'Delivery Challan' : 'Journal Voucher';
 
   // Calculate invoice entry amounts
@@ -107,27 +104,10 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     return Math.abs(entry.lineTotal || 0);
   };
 
-  const invoiceEntries = useMemo(() => {
-    return voucherData.entries?.filter(e => e.quantity > 0) || [];
-  }, [voucherData.entries]);
+  const invoiceEntries = voucherData?.entries?.filter(e => e.quantity > 0) || [];
+  const invoiceTotal = invoiceEntries.reduce((sum, entry) => sum + calculateEntryAmount(entry), 0);
 
-  const invoiceTotal = useMemo(() => {
-    return invoiceEntries.reduce((sum, entry) => sum + calculateEntryAmount(entry), 0);
-  }, [invoiceEntries]);
-
-  const shouldHideAccountName = (entry) => {
-    if (voucherType !== 'JV') return false;
-    const debit = entry.debit || 0;
-    const credit = entry.credit || 0;
-    if (normalizedFilter === 'credit' && debit > 0) return true;
-    if (normalizedFilter === 'debit' && credit > 0) return true;
-    return false;
-  };
-
-  const getDisplayAccountName = (entry) => {
-    if (shouldHideAccountName(entry)) return '';
-    return entry.accountName ?? entry.AccountName ?? '';
-  };
+  if (!voucherData) return null;
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -181,7 +161,6 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
               <div className="text-muted">
                 {isInv && <span>{formatDate(voucherData.createdDate)}</span>}
                 {isDC && <span>Delivery Challan - {formatDate(voucherData.createdDate)}</span>}
-                {isJV && <span>Journal Voucher - {formatDate(voucherData.createdDate)}</span>}
               </div>
             </div>
             <div className="logo-container">
@@ -313,6 +292,12 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                             <td style={{ padding: '2px 0' }}><strong>Adda:</strong></td>
                             <td style={{ padding: '2px 0' }}>{voucherData.adda || ''}</td>
                           </tr>
+                          {voucherData.station?.trim() && (
+                            <tr>
+                              <td style={{ padding: '2px 0' }}><strong>Station:</strong></td>
+                              <td style={{ padding: '2px 0', overflowWrap: 'anywhere' }}>{voucherData.station}</td>
+                            </tr>
+                          )}
                           <tr>
                             <td style={{ padding: '2px 0' }}><strong>Builty:</strong></td>
                             <td style={{ padding: '2px 0' }}>{voucherData.builty || ''}</td>
@@ -322,47 +307,6 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                             <td style={{ padding: '2px 0' }}>{voucherData.remarks || ''}</td>
                             <td style={{ padding: '2px 0', paddingLeft: '15px' }}><strong>Other Ref:</strong></td>
                             <td style={{ padding: '2px 0' }}>{voucherData.otherReference || ''}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </td>
-                </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {isJV && (
-            <div className="invoice-header mb-3">
-              <table className="header-table" width="100%">
-                <tbody>
-                  <tr>
-                    <td width="50%" style={{ verticalAlign: 'top', paddingRight: '15px' }}>
-                    <div className="voucher-info" style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
-                      <h6 className="info-heading" style={{ marginTop: 0, marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '5px', fontSize: '14px' }}>
-                        Project Information
-                      </h6>
-                      <table className="info-table" width="100%" style={{ fontSize: '12px' }}>
-                        <tbody>
-                          <tr>
-                            <td width="35%" style={{ padding: '2px 0' }}><strong>Project:</strong></td>
-                            <td style={{ padding: '2px 0' }}>{voucherData.projectName || ''}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </td>
-                  <td width="50%" style={{ verticalAlign: 'top' }}>
-                    <div className="voucher-info" style={{ border: '1px solid #ddd', padding: '8px', borderRadius: '4px' }}>
-                      <h6 className="info-heading" style={{ marginTop: 0, marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '5px', fontSize: '14px' }}>
-                        Booker Information
-                      </h6>
-                      <table className="info-table" width="100%" style={{ fontSize: '12px' }}>
-                        <tbody>
-                          <tr>
-                            <td width="35%" style={{ padding: '2px 0' }}><strong>Booker:</strong></td>
-                            <td style={{ padding: '2px 0' }}>{voucherData.bookerName || ''}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -460,43 +404,7 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
                 </tfoot>
               </table>
             </div>
-          ) : (
-            <div className="table-responsive mb-3">
-              <table className="table table-bordered table-striped" style={{ fontSize: '12px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '30%' }}>Account</th>
-                    <th style={{ width: '30%' }}>Description</th>
-                    <th style={{ width: '8%', textAlign: 'right' }}>Qty</th>
-                    <th style={{ width: '10%', textAlign: 'right' }}>Rate</th>
-                    <th style={{ width: '11%', textAlign: 'right' }}>Debit</th>
-                    <th style={{ width: '11%', textAlign: 'right' }}>Credit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {voucherData.entries?.map((entry, index) => (
-                    <tr key={index}>
-                      <td>{getDisplayAccountName(entry)}</td>
-                      <td>{entry.description || ''}</td>
-                      <td style={{ textAlign: 'right' }}>{entry.quantity || ''}</td>
-                      <td style={{ textAlign: 'right' }}>{entry.rate || ''}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(entry.debit || 0)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(entry.credit || 0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="table-active">
-                    <th colSpan="2" style={{ textAlign: 'right' }}>Totals</th>
-                    <th style={{ textAlign: 'right' }}>{voucherData.totalQuantity || ''}</th>
-                    <th style={{ textAlign: 'right' }}></th>
-                    <th style={{ textAlign: 'right' }}>{formatCurrency(voucherData.totalAmount2 || voucherData.totalDebit || 0)}</th>
-                    <th style={{ textAlign: 'right' }}>{formatCurrency(voucherData.totalAmount1 || voucherData.totalCredit || 0)}</th>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
+          ) : null}
 
           {/* Customer Running Balance Display - Only for Invoice */}
           {isInv && (
@@ -571,6 +479,10 @@ const PrintVoucher = ({ voucherData, voucherType, voucherId, filter = 'all' }) =
     </div>
   );
 };
+
+const PrintVoucher = props => props.voucherType === 'JV'
+  ? <JournalVoucherPrint {...props} />
+  : <InvoiceChallanPrint {...props} />;
 
 export default PrintVoucher;
 

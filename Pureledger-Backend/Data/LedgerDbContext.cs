@@ -1,4 +1,4 @@
-﻿using global::PureLedger.Models;
+using global::PureLedger.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 
@@ -9,14 +9,18 @@ namespace PureLedger.Data
         public LedgerDbContext(DbContextOptions<LedgerDbContext> options) : base(options) { }
 
         public DbSet<Project> Projects { get; set; }
+        public DbSet<ProjectImg> ProjectImgs { get; set; }
         public DbSet<Category> Categories { get; set; }
         public DbSet<Account> Accounts { get; set; }
         public DbSet<AccountType> AccountTypes { get; set; }
         public DbSet<AccountGroup> AccountGroups { get; set; }
+        public DbSet<ApprovalVoucher> ApprovalVouchers { get; set; }
+        public DbSet<ApprovalVoucherEntry> ApprovalVoucherEntries { get; set; }
         public DbSet<AccountData> AccountDatas { get; set; }
         public DbSet<ProductData> ProductDatas { get; set; }
         public DbSet<JournalVoucher> JournalVouchers { get; set; }
         public DbSet<JournalEntry> JournalEntries { get; set; }
+        public DbSet<JournalEntryInstrumentDetail> JournalEntryInstrumentDetails { get; set; }
         public DbSet<Location> Locations { get; set; }
         public DbSet<DeliveryChallanVoucher> DeliveryChallanVouchers { get; set; }
         public DbSet<DeliveryChallanEntry> DeliveryChallanEntries { get; set; }
@@ -41,10 +45,21 @@ namespace PureLedger.Data
 
         // App settings table
         public DbSet<AppSetting> AppSettings { get; set; }
+        public DbSet<ApplicationErrorLog> ApplicationErrorLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Account>()
+                .HasOne(a => a.LinkedBooker)
+                .WithMany()
+                .HasForeignKey(a => a.LinkedBookerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Account>().HasIndex(a => a.LinkedBookerId);
+            modelBuilder.Entity<Account>().ToTable(t => t.HasCheckConstraint(
+                "CK_Accounts_LinkedBooker_AccountGroup",
+                "\"LinkedBookerId\" IS NULL OR \"AccountGroupId\" = 1"));
 
             // JournalEntries to Category relationship - use NO ACTION to break cascade path
             modelBuilder.Entity<JournalEntry>()
@@ -66,6 +81,17 @@ namespace PureLedger.Data
                 .WithMany()
                 .HasForeignKey(jv => jv.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<JournalVoucher>()
+                .Property(jv => jv.IsStockTransfer)
+                .HasDefaultValue(false);
+
+            // PostgreSQL has no SQL Server-style rowversion. Store an application-generated
+            // opaque token so aggregate mutations can reliably compare and rotate it.
+            modelBuilder.Entity<JournalVoucher>()
+                .Property(jv => jv.RowVersion)
+                .IsConcurrencyToken()
+                .ValueGeneratedNever();
 
             // JournalEntries to JournalVoucher relationship
             modelBuilder.Entity<JournalEntry>()
@@ -170,8 +196,56 @@ namespace PureLedger.Data
             // Seed AccountGroup data
             modelBuilder.Entity<AccountGroup>().HasData(
                 new AccountGroup { AccountGroupId = 1, AccountGroupName = "Account" },
-                new AccountGroup { AccountGroupId = 2, AccountGroupName = "Product" }
+                new AccountGroup { AccountGroupId = 2, AccountGroupName = "Product" },
+                new AccountGroup { AccountGroupId = 3, AccountGroupName = "Expense" }
             );
+
+            modelBuilder.Entity<ApprovalVoucherEntry>()
+                .HasOne(x => x.ApprovalVoucher)
+                .WithMany(x => x.Entries)
+                .HasForeignKey(x => x.ApprovalVoucherId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<JournalEntryInstrumentDetail>()
+                .HasOne(x => x.JournalEntry)
+                .WithOne(x => x.InstrumentDetail)
+                .HasForeignKey<JournalEntryInstrumentDetail>(x => x.JournalEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<JournalEntryInstrumentDetail>()
+                .Property(x => x.InstrumentType)
+                .HasConversion<string>()
+                .HasMaxLength(30);
+
+            modelBuilder.Entity<JournalEntryInstrumentDetail>()
+                .HasIndex(x => x.JournalEntryId)
+                .IsUnique();
+
+            modelBuilder.Entity<JournalEntryInstrumentDetail>()
+                .HasIndex(x => new { x.InstrumentType, x.NormalizedReferenceNumber });
+
+            modelBuilder.Entity<JournalEntryInstrumentDetail>()
+                .ToTable(t =>
+                {
+                    t.HasCheckConstraint(
+                        "CK_JournalEntryInstrumentDetails_InstrumentFields",
+                        "\"InstrumentType\" IN ('Cash','Cheque','BankTransfer','WireTransfer') AND ((\"InstrumentType\" = 'Cash' AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" <> 'Cash' AND \"ReferenceNumber\" IS NOT NULL AND \"NormalizedReferenceNumber\" IS NOT NULL AND length(\"ReferenceNumber\") > 0 AND \"ReferenceNumber\" = btrim(\"ReferenceNumber\") AND \"NormalizedReferenceNumber\" = upper(\"ReferenceNumber\") AND \"InstrumentDate\" IS NOT NULL))");
+                });
+
+            // Audit/master IDs intentionally remain scalar values. Historical approval
+            // rows must not prevent the existing user/account/category/JV delete flows.
+            modelBuilder.Entity<ApprovalVoucher>()
+                .HasIndex(x => x.JournalVoucherId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 'Pending' AND \"JournalVoucherId\" IS NOT NULL")
+                .HasDatabaseName("UX_ApprovalVouchers_OnePendingRevision");
+
+            modelBuilder.Entity<ApprovalVoucher>()
+                .HasIndex(x => new { x.Status, x.ProjectId, x.SubmittedDate });
+
+            modelBuilder.Entity<ApprovalVoucherEntry>()
+                .HasIndex(x => new { x.ApprovalVoucherId, x.LineNumber })
+                .IsUnique();
 
             // Configure JournalVoucherReference relationships
             modelBuilder.Entity<JournalVoucherReference>()
@@ -207,6 +281,34 @@ namespace PureLedger.Data
                 .WithMany()
                 .HasForeignKey(pcs => pcs.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProjectImg>()
+                .ToTable("ProjectImg")
+                .HasOne(img => img.Project)
+                .WithOne(project => project.ProjectImg)
+                .HasForeignKey<ProjectImg>(img => img.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ApprovalVoucher>()
+                .Property(x => x.VoucherType)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .HasDefaultValue(ApprovalVoucherType.ManualExpense);
+
+            modelBuilder.Entity<ApprovalVoucherEntry>()
+                .Property(x => x.InstrumentType)
+                .HasConversion<string>()
+                .HasMaxLength(30);
+
+            modelBuilder.Entity<ApprovalVoucherEntry>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_ApprovalVoucherEntries_InstrumentFields",
+                    "(\"InstrumentType\" IS NULL AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" = 'Cash' AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" IN ('Cheque','BankTransfer','WireTransfer') AND \"ReferenceNumber\" IS NOT NULL AND \"NormalizedReferenceNumber\" IS NOT NULL AND length(\"ReferenceNumber\") > 0 AND \"ReferenceNumber\" = btrim(\"ReferenceNumber\") AND \"NormalizedReferenceNumber\" = upper(\"ReferenceNumber\") AND \"InstrumentDate\" IS NOT NULL)"));
+
+            modelBuilder.Entity<ApprovalVoucher>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_ApprovalVouchers_PaymentReceiptFields",
+                    "(\"VoucherType\" = 'ManualExpense' AND \"RequestedEntryDate\" IS NULL AND \"SnapshotVersion\" IS NULL) OR (\"VoucherType\" = 'PaymentReceipt' AND \"RequestedEntryDate\" IS NOT NULL AND \"SnapshotVersion\" IS NOT NULL)"));
 
             modelBuilder.Entity<ProjectCartageSettings>()
                 .HasOne(pcs => pcs.ForExpenseCategory)
@@ -378,6 +480,30 @@ namespace PureLedger.Data
                 .HasIndex(a => a.SettingKey)
                 .IsUnique()
                 .HasDatabaseName("IX_AppSettings_SettingKey");
+
+            modelBuilder.Entity<ApplicationErrorLog>(entity =>
+            {
+                entity.ToTable("ApplicationErrorLogs");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.ErrorId).HasMaxLength(32).IsRequired();
+                entity.Property(e => e.CorrelationId).HasMaxLength(128).IsRequired();
+                entity.Property(e => e.Level).HasMaxLength(32).IsRequired();
+                entity.Property(e => e.Source).HasMaxLength(64).IsRequired();
+                entity.Property(e => e.ExceptionType).HasMaxLength(256);
+                entity.Property(e => e.Method).HasMaxLength(16);
+                entity.Property(e => e.Path).HasMaxLength(512);
+                entity.Property(e => e.Username).HasMaxLength(256);
+                entity.Property(e => e.IpAddress).HasMaxLength(128);
+                entity.Property(e => e.UserAgent).HasMaxLength(512);
+                entity.Property(e => e.ExtraPropertiesJson).HasColumnType("jsonb");
+
+                entity.HasIndex(e => e.ErrorId).IsUnique().HasDatabaseName("IX_ApplicationErrorLogs_ErrorId");
+                entity.HasIndex(e => e.CorrelationId).HasDatabaseName("IX_ApplicationErrorLogs_CorrelationId");
+                entity.HasIndex(e => e.CreatedAtUtc).HasDatabaseName("IX_ApplicationErrorLogs_CreatedAtUtc");
+                entity.HasIndex(e => new { e.Level, e.CreatedAtUtc }).HasDatabaseName("IX_ApplicationErrorLogs_Level_CreatedAtUtc");
+                entity.HasIndex(e => new { e.StatusCode, e.CreatedAtUtc }).HasDatabaseName("IX_ApplicationErrorLogs_StatusCode_CreatedAtUtc");
+            });
+
         }
     }
 }

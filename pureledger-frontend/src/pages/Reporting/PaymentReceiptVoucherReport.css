@@ -1,0 +1,87 @@
+.payment-receipt-report .report-parameters-card,
+.payment-receipt-report .report-results-card {
+    overflow: visible;
+}
+
+.payment-receipt-report .report-parameters-card .form-label {
+    margin-bottom: 0.35rem;
+}
+
+.payment-receipt-report .report-actions .btn {
+    white-space: nowrap;
+}
+
+.payment-receipt-report .pr-report-table-wrap {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding-bottom: 0.25rem;
+}
+
+#paymentReceiptVoucherReportTable {
+    min-width: 1120px;
+}
+
+#paymentReceiptVoucherReportTable th {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+#paymentReceiptVoucherReportTable .voucher-column {
+    min-width: 95px;
+}
+
+#paymentReceiptVoucherReportTable .date-column {
+    min-width: 110px;
+}
+
+#paymentReceiptVoucherReportTable .account-column {
+    min-width: 150px;
+}
+
+#paymentReceiptVoucherReportTable .description-column {
+    min-width: 230px;
+}
+
+#paymentReceiptVoucherReportTable .description-cell {
+    max-width: 320px;
+    min-width: 230px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+#paymentReceiptVoucherReportTable .instrument-column {
+    min-width: 125px;
+}
+
+#paymentReceiptVoucherReportTable .reference-column {
+    min-width: 180px;
+}
+
+#paymentReceiptVoucherReportTable .money-column {
+    min-width: 125px;
+}
+
+#paymentReceiptVoucherReportTable .voucher-cell {
+    background: var(--bs-body-bg, #fff);
+    vertical-align: middle;
+}
+
+#paymentReceiptVoucherReportTable .voucher-link {
+    display: inline-block;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#paymentReceiptVoucherReportTable .filter-match-row > td {
+    --bs-table-bg-state: color-mix(in srgb, var(--warning-soft) 72%, transparent);
+}
+
+@media (max-width: 575.98px) {
+    .payment-receipt-report .report-actions {
+        width: 100%;
+    }
+
+    .payment-receipt-report .report-actions .btn {
+        flex: 1 1 auto;
+    }
+}

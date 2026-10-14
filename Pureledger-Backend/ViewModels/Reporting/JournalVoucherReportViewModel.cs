@@ -19,6 +19,7 @@ namespace PureLedger.ViewModels.Reporting
 
         //Particular Document Detail
         public DateOnly? DueDate { get; set; }
+        public string? Station { get; set; }
         public string? Adda { get; set; }
         public decimal? Builty { get; set; }
         public string? Remarks { get; set; }
@@ -47,6 +48,14 @@ namespace PureLedger.ViewModels.Reporting
         public string? AccountName { get; set; }
         public string? AuthorizedBy { get; set; }
         public string? ReceivedBy { get; set; }
+        public DateOnly? ApprovalSubmittedDate { get; set; }
+        public DateOnly? ApprovalDecisionDate { get; set; }
+        public string? SubmittedBy { get; set; }
+        public string? ApprovedBy { get; set; }
+        public bool HadDuplicateWarningsAtDecision { get; set; }
+        public decimal TotalDebit => Entries.Sum(x => x.Debit);
+        public decimal TotalCredit => Entries.Sum(x => x.Credit);
+        public decimal Balance => TotalDebit - TotalCredit;
 
         public JournalEntry? CartageEntry { get; set; }
     }

@@ -3,12 +3,6 @@ using System.Collections.Generic;
 
 namespace PureLedger.ViewModels.Reporting
 {
-    public class MasterReportPageViewModel
-    {
-        public List<ProjectViewModel> Projects { get; set; } = new();
-        public List<CategoryViewModel> Categories { get; set; } = new();
-    }
-
     public class MasterReportRequest
     {
         public DateOnly? StartDate { get; set; }

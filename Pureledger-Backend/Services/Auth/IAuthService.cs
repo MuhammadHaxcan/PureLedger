@@ -17,24 +17,20 @@ namespace PureLedger.Services.Auth
     /// </summary>
     public interface IAuthService
     {
-        // User Authentication and Validation
-        Task<bool> ValidateUserAsync(LoginViewModel model);
+        Task<User?> AuthenticateUserAsync(LoginViewModel model);
         Task<User?> GetUserByUsernameAsync(string username);
         Task<User?> GetUserByIdAsync(int userId);
-        Task<bool> CheckPasswordAsync(User user, string password);
+        bool CheckPassword(User user, string password);
         Task UpdateLastLoginAsync(User user);
 
         // JWT Token Generation and Validation
         string GenerateToken(int userId, string username, string fullName, bool isAdmin, string subroute);
         string GenerateRefreshToken();
         ClaimsPrincipal? ValidateToken(string token);
-        ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 
         // Refresh Token Management
         Task<RefreshToken> CreateRefreshTokenAsync(int userId, string token);
         Task<RefreshToken?> GetRefreshTokenAsync(string token);
-        Task<bool> ValidateRefreshTokenAsync(string token);
-        Task<RefreshToken?> RefreshAccessTokenAsync(string accessToken, string refreshToken);
         Task<bool> RevokeRefreshTokenAsync(string token);
         Task<bool> RevokeAllUserTokensAsync(int userId);
 
@@ -51,7 +47,6 @@ namespace PureLedger.Services.Auth
         Task<bool> CreateUserAsync(UserViewModel model);
         Task<bool> UpdateUserAsync(UserViewModel model);
         Task<bool> DeleteUserAsync(int userId);
-        Task<bool> IsSubrouteAdminAsync(string username, string subroute);
         Task<List<User>> GetUsersBySubrouteAsync(string subroute);
 
         // Project and Settings Management

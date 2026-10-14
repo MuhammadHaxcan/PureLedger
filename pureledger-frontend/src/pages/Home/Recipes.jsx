@@ -36,7 +36,7 @@ const Recipes = () => {
             if (response.data.success && response.data.projects) {
                 setProjects(response.data.projects);
             }
-        } catch (err) {
+        } catch {
             setError('Failed to load projects');
         } finally {
             setLoading(false);
@@ -85,11 +85,6 @@ const Recipes = () => {
     return (
         <div className="container-fluid">
             <div className="card shadow mb-4">
-                <div className="card-header py-3">
-                    <h6 className="m-0 font-weight-bold text-primary">
-                        <i className="fas fa-book-open me-2"></i>Recipes
-                    </h6>
-                </div>
                 <div className="card-body">
                     <div className="row mb-4">
                         <div className="col-md-6">

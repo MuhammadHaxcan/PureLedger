@@ -19,6 +19,7 @@ namespace PureLedger.Repositories
             return await _context.Accounts
                 .AsNoTracking()
                 .Include(a => a.AccountData)
+                .Include(a => a.LinkedBooker)
                 .Include(a => a.ProductData)
                 .Include(a => a.Category)
                     .ThenInclude(c => c.Project)
@@ -52,36 +53,27 @@ namespace PureLedger.Repositories
         {
             return await _context.Accounts
                 .Include(a => a.AccountData)
+                .Include(a => a.LinkedBooker)
                 .Include(a => a.ProductData)
                 .FirstOrDefaultAsync(a => a.AccountId == id);
         }
 
-        public async Task<Account> AddAsync(Account account)
+        public Account Add(Account account)
         {
             _context.Accounts.Add(account);
-            await _context.SaveChangesAsync();
             return account;
         }
 
-        public async Task<Account> UpdateAsync(Account account)
+        public Account Update(Account account)
         {
             _context.Accounts.Update(account);
-            await _context.SaveChangesAsync();
             return account;
         }
 
-        public async Task<bool> DeleteAsync(Account account)
+        public bool Delete(Account account)
         {
-            try
-            {
-                _context.Accounts.Remove(account);
-                await _context.SaveChangesAsync();
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            _context.Accounts.Remove(account);
+            return true;
         }
 
         public async Task<object?> GetProductDetailsAsync(int accountId)
@@ -113,16 +105,11 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync(a => a.AccountId == id);
         }
 
-        public async Task<List<Account>> GetByCategoryIdWithCategoryAsync(int categoryId)
-        {
-            return await _context.Accounts
-                .AsNoTracking()
-                .Include(a => a.Category)
-                .Where(a => a.CategoryId == categoryId)
-                .ToListAsync();
-        }
-
         // New method to check if account has associated journal entries
+        public Task<List<int>> GetPendingApprovalIdsAsync(int accountId) => _context.ApprovalVoucherEntries
+            .Where(e => e.AccountId == accountId && e.ApprovalVoucher.Status == ApprovalStatuses.Pending)
+            .Select(e => e.ApprovalVoucherId).Distinct().OrderBy(id => id).ToListAsync();
+
         public async Task<List<int>> GetAssociatedJournalVoucherIds(int accountId)
         {
             return await _context.JournalEntries
@@ -132,34 +119,10 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        // New optimized method to get accounts with entries in a specific project
-        public async Task<List<Account>> GetAccountsWithEntriesInProjectAsync(int projectId)
-        {
-            // This query finds all accounts that have at least one journal entry 
-            // in a voucher belonging to the specified project
-            var accountIds = await _context.JournalEntries
-                .Where(je => je.JournalVoucher.ProjectId == projectId && 
-                            je.JournalVoucher.IsCompleted)
-                .Select(je => je.AccountId)
-                .Distinct()
-                .ToListAsync();
-
-            // Then fetch those accounts with their categories in a single query
-            return await _context.Accounts
-                .Include(a => a.Category)
-                .Where(a => accountIds.Contains(a.AccountId))
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<Account>> GetAccountsByCategoryAndProjectAsync(int categoryId, int projectId)
-        {
-            var accounts = await GetByCategoryIdAsync(categoryId);
-            return accounts.Where(a => a.Category?.ProjectId == projectId);
-        }
-
         public async Task<List<Account>> GetByProjectAsync(int projectId, int? categoryId = null)
         {
             var query = _context.Accounts
+                .Include(a => a.LinkedBooker)
                 .Include(a => a.Category)
                     .ThenInclude(c => c.Project)
                 .Include(a => a.AccountGroup)
@@ -185,11 +148,7 @@ namespace PureLedger.Repositories
                     && (!excludeId.HasValue || a.AccountId != excludeId.Value));
         }
 
-        public async Task<bool> HasAssociatedJournalEntriesAsync(int accountId)
-        {
-            return await _context.JournalEntries
-                .AsNoTracking()
-                .AnyAsync(je => je.AccountId == accountId);
-        }
+        public Task<bool> HasLinkedBookerAsync(int bookerId) => _context.Accounts
+            .AnyAsync(a => a.LinkedBookerId == bookerId);
     }
 }

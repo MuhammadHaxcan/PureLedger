@@ -24,17 +24,15 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync(e => e.JournalEntryId == id);
         }
 
-        public async Task<JournalEntry> AddAsync(JournalEntry entry)
+        public JournalEntry Add(JournalEntry entry)
         {
             _context.JournalEntries.Add(entry);
-            await _context.SaveChangesAsync();
             return entry;
         }
 
-        public async Task<JournalEntry> UpdateAsync(JournalEntry entry)
+        public JournalEntry Update(JournalEntry entry)
         {
             _context.JournalEntries.Update(entry);
-            await _context.SaveChangesAsync();
             return entry;
         }
 
@@ -66,9 +64,12 @@ namespace PureLedger.Repositories
             var entry = await _context.JournalEntries.FindAsync(entryId);
             if (entry == null)
                 return false;
+            if (await _context.JournalEntryInstrumentDetails.AsNoTracking()
+                    .AnyAsync(x => x.JournalEntry.JournalVoucherId == entry.JournalVoucherId))
+                throw new InvalidOperationException(
+                    "Payment & Receipt entries cannot be deleted through the generic entry workflow.");
 
             _context.JournalEntries.Remove(entry);
-            await _context.SaveChangesAsync();
             return true;
         }
 
@@ -134,11 +135,11 @@ namespace PureLedger.Repositories
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
-            // Filter by location - only include entries that have a DCEntry with matching LocationId
             if (locationId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int takeCount = page * pageSize;
@@ -201,6 +202,7 @@ namespace PureLedger.Repositories
                     .ThenInclude(jv => jv.Booker)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
+                .Include(je => je.InstrumentDetail)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     !je.JournalVoucher.IsBaseVoucher &&
@@ -231,7 +233,8 @@ namespace PureLedger.Repositories
             if (locationId.HasValue)
             {
                 query = query.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int totalCount = await query.CountAsync();
@@ -259,7 +262,9 @@ namespace PureLedger.Repositories
 
             var results = pagedResults.Select(je => (
                 Entry: je,
-                DCEntry: dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
+                DCEntry: je.JournalVoucher.IsStockTransfer && je.Account?.AccountGroupId == 1 && je.Quantity == 0
+                    ? null
+                    : dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
             )).ToList();
 
             return (results, totalCount);
@@ -285,6 +290,7 @@ namespace PureLedger.Repositories
                     .ThenInclude(jv => jv.Booker)
                 .Include(je => je.Account)
                 .Include(je => je.Category)
+                .Include(je => je.InstrumentDetail)
                 .Where(je =>
                     je.JournalVoucher.IsCompleted &&
                     !je.JournalVoucher.IsBaseVoucher &&
@@ -311,7 +317,8 @@ namespace PureLedger.Repositories
             if (locationId.HasValue)
             {
                 query = query.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int totalCount = await query.CountAsync();
@@ -338,7 +345,9 @@ namespace PureLedger.Repositories
 
             var results = pagedResults.Select(je => (
                 Entry: je,
-                DCEntry: dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
+                DCEntry: je.JournalVoucher.IsStockTransfer && je.Account?.AccountGroupId == 1 && je.Quantity == 0
+                    ? null
+                    : dcEntryLookup.TryGetValue(je.JournalEntryId, out var dce) ? dce : null
             )).ToList();
 
             return (results, totalCount);
@@ -417,7 +426,8 @@ namespace PureLedger.Repositories
             if (locationId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int takeCount = page * pageSize;
@@ -483,11 +493,11 @@ namespace PureLedger.Repositories
                 baseQuery = baseQuery.Where(je => je.JournalVoucher.BookerId == bookerId.Value);
             }
 
-            // Filter by location - only include entries that have a DCEntry with matching LocationId
             if (locationId.HasValue)
             {
                 baseQuery = baseQuery.Where(je => _context.DeliveryChallanEntries
-                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
+                    .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value) &&
+                    !(je.JournalVoucher.IsStockTransfer && je.Account.AccountGroupId == 1 && je.Quantity == 0));
             }
 
             int takeCount = page * pageSize;
@@ -578,73 +588,141 @@ namespace PureLedger.Repositories
             return (totals?.Debit ?? 0m, totals?.Credit ?? 0m);
         }
 
-        public async Task<List<(JournalEntry Entry, DeliveryChallanEntry? DCEntry)>> GetAllEntriesForProductReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int? locationId)
+        public async Task<List<ProductTransitMovementDto>> GetProductTransitMovementsAsync(
+            int projectId, DateOnly endDate, int? categoryId = null, int? productId = null)
         {
-
-            var query = _context.JournalEntries
-                .AsNoTracking()
-                .Include(je => je.JournalVoucher)
-                .Include(je => je.Account)
-                .Include(je => je.Category)
-                .Where(je =>
-                    je.JournalVoucher.ProjectId == projectId &&
-                    je.JournalVoucher.IsCompleted &&
-                    !je.JournalVoucher.IsBaseVoucher &&
-                    je.IsProcessed &&
-                    je.Account.AccountGroupId == 2 &&
-                    je.JournalVoucher.EntryDate <= endDate);
-
-            if (startDate != DateOnly.MinValue)
-            {
-                query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
-            }
-
+            // Product credits identify the dispatch lines. The transit account holds
+            // money, but no product quantity, so it cannot supply this calculation.
+            var dispatchQuery = _context.JournalEntries.AsNoTracking().Where(entry =>
+                entry.JournalVoucher != null && entry.Account != null &&
+                entry.JournalVoucher.ProjectId == projectId &&
+                entry.JournalVoucher.IsStockTransfer && entry.JournalVoucher.IsCompleted &&
+                !entry.JournalVoucher.IsBaseVoucher && entry.IsProcessed &&
+                entry.JournalVoucher.EntryDate <= endDate &&
+                entry.Account.AccountGroupId == 2 && entry.Quantity > 0 &&
+                entry.Credit > 0 && entry.Debit == 0);
             if (categoryId.HasValue)
-            {
-                query = query.Where(je => je.CategoryId == categoryId.Value);
-            }
+                dispatchQuery = dispatchQuery.Where(entry => entry.CategoryId == categoryId.Value);
+            if (productId.HasValue)
+                dispatchQuery = dispatchQuery.Where(entry => entry.AccountId == productId.Value);
 
-            if (accountId.HasValue)
-            {
-                query = query.Where(je => je.AccountId == accountId.Value);
-            }
+            var dispatches = await dispatchQuery.Select(entry => new {
+                entry.JournalEntryId, entry.JournalVoucherId, entry.AccountId,
+                entry.Quantity, entry.JournalVoucher!.EntryDate
+            }).ToListAsync();
+            if (dispatches.Count == 0)
+                return new List<ProductTransitMovementDto>();
 
-            query = query.OrderBy(je => je.JournalVoucher.EntryDate)
-                        .ThenBy(je => je.JournalVoucherId)
-                        .ThenBy(je => je.JournalEntryId);
-
-            var entriesWithDC = await query
-                .GroupJoin(
-                    _context.DeliveryChallanEntries.Include(dce => dce.Location),
-                    je => je.JournalEntryId,
-                    dce => dce.JournalEntryId,
-                    (je, dces) => new { JournalEntry = je, DCEntries = dces })
-                .SelectMany(
-                    x => x.DCEntries.DefaultIfEmpty(),
-                    (x, dce) => new { JournalEntry = x.JournalEntry, DCEntry = dce })
+            var dispatchIds = dispatches.Select(x => x.JournalVoucherId).Distinct().ToList();
+            var transitEntries = await _context.JournalEntries.AsNoTracking()
+                .Where(entry => dispatchIds.Contains(entry.JournalVoucherId) &&
+                                entry.Account != null && entry.Account.AccountGroupId == 1 &&
+                                entry.Quantity == 0 && entry.Debit > 0 && entry.Credit == 0)
+                .Select(entry => new { entry.JournalEntryId, entry.JournalVoucherId })
                 .ToListAsync();
+            var assignmentEntryIds = dispatches.Select(x => x.JournalEntryId)
+                .Concat(transitEntries.Select(x => x.JournalEntryId)).ToList();
+            var assignments = await _context.DeliveryChallanEntries.AsNoTracking()
+                .Where(x => assignmentEntryIds.Contains(x.JournalEntryId))
+                .Select(x => new { x.JournalEntryId, x.LocationId, Name = x.Location!.LocationName })
+                .ToListAsync();
+            var assignmentsByEntry = assignments.GroupBy(x => x.JournalEntryId)
+                .ToDictionary(x => x.Key, x => x.ToList());
+            var transitByDispatch = transitEntries.GroupBy(x => x.JournalVoucherId)
+                .ToDictionary(x => x.Key, x => x.ToList());
 
-            if (locationId.HasValue)
+            var outcomes = await (
+                from reference in _context.JournalVoucherReferences.AsNoTracking()
+                join entry in _context.JournalEntries.AsNoTracking()
+                    on reference.ReferencedVoucherId equals entry.JournalVoucherId
+                where dispatchIds.Contains(reference.MainVoucherId) &&
+                      (reference.ReferenceType == "StockTransferReceipt" ||
+                       reference.ReferenceType == "StockTransferCancellation") &&
+                      entry.JournalVoucher != null && entry.Account != null &&
+                      entry.JournalVoucher.ProjectId == projectId &&
+                      entry.JournalVoucher.IsStockTransfer && entry.JournalVoucher.IsCompleted &&
+                      !entry.JournalVoucher.IsBaseVoucher && entry.IsProcessed &&
+                      entry.JournalVoucher.EntryDate <= endDate &&
+                      entry.Account.AccountGroupId == 2 && entry.Quantity > 0 &&
+                      entry.Debit > 0 && entry.Credit == 0
+                select new { reference.MainVoucherId, entry.AccountId, entry.Quantity })
+                .ToListAsync();
+            var outcomesByLine = outcomes.GroupBy(x => (x.MainVoucherId, x.AccountId))
+                .ToDictionary(x => x.Key, x => x.ToList());
+
+            var result = new List<ProductTransitMovementDto>();
+            foreach (var dispatch in dispatches)
             {
-                entriesWithDC = entriesWithDC
-                    .Where(x => x.DCEntry != null && x.DCEntry.LocationId == locationId.Value)
-                    .ToList();
-            }
+                var lineOutcomes = outcomesByLine.GetValueOrDefault((dispatch.JournalVoucherId, dispatch.AccountId));
+                if (lineOutcomes is { Count: > 1 } ||
+                    lineOutcomes is { Count: 1 } && lineOutcomes[0].Quantity != dispatch.Quantity)
+                    throw new InvalidOperationException("A stock-transfer product has invalid receipt or cancellation quantities.");
+                if (lineOutcomes is { Count: 1 })
+                    continue;
 
-            var results = entriesWithDC.Select(x => (x.JournalEntry, x.DCEntry)).ToList();
-            return results;
+                var sourceAssignments = assignmentsByEntry.GetValueOrDefault(dispatch.JournalEntryId);
+                var markers = transitByDispatch.GetValueOrDefault(dispatch.JournalVoucherId);
+                var destinationAssignments = markers is { Count: 1 }
+                    ? assignmentsByEntry.GetValueOrDefault(markers[0].JournalEntryId)
+                    : null;
+                var source = sourceAssignments is { Count: 1 } ? sourceAssignments[0] : null;
+                var destination = destinationAssignments is { Count: 1 } ? destinationAssignments[0] : null;
+                result.Add(new ProductTransitMovementDto {
+                    ProductId = dispatch.AccountId,
+                    DispatchJournalVoucherId = dispatch.JournalVoucherId,
+                    DispatchDate = dispatch.EntryDate,
+                    SourceLocationId = source?.LocationId,
+                    SourceLocationName = source?.Name ?? "Unknown source",
+                    DestinationLocationId = destination?.LocationId,
+                    DestinationLocationName = destination?.Name ?? "Unknown destination",
+                    Quantity = dispatch.Quantity,
+                    HasRouteIssue = source == null || destination == null ||
+                                    source.LocationId == destination.LocationId
+                });
+            }
+            return result;
+        }
+
+        public async Task<List<ProductStockLocationMovementDto>> GetProductStockLocationMovementsAsync(
+            int projectId,
+            int productId,
+            DateOnly endDate)
+        {
+            var query =
+                from entry in _context.JournalEntries.AsNoTracking()
+                join assignment in _context.DeliveryChallanEntries.AsNoTracking()
+                    on entry.JournalEntryId equals assignment.JournalEntryId into assignments
+                from assignment in assignments.DefaultIfEmpty()
+                join location in _context.Locations.AsNoTracking()
+                    on assignment!.LocationId equals location.LocationId into assignedLocations
+                from location in assignedLocations.DefaultIfEmpty()
+                where entry.JournalVoucher != null &&
+                      entry.Account != null &&
+                      entry.JournalVoucher!.ProjectId == projectId &&
+                      entry.AccountId == productId &&
+                      entry.Account!.AccountGroupId == 2 &&
+                      entry.JournalVoucher!.IsCompleted &&
+                      !entry.JournalVoucher!.IsBaseVoucher &&
+                      entry.IsProcessed &&
+                      entry.JournalVoucher!.EntryDate <= endDate
+                select new ProductStockLocationMovementDto
+                {
+                    JournalEntryId = entry.JournalEntryId,
+                    LocationId = assignment == null ? null : assignment.LocationId,
+                    LocationName = location == null ? null : location.LocationName,
+                    Quantity = entry.Quantity,
+                    Debit = entry.Debit,
+                    Credit = entry.Credit
+                };
+
+            return await query.ToListAsync();
         }
 
         public async Task<(List<AccountReportViewModels> Entries, int TotalCount)> GetEntriesForAccountReportAsync(
             int projectId,
             int? categoryId,
             int? accountId,
+            int? bookerId,
             int page,
             int pageSize)
         {
@@ -669,6 +747,13 @@ namespace PureLedger.Repositories
                 query = query.Where(je => je.AccountId == accountId.Value);
             }
 
+            if (bookerId.HasValue)
+            {
+                query = query.Where(je => je.Account.AccountGroupId == 1 &&
+                    je.Account.LinkedBookerId == bookerId.Value);
+            }
+
+            // Select assigned accounts, then include their full eligible transaction history.
             // Group by account + project + category id so repository returns IDs directly
             var groupedQuery = query
                 .GroupBy(je => new {
@@ -713,24 +798,12 @@ namespace PureLedger.Repositories
             // Base query conditions (common to both queries)
             IQueryable<JournalEntry> BuildBaseQuery(bool includeCreditableDateFilter)
             {
-                var baseQuery = _context.JournalEntries
-                    .AsNoTracking()
-                    .Include(je => je.JournalVoucher)
-                    .Include(je => je.Account)
-                    .Where(je =>
-                        accountIds.Contains(je.AccountId) &&
-                        je.CategoryId == categoryId &&
-                        je.JournalVoucher.IsCompleted &&
-                        !je.JournalVoucher.IsBaseVoucher);
+                var baseQuery = AgingReportQuery.EligibleEntries(_context, categoryId, projectId)
+                    .Where(je => accountIds.Contains(je.AccountId));
 
                 if (includeCreditableDateFilter)
                 {
                     baseQuery = baseQuery.Where(je => je.JournalVoucher.CreditableDate <= referenceDate);
-                }
-
-                if (projectId.HasValue)
-                {
-                    baseQuery = baseQuery.Where(je => je.JournalVoucher.ProjectId == projectId.Value);
                 }
 
                 return baseQuery;
@@ -763,6 +836,7 @@ namespace PureLedger.Repositories
             // Get paginated account list
             var pagedAccountList = await allAccountsQuery
                 .OrderBy(g => g.AccountName)
+                .ThenBy(g => g.AccountId)
                 .Skip(page * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -795,68 +869,6 @@ namespace PureLedger.Repositories
 
             return (agingReportEntries, totalCount);
         }
-
-        public async Task<(List<int> ProductIds, int TotalCount)> GetProductIdsForReportAsync(
-    DateOnly startDate,
-    DateOnly endDate,
-    int projectId,
-    int? categoryId,
-    int? accountId,
-    int? locationId,
-    int page,
-    int pageSize)
-{
-    var query = _context.JournalEntries
-        .AsNoTracking()
-        .Include(je => je.JournalVoucher)
-        .Include(je => je.Account)
-        .Where(je =>
-            je.JournalVoucher.ProjectId == projectId &&
-            je.JournalVoucher.IsCompleted &&
-            !je.JournalVoucher.IsBaseVoucher &&
-            je.IsProcessed &&
-            je.Account.AccountGroupId == 2 &&
-            je.JournalVoucher.EntryDate <= endDate);
-
-    if (startDate != DateOnly.MinValue)
-    {
-        query = query.Where(je => je.JournalVoucher.EntryDate >= startDate);
-    }
-
-    if (categoryId.HasValue)
-    {
-        query = query.Where(je => je.CategoryId == categoryId.Value);
-    }
-
-    if (accountId.HasValue)
-    {
-        query = query.Where(je => je.AccountId == accountId.Value);
-    }
-
-    // Apply location filter using SQL subquery instead of loading IDs into memory
-    if (locationId.HasValue)
-    {
-        query = query.Where(je => _context.DeliveryChallanEntries
-            .Any(dce => dce.JournalEntryId == je.JournalEntryId && dce.LocationId == locationId.Value));
-    }
-
-    // Get distinct product IDs
-    var distinctProductIds = await query
-        .Select(je => je.AccountId)
-        .Distinct()
-        .OrderBy(id => id)
-        .ToListAsync();
-
-    int totalCount = distinctProductIds.Count;
-
-    // Apply pagination to product IDs
-    var pagedProductIds = distinctProductIds
-        .Skip(page * pageSize)
-        .Take(pageSize)
-        .ToList();
-
-    return (pagedProductIds, totalCount);
-}
 
         /// <summary>
         /// Batch fetch entries for multiple voucher IDs and a specific account - fixes N+1 query issue

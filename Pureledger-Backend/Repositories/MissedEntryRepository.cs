@@ -16,10 +16,9 @@ namespace PureLedger.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<MissedEntry> AddAsync(MissedEntry entry)
+        public MissedEntry Add(MissedEntry entry)
         {
-            var result = await _dbContext.MissedEntries.AddAsync(entry);
-            return result.Entity;
+            return _dbContext.MissedEntries.Add(entry).Entity;
         }
 
         public async Task<List<MissedEntry>> GetByCustomerAccountIdAsync(int customerAccountId)
@@ -31,18 +30,6 @@ namespace PureLedger.Repositories
                     .ThenInclude(a => a!.ProductData)
                 .Include(m => m.Project)
                 .Where(m => m.CustomerAccountId == customerAccountId)
-                .OrderByDescending(m => m.MissedDate)
-                .ToListAsync();
-        }
-
-        public async Task<List<MissedEntry>> GetByProductAccountIdAsync(int productAccountId)
-        {
-            return await _dbContext.MissedEntries
-                .AsNoTracking()
-                .Include(m => m.CustomerAccount)
-                .Include(m => m.ProductAccount)
-                .Include(m => m.Project)
-                .Where(m => m.ProductAccountId == productAccountId)
                 .OrderByDescending(m => m.MissedDate)
                 .ToListAsync();
         }

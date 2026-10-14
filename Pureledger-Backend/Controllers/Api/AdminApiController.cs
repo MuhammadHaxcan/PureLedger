@@ -23,10 +23,10 @@ namespace PureLedger.Controllers.Api
         // Map of controllers and their actions for access control
         private readonly Dictionary<string, List<string>> _controllerActions = new()
         {
-            ["Home"] = new() { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" },
+            ["Home"] = new() { "Entry", "PaymentAndReceipt", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes", "PendingApprovals" },
             ["MetaData"] = new() { "Projects", "Categories", "Accounts", "Locations", "Bookers" },
-            ["Reporting"] = new() { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" },
-            ["DeliveryChallan"] = new() { "ProcessDC" }
+            ["Reporting"] = new() { "SingleDoc", "PaymentReceiptVoucherReport", "AgingReport", "AccountReport", "MasterReport", "UserReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" },
+            ["DeliveryChallan"] = new() { "ProcessDC", "StockTransfers" }
         };
 
         public AdminApiController(
@@ -247,7 +247,7 @@ namespace PureLedger.Controllers.Api
                     });
                 }
 
-                return BadRequest(new { success = false, message = "Error creating user. Username may already exist." });
+                return BadRequest(new { success = false, message = "Error creating user. Username or email may already be in use." });
             }
             catch (Exception ex)
             {
@@ -345,7 +345,7 @@ namespace PureLedger.Controllers.Api
                     });
                 }
 
-                return BadRequest(new { success = false, message = "Error updating user" });
+                return BadRequest(new { success = false, message = "Error updating user. Email may already be in use." });
             }
             catch (Exception ex)
             {
@@ -464,7 +464,7 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, message = "Profile updated successfully", data = model });
                 }
 
-                return BadRequest(new { success = false, message = "Error updating profile" });
+                return BadRequest(new { success = false, message = "Error updating profile. Email may already be in use." });
             }
             catch (Exception ex)
             {
@@ -488,7 +488,6 @@ namespace PureLedger.Controllers.Api
                     settings = await _authService.GetProjectCartageSettingsAsync(projectId.Value);
                 }
 
-                // ProjectImage is already stored as base64 string, return directly
                 object settingsData;
                 if (settings != null)
                 {
@@ -497,8 +496,7 @@ namespace PureLedger.Controllers.Api
                         id = settings.Id,
                         projectId = settings.ProjectId,
                         forExpenseCategoryId = settings.ForExpenseCategoryId ?? (int?)null,
-                        cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
-                        projectImage = settings.ProjectImage // Already base64 string
+                        cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null
                     };
                 }
                 else
@@ -537,8 +535,7 @@ namespace PureLedger.Controllers.Api
                     Id = viewModel.Id,
                     ProjectId = viewModel.ProjectId,
                     ForExpenseCategoryId = viewModel.ForExpenseCategoryId,
-                    CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId,
-                    ProjectImage = viewModel.ProjectImageBase64
+                    CartageTransporterCategoryId = viewModel.CartageTransporterCategoryId
                 };
 
                 var validationResults = new List<ValidationResult>();
@@ -557,7 +554,7 @@ namespace PureLedger.Controllers.Api
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error saving project cartage settings: {Message}", ex.Message);
-                return StatusCode(500, new { success = false, message = $"Error saving settings: {ex.Message}" });
+                return StatusCode(500, new { success = false, message = "Error saving settings" });
             }
         }
 
@@ -629,7 +626,6 @@ namespace PureLedger.Controllers.Api
                     return Ok(new { success = true, data = (object?)null });
                 }
 
-                // ProjectImage is already stored as base64 string, return directly
                 return Ok(new
                 {
                     success = true,
@@ -638,8 +634,7 @@ namespace PureLedger.Controllers.Api
                         id = settings.Id,
                         projectId = settings.ProjectId,
                         forExpenseCategoryId = settings.ForExpenseCategoryId ?? (int?)null,
-                        cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null,
-                        projectImage = settings.ProjectImage // Already base64 string
+                        cartageTransporterCategoryId = settings.CartageTransporterCategoryId ?? (int?)null
                     }
                 });
             }

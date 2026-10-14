@@ -99,17 +99,9 @@ namespace PureLedger.Controllers.Api {
                 return BadRequest(new { success = false, message = "Invalid input", errors = ModelState });
             }
 
-            var normalizedUsername = model.Username?.Trim().ToLowerInvariant();
-            model.Username = normalizedUsername;
-
-            var isValid = await _authService.ValidateUserAsync(model);
-            if (!isValid) {
-                return Unauthorized(new { success = false, message = "Invalid username or password" });
-            }
-
-            var user = await _authService.GetUserByUsernameAsync(model.Username);
+            var user = await _authService.AuthenticateUserAsync(model);
             if (user == null) {
-                return Unauthorized(new { success = false, message = "User not found" });
+                return Unauthorized(new { success = false, message = "Invalid username/email or password" });
             }
 
             // Generate JWT access token
@@ -134,7 +126,7 @@ namespace PureLedger.Controllers.Api {
             var xsrfToken = ValidateXsrfTokenAttribute.GenerateToken();
             ValidateXsrfTokenAttribute.SetXsrfCookie(HttpContext, xsrfToken);
 
-            _logger.LogInformation($"User {model.Username} logged in via API");
+            _logger.LogInformation("User {UserId} ({Username}) logged in via API", user.UserId, user.Username);
 
             // Return user info without tokens (tokens are in HttpOnly cookies)
             return Ok(new {
@@ -307,26 +299,20 @@ namespace PureLedger.Controllers.Api {
 
             var isAdmin = User.IsInRole("Admin");
 
-            // Optimized: Run all async calls in parallel
-            var controllerAccessTask = _authService.GetUserControllerAccessAsync(userId);
-            var actionAccessTask = _authService.GetUserActionAccessAsync(userId);
-            var accessibleProjectsTask = _authService.GetUserProjectsAsync(userId);
-
-            await Task.WhenAll(controllerAccessTask, actionAccessTask, accessibleProjectsTask);
-
-            var controllerAccess = await controllerAccessTask;
-            var actionAccess = await actionAccessTask;
-            var accessibleProjects = await accessibleProjectsTask;
+            // Sequential: these share one scoped DbContext, which cannot run concurrent operations.
+            var controllerAccess = await _authService.GetUserControllerAccessAsync(userId);
+            var actionAccess = await _authService.GetUserActionAccessAsync(userId);
+            var accessibleProjects = await _authService.GetUserProjectsAsync(userId);
 
             // Build navigation structure similar to NavigationMenuViewComponent
             var navigationMap = new List<object>();
 
             // Define controller structure with icons
             var controllerDefinitions = new Dictionary<string, (string title, string icon, string[] actions)> {
-                ["Home"] = ("Home", "fas fa-home", new[] { "Entry", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes" }),
+                ["Home"] = ("Home", "fas fa-home", new[] { "Entry", "PaymentAndReceipt", "VoucherEntry", "ModifiedEntries", "BaseVouchers", "Recipes", "PendingApprovals" }),
                 ["MetaData"] = ("Meta Data", "fas fa-database", new[] { "Projects", "Categories", "Accounts", "Locations", "Bookers" }),
-                ["Reporting"] = ("Reporting", "fas fa-chart-bar", new[] { "SingleDoc", "AgingReport", "AccountReport", "MasterReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" }),
-                ["DeliveryChallan"] = ("Delivery Challan", "fas fa-truck", new[] { "ProcessDC" })
+                ["Reporting"] = ("Reporting", "fas fa-chart-bar", new[] { "SingleDoc", "PaymentReceiptVoucherReport", "AgingReport", "AccountReport", "MasterReport", "ProductReport", "MissedEntriesReport", "OldMasterReport" }),
+                ["DeliveryChallan"] = ("Delivery Challan", "fas fa-truck", new[] { "ProcessDC", "StockTransfers" })
             };
 
             foreach (var kvp in controllerDefinitions) {
@@ -425,10 +411,12 @@ namespace PureLedger.Controllers.Api {
             var iconMap = new Dictionary<string, Dictionary<string, string>> {
                 ["Home"] = new Dictionary<string, string> {
                     ["Entry"] = "fas fa-plus-circle",
+                    ["PaymentAndReceipt"] = "fas fa-money-check-alt",
                     ["VoucherEntry"] = "fas fa-file-invoice",
                     ["ModifiedEntries"] = "fas fa-history",
                     ["BaseVouchers"] = "fas fa-layer-group",
-                    ["Recipes"] = "fas fa-book-open"
+                    ["Recipes"] = "fas fa-book-open",
+                    ["PendingApprovals"] = "fas fa-clipboard-check"
                 },
                 ["MetaData"] = new Dictionary<string, string> {
                     ["Projects"] = "fas fa-project-diagram",
@@ -439,6 +427,7 @@ namespace PureLedger.Controllers.Api {
                 },
                 ["Reporting"] = new Dictionary<string, string> {
                     ["SingleDoc"] = "fas fa-file-alt",
+                    ["PaymentReceiptVoucherReport"] = "fas fa-receipt",
                     ["AgingReport"] = "fas fa-clock",
                     ["AccountReport"] = "fas fa-chart-pie",
                     ["MasterReport"] = "fas fa-file-alt",
@@ -447,7 +436,8 @@ namespace PureLedger.Controllers.Api {
                     ["OldMasterReport"] = "fas fa-history"
                 },
                 ["DeliveryChallan"] = new Dictionary<string, string> {
-                    ["ProcessDC"] = "fas fa-truck-loading"
+                    ["ProcessDC"] = "fas fa-truck-loading",
+                    ["StockTransfers"] = "fas fa-exchange-alt"
                 }
             };
 

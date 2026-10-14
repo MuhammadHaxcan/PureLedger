@@ -18,17 +18,9 @@ namespace PureLedger.Repositories
             _context = context;
         }
 
-        public async Task<JournalVoucherReference> AddAsync(JournalVoucherReference reference)
+        public JournalVoucherReference Add(JournalVoucherReference reference)
         {
-            try
-            {
-                var result = await _context.JournalVoucherReferences.AddAsync(reference);
-                return result.Entity;
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            return _context.JournalVoucherReferences.Add(reference).Entity;
         }
 
         public async Task<JournalVoucherReference?> GetByIdAsync(int id)
@@ -93,17 +85,9 @@ namespace PureLedger.Repositories
             }
         }
 
-        public async Task<JournalVoucherReference> UpdateAsync(JournalVoucherReference reference)
+        public JournalVoucherReference Update(JournalVoucherReference reference)
         {
-            try
-            {
-                var entity = _context.JournalVoucherReferences.Update(reference);
-                return entity.Entity;
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            return _context.JournalVoucherReferences.Update(reference).Entity;
         }
 
         public async Task<bool> DeleteAsync(int id)
@@ -118,26 +102,6 @@ namespace PureLedger.Repositories
 
                 _context.JournalVoucherReferences.Remove(reference);
                 return true;
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-        }
-
-        public async Task<int> DeleteByVoucherIdAsync(int voucherId)
-        {
-            try
-            {
-                var references = await _context.JournalVoucherReferences
-                    .Where(r => r.MainVoucherId == voucherId || r.ReferencedVoucherId == voucherId)
-                    .ToListAsync();
-
-                if (!references.Any())
-                    return 0;
-
-                _context.JournalVoucherReferences.RemoveRange(references);
-                return references.Count;
             }
             catch (Exception)
             {

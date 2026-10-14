@@ -15,6 +15,8 @@ namespace PureLedger.Models
         [StringLength(100, ErrorMessage = "Project name must be under 100 characters")]
         public string ProjectName { get; set; }
 
+        public ProjectImg? ProjectImg { get; set; }
+
         public ICollection<Category> Categories { get; set; } = new List<Category>();
     }
 }

@@ -13,10 +13,9 @@ namespace PureLedger.Repositories
             _context = context;
         }
 
-        public async Task DeleteAsync(ProductData productData)
+        public void Delete(ProductData productData)
         {
             _context.ProductDatas.Remove(productData);
-            await _context.SaveChangesAsync();
         }
     }
 }

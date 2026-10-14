@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using PureLedger.Services.Auth;
+using PureLedger.Services.Interface;
 using System.Security.Claims;
 
 namespace PureLedger.Attributes
@@ -87,6 +88,38 @@ namespace PureLedger.Attributes
                 ["add-cartage"] = "ProcessDC",
                 ["locations"] = "ProcessDC"
             },
+            ["StockTransfer"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["init"] = "StockTransfers",
+                ["categories"] = "StockTransfers",
+                ["accounts"] = "StockTransfers",
+                ["availability"] = "StockTransfers",
+                ["cancel-remaining"] = "StockTransfers",
+                ["receipts"] = "StockTransfers"
+            },
+            ["Approval"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["pending"] = "PendingApprovals",
+                ["history"] = "PendingApprovals",
+                ["approve"] = "PendingApprovals",
+                ["reject"] = "PendingApprovals"
+            },
+            ["PaymentReceipt"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["init"] = "PaymentAndReceipt",
+                ["categories"] = "PaymentAndReceipt",
+                ["accounts"] = "PaymentAndReceipt",
+                ["duplicate-warnings"] = "PaymentAndReceipt",
+                ["voucher"] = "PaymentAndReceipt"
+            },
+            ["PaymentReceiptReport"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["init"] = "PaymentReceiptVoucherReport"
+            },
+            ["PaymentReceiptVoucher"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                [""] = "VoucherEntry"
+            },
             ["Reporting"] = new(StringComparer.OrdinalIgnoreCase)
             {
                 // SingleDoc action
@@ -95,6 +128,7 @@ namespace PureLedger.Attributes
                 // AgingReport action
                 ["report-data"] = "AgingReport",
                 ["aging-report"] = "AgingReport",
+                ["aging-report-fifo"] = "AgingReport",
                 // AccountReport action
                 ["account-report"] = "AccountReport",
                 ["account-report-init"] = "AccountReport",
@@ -112,6 +146,7 @@ namespace PureLedger.Attributes
                 ["user-report-categories-by-project"] = "UserReport",
                 // ProductReport action
                 ["product-report"] = "ProductReport",
+                ["product-report-stock-breakdown"] = "ProductReport",
                 ["product-report-init"] = "ProductReport",
                 ["product-report-locations"] = "ProductReport",
                 // MissedEntriesReport action
@@ -165,10 +200,7 @@ namespace PureLedger.Attributes
             // Must be authenticated
             if (context.HttpContext.User.Identity?.IsAuthenticated != true)
             {
-                context.Result = new JsonResult(new { success = false, message = "Unauthorized. Please login." })
-                {
-                    StatusCode = 401
-                };
+                context.Result = CreateAccessError(context, StatusCodes.Status401Unauthorized, "Unauthorized. Please login.", "UNAUTHORIZED");
                 return;
             }
 
@@ -176,10 +208,7 @@ namespace PureLedger.Attributes
             var userIdClaim = context.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             {
-                context.Result = new JsonResult(new { success = false, message = "Invalid user session." })
-                {
-                    StatusCode = 401
-                };
+                context.Result = CreateAccessError(context, StatusCodes.Status401Unauthorized, "Invalid user session.", "INVALID_SESSION");
                 return;
             }
 
@@ -193,6 +222,33 @@ namespace PureLedger.Attributes
 
             // Get the AuthService from DI
             var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
+            var permissionControllerName = normalizedControllerName;
+            string? routedFeatureAction = null;
+            if (normalizedControllerName.Equals("Approval", StringComparison.OrdinalIgnoreCase))
+            {
+                permissionControllerName = "Home";
+                routedFeatureAction = "PendingApprovals";
+            }
+            else if (normalizedControllerName.Equals("StockTransfer", StringComparison.OrdinalIgnoreCase))
+            {
+                permissionControllerName = "DeliveryChallan";
+                routedFeatureAction = "StockTransfers";
+            }
+            else if (normalizedControllerName.Equals("PaymentReceipt", StringComparison.OrdinalIgnoreCase))
+            {
+                permissionControllerName = "Home";
+                routedFeatureAction = "PaymentAndReceipt";
+            }
+            else if (normalizedControllerName.Equals("PaymentReceiptReport", StringComparison.OrdinalIgnoreCase))
+            {
+                permissionControllerName = "Reporting";
+                routedFeatureAction = "PaymentReceiptVoucherReport";
+            }
+            else if (normalizedControllerName.Equals("PaymentReceiptVoucher", StringComparison.OrdinalIgnoreCase))
+            {
+                permissionControllerName = "Home";
+                routedFeatureAction = "VoucherEntry";
+            }
 
             // Check project access if projectId is in route or query
             if (context.RouteData.Values.TryGetValue("projectId", out var projectIdObj) ||
@@ -209,14 +265,30 @@ namespace PureLedger.Attributes
             }
 
             // Check for controller-level access first
-            if (await authService.HasControllerAccessAsync(userId, normalizedControllerName))
+            if (await authService.HasControllerAccessAsync(userId, permissionControllerName))
             {
                 await next();
                 return;
             }
 
+            // Approval and Stock Transfer have their own API controllers, but they are
+            // permissioned and displayed as Home and Delivery features respectively.
+            // Require their exact action permission instead of applying the generic
+            // "any action grants GET access" rule used for utility-heavy controllers.
+            if (routedFeatureAction != null)
+            {
+                if (await authService.HasActionAccessAsync(userId, permissionControllerName, routedFeatureAction))
+                {
+                    await next();
+                    return;
+                }
+
+                DenyAccess(context);
+                return;
+            }
+
             // Check if user has ANY action permission in this controller
-            bool hasAnyActionInController = await HasAccessToAnyActionInControllerAsync(authService, userId, normalizedControllerName);
+            bool hasAnyActionInController = await HasAccessToAnyActionInControllerAsync(authService, userId, permissionControllerName);
             
             // For GET requests (read-only), allow if user has any action in the controller
             // This covers utility endpoints like categories-by-project, accounts-by-category, etc.
@@ -230,7 +302,7 @@ namespace PureLedger.Attributes
             var actionPermission = GetActionPermission(normalizedControllerName, requestPath);
             if (!string.IsNullOrEmpty(actionPermission))
             {
-                if (await authService.HasActionAccessAsync(userId, normalizedControllerName, actionPermission))
+                if (await authService.HasActionAccessAsync(userId, permissionControllerName, actionPermission))
                 {
                     await next();
                     return;
@@ -254,6 +326,17 @@ namespace PureLedger.Attributes
         /// </summary>
         private static string? GetActionPermission(string controllerName, string requestPath)
         {
+            if (controllerName.Equals("StockTransfer", StringComparison.OrdinalIgnoreCase))
+                return "Transfers";
+            if (controllerName.Equals("Approval", StringComparison.OrdinalIgnoreCase))
+                return "PendingApprovals";
+            if (controllerName.Equals("PaymentReceipt", StringComparison.OrdinalIgnoreCase))
+                return "PaymentAndReceipt";
+            if (controllerName.Equals("PaymentReceiptReport", StringComparison.OrdinalIgnoreCase))
+                return "PaymentReceiptVoucherReport";
+            if (controllerName.Equals("PaymentReceiptVoucher", StringComparison.OrdinalIgnoreCase))
+                return "VoucherEntry";
+
             if (!ActionPermissionMap.TryGetValue(controllerName, out var controllerMappings))
                 return null;
 
@@ -346,9 +429,26 @@ namespace PureLedger.Attributes
 
         private static void DenyAccess(ActionExecutingContext context)
         {
-            context.Result = new JsonResult(new { success = false, message = "Access denied. You do not have permission to access this resource." })
+            context.Result = CreateAccessError(
+                context,
+                StatusCodes.Status403Forbidden,
+                "Access denied. You do not have permission to access this resource.",
+                "FORBIDDEN");
+        }
+
+        private static JsonResult CreateAccessError(ActionExecutingContext context, int statusCode, string message, string errorCode)
+        {
+            var responseFactory = context.HttpContext.RequestServices.GetRequiredService<IApiErrorResponseFactory>();
+            var response = responseFactory.Create(
+                context.HttpContext,
+                statusCode,
+                message,
+                new[] { message },
+                errorCode);
+
+            return new JsonResult(response)
             {
-                StatusCode = 403
+                StatusCode = statusCode
             };
         }
     }

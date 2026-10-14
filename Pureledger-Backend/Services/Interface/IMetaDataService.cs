@@ -13,7 +13,6 @@ namespace PureLedger.Services.Interface
 
         // Category operations
         Task<List<Category>> GetAllCategoriesAsync();
-        Task<List<Project>> GetAllProjectsForCategoriesAsync();
         Task<List<Project>> GetAllProjectsForCategoriesForUserAsync(int userId);
         Task<List<AccountType>> GetAllAccountTypesAsync();
         Task<Category?> GetCategoryByIdAsync(int id);
@@ -25,15 +24,14 @@ namespace PureLedger.Services.Interface
 
         // Account operations
         Task<List<Account>> GetAllAccountsAsync();
-        Task<List<Category>> GetCategoriesForAccountsAsync();
         Task<List<AccountGroup>> GetAccountGroupsAsync();
-        Task<List<Project>> GetProjectsForAccountsAsync();
         Task<List<Project>> GetProjectsForAccountsForUserAsync(int userId);
         Task<Account?> GetAccountByIdAsync(int id);
         Task<List<string>> CreateAccountAsync(Account account);
         Task<List<string>> UpdateAccountAsync(Account account);
         Task<(bool Success, List<int> AssociatedVoucherIds)> DeleteAccountAsync(int id);
         Task<List<int>> GetAssociatedVoucherIdsAsync(int accountId);
+        Task<List<int>> GetPendingApprovalIdsForAccountAsync(int accountId);
         Task<List<string>> ToggleAccountStatusAsync(int accountId);
         Task<List<Account>> GetAccountsByProjectAndCategoryAsync(int projectId, int? categoryId);
 

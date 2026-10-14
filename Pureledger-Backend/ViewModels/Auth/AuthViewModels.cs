@@ -7,7 +7,8 @@ namespace PureLedger.ViewModels.Auth
     /// </summary>
     public class LoginViewModel
     {
-        [Required(ErrorMessage = "Username is required")]
+        // Keep the JSON property name for existing clients; accepts a username or an email address.
+        [Required(ErrorMessage = "Username or email is required")]
         public string Username { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Password is required")]

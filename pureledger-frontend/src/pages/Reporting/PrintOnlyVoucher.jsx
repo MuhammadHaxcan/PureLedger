@@ -3,9 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../services/api';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import PrintVoucher from './PrintVoucher';
+import PaymentReceiptPrint from './PaymentReceiptPrint';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import '../../App.css';
 import './PrintVoucher.css';
+import { isPaymentReceiptVoucherType, resolvePrintVoucherType } from '../../utils/voucherType';
 
 const PrintOnlyVoucher = () => {
   usePageTitle('Print Voucher');
@@ -13,6 +15,7 @@ const PrintOnlyVoucher = () => {
   const [voucherData, setVoucherData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [resolvedVoucherType, setResolvedVoucherType] = useState('');
 
   const voucherId = searchParams.get('voucherId');
   const voucherType = searchParams.get('type') || 'JV';
@@ -41,6 +44,7 @@ const PrintOnlyVoucher = () => {
             previousBalance: response.data.previousBalance
           };
           setVoucherData(voucherDataWithBalance);
+          setResolvedVoucherType(resolvePrintVoucherType(response.data, voucherType));
         } else {
           setError('Failed to load voucher');
         }
@@ -65,7 +69,7 @@ const PrintOnlyVoucher = () => {
         if (!window.opener || window.opener.closed) {
           window.history.back();
         }
-      } catch (e) {
+      } catch {
         // Cross-origin or closed - navigate back
         window.history.back();
       }
@@ -99,7 +103,7 @@ const PrintOnlyVoucher = () => {
   }
 
   return (
-    <div style={{ 
+    <div className="print-only-voucher" style={{
       minHeight: '100vh', 
       padding: '20px', 
       backgroundColor: '#fff',
@@ -119,12 +123,16 @@ const PrintOnlyVoucher = () => {
           display: none !important;
         }
       `}</style>
-      <PrintVoucher 
-        voucherData={voucherData} 
-        voucherType={voucherType} 
-        voucherId={voucherId}
-        filter={filter}
-      />
+      {isPaymentReceiptVoucherType(resolvedVoucherType) ? (
+        <PaymentReceiptPrint voucherData={voucherData} voucherId={voucherId} filter={filter} />
+      ) : (
+        <PrintVoucher
+          voucherData={voucherData}
+          voucherType={resolvedVoucherType || voucherType}
+          voucherId={voucherId}
+          filter={filter}
+        />
+      )}
     </div>
   );
 };

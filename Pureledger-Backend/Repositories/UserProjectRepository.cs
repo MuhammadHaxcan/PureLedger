@@ -33,10 +33,9 @@ namespace PureLedger.Repositories
             return await _context.UserProjects.FindAsync(id);
         }
 
-        public async Task<UserProject> AddAsync(UserProject userProject)
+        public UserProject Add(UserProject userProject)
         {
             _context.UserProjects.Add(userProject);
-            await _context.SaveChangesAsync();
             return userProject;
         }
 
@@ -47,7 +46,6 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.UserProjects.Remove(userProject);
-            await _context.SaveChangesAsync();
             return true;
         }
 
@@ -58,25 +56,7 @@ namespace PureLedger.Repositories
                 .ToListAsync();
 
             if (userProjects.Any())
-            {
                 _context.UserProjects.RemoveRange(userProjects);
-                await _context.SaveChangesAsync();
-            }
-
-            return true;
-        }
-
-        public async Task<bool> DeleteByProjectIdAsync(int projectId)
-        {
-            var userProjects = await _context.UserProjects
-                .Where(up => up.ProjectId == projectId)
-                .ToListAsync();
-
-            if (userProjects.Any())
-            {
-                _context.UserProjects.RemoveRange(userProjects);
-                await _context.SaveChangesAsync();
-            }
 
             return true;
         }

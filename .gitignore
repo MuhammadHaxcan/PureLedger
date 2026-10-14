@@ -34,7 +34,8 @@ bld/
 [Ll]ogs/
 
 # EF Core migrations (backend)
-Pureledger-Backend/Migrations/
+Pureledger-Backend/Migrations/*
+!Pureledger-Backend/Migrations/*.cs
 
 
 # Visual Studio 2015/2017 cache/options directory

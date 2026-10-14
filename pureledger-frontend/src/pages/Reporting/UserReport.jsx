@@ -1,3 +1,4 @@
+import { todayString } from '../../utils/businessDate';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -5,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getProjectImageDataUrl } from '../../services/projectImgApi';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const buildVoucherUrl = (voucherId, type) => {
@@ -34,7 +36,6 @@ const UserReport = () => {
     const [accountSummary, setAccountSummary] = useState([]);
     const [categorySummary, setCategorySummary] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [loadedRecords, setLoadedRecords] = useState(0);
     const [visibleColumns, setVisibleColumns] = useState({
         date: true,
         creditableDate: true,
@@ -59,17 +60,11 @@ const UserReport = () => {
         locationId: null
     });
     const [dateFilterType, setDateFilterType] = useState('custom');
-    const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [isAutoLoading, setIsAutoLoading] = useState(false);
-    const [statusMessage, setStatusMessage] = useState('');
-    const [previousBalance, setPreviousBalance] = useState(0);
     const [totalRecords, setTotalRecords] = useState(0);
     const pageSize = 2500;
     const searchTermRef = useRef('');
-    const abortControllerRef = useRef(null);
-    const activeFiltersRef = useRef(null);
 
     useEffect(() => {
         loadInitData();
@@ -98,14 +93,6 @@ const UserReport = () => {
     useEffect(() => {
         searchTermRef.current = searchTerm.trim();
     }, [searchTerm]);
-
-    useEffect(() => {
-        return () => {
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
-        };
-    }, []);
 
     const loadInitData = async () => {
         setLoading(true);
@@ -158,27 +145,6 @@ const UserReport = () => {
         }
     };
 
-    const resetReportState = () => {
-        setAllEntries([]);
-        setAccountSummary([]);
-        setCategorySummary([]);
-        setLoadedRecords(0);
-        setTotalRecords(0);
-        setStatusMessage('');
-        setCurrentPage(0);
-        setHasMoreData(false);
-        setPreviousBalance(0);
-        setIsLoadingMore(false);
-        setIsAutoLoading(false);
-    };
-
-    const ensureAbortController = () => {
-        if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
-            abortControllerRef.current = new AbortController();
-        }
-        return abortControllerRef.current;
-    };
-
     const generateReport = async (page = 0, append = false) => {
         if (!formData.projectId) {
             setError('Please select a project');
@@ -196,7 +162,6 @@ const UserReport = () => {
             setAccountSummary([]);
             setCategorySummary([]);
             setSearchTerm('');
-            setCurrentPage(0);
         } else {
             setIsLoadingMore(true);
         }
@@ -233,8 +198,6 @@ const UserReport = () => {
 
                 setHasMoreData(data.hasMoreData || false);
                 setTotalRecords(data.totalRecords || 0);
-                setPreviousBalance(data.previousBalance || 0);
-                setCurrentPage(page + 1);
 
                 // Calculate summaries
                 const allEntriesForSummary = append ? [...allEntries, ...entries] : entries;
@@ -242,22 +205,17 @@ const UserReport = () => {
 
                 // Auto-load next page if there's more data
                 if (data.hasMoreData) {
-                    setIsAutoLoading(true);
                     setTimeout(() => {
                         generateReport(page + 1, true);
                     }, 100);
-                } else {
-                    setIsAutoLoading(false);
                 }
             } else {
                 setError('Failed to generate report');
                 setHasMoreData(false);
-                setIsAutoLoading(false);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to generate report');
             setHasMoreData(false);
-            setIsAutoLoading(false);
         } finally {
             setGenerating(false);
             setIsLoadingMore(false);
@@ -320,12 +278,6 @@ const UserReport = () => {
     const handleSubmit = (e) => {
         e.preventDefault();
         generateReport(0, false);
-    };
-
-    const handleLoadMore = () => {
-        if (!isLoadingMore && hasMoreData) {
-            generateReport(currentPage, true);
-        }
     };
 
     const filteredEntries = allEntries.filter(entry => {
@@ -396,7 +348,7 @@ const UserReport = () => {
                 if (visibleColumns.balance) row['Balance'] = entry.balance || 0;
                 return row;
             });
-            await exportToCsvAsync(csvData, `UserReport_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `UserReport_${todayString()}.csv`);
         } finally {
             setExportingMainCsv(false);
         }
@@ -412,7 +364,7 @@ const UserReport = () => {
                 Credit: item.credit,
                 Balance: item.debit - item.credit
             }));
-            await exportToCsvAsync(csvData, `UserReportAccountSummary_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `UserReportAccountSummary_${todayString()}.csv`);
         } finally {
             setExportingAccountCsv(false);
         }
@@ -428,7 +380,7 @@ const UserReport = () => {
                 Credit: item.credit,
                 Balance: item.debit - item.credit
             }));
-            await exportToCsvAsync(csvData, `UserReportCategorySummary_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `UserReportCategorySummary_${todayString()}.csv`);
         } finally {
             setExportingCategoryCsv(false);
         }
@@ -497,6 +449,7 @@ const UserReport = () => {
                 format: 'a4',
                 title: 'User Report',
                 projectName: selectedProject?.name || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
                 dateRange,
                 generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${totalRecords || filteredEntries.length}`,
                 columns,
@@ -505,8 +458,10 @@ const UserReport = () => {
                 startY: 46,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `UserReport_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `UserReport_${todayString()}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingMainPdf(false);
         }
@@ -538,6 +493,7 @@ const UserReport = () => {
                 format: 'a4',
                 title: 'User Report - Account Summary',
                 projectName: selectedProject?.name || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
                 generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
                 rows,
@@ -545,8 +501,10 @@ const UserReport = () => {
                 startY: 40,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `UserReportAccountSummary_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `UserReportAccountSummary_${todayString()}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingAccountPdf(false);
         }
@@ -578,6 +536,7 @@ const UserReport = () => {
                 format: 'a4',
                 title: 'User Report - Category Summary',
                 projectName: selectedProject?.name || 'All Projects',
+                logoDataUrl: await getProjectImageDataUrl(formData.projectId),
                 generatedInfo: `Generated: ${new Date().toLocaleString()}`,
                 columns,
                 rows,
@@ -585,8 +544,10 @@ const UserReport = () => {
                 startY: 40,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `UserReportCategorySummary_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `UserReportCategorySummary_${todayString()}.pdf`
             });
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to export PDF');
         } finally {
             setExportingCategoryPdf(false);
         }
@@ -598,10 +559,6 @@ const UserReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-file-alt me-2"></i>User Report</h2>
-            </div>
-
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
                     <i className="fas fa-exclamation-circle me-2"></i>{error}

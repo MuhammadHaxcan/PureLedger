@@ -16,8 +16,6 @@ namespace PureLedger.ViewModels
         [JsonPropertyName("cartageTransporterCategoryId")]
         public int? CartageTransporterCategoryId { get; set; }
         
-        [JsonPropertyName("projectImageBase64")]
-        public string? ProjectImageBase64 { get; set; } // Base64 string (can include data URL prefix)
     }
 }
 

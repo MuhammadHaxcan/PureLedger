@@ -8,9 +8,8 @@ namespace PureLedger.Repositories.Interfaces
         Task<DeliveryChallanVoucher?> GetByIdWithEntriesAsync(int id);
         Task<DeliveryChallanVoucher?> GetByJournalVoucherIdAsync(int journalVoucherId);
         Task<List<DeliveryChallanVoucher>> GetByDateRangeAsync(DateOnly startDate, DateOnly endDate);
-        Task<DeliveryChallanVoucher> AddAsync(DeliveryChallanVoucher deliveryChallanVoucher);
-        Task<DeliveryChallanVoucher> UpdateAsync(DeliveryChallanVoucher deliveryChallanVoucher);
-        Task<AccountData?> GetAccountDataByAccountNameAsync(string accountName);
+        DeliveryChallanVoucher Add(DeliveryChallanVoucher deliveryChallanVoucher);
+        DeliveryChallanVoucher Update(DeliveryChallanVoucher deliveryChallanVoucher);
         Task<bool> DeleteAsync(int deliveryChallanVoucherId);
     }
 }

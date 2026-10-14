@@ -4,6 +4,8 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const ToastContext = createContext(null);
 
+// The hook is deliberately colocated with its provider; splitting it would touch every importer.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {

@@ -24,12 +24,6 @@ namespace PureLedger.Repositories
             return await _context.Users.FindAsync(id);
         }
 
-        public async Task<User?> GetByUsernameAsync(string username)
-        {
-            return await _context.Users
-                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
-        }
-
         public async Task<User?> GetByUsernameWithAccessAsync(string username)
         {
             return await _context.Users
@@ -47,6 +41,35 @@ namespace PureLedger.Repositories
                 .FirstOrDefaultAsync(u => u.UserId == id);
         }
 
+        public async Task<User?> GetByLoginWithAccessAsync(string identifier)
+        {
+            if (string.IsNullOrWhiteSpace(identifier))
+                return null;
+
+            var normalizedIdentifier = identifier.Trim().ToLowerInvariant();
+            var matches = await _context.Users
+                .Where(u => u.Username.ToLower() == normalizedIdentifier ||
+                    (u.Email != null && u.Email.Trim().ToLower() == normalizedIdentifier))
+                .Select(u => u.UserId)
+                .Take(2)
+                .ToListAsync();
+
+            // Legacy duplicate emails or username/email collisions must never select an arbitrary account.
+            return matches.Count == 1 ? await GetByIdWithAccessAsync(matches[0]) : null;
+        }
+
+        public async Task<bool> LoginIdentifierExistsAsync(string identifier, int? excludedUserId = null)
+        {
+            if (string.IsNullOrWhiteSpace(identifier))
+                return false;
+
+            var normalizedIdentifier = identifier.Trim().ToLowerInvariant();
+            return await _context.Users.AnyAsync(u =>
+                (!excludedUserId.HasValue || u.UserId != excludedUserId.Value) &&
+                (u.Username.ToLower() == normalizedIdentifier ||
+                    (u.Email != null && u.Email.Trim().ToLower() == normalizedIdentifier)));
+        }
+
         public async Task<List<User>> GetBySubrouteAsync(string subroute)
         {
             return await _context.Users
@@ -54,17 +77,15 @@ namespace PureLedger.Repositories
                 .ToListAsync();
         }
 
-        public async Task<User> AddAsync(User user)
+        public User Add(User user)
         {
             _context.Users.Add(user);
-            await _context.SaveChangesAsync();
             return user;
         }
 
-        public async Task<User> UpdateAsync(User user)
+        public User Update(User user)
         {
             _context.Users.Update(user);
-            await _context.SaveChangesAsync();
             return user;
         }
 
@@ -75,13 +96,7 @@ namespace PureLedger.Repositories
                 return false;
 
             _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
             return true;
-        }
-
-        public async Task<bool> UsernameExistsAsync(string username)
-        {
-            return await _context.Users.AnyAsync(u => u.Username.ToLower() == username.ToLower());
         }
 
         public async Task<int> GetAdminCountAsync()

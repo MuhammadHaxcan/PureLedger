@@ -1,3 +1,4 @@
+import { addMonths, todayString } from '../../utils/businessDate';
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Form, Button, Alert, Table, InputGroup, Nav, Tab } from 'react-bootstrap';
 import apiClient from '../../services/api';
@@ -8,7 +9,7 @@ import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 import { getDateRange, dateFilterOptions } from '../../utils/dateFilters';
 
 const MissedEntriesReport = () => {
-    usePageTitle('Missed Entries');
+    usePageTitle('Missed Entries', 'Missed Entries Report');
     const [projects, setProjects] = useState([]);
     const [allEntries, setAllEntries] = useState([]);
     const [byCustomerData, setByCustomerData] = useState([]);
@@ -48,7 +49,6 @@ const MissedEntriesReport = () => {
         endDate: ''
     });
     const [dateFilterType, setDateFilterType] = useState('custom');
-    const [currentPage, setCurrentPage] = useState(0);
     const [hasMoreData, setHasMoreData] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isAutoLoading, setIsAutoLoading] = useState(false);
@@ -83,13 +83,11 @@ const MissedEntriesReport = () => {
     const validateDates = () => {
         if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
             setError('Start date must be before end date');
-            const today = new Date();
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setMonth(today.getMonth() - 1);
+            const today = todayString();
             setFormData(prev => ({
                 ...prev,
-                startDate: oneMonthAgo.toISOString().split('T')[0],
-                endDate: today.toISOString().split('T')[0]
+                startDate: addMonths(today, -1),
+                endDate: today
             }));
             return false;
         }
@@ -102,7 +100,6 @@ const MissedEntriesReport = () => {
         setByProductData([]);
         setCustomerDetails([]);
         setSelectedCustomer(null);
-        setCurrentPage(0);
         setHasMoreData(false);
         setTotalRecords(0);
         setLoadedCount(0);
@@ -213,7 +210,6 @@ const MissedEntriesReport = () => {
                 setLoadedCount(newLoadedCount);
                 setHasMoreData(data.hasMoreData || data.HasMoreData || false);
                 setTotalRecords(data.totalRecords || data.TotalRecords || entries.length);
-                setCurrentPage(page + 1);
 
                 // Auto-load next page if there's more data
                 const hasMore = data.hasMoreData || data.HasMoreData || false;
@@ -383,7 +379,7 @@ const MissedEntriesReport = () => {
                 'Total Value': (entry.totalValue || entry.TotalValue || 0).toFixed(2),
                 Description: entry.description || entry.Description || ''
             }));
-            await exportToCsvAsync(csvData, `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `MissedEntries_Details_${todayString()}.csv`);
         } finally {
             setExportingDetailsCsv(false);
         }
@@ -433,7 +429,7 @@ const MissedEntriesReport = () => {
                 startY: 46,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `MissedEntries_Details_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `MissedEntries_Details_${todayString()}.pdf`
             });
         } finally {
             setExportingDetailsPdf(false);
@@ -451,7 +447,7 @@ const MissedEntriesReport = () => {
                 'Unique Products': (item.uniqueProductCount || 0).toFixed(2),
                 'Avg Qty/Entry': (item.averageQuantityPerEntry || 0).toFixed(2)
             }));
-            await exportToCsvAsync(csvData, `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `MissedEntries_ByCustomer_${todayString()}.csv`);
         } finally {
             setExportingCustomerCsv(false);
         }
@@ -492,7 +488,7 @@ const MissedEntriesReport = () => {
                 startY: 40,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `MissedEntries_ByCustomer_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `MissedEntries_ByCustomer_${todayString()}.pdf`
             });
         } finally {
             setExportingCustomerPdf(false);
@@ -511,7 +507,7 @@ const MissedEntriesReport = () => {
                 'Avg Rate': (item.averageRate || 0).toFixed(2),
                 'Avg Discount': (item.averageDiscount || 0).toFixed(2)
             }));
-            await exportToCsvAsync(csvData, `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.csv`);
+            await exportToCsvAsync(csvData, `MissedEntries_ByProduct_${todayString()}.csv`);
         } finally {
             setExportingProductCsv(false);
         }
@@ -554,7 +550,7 @@ const MissedEntriesReport = () => {
                 startY: 40,
                 fontSize: 9,
                 cellPadding: 2,
-                filename: `MissedEntries_ByProduct_${new Date().toISOString().split('T')[0]}.pdf`
+                filename: `MissedEntries_ByProduct_${todayString()}.pdf`
             });
         } finally {
             setExportingProductPdf(false);
@@ -569,10 +565,6 @@ const MissedEntriesReport = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2><i className="fas fa-exclamation-circle me-2"></i>Missed Entries Report</h2>
-            </div>
-
             <Card className="shadow mb-4">
                 <Card.Header className="py-3 d-flex justify-content-between align-items-center">
                     <h6 className="m-0 font-weight-bold text-primary">

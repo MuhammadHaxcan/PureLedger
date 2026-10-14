@@ -1,6 +1,9 @@
+import { todayString } from './businessDate';
+
 export const getDateRange = (filterType) => {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [businessYear, businessMonth, businessDay] = todayString(now).split('-').map(Number);
+    const today = new Date(businessYear, businessMonth - 1, businessDay);
     
     let startDate = null;
     let endDate = null;
@@ -11,30 +14,32 @@ export const getDateRange = (filterType) => {
             endDate = new Date(today);
             break;
         
-        case 'thisWeek':
+        case 'thisWeek': {
             const dayOfWeek = today.getDay();
             const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
             startDate = new Date(today.getFullYear(), today.getMonth(), diff);
             endDate = new Date(today);
             break;
+        }
         
         case 'thisMonth':
             startDate = new Date(today.getFullYear(), today.getMonth(), 1);
             endDate = new Date(today);
             break;
         
-        case 'thisQuarter':
+        case 'thisQuarter': {
             const quarter = Math.floor(today.getMonth() / 3);
             startDate = new Date(today.getFullYear(), quarter * 3, 1);
             endDate = new Date(today);
             break;
+        }
         
         case 'thisYear':
             startDate = new Date(today.getFullYear(), 0, 1);
             endDate = new Date(today);
             break;
         
-        case 'lastWeek':
+        case 'lastWeek': {
             const lastWeekDay = today.getDay();
             const lastWeekDiff = today.getDate() - lastWeekDay - 6 + (lastWeekDay === 0 ? -6 : 1);
             startDate = new Date(today.getFullYear(), today.getMonth(), lastWeekDiff);
@@ -42,19 +47,21 @@ export const getDateRange = (filterType) => {
             lastWeekEnd.setDate(startDate.getDate() + 6);
             endDate = lastWeekEnd;
             break;
+        }
         
         case 'lastMonth':
             startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
             endDate = new Date(today.getFullYear(), today.getMonth(), 0);
             break;
         
-        case 'lastQuarter':
+        case 'lastQuarter': {
             const currentQuarter = Math.floor(today.getMonth() / 3);
             const lastQuarterStart = currentQuarter === 0 ? 9 : (currentQuarter - 1) * 3;
             const lastQuarterYear = currentQuarter === 0 ? today.getFullYear() - 1 : today.getFullYear();
             startDate = new Date(lastQuarterYear, lastQuarterStart, 1);
             endDate = new Date(today.getFullYear(), currentQuarter * 3, 0);
             break;
+        }
         
         case 'lastYear':
             startDate = new Date(today.getFullYear() - 1, 0, 1);

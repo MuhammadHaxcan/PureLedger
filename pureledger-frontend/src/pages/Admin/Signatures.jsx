@@ -5,7 +5,7 @@ import SignatureCanvas from '../../components/SignatureCanvas';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const Signatures = () => {
-  usePageTitle('Signatures');
+  usePageTitle('Signatures', 'Signature Management');
   const isSubmittingRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -13,8 +13,6 @@ const Signatures = () => {
   const [signatures, setSignatures] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingSignature, setEditingSignature] = useState(null);
-  const [deletingSignature, setDeletingSignature] = useState(null);
-
   useEffect(() => {
     loadSignatures();
   }, []);
@@ -158,8 +156,7 @@ const Signatures = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Signature Management</h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleAddNew} disabled={loading}>
           <i className="fas fa-plus me-2"></i>
           Add New Signature

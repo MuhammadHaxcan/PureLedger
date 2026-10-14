@@ -1,13 +1,15 @@
 ﻿using PureLedger.Models;
+using PureLedger.Helpers;
 
 namespace PureLedger.ViewModels.Home
 {
     public class JournalEntryViewModel
     {
         public int ProjectId { get; set; }
+        public byte[]? VoucherVersion { get; set; }
         public int CreditDays { get; set; }
-        public DateOnly EntryDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
-        public DateOnly DueDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly EntryDate { get; set; } = BusinessClock.Today;
+        public DateOnly DueDate { get; set; } = BusinessClock.Today;
         public List<JournalEntryRowModel> Entries { get; set; } = new List<JournalEntryRowModel>();
         public bool IsBaseVoucher { get; set; } = false;
         public bool RequireQuantity { get; set; } = false;

@@ -9,7 +9,7 @@ import { usePageTitle } from '../../hooks/usePageTitle';
 import './Users.css';
 
 const Users = () => {
-  usePageTitle('Users');
+  usePageTitle('Users', 'User Management');
   const { user: currentUser } = useAuth();
   const isSubmittingRef = useRef(false);
   const [users, setUsers] = useState([]);
@@ -436,18 +436,6 @@ const Users = () => {
     setFormData({ ...formData, hiddenCategoryIds });
   };
 
-  // Toggle permission (controller or action)
-  const togglePermission = (permission) => {
-    const permissions = [...formData.accessPermissions];
-    const index = permissions.indexOf(permission);
-    if (index > -1) {
-      permissions.splice(index, 1);
-    } else {
-      permissions.push(permission);
-    }
-    setFormData({ ...formData, accessPermissions: permissions });
-  };
-
   // Handle controller checkbox (full access)
   const handleControllerCheck = (controller) => {
     const isChecked = formData.accessPermissions.includes(controller);
@@ -524,10 +512,7 @@ const Users = () => {
 
   return (
     <div className="container-fluid">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="fas fa-users-cog me-2"></i>User Management
-        </h2>
+      <div className="d-flex justify-content-end align-items-center mb-4">
         <Button variant="primary" onClick={handleCreate} disabled={loading}>
           <i className="fas fa-plus me-2"></i>New User
         </Button>

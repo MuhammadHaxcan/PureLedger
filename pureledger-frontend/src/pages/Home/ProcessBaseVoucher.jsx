@@ -1,3 +1,4 @@
+import { addDays, todayString } from '../../utils/businessDate';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card, Form, Button, Alert, Table } from 'react-bootstrap';
@@ -6,7 +7,6 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { usePageTitle } from '../../hooks/usePageTitle';
 
 const ProcessBaseVoucher = () => {
-    usePageTitle('Process Base Voucher');
     const { id } = useParams();
     const navigate = useNavigate();
     
@@ -24,17 +24,20 @@ const ProcessBaseVoucher = () => {
     const [accountEntryIncluded, setAccountEntryIncluded] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [hasSubmitted, setHasSubmitted] = useState(false);
-    const [derivedEntryDate, setDerivedEntryDate] = useState(new Date().toISOString().split('T')[0]);
+    const [derivedEntryDate, setDerivedEntryDate] = useState(todayString());
     const [creditDays, setCreditDays] = useState(0);
-    const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+    const [dueDate, setDueDate] = useState(todayString());
+
+    usePageTitle(
+        'Process Base Voucher',
+        voucherData ? `Process Base Voucher JV-${voucherData.baseVoucherId}` : 'Process Base Voucher'
+    );
 
     // Calculate due date from entry date + credit days
     useEffect(() => {
         if (derivedEntryDate) {
             const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
-            const date = new Date(derivedEntryDate);
-            date.setDate(date.getDate() + days);
-            setDueDate(date.toISOString().split('T')[0]);
+            setDueDate(addDays(derivedEntryDate, days));
         }
     }, [derivedEntryDate, creditDays]);
 
@@ -645,10 +648,7 @@ const ProcessBaseVoucher = () => {
 
     return (
         <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2>
-                    <i className="fas fa-cogs me-2"></i>Process Base Voucher JV-{voucherData.baseVoucherId}
-                </h2>
+            <div className="d-flex justify-content-end align-items-center mb-3">
                 <Link to="/home/base-vouchers" className="btn btn-secondary">
                     <i className="fas fa-arrow-left me-1"></i> Back to Base Vouchers
                 </Link>

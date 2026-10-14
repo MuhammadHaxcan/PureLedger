@@ -28,6 +28,7 @@ namespace PureLedger.ViewModels.Reporting
         public string ProjectId { get; set; } = string.Empty;
         public string? CategoryId { get; set; }
         public string? AccountId { get; set; }
+        public string? BookerId { get; set; }
         public int Page { get; set; } = 0;
         public int PageSize { get; set; } = 25;
     }

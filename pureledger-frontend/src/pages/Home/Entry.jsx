@@ -1,30 +1,66 @@
+import { addDays, todayString } from '../../utils/businessDate';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, Form, Button, Table, Alert } from 'react-bootstrap';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { Card, Form, Button, Table, Alert, Modal } from 'react-bootstrap';
 import apiClient from '../../services/api';
+import approvalApi from '../../services/approvalApi';
 import SearchableSelect from '../../components/SearchableSelect';
 import { usePageTitle } from '../../hooks/usePageTitle';
+import { LAST_PROJECT_STORAGE_KEY } from '../../utils/lastSelectedProject';
+import { formatMoney, formatMoneyInput, parseMoneyInput } from '../../utils/moneyFormat';
+import { ACCOUNT_GROUP, isAccountGroup } from '../../constants/accountGroups';
 import './Entry.css';
 
-const LAST_PROJECT_STORAGE_KEY = 'pl_last_selected_project';
 const LAST_JV_MESSAGE_KEY = 'pl_last_jv_message';
 
+const positiveId = (value) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const readPayload = (response) => response?.data?.data ?? response?.data ?? {};
+
+const clearProductMechanics = (entry) => ({
+    ...entry,
+    pkg: null,
+    rbp: null,
+    qty: null,
+    rate: null,
+    percent: null,
+    disc: null,
+    dataPkg: null,
+    totalAmount: 0
+});
+
 const HomeEntry = () => {
+    const { approvalId: approvalIdParam } = useParams();
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const editingVoucherId = searchParams.get('voucherId') ? parseInt(searchParams.get('voucherId')) : null;
-    const isEditMode = editingVoucherId != null;
+    const editingVoucherId = positiveId(searchParams.get('voucherId'));
+    const editingApprovalId = positiveId(approvalIdParam);
+    const isVoucherEditMode = editingVoucherId != null;
+    const isApprovalEditMode = editingApprovalId != null;
+    const isEditMode = isVoucherEditMode || isApprovalEditMode;
+    const isBookerRequired = !isApprovalEditMode;
 
-    usePageTitle(isEditMode ? 'Edit Entry' : 'Entry');
+    usePageTitle(
+        isApprovalEditMode
+            ? 'Edit Pending Voucher'
+            : (isVoucherEditMode ? 'Edit Entry' : 'Entry'),
+        isApprovalEditMode
+            ? `Edit Pending Voucher #${editingApprovalId}`
+            : (isVoucherEditMode ? `Edit Journal Voucher #${editingVoucherId}` : 'Journal Entry')
+    );
 
     const isSubmittingRef = useRef(false);
 
     const [projects, setProjects] = useState([]);
     const [bookers, setBookers] = useState([]);
     const [selectedProjectId, setSelectedProjectId] = useState(null);
-    const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+    const [voucherVersion, setVoucherVersion] = useState(null);
+    const [entryDate, setEntryDate] = useState(todayString());
     const [creditDays, setCreditDays] = useState(0);
-    const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
+    const [dueDate, setDueDate] = useState(todayString());
     const [bookerId, setBookerId] = useState(null);
     const [requireQuantity, setRequireQuantity] = useState(true);
     const [isBaseVoucher, setIsBaseVoucher] = useState(false);
@@ -59,16 +95,30 @@ const HomeEntry = () => {
     const [validationErrors, setValidationErrors] = useState([]);
     const [hasBookers, setHasBookers] = useState(false);
     const [bookersLoaded, setBookersLoaded] = useState(false);
+    const [isEditingManualExpenseVoucher, setIsEditingManualExpenseVoucher] = useState(false);
+    const [showExpenseAccountRequiredModal, setShowExpenseAccountRequiredModal] = useState(false);
 
     const persistedSuccessRef = useRef(null);
     const [focusedFields, setFocusedFields] = useState({});
+    const [moneyInputValues, setMoneyInputValues] = useState({});
     const [hoveredDescIndex, setHoveredDescIndex] = useState(null);
+    const hasExpenseAccount = entries.some(entry =>
+        isAccountGroup(entry.accountGroup, ACCOUNT_GROUP.EXPENSE)
+    );
+    const entryCount = entries.length;
 
     useEffect(() => {
+        if (isApprovalEditMode) {
+            loadApprovalForEdit();
+            return;
+        }
+
         loadEntryData();
-        if (isEditMode) {
+        if (isVoucherEditMode) {
             loadVoucherForEdit();
         }
+        // These loaders intentionally run once for the route mode present at mount.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -107,23 +157,30 @@ const HomeEntry = () => {
             const loadCategoriesForAllRows = async () => {
                 const categories = await loadCategories(selectedProjectId, 0);
                 const categoriesMap = {};
-                entries.forEach((_, index) => {
+                for (let index = 0; index < entryCount; index += 1) {
                     categoriesMap[index] = categories;
-                });
+                }
                 setRowCategories(categoriesMap);
             };
             loadCategoriesForAllRows();
         }
-    }, [selectedProjectId, entries.length]);
+    }, [selectedProjectId, entryCount, isEditMode]);
 
     useEffect(() => {
         if (entryDate) {
             const days = creditDays !== '' && creditDays !== null ? parseInt(creditDays) || 0 : 0;
-            const date = new Date(entryDate);
-            date.setDate(date.getDate() + days);
-            setDueDate(date.toISOString().split('T')[0]);
+            setDueDate(addDays(entryDate, days));
         }
     }, [entryDate, creditDays]);
+
+    useEffect(() => {
+        if (!hasExpenseAccount) return;
+
+        setEntries(previous => previous.map(clearProductMechanics));
+        setIsBaseVoucher(false);
+        setSaveAsRecipe(false);
+        setRecipeName('');
+    }, [hasExpenseAccount]);
 
 
     const loadEntryData = async () => {
@@ -161,16 +218,24 @@ const HomeEntry = () => {
             setLoading(true);
             const response = await apiClient.get(`/HomeApi/edit-voucher/${editingVoucherId}`);
             if (response.data.success) {
-                const { model, projects: projData, bookers: bookData, selectedProjectId: projId } = response.data;
+                const {
+                    model,
+                    projects: projData,
+                    bookers: bookData,
+                    selectedProjectId: projId,
+                    isManualExpenseVoucher,
+                } = response.data;
+                setIsEditingManualExpenseVoucher(Boolean(isManualExpenseVoucher));
+                setVoucherVersion(model.voucherVersion ?? null);
                 setProjects(projData || []);
                 setBookers(bookData || []);
                 const bookersAvailable = (bookData || []).length > 0;
                 setHasBookers(bookersAvailable);
                 setBookersLoaded(true);
                 setSelectedProjectId(projId);
-                setEntryDate(model.entryDate || new Date().toISOString().split('T')[0]);
+                setEntryDate(model.entryDate || todayString());
                 setCreditDays(model.creditDays !== undefined && model.creditDays !== null ? model.creditDays : '');
-                setDueDate(model.dueDate || new Date().toISOString().split('T')[0]);
+                setDueDate(model.dueDate || todayString());
                 setBookerId(model.bookerId);
                 setRequireQuantity(model.requireQuantity !== false);
                 setIsBaseVoucher(model.isBaseVoucher || false);
@@ -197,18 +262,18 @@ const HomeEntry = () => {
                                 const productRes = await apiClient.get(`/HomeApi/product-details/${entry.accountId}`);
                                 if (productRes.data.success && productRes.data.data) {
                                     const product = productRes.data.data;
-                                    accountGroup = product.accountGroupId === 1 ? 'account' : 'product';
+                                    accountGroup = Number(product.accountGroupId);
                                     accountType = product.accountTypeName || null;
                                     dataPkg = product.pkg || null;
                                 }
-                            } catch (err) {
+                            } catch {
+                                // Keep the persisted voucher values if account metadata is unavailable.
                             }
                         }
 
                         const parsedQty = entry.qty != null ? (typeof entry.qty === 'number' ? entry.qty : parseFloat(entry.qty)) : null;
                         const parsedRate = entry.rate != null ? (typeof entry.rate === 'number' ? entry.rate : parseFloat(entry.rate)) : null;
                         const parsedPercent = entry.percent != null ? (typeof entry.percent === 'number' ? entry.percent : parseFloat(entry.percent)) : 0;
-                        const parsedDisc = entry.disc != null ? (typeof entry.disc === 'number' ? entry.disc : parseFloat(entry.disc)) : 0;
                         const parsedDebit = entry.debit != null ? (typeof entry.debit === 'number' ? entry.debit : parseFloat(entry.debit)) : null;
                         const parsedCredit = entry.credit != null ? (typeof entry.credit === 'number' ? entry.credit : parseFloat(entry.credit)) : null;
                         const parsedPkg = entry.pkg != null ? (typeof entry.pkg === 'number' ? entry.pkg : parseFloat(entry.pkg)) : (dataPkg != null ? (typeof dataPkg === 'number' ? dataPkg : parseFloat(dataPkg)) : null);
@@ -252,33 +317,141 @@ const HomeEntry = () => {
                     setRowAccounts(accountsMap);
                 }
             }
-        } catch (error) {
+        } catch {
             setError('Failed to load voucher data');
         } finally {
             setLoading(false);
         }
     };
 
-    const loadCategories = async (projectId, rowIndex) => {
+    const loadApprovalForEdit = async () => {
+        try {
+            setLoading(true);
+            setError('');
+
+            const [approvalResponse, entryDataResponse] = await Promise.all([
+                approvalApi.getById(editingApprovalId),
+                apiClient.get('/HomeApi/entry-data')
+            ]);
+
+            const approval = readPayload(approvalResponse);
+            const entryData = readPayload(entryDataResponse);
+            if (!approval?.approvalVoucherId) {
+                throw new Error('The pending approval request was not found.');
+            }
+            if (String(approval.status || '').toLowerCase() !== 'pending') {
+                throw new Error('Only pending approval requests can be edited.');
+            }
+
+            const projectId = Number(approval.projectId);
+            const projectRows = entryData.projects || [];
+            const bookerRows = entryData.bookers || [];
+            setProjects(projectRows);
+            setBookers(bookerRows);
+            setHasBookers(bookerRows.length > 0);
+            setBookersLoaded(true);
+            setSelectedProjectId(projectId);
+            setBookerId(approval.bookerId ?? null);
+            setCreditDays(
+                approval.creditDays !== undefined && approval.creditDays !== null
+                    ? approval.creditDays
+                    : 0
+            );
+            setEntryDate(todayString());
+            setRequireQuantity(true);
+            setIsBaseVoucher(false);
+            setSaveAsRecipe(false);
+            setRecipeName('');
+
+            const sourceEntries = approval.entries || [];
+            if (sourceEntries.length === 0) {
+                throw new Error('The pending approval request does not contain any voucher entries.');
+            }
+
+            const categories = await loadCategories(projectId, 0);
+            const categoriesMap = {};
+            const accountsMap = {};
+            const loadedEntries = await Promise.all(sourceEntries.map(async (entry, index) => {
+                categoriesMap[index] = categories;
+                if (entry.categoryId) {
+                    accountsMap[index] = await loadAccounts(entry.categoryId, index);
+                }
+
+                let accountGroup = null;
+                let accountType = null;
+                let dataPkg = null;
+                if (entry.accountId) {
+                    try {
+                        const productResponse = await apiClient.get(
+                            `/HomeApi/product-details/${entry.accountId}`
+                        );
+                        const product = readPayload(productResponse);
+                        accountGroup = Number(product.accountGroupId || 0);
+                        accountType = product.accountTypeName || null;
+                        dataPkg = product.pkg ?? null;
+                    } catch {
+                        // The selected account is still shown from the approval snapshot.
+                        // Server validation will reject it if it is no longer available.
+                    }
+                }
+
+                return {
+                    entryId: entry.originalJournalEntryId ?? null,
+                    categoryId: entry.categoryId ?? null,
+                    accountId: entry.accountId ?? null,
+                    pkg: null,
+                    rbp: null,
+                    des: entry.description ?? entry.des ?? '',
+                    qty: null,
+                    rate: null,
+                    percent: null,
+                    disc: null,
+                    debit: entry.debit != null ? Number(entry.debit) : null,
+                    credit: entry.credit != null ? Number(entry.credit) : null,
+                    accountGroup,
+                    accountType,
+                    dataPkg,
+                    totalAmount: 0
+                };
+            }));
+
+            setEntries(loadedEntries);
+            setRowCategories(categoriesMap);
+            setRowAccounts(accountsMap);
+        } catch (requestError) {
+            setError(
+                requestError.response?.data?.message ||
+                requestError.message ||
+                'Failed to load the pending voucher.'
+            );
+            setBookersLoaded(true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadCategories = async (projectId) => {
         if (!projectId) return [];
         try {
             const response = await apiClient.get(`/HomeApi/categories-by-project/${projectId}`);
             if (response.data.success) {
                 return response.data.data || [];
             }
-        } catch (error) {
+        } catch {
+            // The caller renders an empty selector and preserves the current value.
         }
         return [];
     };
 
-    const loadAccounts = async (categoryId, rowIndex) => {
+    const loadAccounts = async (categoryId) => {
         if (!categoryId) return [];
         try {
             const response = await apiClient.get(`/HomeApi/accounts-by-category/${categoryId}`);
             if (response.data.success) {
                 return response.data.data || [];
             }
-        } catch (error) {
+        } catch {
+            // The caller renders an empty selector and preserves the current value.
         }
         return [];
     };
@@ -289,12 +462,18 @@ const HomeEntry = () => {
             const response = await apiClient.get(`/HomeApi/product-details/${accountId}`);
             if (response.data.success && response.data.data) {
                 const product = response.data.data;
-                const accountGroup = product.accountGroupId === 1 ? 'account' : 'product';
+                const accountGroup = Number(product.accountGroupId);
 
                 setEntries(prev => {
                     const updated = [...prev];
                     if (updated[rowIndex]) {
                         const hasExistingRate = updated[rowIndex].rate != null && updated[rowIndex].rate !== 0;
+                        const voucherWillContainExpense =
+                            isAccountGroup(accountGroup, ACCOUNT_GROUP.EXPENSE) ||
+                            prev.some((entry, index) =>
+                                index !== rowIndex &&
+                                isAccountGroup(entry.accountGroup, ACCOUNT_GROUP.EXPENSE)
+                            );
 
                         updated[rowIndex] = {
                             ...updated[rowIndex],
@@ -304,7 +483,9 @@ const HomeEntry = () => {
                             pkg: updated[rowIndex].pkg || product.pkg || null
                         };
 
-                        if (product.saleRate !== null && product.saleRate !== undefined) {
+                        if (voucherWillContainExpense) {
+                            updated[rowIndex] = clearProductMechanics(updated[rowIndex]);
+                        } else if (product.saleRate !== null && product.saleRate !== undefined) {
                             if (!isEditMode || !hasExistingRate) {
                                 updated[rowIndex].rate = parseFloat(parseFloat(product.saleRate).toFixed(4));
                             }
@@ -315,7 +496,8 @@ const HomeEntry = () => {
 
                 return product;
             }
-        } catch (error) {
+        } catch {
+            // Account metadata errors are surfaced by server validation on save.
         }
         return null;
     };
@@ -412,6 +594,10 @@ const HomeEntry = () => {
             const updated = [...prev];
             const entry = updated[rowIndex];
             if (!entry) return prev;
+            if (prev.some(item => isAccountGroup(item.accountGroup, ACCOUNT_GROUP.EXPENSE))) {
+                updated[rowIndex] = clearProductMechanics(entry);
+                return updated;
+            }
 
             const rbp = entry.rbp === 'Y';
             const qty = parseFloat(entry.qty) || 0;
@@ -476,7 +662,8 @@ const HomeEntry = () => {
         }));
 
         const newIndex = entries.length;
-        setEntries(prev => [...prev, {
+        setEntries(prev => {
+            const blankEntry = {
             entryId: null,
             categoryId: null,
             accountId: null,
@@ -493,7 +680,17 @@ const HomeEntry = () => {
             accountType: null,
             dataPkg: null,
             totalAmount: 0
-        }]);
+            };
+
+            const voucherHasExpense = prev.some(
+                entry => Number(entry.accountGroup) === ACCOUNT_GROUP.EXPENSE
+            );
+
+            return [
+                ...prev,
+                voucherHasExpense ? clearProductMechanics(blankEntry) : blankEntry
+            ];
+        });
 
         if (selectedProjectId) {
             const categories = await loadCategories(selectedProjectId, newIndex);
@@ -577,8 +774,10 @@ const HomeEntry = () => {
     const validateForm = () => {
         const errors = [];
 
-        if (!bookerId || bookerId <= 0) {
+        if (isBookerRequired && (!bookerId || bookerId <= 0)) {
             errors.push('A valid Booker must be selected.');
+        } else if (bookerId != null && bookerId <= 0) {
+            errors.push('The selected Booker is invalid.');
         }
 
         if (!selectedProjectId || selectedProjectId <= 0) {
@@ -590,7 +789,7 @@ const HomeEntry = () => {
             return errors;
         }
 
-        if (entries.length < 2) {
+        if ((!isEditMode || isApprovalEditMode || isEditingManualExpenseVoucher) && entries.length < 2) {
             errors.push('A journal voucher must contain at least two entries.');
         }
 
@@ -612,7 +811,9 @@ const HomeEntry = () => {
             const debit = parseFloat(entry.debit) || 0;
             const credit = parseFloat(entry.credit) || 0;
 
-            if (debit <= 0 && credit <= 0) {
+            if (debit < 0 || credit < 0) {
+                errors.push(`${prefix}Debit and credit values cannot be negative.`);
+            } else if (debit <= 0 && credit <= 0) {
                 errors.push(`${prefix}Either Debit or Credit must be filled.`);
             } else if (debit > 0 && credit > 0) {
                 errors.push(`${prefix}Only one of Debit or Credit can be filled, not both.`);
@@ -621,12 +822,16 @@ const HomeEntry = () => {
             totalDebit += debit;
             totalCredit += credit;
 
-            if (entry.accountGroup === 'product') {
+            if (!hasExpenseAccount && isAccountGroup(entry.accountGroup, ACCOUNT_GROUP.PRODUCT)) {
                 const rate = parseFloat(entry.rate) || 0;
-                if (rate < 0) {
-                    errors.push(`${prefix}Rate must be greater than or equal to zero for product accounts.`);
+                if (isApprovalEditMode ? rate <= 0 : rate < 0) {
+                    errors.push(
+                        `${prefix}Rate must be ${
+                            isApprovalEditMode ? 'greater than zero' : 'greater than or equal to zero'
+                        } for product accounts.`
+                    );
                 }
-                if (requireQuantity) {
+                if (requireQuantity || isApprovalEditMode) {
                     const qty = parseFloat(entry.qty) || 0;
                     if (qty <= 0) {
                         errors.push(`${prefix}Quantity must be greater than zero for product accounts.`);
@@ -660,6 +865,15 @@ const HomeEntry = () => {
             return;
         }
 
+        if (isVoucherEditMode && isEditingManualExpenseVoucher && !hasExpenseAccount) {
+            const message =
+                'This Expense voucher must retain at least one Expense account. ' +
+                'Restore an Expense line, or cancel this edit and delete the voucher through its authorized workflow.';
+            setValidationErrors([message]);
+            setShowExpenseAccountRequiredModal(true);
+            return;
+        }
+
         isSubmittingRef.current = true;
         setIsSubmitting(true);
         setError('');
@@ -679,46 +893,79 @@ const HomeEntry = () => {
         try {
             const model = {
                 projectId: selectedProjectId,
+                voucherVersion: isVoucherEditMode ? voucherVersion : null,
                 entryDate: entryDate,
                 dueDate: dueDate,
                 creditDays: creditDays !== '' && creditDays !== null ? (parseInt(creditDays) || 0) : 0,
                 bookerId: bookerId,
-                requireQuantity: requireQuantity,
-                isBaseVoucher: isBaseVoucher,
-                saveAsRecipe: saveAsRecipe,
-                recipeName: saveAsRecipe ? recipeName : null,
+                requireQuantity: hasExpenseAccount ? false : requireQuantity,
+                isBaseVoucher: hasExpenseAccount ? false : isBaseVoucher,
+                saveAsRecipe: hasExpenseAccount ? false : saveAsRecipe,
+                recipeName: !hasExpenseAccount && saveAsRecipe ? recipeName : null,
                 entries: entries.map(entry => ({
                     entryId: entry.entryId,
                     categoryId: entry.categoryId,
                     accountId: entry.accountId,
-                    pkg: entry.pkg,
-                    rbp: entry.rbp,
+                    pkg: hasExpenseAccount ? null : entry.pkg,
+                    rbp: hasExpenseAccount ? null : entry.rbp,
                     des: entry.des || '',
-                    qty: entry.qty || 0,
-                    rate: entry.rate || 0,
-                    percent: entry.percent || 0,
-                    disc: entry.disc || 0,
+                    qty: hasExpenseAccount ? null : (entry.qty || 0),
+                    rate: hasExpenseAccount ? null : (entry.rate || 0),
+                    percent: hasExpenseAccount ? null : (entry.percent || 0),
+                    disc: hasExpenseAccount ? null : (entry.disc || 0),
                     debit: entry.debit || 0,
                     credit: entry.credit || 0
                 }))
             };
 
+            if (isApprovalEditMode) {
+                const response = await approvalApi.update(editingApprovalId, model);
+                const result = readPayload(response);
+                const status = String(result.status || '').toLowerCase();
+                const successMessage = response.data?.message || (
+                    status === 'postednormally'
+                        ? `The final Expense account was removed and the voucher was posted normally${
+                            result.journalVoucherId ? ` as JV-${result.journalVoucherId}` : ''
+                        }.`
+                        : 'Pending voucher updated successfully.'
+                );
+
+                setSuccess(successMessage);
+                setLoading(false);
+                isSubmittingRef.current = false;
+                setIsSubmitting(false);
+
+                setTimeout(() => {
+                    navigate('/approvals/pending', {
+                        replace: true,
+                        state: { approvalMessage: successMessage }
+                    });
+                }, 800);
+                return;
+            }
+
             const params = new URLSearchParams();
             if (action === 'submit_print') {
                 params.append('action', 'submit_print');
             }
-            if (isEditMode) {
+            if (isVoucherEditMode) {
                 params.append('editingVoucherId', editingVoucherId);
             }
 
             const response = await apiClient.post(`/HomeApi/entry?${params.toString()}`, model);
 
             if (response.data.success) {
-                const successMessage = response.data.message || (isEditMode ? 'Journal voucher updated successfully' : 'Journal entry created successfully');
+                const isPendingApproval =
+                    response.data.isPending ?? ['pending', 'pendingapproval'].includes(
+                        String(response.data.status || '').toLowerCase()
+                    );
+                const successMessage = response.data.message || (isPendingApproval
+                    ? 'Voucher submitted for approval'
+                    : (isVoucherEditMode ? 'Journal voucher updated successfully' : 'Journal entry created successfully'));
                 setSuccess(successMessage);
                 localStorage.setItem(LAST_JV_MESSAGE_KEY, successMessage);
 
-                if (response.data.shouldPrint && response.data.voucherId) {
+                if (!isPendingApproval && response.data.shouldPrint && response.data.voucherId) {
                     const printUrl = `/reporting/print-voucher?voucherId=${response.data.voucherId}&type=JV`;
                     window.open(printUrl, '_blank');
                 }
@@ -734,7 +981,7 @@ const HomeEntry = () => {
                 setIsSubmitting(false);
 
                 setTimeout(() => {
-                    if (isEditMode) {
+                    if (isVoucherEditMode) {
                         window.location.href = '/home/entry';
                     } else {
                         setEntries([{
@@ -756,7 +1003,7 @@ const HomeEntry = () => {
                             totalAmount: 0
                         }]);
                         setBookerId(bookers.length > 0 ? bookers[0].id : null);
-                        setEntryDate(new Date().toISOString().split('T')[0]);
+                        setEntryDate(todayString());
                         setCreditDays(0);
                         setSuccess('');
                     }
@@ -775,26 +1022,96 @@ const HomeEntry = () => {
         }
     };  
 
+    const updateMoneyInput = (rowIndex, field, rawValue) => {
+        const fieldKey = `${field}-${rowIndex}`;
+        const formattedValue = formatMoneyInput(rawValue);
+        const numericValue = parseMoneyInput(formattedValue);
+
+        setMoneyInputValues(prev => ({ ...prev, [fieldKey]: formattedValue }));
+        setEntries(prev => {
+            const updated = [...prev];
+            updated[rowIndex] = { ...updated[rowIndex], [field]: numericValue };
+            if (numericValue) {
+                updated[rowIndex][field === 'debit' ? 'credit' : 'debit'] = null;
+            }
+            return updated;
+        });
+        updateTotals();
+    };
+
+    const beginMoneyInput = (rowIndex, field, value) => {
+        const fieldKey = `${field}-${rowIndex}`;
+        setFocusedFields(prev => ({ ...prev, [fieldKey]: true }));
+        setMoneyInputValues(prev => ({
+            ...prev,
+            [fieldKey]: formatMoneyInput(value),
+        }));
+    };
+
+    const finishMoneyInput = (rowIndex, field, rawValue) => {
+        const fieldKey = `${field}-${rowIndex}`;
+        const numericValue = parseMoneyInput(rawValue);
+
+        setFocusedFields(prev => {
+            const updated = { ...prev };
+            delete updated[fieldKey];
+            return updated;
+        });
+        setMoneyInputValues(prev => {
+            const updated = { ...prev };
+            delete updated[fieldKey];
+            return updated;
+        });
+        setEntries(prev => {
+            const updated = [...prev];
+            updated[rowIndex] = {
+                ...updated[rowIndex],
+                [field]: numericValue === null ? null : Number(numericValue.toFixed(2)),
+            };
+            return updated;
+        });
+        updateTotals();
+    };
+
+    const getMoneyInputValue = (rowIndex, field, value) => {
+        const fieldKey = `${field}-${rowIndex}`;
+        if (!focusedFields[fieldKey]) return formatMoney(value);
+
+        const editingValue = moneyInputValues[fieldKey];
+        return editingValue === '' && value !== null && value !== undefined
+            ? formatMoneyInput(value)
+            : (editingValue ?? formatMoneyInput(value));
+    };
+
     const totalDebit = entries.reduce((sum, entry) => sum + (parseFloat(entry.debit) || 0), 0);
     const totalCredit = entries.reduce((sum, entry) => sum + (parseFloat(entry.credit) || 0), 0);
     const totalBalance = totalDebit - totalCredit;
 
-    const accountEntriesCount = entries.filter(e => e.accountGroup === 'account').length;
-    const productEntriesCount = entries.filter(e => e.accountGroup === 'product').length;
-    const showBaseVoucherCheckbox = accountEntriesCount === 1 && productEntriesCount >= 1;
+    const accountEntriesCount = entries.filter(e => isAccountGroup(e.accountGroup, ACCOUNT_GROUP.ACCOUNT)).length;
+    const productEntriesCount = entries.filter(e => isAccountGroup(e.accountGroup, ACCOUNT_GROUP.PRODUCT)).length;
+    const showBaseVoucherCheckbox = !hasExpenseAccount && accountEntriesCount === 1 && productEntriesCount >= 1;
 
-    const allEntriesAreProducts = entries.every(e => !e.accountGroup || e.accountGroup === 'product');
+    const allEntriesAreProducts = entries.every(e =>
+        !e.accountGroup || isAccountGroup(e.accountGroup, ACCOUNT_GROUP.PRODUCT)
+    );
     const hasAtLeastOneProduct = productEntriesCount > 0;
-    const showSaveRecipeCheckbox = entries.length >= 2 && allEntriesAreProducts && hasAtLeastOneProduct;
+    const showSaveRecipeCheckbox =
+        !hasExpenseAccount && entries.length >= 2 && allEntriesAreProducts && hasAtLeastOneProduct;
 
     return (
-        <div className="container-fluid">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2>
-                    <i className={`fas fa-${isEditMode ? 'edit' : 'book-open'} me-2`}></i>
-                    {isEditMode ? `Edit Journal Voucher #${editingVoucherId}` : 'Journal Entry'}
-                </h2>
-            </div>
+        <div className="container-fluid pt-2">
+            {isApprovalEditMode && (
+                <div className="d-flex justify-content-end align-items-center mb-3">
+                    <Button
+                        variant="outline-secondary"
+                        onClick={() => navigate('/approvals/pending')}
+                        disabled={loading || isSubmitting}
+                    >
+                        <i className="fas fa-arrow-left me-1"></i>
+                        Pending Approvals
+                    </Button>
+                </div>
+            )}
 
             {error && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
@@ -811,7 +1128,7 @@ const HomeEntry = () => {
                 </Alert>
             )}
 
-            {bookersLoaded && !hasBookers && (
+            {bookersLoaded && !hasBookers && isBookerRequired && (
                 <Alert variant="warning" dismissible>
                     <i className="fas fa-exclamation-triangle me-2"></i>
                     <strong>No Bookers Available:</strong> Please add at least one booker before creating journal entries.
@@ -826,6 +1143,22 @@ const HomeEntry = () => {
                             <li key={idx}>{err}</li>
                         ))}
                     </ul>
+                </Alert>
+            )}
+
+            {isApprovalEditMode && (
+                <Alert variant="warning">
+                    <i className="fas fa-lock me-2"></i>
+                    You are editing the complete pending voucher snapshot. Saving keeps it pending;
+                    it will not receive a JV number or enter reports until it is approved.
+                </Alert>
+            )}
+
+            {isVoucherEditMode && isEditingManualExpenseVoucher && (
+                <Alert variant="info">
+                    <i className="fas fa-receipt me-2"></i>
+                    This is an Expense voucher. Edit it as one complete balanced table; at least one
+                    Expense account must remain before it can be submitted for reapproval.
                 </Alert>
             )}
 
@@ -848,6 +1181,7 @@ const HomeEntry = () => {
                                         type="date"
                                         value={entryDate}
                                         onChange={(e) => setEntryDate(e.target.value)}
+                                        disabled={isApprovalEditMode}
                                         required
                                     />
                                 </div>
@@ -862,6 +1196,7 @@ const HomeEntry = () => {
                                         options={projects.map(p => ({ id: p.id, name: p.name }))}
                                         placeholder="Select Project"
                                         required
+                                        disabled={isApprovalEditMode}
                                     />
                                 </div>
                             </div>
@@ -899,8 +1234,10 @@ const HomeEntry = () => {
                                 </thead>
                                 <tbody>
                                     {entries.map((entry, index) => {
-                                        const isProductAccount = entry.accountGroup === 'product';
-                                        const isAccountAccount = entry.accountGroup === 'account';
+                                        const isProductAccount =
+                                            isAccountGroup(entry.accountGroup, ACCOUNT_GROUP.PRODUCT);
+                                        const productMechanicsDisabled =
+                                            hasExpenseAccount || !isProductAccount;
 
                                         return (
                                             <tr key={index}>
@@ -964,7 +1301,7 @@ const HomeEntry = () => {
                                                         type="number"
                                                         min="0"
                                                         step="1"
-                                                        value={entry.pkg ?? 0}
+                                                        value={entry.pkg ?? ''}
                                                         readOnly
                                                         disabled
                                                         className="bg-light"
@@ -975,7 +1312,7 @@ const HomeEntry = () => {
                                                     <Form.Select
                                                         size="sm"
                                                         className="rbp-select-no-arrow"
-                                                        value={entry.rbp || 'Y'}
+                                                        value={entry.rbp || ''}
                                                         onChange={(e) => {
                                                             setEntries(prev => {
                                                                 const updated = [...prev];
@@ -984,8 +1321,9 @@ const HomeEntry = () => {
                                                             });
                                                             calculateRowAmounts(index);
                                                         }}
-                                                        disabled={isAccountAccount}
+                                                        disabled={productMechanicsDisabled}
                                                     >
+                                                        <option value="">—</option>
                                                         <option value="Y">Y</option>
                                                         <option value="N">N</option>
                                                     </Form.Select>
@@ -1037,8 +1375,8 @@ const HomeEntry = () => {
                                                             });
                                                             calculateRowAmounts(index);
                                                         }}
-                                                        disabled={isAccountAccount}
-                                                        required={isProductAccount && requireQuantity}
+                                                        disabled={productMechanicsDisabled}
+                                                        required={!hasExpenseAccount && isProductAccount && requireQuantity}
                                                     />
                                                 </td>
                                                 <td>
@@ -1061,7 +1399,7 @@ const HomeEntry = () => {
                                                         onFocus={() => {
                                                             setFocusedFields(prev => ({ ...prev, [`rate-${index}`]: true }));
                                                         }}
-                                                        disabled={isAccountAccount}
+                                                        disabled={productMechanicsDisabled}
                                                         onBlur={(e) => {
                                                             setFocusedFields(prev => {
                                                                 const newFields = { ...prev };
@@ -1100,7 +1438,7 @@ const HomeEntry = () => {
                                                         onFocus={() => {
                                                             setFocusedFields(prev => ({ ...prev, [`percent-${index}`]: true }));
                                                         }}
-                                                        disabled={isAccountAccount}
+                                                        disabled={productMechanicsDisabled}
                                                         onBlur={(e) => {
                                                             setFocusedFields(prev => {
                                                                 const newFields = { ...prev };
@@ -1125,7 +1463,7 @@ const HomeEntry = () => {
                                                         className="no-arrow bg-light"
                                                         min="0"
                                                         step="0.0001"
-                                                        value={entry.disc ? entry.disc.toFixed(2) : '0.00'}
+                                                        value={entry.disc == null ? '' : Number(entry.disc).toFixed(2)}
                                                         readOnly
                                                         tabIndex="-1"
                                                     />
@@ -1133,49 +1471,24 @@ const HomeEntry = () => {
                                                 <td>
                                                     <Form.Control
                                                         size="sm"
-                                                        type="number"
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        data-money-field="debit"
+                                                        aria-label={`Entry ${index + 1} debit`}
                                                         className="no-arrow"
-                                                        min="0"
-                                                        step="0.01"
-                                                        value={focusedFields[`debit-${index}`] ? (entry.debit != null ? entry.debit : '') : (entry.debit != null ? parseFloat(entry.debit).toFixed(2) : '')}
-                                                        onChange={(e) => {
-                                                            const inputValue = e.target.value;
-                                                            setEntries(prev => {
-                                                                const updated = [...prev];
-                                                                const newValue = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].debit : parseFloat(inputValue));
-                                                                updated[index].debit = newValue;
-                                                                if (newValue) {
-                                                                    updated[index].credit = null;
-                                                                }
-                                                                return updated;
-                                                            });
-                                                            updateTotals();
-                                                        }}
+                                                        value={getMoneyInputValue(index, 'debit', entry.debit)}
+                                                        onChange={(e) => updateMoneyInput(index, 'debit', e.target.value)}
                                                         onFocus={() => {
-                                                            setFocusedFields(prev => ({ ...prev, [`debit-${index}`]: true }));
+                                                            beginMoneyInput(index, 'debit', entry.debit);
                                                             if (!entry.debit && !entry.credit) {
                                                                 calculateRowAmounts(index);
                                                             }
                                                         }}
-                                                        onBlur={(e) => {
-                                                            setFocusedFields(prev => {
-                                                                const newFields = { ...prev };
-                                                                delete newFields[`debit-${index}`];
-                                                                return newFields;
-                                                            });
-                                                            if (e.target.value) {
-                                                                setEntries(prev => {
-                                                                    const updated = [...prev];
-                                                                    updated[index].debit = parseFloat(parseFloat(e.target.value).toFixed(2));
-                                                                    return updated;
-                                                                });
-                                                                updateTotals();
-                                                            }
-                                                        }}
+                                                        onBlur={(e) => finishMoneyInput(index, 'debit', e.target.value)}
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Tab' && !e.shiftKey) {
                                                                 const inputValue = e.target.value;
-                                                                const isEmpty = !inputValue || inputValue.trim() === '' || parseFloat(inputValue) === 0;
+                                                                const isEmpty = parseMoneyInput(inputValue) === null || parseMoneyInput(inputValue) === 0;
 
                                                                 if (isEmpty && (!entry.credit || entry.credit === 0)) {
                                                                     const qty = parseFloat(entry.qty) || 0;
@@ -1206,8 +1519,7 @@ const HomeEntry = () => {
                                                                         setTimeout(() => {
                                                                             const row = e.target.closest('tr');
                                                                             if (row) {
-                                                                                const inputs = row.querySelectorAll('input[type="number"]');
-                                                                                const creditInput = inputs[inputs.length - 1];
+                                                                            const creditInput = row.querySelector('input[data-money-field="credit"]');
                                                                                 if (creditInput) {
                                                                                     creditInput.focus();
                                                                                     creditInput.select();
@@ -1223,49 +1535,24 @@ const HomeEntry = () => {
                                                 <td>
                                                     <Form.Control
                                                         size="sm"
-                                                        type="number"
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        data-money-field="credit"
+                                                        aria-label={`Entry ${index + 1} credit`}
                                                         className="no-arrow"
-                                                        min="0"
-                                                        step="0.01"
-                                                        value={focusedFields[`credit-${index}`] ? (entry.credit != null ? entry.credit : '') : (entry.credit != null ? parseFloat(entry.credit).toFixed(2) : '')}
-                                                        onChange={(e) => {
-                                                            const inputValue = e.target.value;
-                                                            setEntries(prev => {
-                                                                const updated = [...prev];
-                                                                const newValue = inputValue === '' ? null : (isNaN(parseFloat(inputValue)) ? prev[index].credit : parseFloat(inputValue));
-                                                                updated[index].credit = newValue;
-                                                                if (newValue) {
-                                                                    updated[index].debit = null;
-                                                                }
-                                                                return updated;
-                                                            });
-                                                            updateTotals();
-                                                        }}
+                                                        value={getMoneyInputValue(index, 'credit', entry.credit)}
+                                                        onChange={(e) => updateMoneyInput(index, 'credit', e.target.value)}
                                                         onFocus={() => {
-                                                            setFocusedFields(prev => ({ ...prev, [`credit-${index}`]: true }));
+                                                            beginMoneyInput(index, 'credit', entry.credit);
                                                             if (!entry.debit && !entry.credit) {
                                                                 calculateRowAmounts(index);
                                                             }
                                                         }}
-                                                        onBlur={(e) => {
-                                                            setFocusedFields(prev => {
-                                                                const newFields = { ...prev };
-                                                                delete newFields[`credit-${index}`];
-                                                                return newFields;
-                                                            });
-                                                            if (e.target.value) {
-                                                                setEntries(prev => {
-                                                                    const updated = [...prev];
-                                                                    updated[index].credit = parseFloat(parseFloat(e.target.value).toFixed(2));
-                                                                    return updated;
-                                                                });
-                                                                updateTotals();
-                                                            }
-                                                        }}
+                                                        onBlur={(e) => finishMoneyInput(index, 'credit', e.target.value)}
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Tab' && !e.shiftKey) {
                                                                 const inputValue = e.target.value;
-                                                                const isEmpty = !inputValue || inputValue.trim() === '' || parseFloat(inputValue) === 0;
+                                                                const isEmpty = parseMoneyInput(inputValue) === null || parseMoneyInput(inputValue) === 0;
 
                                                                 if (isEmpty && (!entry.debit || entry.debit === 0)) {
                                                                     const qty = parseFloat(entry.qty) || 0;
@@ -1317,13 +1604,13 @@ const HomeEntry = () => {
                                 <tfoot className="table-secondary">
                                     <tr>
                                         <td colSpan="9" className="text-end fw-bold">TOTAL</td>
-                                        <td className="fw-bold">{totalDebit.toFixed(2)}</td>
-                                        <td className="fw-bold">{totalCredit.toFixed(2)}</td>
+                                        <td className="fw-bold">{formatMoney(totalDebit)}</td>
+                                        <td className="fw-bold">{formatMoney(totalCredit)}</td>
                                         <td></td>
                                     </tr>
                                     <tr>
                                         <td colSpan="9" className="text-end fw-bold">BALANCE</td>
-                                        <td colSpan="2" className="fw-bold text-center">{totalBalance.toFixed(2)}</td>
+                                        <td colSpan="2" className="fw-bold text-center">{formatMoney(totalBalance)}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -1369,14 +1656,20 @@ const HomeEntry = () => {
                                 </div>
                             </div>
                             <div className="col-md-4 mb-2">
-                                <Form.Label>Booker</Form.Label>
+                                <Form.Label>
+                                    Booker{isApprovalEditMode ? ' (Optional)' : ''}
+                                </Form.Label>
                                 <div className="input-group">
                                     <span className="input-group-text"><i className="fas fa-user"></i></span>
                                     <SearchableSelect
                                         value={bookerId}
                                         onChange={(value) => setBookerId(value ? parseInt(value) : null)}
                                         options={hasBookers ? bookers.map(b => ({ id: b.id, name: b.name })) : []}
-                                        placeholder={hasBookers ? "Select Booker" : "No bookers available"}
+                                        placeholder={
+                                            hasBookers
+                                                ? (isApprovalEditMode ? "Select Booker (Optional)" : "Select Booker")
+                                                : (isApprovalEditMode ? "No Booker selected" : "No bookers available")
+                                        }
                                         disabled={!hasBookers}
                                     />
                                 </div>
@@ -1400,6 +1693,7 @@ const HomeEntry = () => {
                                     }
                                     checked={requireQuantity}
                                     onChange={(e) => setRequireQuantity(e.target.checked)}
+                                    disabled={hasExpenseAccount}
                                 />
                             </div>
                         </div>
@@ -1471,7 +1765,14 @@ const HomeEntry = () => {
                 </Card>
 
                 <div className="d-flex justify-content-between mb-3">
-                    <Button variant="secondary" type="button" onClick={() => navigate(-1)}>
+                    <Button
+                        variant="secondary"
+                        type="button"
+                        onClick={() => isApprovalEditMode
+                            ? navigate('/approvals/pending')
+                            : navigate(-1)}
+                        disabled={loading || isSubmitting}
+                    >
                         <i className="fas fa-arrow-left me-1"></i> Back
                     </Button>
                     <div>
@@ -1479,33 +1780,66 @@ const HomeEntry = () => {
                             variant="primary"
                             type="button"
                             onClick={(e) => handleSubmit(e, 'submit')}
-                            disabled={loading || isSubmitting || !hasBookers || !bookerId}
+                            disabled={
+                                loading ||
+                                isSubmitting ||
+                                (isBookerRequired && (!hasBookers || !bookerId))
+                            }
                             className="me-2"
                         >
                             {loading ? (
                                 <>
                                     <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    {isEditMode ? 'Updating...' : 'Submitting...'}
+                                    {isApprovalEditMode
+                                        ? 'Saving...'
+                                        : (isVoucherEditMode ? 'Updating...' : 'Submitting...')}
                                 </>
                             ) : (
                                 <>
                                     <i className="fas fa-save me-1"></i>
-                                    {isEditMode ? 'Update Journal Voucher' : 'Submit Journal Entry'}
+                                    {isApprovalEditMode
+                                        ? 'Save Pending Voucher'
+                                        : (isVoucherEditMode ? 'Update Journal Voucher' : 'Submit Journal Entry')}
                                 </>
                             )}
                         </Button>
-                        <Button
-                            variant="success"
-                            type="button"
-                            onClick={(e) => handleSubmit(e, 'submit_print')}
-                            disabled={loading || isSubmitting || !hasBookers || !bookerId}
-                        >
-                            <i className="fas fa-print me-1"></i>
-                            {isEditMode ? 'Update and Print' : 'Submit and Print'}
-                        </Button>
+                        {!isApprovalEditMode && (
+                            <Button
+                                variant="success"
+                                type="button"
+                                onClick={(e) => handleSubmit(e, 'submit_print')}
+                                disabled={loading || isSubmitting || !hasBookers || !bookerId}
+                            >
+                                <i className="fas fa-print me-1"></i>
+                                {isVoucherEditMode ? 'Update and Print' : 'Submit and Print'}
+                            </Button>
+                        )}
                     </div>
                 </div>
             </form>
+
+            <Modal
+                show={showExpenseAccountRequiredModal}
+                onHide={() => setShowExpenseAccountRequiredModal(false)}
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>Expense account required</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    This approved Expense voucher cannot be saved without an Expense account.
+                    Restore at least one Expense line. If the voucher is no longer required, cancel
+                    this edit and delete the voucher through its authorized workflow.
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button
+                        variant="primary"
+                        onClick={() => setShowExpenseAccountRequiredModal(false)}
+                    >
+                        Return to voucher
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };
