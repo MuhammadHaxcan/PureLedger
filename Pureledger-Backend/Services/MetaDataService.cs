@@ -242,9 +242,19 @@ namespace PureLedger.Services
                 return (false, associatedAccountIds);
             }
 
-            // Delete the category
+            // Delete the category. The repository only stages the removal, so a foreign-key failure (category still
+            // referenced by recipes, user restrictions...) surfaces at save time; report it as "cannot delete" like the
+            // repository used to, instead of letting it become an HTTP 500.
             var result = _unitOfWork.Categories.Delete(category);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while deleting category {CategoryId}", id);
+                return (false, new List<int>());
+            }
             return (result, new List<int>());
         }
         #endregion
@@ -487,9 +497,18 @@ namespace PureLedger.Services
                 _unitOfWork.ProductDatas.Delete(account.ProductData);
             }
 
-            // Delete the account itself
+            // Delete the account itself. Staged removal: an account still referenced by journal entries fails at save
+            // time, which must read as "cannot delete" (as the repository used to report), not as an HTTP 500.
             var result = _unitOfWork.Accounts.Delete(account);
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Error while deleting account {AccountId}", id);
+                return (false, new List<int>());
+            }
             return (result, new List<int>());
         }
 

@@ -5,6 +5,7 @@ using PureLedger.Data;
 using PureLedger.Models;
 using PureLedger.Repositories;
 using PureLedger.Services;
+using PureLedger.ViewModels.DeliveryChallan;
 using PureLedger.ViewModels.Home;
 using Xunit;
 
@@ -20,7 +21,7 @@ public sealed class DeliveryChallanReprocessAfterEditTests
     public enum Edit
     {
         ProductRate, ProductDescription, ProductQuantity, ProductSwapped,
-        CustomerSwapped, CustomerAmount, SecondProductAdded
+        CustomerSwapped, CustomerAmount, SecondProductAdded, ProductToCustomer, ProductQuantityZero
     }
 
     public enum Path { SingleRow, WholeVoucher }
@@ -90,6 +91,68 @@ public sealed class DeliveryChallanReprocessAfterEditTests
         await f.AssertFullyProcessedAsync();
     }
 
+    [Theory]
+    [InlineData(Path.SingleRow)]
+    [InlineData(Path.WholeVoucher)]
+    public async Task ProcessedProductRow_ChangedToACustomerOrZeroQuantity_LosesItsChallanRowAndStaysCompleted(Path path)
+    {
+        foreach (var edit in new[] { Edit.ProductToCustomer, Edit.ProductQuantityZero })
+        {
+            var f = await Fixture.CreateAsync();
+            await f.ProcessBatchAsync();
+
+            await f.ApplyEditAsync(edit, path);
+
+            await f.AssertRowGoneWithChallanRowOnlyAsync(f.ProductEntryId, edit.ToString());
+            await f.AssertFullyProcessedAsync(requireChallanForProducts: false);
+        }
+    }
+
+    [Fact]
+    public async Task RemovingAProcessedRow_ByVoucherEdit_RemovesItAndItsChallanRowOnly()
+    {
+        var f = await Fixture.CreateAsync();
+        await f.ProcessBatchAsync();
+        await f.AddProcessedSecondProductAsync();
+
+        await f.RemoveRowViaVoucherEditAsync(f.ProductEntryId);
+
+        await f.AssertRowGoneWithItsChallanRowAsync(f.ProductEntryId);
+        await f.AssertFullyProcessedAsync();
+    }
+
+    [Fact]
+    public async Task RemovingAProcessedRow_BySingleRowDelete_RemovesItAndItsChallanRowOnly()
+    {
+        var f = await Fixture.CreateAsync();
+        await f.ProcessBatchAsync();
+        await f.AddProcessedSecondProductAsync();
+
+        await f.DeleteRowAsync(f.ProductEntryId);
+
+        await f.AssertRowGoneWithItsChallanRowAsync(f.ProductEntryId);
+        await f.AssertFullyProcessedAsync();
+    }
+
+    [Fact]
+    public async Task CartageChallan_EditQuantity_ReopensTheCartageVoucher_AndReprocessingCompletesItAgain()
+    {
+        var f = await Fixture.CreateAsync();
+        await f.ProcessCartageAsync();
+        await f.AssertFullyProcessedAsync();
+        Assert.Equal(new[] { true }, await f.ChildVoucherCompletionAsync());
+
+        await f.ApplyEditAsync(Edit.ProductQuantity, Path.SingleRow);
+
+        await f.AssertUnprocessedRowsHaveNoChallanRowAsync();
+        Assert.Equal(new[] { false }, await f.ChildVoucherCompletionAsync());
+
+        await f.ProcessBatchAsync();
+
+        await f.AssertFullyProcessedAsync();
+        Assert.Equal(new[] { true }, await f.ChildVoucherCompletionAsync());
+    }
+
     [Fact]
     public async Task RowsLeftHalfProcessedByTheOldBug_AreRepairedByReprocessing()
     {
@@ -117,11 +180,11 @@ public sealed class DeliveryChallanReprocessAfterEditTests
         Assert.Equal(newLocation, await f.ChallanLocationAsync());
     }
 
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         private readonly DbContextOptions<LedgerDbContext> options;
-        public int VoucherId, ProductA, ProductB, CustomerA, CustomerB, CategoryId, LocationId;
-        public int ProductEntryId, CustomerEntryId;
+        public int VoucherId, ProductA, ProductB, CustomerA, CustomerB, CategoryId, LocationId, TransporterId;
+        public int ProductEntryId, CustomerEntryId, SecondProductEntryId;
 
         private Fixture(DbContextOptions<LedgerDbContext> options) => this.options = options;
 
@@ -150,6 +213,14 @@ public sealed class DeliveryChallanReprocessAfterEditTests
             var customerB = new Account { CategoryId = category.CategoryId, AccountGroupId = 1, AccountName = "Customer B", IsEnabled = true };
             db.AddRange(productA, productB, customerA, customerB);
             await db.SaveChangesAsync();
+
+            var transporters = new Category { ProjectId = project.ProjectId, CategoryName = "Transporters", AccountTypeId = 1 };
+            db.Add(transporters);
+            await db.SaveChangesAsync();
+            var transporter = new Account { CategoryId = transporters.CategoryId, AccountGroupId = 1, AccountName = "Transporter", IsEnabled = true };
+            db.AddRange(transporter, new ProjectCartageSettings { ProjectId = project.ProjectId, CartageTransporterCategoryId = transporters.CategoryId });
+            await db.SaveChangesAsync();
+            f.TransporterId = transporter.AccountId;
 
             // A sale: customer debited, product credited with a quantity.
             var voucher = new JournalVoucher
@@ -193,6 +264,24 @@ public sealed class DeliveryChallanReprocessAfterEditTests
             await Services(db).Dc.ProcessBatchDCAsync(VoucherId, Date, null, LocationId, null, false, 0);
         }
 
+        public async Task ProcessCartageAsync()
+        {
+            await using var db = Context();
+            await Services(db).Dc.ProcessCartageAsync(new CartageViewModel
+            {
+                JournalVoucherId = VoucherId, EntryId = ProductEntryId, TransporterId = TransporterId, Amount = 25,
+                PostToCustomer = false, DcDate = Date, DcLocation = LocationId
+            });
+        }
+
+        public async Task<List<bool>> ChildVoucherCompletionAsync()
+        {
+            await using var db = Context();
+            var childIds = await db.JournalVoucherReferences.Where(r => r.MainVoucherId == VoucherId)
+                .Select(r => r.ReferencedVoucherId).ToListAsync();
+            return await db.JournalVouchers.Where(v => childIds.Contains(v.JournalVoucherId)).Select(v => v.IsCompleted).ToListAsync();
+        }
+
         public async Task ProcessSingleAsync(int entryId)
         {
             await using var db = Context();
@@ -203,6 +292,51 @@ public sealed class DeliveryChallanReprocessAfterEditTests
         {
             if (path == Path.SingleRow) await ApplySingleRowEditAsync(edit, quantity, locationId);
             else await ApplyWholeVoucherEditAsync(edit, quantity);
+        }
+
+        // Adds a second product row through a voucher edit and processes it, so the voucher has two challan rows.
+        public async Task AddProcessedSecondProductAsync()
+        {
+            await ApplyEditAsync(Edit.SecondProductAdded, Path.WholeVoucher);
+            await ProcessBatchAsync();
+            await using var db = Context();
+            SecondProductEntryId = await db.JournalEntries
+                .Where(e => e.JournalVoucherId == VoucherId && e.JournalEntryId != ProductEntryId && e.JournalEntryId != CustomerEntryId)
+                .Select(e => e.JournalEntryId).SingleAsync();
+        }
+
+        public async Task RemoveRowViaVoucherEditAsync(int entryId)
+        {
+            await using var db = Context();
+            var journal = Services(db).Journal;
+            var voucher = await db.JournalVouchers.AsNoTracking().SingleAsync(v => v.JournalVoucherId == VoucherId);
+            var rows = await db.JournalEntries.AsNoTracking().Where(e => e.JournalVoucherId == VoucherId && e.JournalEntryId != entryId)
+                .OrderBy(e => e.JournalEntryId).ToListAsync();
+            await journal.UpdateVoucherAsync(VoucherId, new JournalEntryViewModel
+            {
+                ProjectId = voucher.ProjectId, EntryDate = voucher.EntryDate, DueDate = voucher.CreditableDate,
+                BookerId = voucher.BookerId, VoucherVersion = voucher.RowVersion,
+                Entries = rows.Select(e => new JournalEntryRowModel
+                {
+                    EntryId = e.JournalEntryId, AccountId = e.AccountId, CategoryId = e.CategoryId, Rbp = e.Rbp,
+                    Des = e.Description, Qty = e.Quantity, Rate = e.Rate, Percent = e.DiscountPercent,
+                    Disc = e.Discount, Debit = e.Debit, Credit = e.Credit
+                }).ToList()
+            });
+        }
+
+        public async Task DeleteRowAsync(int entryId)
+        {
+            await using var db = Context();
+            var (success, error) = await Services(db).Journal.DeleteEntryAsync(entryId);
+            Assert.True(success, error);
+        }
+
+        public async Task AssertRowGoneWithItsChallanRowAsync(int entryId)
+        {
+            await using var db = Context();
+            Assert.False(await db.JournalEntries.AnyAsync(e => e.JournalEntryId == entryId), $"journal row {entryId} still exists");
+            Assert.False(await db.DeliveryChallanEntries.AnyAsync(d => d.JournalEntryId == entryId), $"challan row for {entryId} still exists");
         }
 
         public async Task<int> AddLocationAsync(string name)
@@ -250,6 +384,8 @@ public sealed class DeliveryChallanReprocessAfterEditTests
                 case Edit.ProductSwapped: update.AccountId = ProductB; break;
                 case Edit.CustomerSwapped: update.AccountId = CustomerB; break;
                 case Edit.CustomerAmount: update.Debit = 1200; break;
+                case Edit.ProductToCustomer: update.AccountId = CustomerB; update.Quantity = 0; update.Rate = 0; update.Credit = 1000; break;
+                case Edit.ProductQuantityZero: update.Quantity = 0; break;
                 default: throw new NotSupportedException(edit.ToString());
             }
             var (success, error) = await journal.UpdateEntryAsync(update);
@@ -284,6 +420,8 @@ public sealed class DeliveryChallanReprocessAfterEditTests
                 case Edit.ProductSwapped: product.AccountId = ProductB; break;
                 case Edit.CustomerSwapped: customer.AccountId = CustomerB; break;
                 case Edit.CustomerAmount: customer.Debit = 1200; break;
+                case Edit.ProductToCustomer: product.AccountId = CustomerB; product.Qty = 0; product.Rate = 0; break;
+                case Edit.ProductQuantityZero: product.Qty = 0; break;
                 case Edit.SecondProductAdded:
                     model.Entries.Add(new JournalEntryRowModel
                     {
@@ -314,7 +452,16 @@ public sealed class DeliveryChallanReprocessAfterEditTests
             Assert.Empty(linked);
         }
 
-        public async Task AssertFullyProcessedAsync()
+        public async Task AssertRowGoneWithChallanRowOnlyAsync(int entryId, string because)
+        {
+            await using var db = Context();
+            Assert.False(await db.DeliveryChallanEntries.AnyAsync(d => d.JournalEntryId == entryId),
+                $"challan row for {entryId} should be gone after {because}");
+            Assert.True((await db.JournalEntries.SingleAsync(e => e.JournalEntryId == entryId)).IsProcessed,
+                $"row {entryId} should count as processed after {because}");
+        }
+
+        public async Task AssertFullyProcessedAsync(bool requireChallanForProducts = true)
         {
             await using var db = Context();
             var entries = await db.JournalEntries.Include(e => e.Account)
@@ -323,8 +470,8 @@ public sealed class DeliveryChallanReprocessAfterEditTests
             var dcEntries = await db.DeliveryChallanEntries
                 .Where(d => d.DeliveryChallanVoucher.JournalVoucherId == VoucherId).ToListAsync();
 
-            Assert.Single(challans);
-            foreach (var product in entries.Where(e => e.Account!.AccountGroupId == 2 && e.Quantity > 0))
+            if (requireChallanForProducts) Assert.Single(challans);
+            foreach (var product in entries.Where(e => requireChallanForProducts && e.Account!.AccountGroupId == 2 && e.Quantity > 0))
             {
                 Assert.True(product.IsProcessed, $"product row {product.JournalEntryId} is still unprocessed");
                 Assert.Single(dcEntries, d => d.JournalEntryId == product.JournalEntryId);
