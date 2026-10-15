@@ -12,8 +12,8 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20260928215754_AddProjectImg")]
-    partial class AddProjectImg
+    [Migration("20261010150600_AddDeliveryChallanStation")]
+    partial class AddDeliveryChallanStation
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -607,6 +607,10 @@ namespace PureLedger.Migrations
 
                     b.Property<int>("JournalVoucherId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Station")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
 
                     b.HasKey("DeliveryChallanVoucherId");
 

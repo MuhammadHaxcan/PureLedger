@@ -9,7 +9,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace PureLedger.Migrations
 {
     /// <inheritdoc />
-    public partial class BaselineFromMaster : Migration
+    public partial class VpsMasterBaseline : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

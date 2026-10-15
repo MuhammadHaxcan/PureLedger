@@ -12,8 +12,8 @@ using PureLedger.Data;
 namespace PureLedger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    [Migration("20260925150131_NewFeaturesOnRestoredBaseline")]
-    partial class NewFeaturesOnRestoredBaseline
+    [Migration("20261003102217_VpsMasterBaseline")]
+    partial class VpsMasterBaseline
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -175,11 +175,6 @@ namespace PureLedger.Migrations
                         {
                             AccountGroupId = 2,
                             AccountGroupName = "Product"
-                        },
-                        new
-                        {
-                            AccountGroupId = 3,
-                            AccountGroupName = "Expense"
                         });
                 });
 
@@ -255,240 +250,6 @@ namespace PureLedger.Migrations
                         .HasDatabaseName("IX_AppSettings_SettingKey");
 
                     b.ToTable("AppSettings");
-                });
-
-            modelBuilder.Entity("PureLedger.Models.ApplicationErrorLog", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("CorrelationId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ErrorId")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("ExceptionType")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("ExtraPropertiesJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("Level")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Method")
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<string>("Path")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("RequestBodySummary")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("StackTrace")
-                        .HasColumnType("text");
-
-                    b.Property<int?>("StatusCode")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Username")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CorrelationId")
-                        .HasDatabaseName("IX_ApplicationErrorLogs_CorrelationId");
-
-                    b.HasIndex("CreatedAtUtc")
-                        .HasDatabaseName("IX_ApplicationErrorLogs_CreatedAtUtc");
-
-                    b.HasIndex("ErrorId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_ApplicationErrorLogs_ErrorId");
-
-                    b.HasIndex("Level", "CreatedAtUtc")
-                        .HasDatabaseName("IX_ApplicationErrorLogs_Level_CreatedAtUtc");
-
-                    b.HasIndex("StatusCode", "CreatedAtUtc")
-                        .HasDatabaseName("IX_ApplicationErrorLogs_StatusCode_CreatedAtUtc");
-
-                    b.ToTable("ApplicationErrorLogs", (string)null);
-                });
-
-            modelBuilder.Entity("PureLedger.Models.ApprovalVoucher", b =>
-                {
-                    b.Property<int>("ApprovalVoucherId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ApprovalVoucherId"));
-
-                    b.Property<int?>("BookerId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("CreditDays")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("DecisionByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateOnly?>("DecisionDate")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("HadDuplicateWarningsAtDecision")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("HadDuplicateWarningsAtSubmission")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("JournalVoucherId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PostedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("RequestKind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateOnly?>("RequestedEntryDate")
-                        .HasColumnType("date");
-
-                    b.Property<Guid?>("SnapshotVersion")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateOnly>("SubmittedDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("VoucherType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasDefaultValue("ManualExpense");
-
-                    b.HasKey("ApprovalVoucherId");
-
-                    b.HasIndex("JournalVoucherId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_ApprovalVouchers_OnePendingRevision")
-                        .HasFilter("\"Status\" = 'Pending' AND \"JournalVoucherId\" IS NOT NULL");
-
-                    b.HasIndex("Status", "ProjectId", "SubmittedDate");
-
-                    b.ToTable("ApprovalVouchers", t =>
-                        {
-                            t.HasCheckConstraint("CK_ApprovalVouchers_PaymentReceiptFields", "(\"VoucherType\" = 'ManualExpense' AND \"RequestedEntryDate\" IS NULL AND \"SnapshotVersion\" IS NULL) OR (\"VoucherType\" = 'PaymentReceipt' AND \"RequestedEntryDate\" IS NOT NULL AND \"SnapshotVersion\" IS NOT NULL)");
-                        });
-                });
-
-            modelBuilder.Entity("PureLedger.Models.ApprovalVoucherEntry", b =>
-                {
-                    b.Property<int>("ApprovalVoucherEntryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ApprovalVoucherEntryId"));
-
-                    b.Property<int>("AccountId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ApprovalVoucherId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Credit")
-                        .HasColumnType("decimal(14,4)");
-
-                    b.Property<decimal>("Debit")
-                        .HasColumnType("decimal(14,4)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateOnly?>("InstrumentDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("InstrumentType")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<int?>("LineNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("NormalizedReferenceNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int?>("OriginalJournalEntryId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ReferenceNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("ApprovalVoucherEntryId");
-
-                    b.HasIndex("ApprovalVoucherId", "LineNumber")
-                        .IsUnique();
-
-                    b.ToTable("ApprovalVoucherEntries", t =>
-                        {
-                            t.HasCheckConstraint("CK_ApprovalVoucherEntries_InstrumentFields", "(\"InstrumentType\" IS NULL AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" = 'Cash' AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" IN ('Cheque','BankTransfer','WireTransfer') AND \"ReferenceNumber\" IS NOT NULL AND \"NormalizedReferenceNumber\" IS NOT NULL AND length(\"ReferenceNumber\") > 0 AND \"ReferenceNumber\" = btrim(\"ReferenceNumber\") AND \"NormalizedReferenceNumber\" = upper(\"ReferenceNumber\") AND \"InstrumentDate\" IS NOT NULL)");
-                        });
                 });
 
             modelBuilder.Entity("PureLedger.Models.Booker", b =>
@@ -692,46 +453,6 @@ namespace PureLedger.Migrations
                     b.ToTable("JournalEntries");
                 });
 
-            modelBuilder.Entity("PureLedger.Models.JournalEntryInstrumentDetail", b =>
-                {
-                    b.Property<int>("JournalEntryInstrumentDetailId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("JournalEntryInstrumentDetailId"));
-
-                    b.Property<DateOnly?>("InstrumentDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("InstrumentType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<int>("JournalEntryId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("NormalizedReferenceNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("ReferenceNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("JournalEntryInstrumentDetailId");
-
-                    b.HasIndex("JournalEntryId")
-                        .IsUnique();
-
-                    b.HasIndex("InstrumentType", "NormalizedReferenceNumber");
-
-                    b.ToTable("JournalEntryInstrumentDetails", t =>
-                        {
-                            t.HasCheckConstraint("CK_JournalEntryInstrumentDetails_InstrumentFields", "\"InstrumentType\" IN ('Cash','Cheque','BankTransfer','WireTransfer') AND ((\"InstrumentType\" = 'Cash' AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" <> 'Cash' AND \"ReferenceNumber\" IS NOT NULL AND \"NormalizedReferenceNumber\" IS NOT NULL AND length(\"ReferenceNumber\") > 0 AND \"ReferenceNumber\" = btrim(\"ReferenceNumber\") AND \"NormalizedReferenceNumber\" = upper(\"ReferenceNumber\") AND \"InstrumentDate\" IS NOT NULL))");
-                        });
-                });
-
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
                 {
                     b.Property<int>("JournalVoucherId")
@@ -755,11 +476,6 @@ namespace PureLedger.Migrations
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsStockTransfer")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
                     b.Property<bool>("PendingForCharges")
                         .HasColumnType("boolean");
 
@@ -768,6 +484,7 @@ namespace PureLedger.Migrations
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("bytea");
 
                     b.HasKey("JournalVoucherId");
@@ -1253,17 +970,6 @@ namespace PureLedger.Migrations
                     b.Navigation("Account");
                 });
 
-            modelBuilder.Entity("PureLedger.Models.ApprovalVoucherEntry", b =>
-                {
-                    b.HasOne("PureLedger.Models.ApprovalVoucher", "ApprovalVoucher")
-                        .WithMany("Entries")
-                        .HasForeignKey("ApprovalVoucherId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ApprovalVoucher");
-                });
-
             modelBuilder.Entity("PureLedger.Models.Category", b =>
                 {
                     b.HasOne("PureLedger.Models.AccountType", "AccountType")
@@ -1346,17 +1052,6 @@ namespace PureLedger.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("JournalVoucher");
-                });
-
-            modelBuilder.Entity("PureLedger.Models.JournalEntryInstrumentDetail", b =>
-                {
-                    b.HasOne("PureLedger.Models.JournalEntry", "JournalEntry")
-                        .WithOne("InstrumentDetail")
-                        .HasForeignKey("PureLedger.Models.JournalEntryInstrumentDetail", "JournalEntryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("JournalEntry");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>
@@ -1536,11 +1231,6 @@ namespace PureLedger.Migrations
                     b.Navigation("ProductData");
                 });
 
-            modelBuilder.Entity("PureLedger.Models.ApprovalVoucher", b =>
-                {
-                    b.Navigation("Entries");
-                });
-
             modelBuilder.Entity("PureLedger.Models.Category", b =>
                 {
                     b.Navigation("Accounts");
@@ -1549,11 +1239,6 @@ namespace PureLedger.Migrations
             modelBuilder.Entity("PureLedger.Models.DeliveryChallanVoucher", b =>
                 {
                     b.Navigation("Entries");
-                });
-
-            modelBuilder.Entity("PureLedger.Models.JournalEntry", b =>
-                {
-                    b.Navigation("InstrumentDetail");
                 });
 
             modelBuilder.Entity("PureLedger.Models.JournalVoucher", b =>

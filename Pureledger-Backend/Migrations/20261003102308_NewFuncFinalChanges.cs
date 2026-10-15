@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace PureLedger.Migrations
 {
     /// <inheritdoc />
-    public partial class NewFeaturesOnRestoredBaseline : Migration
+    public partial class NewFuncFinalChanges : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -100,6 +100,37 @@ namespace PureLedger.Migrations
                         principalColumn: "JournalEntryId",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.CreateTable(
+                name: "ProjectImg",
+                columns: table => new
+                {
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    ImageDataUrl = table.Column<string>(type: "text", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ProjectImg", x => x.ProjectId);
+                    table.ForeignKey(
+                        name: "FK_ProjectImg_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "ProjectId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            // Move the existing image before removing its original column.
+            migrationBuilder.Sql("""
+                INSERT INTO "ProjectImg" ("ProjectId", "ImageDataUrl")
+                SELECT DISTINCT ON ("ProjectId") "ProjectId", "ProjectImage"
+                FROM "ProjectCartageSettings"
+                WHERE "ProjectImage" IS NOT NULL AND btrim("ProjectImage") <> ''
+                ORDER BY "ProjectId", "Id" DESC;
+                """);
+
+            migrationBuilder.DropColumn(
+                name: "ProjectImage",
+                table: "ProjectCartageSettings");
 
             migrationBuilder.CreateTable(
                 name: "ApprovalVoucherEntries",
@@ -196,6 +227,19 @@ namespace PureLedger.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<string>(
+                name: "ProjectImage",
+                table: "ProjectCartageSettings",
+                type: "text",
+                nullable: true);
+
+            migrationBuilder.Sql("""
+                UPDATE "ProjectCartageSettings" AS settings
+                SET "ProjectImage" = image."ImageDataUrl"
+                FROM "ProjectImg" AS image
+                WHERE settings."ProjectId" = image."ProjectId";
+                """);
+
             migrationBuilder.DropTable(
                 name: "ApplicationErrorLogs");
 
@@ -204,6 +248,9 @@ namespace PureLedger.Migrations
 
             migrationBuilder.DropTable(
                 name: "JournalEntryInstrumentDetails");
+
+            migrationBuilder.DropTable(
+                name: "ProjectImg");
 
             migrationBuilder.DropTable(
                 name: "ApprovalVouchers");
@@ -216,6 +263,7 @@ namespace PureLedger.Migrations
             migrationBuilder.DropColumn(
                 name: "IsStockTransfer",
                 table: "JournalVouchers");
+
         }
     }
 }

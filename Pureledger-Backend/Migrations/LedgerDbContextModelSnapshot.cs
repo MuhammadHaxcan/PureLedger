@@ -93,9 +93,14 @@ namespace PureLedger.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("LinkedBookerId")
+                        .HasColumnType("integer");
+
                     b.HasKey("AccountId");
 
                     b.HasIndex("AccountGroupId");
+
+                    b.HasIndex("LinkedBookerId");
 
                     b.HasIndex("AccountName", "CategoryId")
                         .IsUnique();
@@ -103,7 +108,10 @@ namespace PureLedger.Migrations
                     b.HasIndex("CategoryId", "IsEnabled")
                         .HasDatabaseName("IX_Accounts_CategoryId_IsEnabled");
 
-                    b.ToTable("Accounts");
+                    b.ToTable("Accounts", t =>
+                        {
+                            t.HasCheckConstraint("CK_Accounts_LinkedBooker_AccountGroup", "\"LinkedBookerId\" IS NULL OR \"AccountGroupId\" = 1");
+                        });
                 });
 
             modelBuilder.Entity("PureLedger.Models.AccountData", b =>
@@ -604,6 +612,10 @@ namespace PureLedger.Migrations
 
                     b.Property<int>("JournalVoucherId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Station")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
 
                     b.HasKey("DeliveryChallanVoucherId");
 
@@ -1245,9 +1257,16 @@ namespace PureLedger.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PureLedger.Models.Booker", "LinkedBooker")
+                        .WithMany()
+                        .HasForeignKey("LinkedBookerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("AccountGroup");
 
                     b.Navigation("Category");
+
+                    b.Navigation("LinkedBooker");
                 });
 
             modelBuilder.Entity("PureLedger.Models.AccountData", b =>
