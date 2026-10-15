@@ -172,7 +172,7 @@ public sealed class DeliveryChallanReprocessAfterEditTests
     {
         var f = await Fixture.CreateAsync();
         await f.ProcessBatchAsync();
-        var newLocation = await f.AddLocationAsync("Second store");
+        var newLocation = await f.AddLocationAsync("Second store " + Guid.NewGuid().ToString("N")[..8]);
 
         await f.ApplyEditAsync(Edit.ProductRate, Path.SingleRow, locationId: newLocation);
 
@@ -183,7 +183,7 @@ public sealed class DeliveryChallanReprocessAfterEditTests
     internal sealed class Fixture
     {
         private readonly DbContextOptions<LedgerDbContext> options;
-        public int VoucherId, ProductA, ProductB, CustomerA, CustomerB, CategoryId, LocationId, TransporterId;
+        public int ProjectId, VoucherId, ProductA, ProductB, CustomerA, CustomerB, CategoryId, LocationId, TransporterId;
         public int ProductEntryId, CustomerEntryId, SecondProductEntryId;
 
         private Fixture(DbContextOptions<LedgerDbContext> options) => this.options = options;
@@ -201,15 +201,23 @@ public sealed class DeliveryChallanReprocessAfterEditTests
 
         public static async Task<Fixture> CreateAsync()
         {
-            var options = new DbContextOptionsBuilder<LedgerDbContext>()
-                .UseInMemoryDatabase("dc-reprocess-" + Guid.NewGuid().ToString("N"))
-                .ConfigureWarnings(x => x.Ignore(InMemoryEventId.TransactionIgnoredWarning)).Options;
+            // With PURELEDGER_TEST_POSTGRES set the same scenarios run against a real, migrated PostgreSQL database
+            // (use a disposable copy: every fixture adds its own uniquely named project and leaves it behind).
+            var pg = Environment.GetEnvironmentVariable("PURELEDGER_TEST_POSTGRES");
+            var builder = new DbContextOptionsBuilder<LedgerDbContext>();
+            if (string.IsNullOrWhiteSpace(pg))
+                builder.UseInMemoryDatabase("dc-reprocess-" + Guid.NewGuid().ToString("N"))
+                    .ConfigureWarnings(x => x.Ignore(InMemoryEventId.TransactionIgnoredWarning));
+            else
+                builder.UseNpgsql(pg);
+            var options = builder.Options;
             var f = new Fixture(options);
             await using var db = f.Context();
-            await db.Database.EnsureCreatedAsync();
+            if (string.IsNullOrWhiteSpace(pg)) await db.Database.EnsureCreatedAsync();
 
-            var project = new Project { ProjectName = "DC reprocess" };
-            var location = new Location { LocationName = "Main store" };
+            var unique = Guid.NewGuid().ToString("N")[..8];
+            var project = new Project { ProjectName = "DC reprocess " + unique };
+            var location = new Location { LocationName = "Main store " + unique };
             db.AddRange(project, location);
             await db.SaveChangesAsync();
             var category = new Category { ProjectId = project.ProjectId, CategoryName = "Mixed", AccountTypeId = 1 };
@@ -247,6 +255,7 @@ public sealed class DeliveryChallanReprocessAfterEditTests
             db.Add(voucher);
             await db.SaveChangesAsync();
 
+            f.ProjectId = project.ProjectId;
             f.VoucherId = voucher.JournalVoucherId;
             f.CategoryId = category.CategoryId; f.LocationId = location.LocationId;
             f.ProductA = productA.AccountId; f.ProductB = productB.AccountId;

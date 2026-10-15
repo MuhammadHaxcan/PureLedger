@@ -162,7 +162,7 @@ public sealed class StagedWriteOperationConsistencyTests
         {
             var baseVoucher = new JournalVoucher
             {
-                ProjectId = (await db.Projects.FirstAsync()).ProjectId, EntryDate = Date, CreditableDate = Date,
+                ProjectId = f.ProjectId, EntryDate = Date, CreditableDate = Date,
                 IsBaseVoucher = true, RowVersion = Guid.NewGuid().ToByteArray(),
                 JournalEntries =
                 {
@@ -178,7 +178,7 @@ public sealed class StagedWriteOperationConsistencyTests
         await using (var db = f.Db()) await f.NewServices(db).Journal.MarkEntriesAsMissedAsync(baseId);
 
         await using var verify = f.Db();
-        var missed = await verify.MissedEntries.SingleAsync();
+        var missed = await verify.MissedEntries.SingleAsync(m => m.ProductAccountId == f.ProductA);
         Assert.Equal((f.CustomerA, f.ProductA, 5), (missed.CustomerAccountId, missed.ProductAccountId, (int)missed.Quantity));
         Assert.Equal(0, (await verify.JournalEntries.SingleAsync(e => e.JournalVoucherId == baseId && e.AccountId == f.ProductA)).Quantity);
     }
@@ -191,7 +191,7 @@ public sealed class StagedWriteOperationConsistencyTests
         int expenseAccountId;
         await using (var db = f.Db())
         {
-            var projectId = (await db.Projects.FirstAsync()).ProjectId;
+            var projectId = f.ProjectId;
             var cat = new Category { ProjectId = projectId, CategoryName = "FOR", AccountTypeId = 1 };
             db.Add(cat);
             await db.SaveChangesAsync();
@@ -237,9 +237,13 @@ public sealed class StagedWriteOperationConsistencyTests
         int baseId, baseProductEntryId, baseCustomerEntryId;
         await using (var db = f.Db())
         {
+            // The UI always requires a booker; the derived voucher inherits it (a real database has no booker 0).
+            var booker = new Booker { BookerName = "Derived test " + Guid.NewGuid().ToString("N")[..8] };
+            db.Add(booker);
+            await db.SaveChangesAsync();
             var baseVoucher = new JournalVoucher
             {
-                ProjectId = (await db.Projects.FirstAsync()).ProjectId, EntryDate = Date, CreditableDate = Date,
+                ProjectId = f.ProjectId, EntryDate = Date, CreditableDate = Date, BookerId = booker.BookerID,
                 IsBaseVoucher = true, PendingForCharges = true, RowVersion = Guid.NewGuid().ToByteArray(),
                 JournalEntries =
                 {
