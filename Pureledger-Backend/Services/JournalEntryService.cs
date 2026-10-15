@@ -612,20 +612,25 @@ namespace PureLedger.Services
                 var result = await DeleteEntryInternalAsync(entryId);
                 if (result)
                 {
-                    // Mark remaining entries as edited to indicate voucher was modified
+                    // Repositories only stage changes, so persist the deletion before looking at the surviving
+                    // rows. Otherwise the query below still returns the row being deleted, and calling Update()
+                    // on it would turn the staged delete back into a modification (reported as success, row kept).
+                    await _unitOfWork.SaveChangesAsync();
+
+                    // Mark a surviving entry as edited to indicate the voucher was modified. The query has no
+                    // inherent order, so pick deterministically and never the entry that was just deleted.
                     var remainingEntries = await _unitOfWork.JournalEntries.GetEntriesByVoucherIdAsync(voucherId, null, null);
-                    if (remainingEntries.Any())
+                    var firstEntry = remainingEntries
+                        .Where(e => e.JournalEntryId != entryId)
+                        .OrderBy(e => e.JournalEntryId)
+                        .FirstOrDefault();
+                    if (firstEntry is { IsEdited: false })
                     {
-                        var firstEntry = remainingEntries.First();
-                        if (!firstEntry.IsEdited)
-                        {
-                            firstEntry.IsEdited = true;
-                            firstEntry.ModifiedDateTime = BusinessClock.Today;
-                            _unitOfWork.JournalEntries.Update(firstEntry);
-                        }
+                        firstEntry.IsEdited = true;
+                        firstEntry.ModifiedDateTime = BusinessClock.Today;
+                        _unitOfWork.JournalEntries.Update(firstEntry);
                     }
 
-                    // Persist the deletion before completion recalculation queries the voucher graph.
                     await _unitOfWork.SaveChangesAsync();
                     await RecalculateCompletionAsync(voucherId);
                     await ApplyLinkedBookerAsync(voucher);
