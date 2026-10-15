@@ -1,0 +1,7 @@
+#!/bin/bash
+# Prints the voucher / entries / challan rows for one voucher straight from PostgreSQL.
+# Usage: PG_DB=<disposable db> PGPASSWORD=... ./dbstate.sh <voucherId>
+: "${PG_DB:?set PG_DB to the disposable database the app is running against}"
+PSQL="${PSQL:-psql}"
+V=${1:?voucher id}
+"$PSQL" -h "${PGHOST:-localhost}" -U "${PGUSER:-postgres}" -d "$PG_DB" -tA -F' | ' -c "select 'voucher '||v.\"JournalVoucherId\", 'completed='||v.\"IsCompleted\", 'edited='||(select count(*) from \"JournalEntries\" e where e.\"JournalVoucherId\"=v.\"JournalVoucherId\" and e.\"IsEdited\") from \"JournalVouchers\" v where v.\"JournalVoucherId\"=$V union all select 'entry '||e.\"JournalEntryId\"||' ('||a.\"AccountName\"||')', 'processed='||e.\"IsProcessed\", 'qty='||e.\"Quantity\"||' rate='||e.\"Rate\"||' dr='||e.\"Debit\"||' cr='||e.\"Credit\" from \"JournalEntries\" e join \"Accounts\" a on a.\"AccountId\"=e.\"AccountId\" where e.\"JournalVoucherId\"=$V union all select 'dc-entry '||d.\"DeliveryChallanEntryId\", 'location='||l.\"LocationName\", 'for journal entry '||d.\"JournalEntryId\" from \"DeliveryChallanEntries\" d join \"Locations\" l on l.\"LocationId\"=d.\"LocationId\" join \"DeliveryChallanVouchers\" dv on dv.\"DeliveryChallanVoucherId\"=d.\"DeliveryChallanVoucherId\" where dv.\"JournalVoucherId\"=$V union all select 'dc-voucher '||\"DeliveryChallanVoucherId\", 'station='||coalesce(\"Station\",'-'), '' from \"DeliveryChallanVouchers\" where \"JournalVoucherId\"=$V order by 1"

@@ -1,0 +1,6 @@
+{
+  "name": "pureledger-e2e-audit",
+  "private": true,
+  "type": "module",
+  "dependencies": { "bcryptjs": "^3.0.2", "playwright-core": "^1.50.0" }
+}
