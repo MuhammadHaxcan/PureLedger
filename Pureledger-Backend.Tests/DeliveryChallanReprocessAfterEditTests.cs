@@ -190,6 +190,15 @@ public sealed class DeliveryChallanReprocessAfterEditTests
 
         private LedgerDbContext Context() => new(options);
 
+        // Fresh context per call, like one HTTP request. Used by other audit suites for seeding and assertions.
+        public LedgerDbContext Db() => Context();
+
+        public (DeliveryChallanService Dc, JournalEntryService Journal) NewServices(LedgerDbContext db)
+        {
+            var s = Services(db);
+            return (s.Dc, s.Journal);
+        }
+
         public static async Task<Fixture> CreateAsync()
         {
             var options = new DbContextOptionsBuilder<LedgerDbContext>()
