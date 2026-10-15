@@ -492,6 +492,13 @@ namespace PureLedger.Services
                     existingEntry.LocationId = locationId;
                     existingEntry.EntryDate = entryDate;
                     _unitOfWork.DeliveryChallanEntries.Update(existingEntry);
+                    // Self-heal rows left half-processed (DC row present, journal row still unprocessed), so
+                    // re-processing completes them instead of silently leaving them off the challan/invoice.
+                    if (!journalEntry.IsProcessed)
+                    {
+                        journalEntry.IsProcessed = true;
+                        _unitOfWork.JournalEntries.Update(journalEntry);
+                    }
                     _logger.LogInformation("Updated delivery challan entry {DCEntryId}", existingEntry.DeliveryChallanEntryId);
                     return existingEntry;
                 }

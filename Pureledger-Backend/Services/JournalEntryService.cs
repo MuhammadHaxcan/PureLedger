@@ -538,13 +538,16 @@ namespace PureLedger.Services
                 var newAccount = await _unitOfWork.Accounts.GetByIdAsync(entry.AccountId);
                 var newAccountGroupId = newAccount?.AccountGroupId ?? 0;
 
+                // Apply the location before the entry update: that step may unlink (delete) this DC entry when the
+                // quantity changes. Calling Update() on a DC entry already staged for deletion would turn the delete
+                // back into a modification, leaving the journal row unprocessed but still attached to the old DC row.
+                if (model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
+                    await UpdateDCEntryLocationAsync(model.DeliveryChallanEntryId.Value, model.LocationId.Value);
+
                 await HandleEntryUpdateAsync(
                     entry, voucherId, voucher, wasCompleted,
                     oldAccountGroupId, newAccountGroupId, oldQuantity,
                     deferCompletionRecalculation: true);
-
-                if (model.DeliveryChallanEntryId.HasValue && model.LocationId.HasValue)
-                    await UpdateDCEntryLocationAsync(model.DeliveryChallanEntryId.Value, model.LocationId.Value);
 
                 // Persist entry/DC mutations before completion recalculation queries the voucher graph.
                 await _unitOfWork.SaveChangesAsync();
