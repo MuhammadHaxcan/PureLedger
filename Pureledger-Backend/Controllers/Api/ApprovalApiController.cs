@@ -13,6 +13,9 @@ namespace PureLedger.Controllers.Api;
 [ControllerAccess]
 public sealed class ApprovalApiController : ControllerBase
 {
+    // Matches [MaxLength] on ApprovalVoucher.RejectionReason.
+    private const int MaxRejectionReasonLength = 1000;
+
     private readonly IApprovalService _service;
     private readonly ICurrentUserService _currentUser;
     private readonly IPaymentReceiptService _paymentReceipts;
@@ -68,8 +71,17 @@ public sealed class ApprovalApiController : ControllerBase
         Ok(await _service.ApproveAsync(id, request?.SnapshotVersion, RequireUser(), _currentUser.IsCurrentUserAdmin()));
 
     [HttpPost("{id:int}/reject")]
-    public async Task<IActionResult> Reject(int id, [FromBody] ApprovalDecisionRequest request) =>
-        Ok(await _service.RejectAsync(id, request.Reason ?? string.Empty, request.SnapshotVersion, RequireUser(), _currentUser.IsCurrentUserAdmin()));
+    public async Task<IActionResult> Reject(int id, [FromBody] ApprovalDecisionRequest request)
+    {
+        // Validated here so a missing reason is a clear 400 instead of surfacing as a server error.
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrEmpty(reason))
+            throw new BusinessRuleException("A rejection reason is required.", "REJECTION_REASON_REQUIRED");
+        if (reason.Length > MaxRejectionReasonLength)
+            throw new BusinessRuleException(
+                $"The rejection reason must not exceed {MaxRejectionReasonLength} characters.", "REJECTION_REASON_TOO_LONG");
+        return Ok(await _service.RejectAsync(id, reason, request.SnapshotVersion, RequireUser(), _currentUser.IsCurrentUserAdmin()));
+    }
 
     private int RequireUser() =>
         _currentUser.GetCurrentUserId() ?? throw new NotAuthenticatedException();

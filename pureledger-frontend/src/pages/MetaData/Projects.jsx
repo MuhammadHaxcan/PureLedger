@@ -171,7 +171,7 @@ const Projects = () => {
         </Button>
       </div>
 
-      {error && !showModal && (
+      {error && !showModal && !showDeleteModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           {error}
         </Alert>
@@ -243,11 +243,13 @@ const Projects = () => {
       {/* Create/Edit Modal */}
       <Modal
         show={showModal}
-        onHide={() => { logoLoadRef.current += 1; setShowModal(false); }}
+        onHide={() => { logoLoadRef.current += 1; setShowModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         title={editingProject ? 'Edit Project' : 'New Project'}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
+            <Button variant="secondary" onClick={() => { setShowModal(false); setError(''); }}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSubmit} disabled={logoLoading}>
@@ -257,7 +259,6 @@ const Projects = () => {
         }
       >
         <Form onSubmit={handleSubmit}>
-          {error && <Alert variant="danger">{error}</Alert>}
           <Form.Group className="mb-3" controlId="project-name">
             <Form.Label>Project Name</Form.Label>
             <Form.Control
@@ -286,7 +287,9 @@ const Projects = () => {
       {/* Delete Confirmation Modal */}
       <ConfirmModal
         show={showDeleteModal}
-        onHide={() => setShowDeleteModal(false)}
+        onHide={() => { setShowDeleteModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         onConfirm={handleConfirmDelete}
         title="Delete Project"
         message={`Are you sure you want to delete "${editingProject?.projectName}"? This action cannot be undone.`}

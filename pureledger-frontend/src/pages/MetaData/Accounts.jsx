@@ -413,7 +413,7 @@ const Accounts = () => {
         </Button>
       </div>
 
-      {error && (
+      {error && !showModal && !showDeleteModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           {error}
         </Alert>
@@ -550,12 +550,14 @@ const Accounts = () => {
 
       <Modal
         show={showModal}
-        onHide={() => setShowModal(false)}
+        onHide={() => { setShowModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         title={editingAccount ? 'Edit Account' : 'New Account'}
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
+            <Button variant="secondary" onClick={() => { setShowModal(false); setError(''); }}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSubmit}
@@ -820,7 +822,9 @@ const Accounts = () => {
 
       <ConfirmModal
         show={showDeleteModal}
-        onHide={() => setShowDeleteModal(false)}
+        onHide={() => { setShowDeleteModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         onConfirm={handleConfirmDelete}
         title="Delete Account"
         message={`Are you sure you want to delete "${editingAccount?.accountName}"?`}

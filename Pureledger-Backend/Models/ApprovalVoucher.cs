@@ -28,6 +28,10 @@ public class ApprovalVoucher
     [MaxLength(30)] public string Status { get; set; } = ApprovalStatuses.Pending;
     [MaxLength(20)] public string RequestKind { get; set; } = ApprovalRequestKinds.New;
     public int? JournalVoucherId { get; set; }
+    // JV number drawn from the JournalVouchers identity sequence when a New request is
+    // submitted for approval, so the number can be shown while the voucher is pending.
+    // No JournalVoucher row exists until approval, which inserts it with this exact id.
+    public int? ReservedJournalVoucherId { get; set; }
     public int ProjectId { get; set; }
     public int? BookerId { get; set; }
     public int CreditDays { get; set; }

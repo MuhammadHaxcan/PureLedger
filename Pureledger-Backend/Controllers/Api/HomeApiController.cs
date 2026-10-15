@@ -94,9 +94,13 @@ namespace PureLedger.Controllers.Api
                         autoApproved = approvalResult.AutoApproved,
                         approvalVoucherId = approvalResult.ApprovalVoucherId,
                         voucherId = approvalResult.JournalVoucherId,
+                        reservedJournalVoucherId = approvalResult.ReservedJournalVoucherId,
+                        displayVoucherId = approvalResult.JournalVoucherId ?? approvalResult.ReservedJournalVoucherId,
                         projectId = approvalResult.ProjectId,
                         message = approvalResult.IsPending
-                            ? "Voucher submitted for approval."
+                            ? (approvalResult.ReservedJournalVoucherId.HasValue
+                                ? $"Voucher submitted for approval. JV-{approvalResult.ReservedJournalVoucherId}"
+                                : "Voucher submitted for approval.")
                             : $"Expense voucher posted and automatically approved. JV-{approvalResult.JournalVoucherId}",
                         shouldPrint = !approvalResult.IsPending && action == "submit_print",
                         printUrl = !approvalResult.IsPending && action == "submit_print"
@@ -170,7 +174,10 @@ namespace PureLedger.Controllers.Api
             {
                 var result = await _journalService.GetVoucherDetailsAsync(id);
                 if (result == null)
-                    return NotFound(new { success = false, message = "Voucher not found" });
+                {
+                    var reservedMessage = await _approvalService.DescribeReservedVoucherNumberAsync(id);
+                    return NotFound(new { success = false, message = reservedMessage ?? "Voucher not found" });
+                }
 
                 return Ok(new { success = true, voucher = result });
             }

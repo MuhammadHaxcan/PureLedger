@@ -30,7 +30,7 @@ export const ToastProvider = ({ children }) => {
   const showError = (message, options = {}) => {
     toast.error(message, {
       position: "top-right",
-      autoClose: 5000,
+      autoClose: 10000,
       hideProgressBar: true,
       closeOnClick: true,
       pauseOnHover: true,

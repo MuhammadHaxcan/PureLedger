@@ -134,7 +134,7 @@ const Bookers = () => {
         </Button>
       </div>
 
-      {error && (
+      {error && !showModal && !showDeleteModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           {error}
         </Alert>
@@ -218,11 +218,13 @@ const Bookers = () => {
 
       <Modal
         show={showModal}
-        onHide={() => setShowModal(false)}
+        onHide={() => { setShowModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         title={editingBooker ? 'Edit Booker' : 'New Booker'}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
+            <Button variant="secondary" onClick={() => { setShowModal(false); setError(''); }}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSubmit}>
@@ -247,7 +249,9 @@ const Bookers = () => {
 
       <ConfirmModal
         show={showDeleteModal}
-        onHide={() => setShowDeleteModal(false)}
+        onHide={() => { setShowDeleteModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         onConfirm={handleConfirmDelete}
         title="Delete Booker"
         message={`Are you sure you want to delete "${editingBooker?.bookerName}"?`}

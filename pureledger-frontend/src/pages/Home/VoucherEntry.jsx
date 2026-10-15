@@ -321,7 +321,7 @@ const VoucherEntry = () => {
                 </div>
             )}
 
-            {error && (
+            {error && !showEditModal && !showDeleteModal && (
                 <div className="alert alert-danger alert-dismissible fade show" role="alert">
                     <i className="fas fa-exclamation-circle me-2"></i>{error}
                     <button type="button" className="btn-close" onClick={() => setError('')}></button>
@@ -376,7 +376,7 @@ const VoucherEntry = () => {
                 </div>
             </div>
 
-            {!voucher && !loading && hasSearched && voucherId && (
+            {!voucher && !loading && hasSearched && voucherId && !error && (
                 <div className="alert alert-warning">
                     <i className="fas fa-exclamation-triangle me-2"></i>No voucher found for the entered ID.
                 </div>
@@ -633,7 +633,7 @@ const VoucherEntry = () => {
             )}
 
             {/* Edit Entry Modal */}
-            <Modal show={showEditModal} onHide={() => setShowEditModal(false)} size="lg">
+            <Modal show={showEditModal} onHide={() => { setShowEditModal(false); setError(''); }} size="lg">
                 <Modal.Header closeButton>
                     <Modal.Title>
                         <i className="fas fa-edit me-2"></i>Edit Journal Entry
@@ -641,6 +641,12 @@ const VoucherEntry = () => {
                 </Modal.Header>
                 <Form onSubmit={handleEditFormSubmit}>
                     <Modal.Body>
+                        {error && (
+                            <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i className="fas fa-exclamation-circle me-2"></i>{error}
+                                <button type="button" className="btn-close" onClick={() => setError('')}></button>
+                            </div>
+                        )}
                         <input type="hidden" value={editFormData.entryId || ''} />
                         <input type="hidden" value={editFormData.projectId || ''} />
                         
@@ -847,7 +853,7 @@ const VoucherEntry = () => {
                         )}
                     </Modal.Body>
                     <Modal.Footer>
-                        <Button variant="secondary" onClick={() => setShowEditModal(false)}>
+                        <Button variant="secondary" onClick={() => { setShowEditModal(false); setError(''); }}>
                             <i className="fas fa-times me-1"></i> Cancel
                         </Button>
                         <Button variant="primary" type="submit" disabled={loading}>
@@ -860,7 +866,9 @@ const VoucherEntry = () => {
             {/* Delete Confirmation Modal */}
             <ConfirmModal
                 show={showDeleteModal}
-                onHide={() => setShowDeleteModal(false)}
+                onHide={() => { setShowDeleteModal(false); setError(''); }}
+                error={error}
+                onErrorDismiss={() => setError('')}
                 onConfirm={confirmDeleteEntry}
                 title="Delete Entry"
                 message={`Are you sure you want to delete this entry? This action cannot be undone.`}

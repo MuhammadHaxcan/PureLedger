@@ -1,17 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Form, Modal, Table } from 'react-bootstrap';
 import apiClient from '../../services/api';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
+import { getProjectImageDataUrl } from '../../services/projectImgApi';
 import './AgingFifoModal.css';
 
 const currency = value => new Intl.NumberFormat('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value ?? 0);
 const date = value => value ? value.split('-').reverse().join('/') : '—';
-const daysSinceBill = (entryDate, referenceDate) => {
-  if (!entryDate || !referenceDate) return '—';
+// Export formats shared with the other reports: MM/DD/YY dates and 2-decimal amounts.
+const exportDate = value => {
+  const parts = typeof value === 'string' ? value.split('-') : [];
+  return parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0].slice(-2)}` : '';
+};
+const currency2 = value => new Intl.NumberFormat('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+const daysBetween = (fromDate, toDate) => {
+  if (!fromDate || !toDate) return null;
   // Date-only values use UTC so daylight-saving changes cannot affect the day count.
-  const days = (Date.parse(`${referenceDate}T00:00:00Z`) - Date.parse(`${entryDate}T00:00:00Z`)) / 86400000;
-  return Number.isFinite(days) ? Math.round(days) : '—';
+  const days = (Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${fromDate}T00:00:00Z`)) / 86400000;
+  return Number.isFinite(days) ? Math.round(days) : null;
+};
+// Days past the creditable (due) date as of the reference date; 0 when not yet due.
+const daysOverdue = (creditableDate, referenceDate) => {
+  const days = daysBetween(creditableDate, referenceDate);
+  return days === null ? '—' : Math.max(0, days);
 };
 const pageSize = 100;
+const exportPageSize = 250;
+const viewLabels = { outstanding: 'Outstanding', credits: 'Payments & Credits', history: 'Transaction History' };
+const scopeLabels = { full: 'Full Ledger FIFO - Total Due', due: 'Due Till Date Breakdown' };
+// Stop spreadsheet apps from running user-entered text as a formula.
+const safeCell = value => (typeof value === 'string' && /^[=+\-@\t\r]/.test(value) ? `'${value}` : value);
+const amountColumns = {
+  outstanding: [['Original debit', 'debit'], ['Settled', 'settledDebit'], ['Remaining', 'remainingDebit']],
+  credits: [['Credit amount', 'credit'], ['Applied', 'appliedCredit'], ['Unapplied', 'unappliedCredit']],
+  history: [['Debit', 'debit'], ['Credit', 'credit'], ['Running balance', 'runningBalance']]
+};
 
 function PageControls({ page, totalRecords, hasMoreData, loading, onPage, label }) {
   return <div className="aging-fifo-pagination">
@@ -80,6 +103,8 @@ function FifoContent({ target, onRefreshReport }) {
   const [attempt, setAttempt] = useState(0);
   const [entry, setEntry] = useState(null);
   const [ledgerChanged, setLedgerChanged] = useState(false);
+  const [exporting, setExporting] = useState(null);
+  const [exportError, setExportError] = useState('');
   const versions = useRef({});
 
   useEffect(() => {
@@ -104,13 +129,84 @@ function FifoContent({ target, onRefreshReport }) {
   const expected = scope === 'due' ? target.dueTillDate : target.totalDue;
   const differs = data && Math.abs(Number(data.summary.netBalance) - Number(expected)) > 0.00005;
   const summary = data?.summary;
-  const showDaysSinceBill = view === 'outstanding' || view === 'history';
+  const showDaysOverdue = view === 'outstanding' || view === 'history';
   const prepareLoad = () => { setLoading(true); setError(''); setData(null); setEntry(null); };
   const selectView = next => {
     if (next === view && page === 0) return;
     prepareLoad(); setView(next); setPage(0);
   };
   const refresh = () => { prepareLoad(); versions.current = {}; setLedgerChanged(false); setPage(0); setAttempt(x => x + 1); };
+
+  // Exports cover every page of the selected view and scope, not just the visible page.
+  const fetchAllRows = async () => {
+    const all = [];
+    for (let exportPage = 0; ; exportPage++) {
+      const response = await apiClient.get('/ReportingApi/aging-report-fifo', {
+        params: { projectId: target.filters.projectId, categoryId: target.filters.categoryId,
+          accountId: target.accountId, referenceDate: target.filters.referenceDate, scope, view, page: exportPage, pageSize: exportPageSize }
+      });
+      if (!response.data.success || !response.data.data) throw new Error(response.data.message || 'Failed to load rows for export');
+      if (data && response.data.data.ledgerVersion !== data.ledgerVersion) setLedgerChanged(true);
+      all.push(...response.data.data.rows);
+      if (!response.data.data.hasMoreData) return all;
+    }
+  };
+  // Column headers, ID format and MM/DD/YY dates follow the Master Report exports.
+  const buildExport = (rows, kind) => {
+    const referenceDate = target.filters.referenceDate;
+    const pdf = kind === 'pdf';
+    const columns = [
+      ['ID', row => `JV-${row.journalVoucherId}${pdf ? '\n' : ', '}Entry: ${row.journalEntryId}`],
+      ...(showDaysOverdue ? [['Days Overdue', row => daysOverdue(row.creditableDate, referenceDate)]] : []),
+      ['Entry Date', row => exportDate(row.entryDate)],
+      ['Credit Date', row => exportDate(row.creditableDate)],
+      ['Description', row => safeCell(row.description || '')],
+      ...amountColumns[view].map(([label, key]) => [label, row => (pdf ? currency2(row[key]) : Number(row[key] ?? 0))])
+    ];
+    const records = rows.map(row => Object.fromEntries(columns.map(([header, get]) => [header, get(row)])));
+    if (pdf) {
+      const sum = key => rows.reduce((total, row) => total + Number(row[key] ?? 0), 0);
+      const totals = { ID: 'TOTAL' };
+      columns.forEach(([header]) => { totals[header] ??= ''; });
+      amountColumns[view].forEach(([label, key]) => {
+        // A running balance is not additive, so the history total shows the net movement instead.
+        totals[label] = currency2(key === 'runningBalance' ? sum('debit') - sum('credit') : sum(key));
+      });
+      records.push(totals);
+    }
+    return { columns: columns.map(([header]) => header), records };
+  };
+  const exportFileName = extension => {
+    const account = String(target.accountName ?? target.accountId).replace(/[^\w-]+/g, '_');
+    return `AgingFIFO_${account}_${scope}_${view}_${target.filters.referenceDate}.${extension}`;
+  };
+  const runExport = async kind => {
+    setExporting(kind); setExportError('');
+    try {
+      const rows = await fetchAllRows();
+      if (rows.length === 0) { setExportError('There are no rows to export for this view.'); return; }
+      const { columns, records } = buildExport(rows, kind);
+      if (kind === 'csv') {
+        await exportToCsvAsync(records, exportFileName('csv'));
+      } else {
+        const logoDataUrl = await getProjectImageDataUrl(target.filters.projectId).catch(() => null);
+        await generatePdfAsync({
+          orientation: 'landscape', format: 'a4',
+          title: 'Aging Report - FIFO Breakdown',
+          projectName: target.filters.projectName,
+          logoDataUrl,
+          subtitle: `Account: ${target.accountName}\nCategory: ${target.filters.categoryName}\nReference Date: ${target.filters.referenceDate}\nView: ${viewLabels[view]} | Scope: ${scopeLabels[scope]}`,
+          generatedInfo: `Generated: ${new Date().toLocaleString()} | Total Records: ${rows.length}`,
+          columns: columns.map(header => ({ header, dataKey: header })), rows: records,
+          rowsPerPage: 14, startY: 60, fontSize: 9, cellPadding: 2, filename: exportFileName('pdf')
+        });
+      }
+    } catch (err) {
+      setExportError(err.response?.data?.message || err.message || `Failed to export ${kind.toUpperCase()}`);
+    } finally {
+      setExporting(null);
+    }
+  };
 
   return <>
     <div className="aging-fifo-toolbar">
@@ -122,7 +218,16 @@ function FifoContent({ target, onRefreshReport }) {
         <option value="due">Due Till Date Breakdown</option>
       </Form.Select>
     </Form.Group>
+    <div className="aging-fifo-export d-flex gap-2" role="group" aria-label="Export">
+      <Button size="sm" variant="outline-success" disabled={loading || !data || !!exporting} onClick={() => runExport('csv')}>
+        {exporting === 'csv' ? <><span className="spinner-border spinner-border-sm me-2" role="status" />Generating...</> : <><i className="fas fa-file-csv me-1" /> Export CSV</>}
+      </Button>
+      <Button size="sm" variant="outline-danger" disabled={loading || !data || !!exporting} onClick={() => runExport('pdf')}>
+        {exporting === 'pdf' ? <><span className="spinner-border spinner-border-sm me-2" role="status" />Generating...</> : <><i className="fas fa-file-pdf me-1" /> Export PDF</>}
+      </Button>
     </div>
+    </div>
+    {exportError && <Alert variant="danger" dismissible onClose={() => setExportError('')}>{exportError}</Alert>}
     {(differs || ledgerChanged) && <Alert variant="warning">
       {ledgerChanged ? 'The ledger changed while this popup was open. Refresh to review the latest entries.' : 'This balance differs from the generated report. Account entries may have changed since it was generated.'}
       {differs && <div>Generated report: {currency(expected)} · Latest balance: {currency(summary.netBalance)}</div>}
@@ -149,16 +254,16 @@ function FifoContent({ target, onRefreshReport }) {
     {error && <Alert variant="danger">{error} <Button size="sm" variant="outline-danger" onClick={() => { prepareLoad(); setAttempt(x => x + 1); }}>Retry breakdown</Button></Alert>}
     {data && <>
       <div className="aging-fifo-table-scroll" role="region" aria-label="FIFO entries table" tabIndex={0}>
-        <Table bordered striped hover size="sm" className={`aging-fifo-table aging-fifo-entry-table${showDaysSinceBill ? ' aging-fifo-entry-table-with-days' : ''}`}>
-          <colgroup>{showDaysSinceBill && <col className="aging-fifo-days-column" />}<col className="aging-fifo-date-column" /><col className="aging-fifo-date-column" /><col className="aging-fifo-reference-column" /><col /><col className="aging-fifo-amount-column" /><col className="aging-fifo-amount-column" /><col className="aging-fifo-amount-column" /><col className="aging-fifo-action-column" /></colgroup>
-          <thead><tr>{showDaysSinceBill && <th scope="col" className="text-end" title="Days from the entry date to the report reference date. Negative values indicate entries after the reference date.">Days since bill</th>}<th scope="col">Entry date</th><th scope="col">Creditable date</th><th scope="col">Entry / voucher</th><th scope="col">Description</th>
+        <Table bordered striped hover size="sm" className={`aging-fifo-table aging-fifo-entry-table${showDaysOverdue ? ' aging-fifo-entry-table-with-days' : ''}`}>
+          <colgroup>{showDaysOverdue && <col className="aging-fifo-days-column" />}<col className="aging-fifo-date-column" /><col className="aging-fifo-date-column" /><col className="aging-fifo-reference-column" /><col /><col className="aging-fifo-amount-column" /><col className="aging-fifo-amount-column" /><col className="aging-fifo-amount-column" /><col className="aging-fifo-action-column" /></colgroup>
+          <thead><tr>{showDaysOverdue && <th scope="col" className="text-end" title="Days from the creditable date to the report reference date. 0 means not yet due.">Days overdue</th>}<th scope="col">Entry date</th><th scope="col">Creditable date</th><th scope="col">Entry / voucher</th><th scope="col">Description</th>
             {view === 'outstanding' && <><th scope="col" className="text-end">Original debit</th><th scope="col" className="text-end">Settled</th><th scope="col" className="text-end">Remaining</th></>}
             {view === 'credits' && <><th scope="col" className="text-end">Credit amount</th><th scope="col" className="text-end">Applied</th><th scope="col" className="text-end">Unapplied</th></>}
             {view === 'history' && <><th scope="col" className="text-end">Debit</th><th scope="col" className="text-end">Credit</th><th scope="col" className="text-end">Running balance</th></>}
             <th scope="col" className="aging-fifo-actions">Allocations</th>
           </tr></thead>
           <tbody>{data.rows.map(row => <tr key={row.journalEntryId}>
-            {showDaysSinceBill && <td className="text-end text-nowrap">{daysSinceBill(row.entryDate, target.filters.referenceDate)}</td>}
+            {showDaysOverdue && <td className="text-end text-nowrap">{daysOverdue(row.creditableDate, target.filters.referenceDate)}</td>}
             <td className="text-nowrap">{date(row.entryDate)}</td><td className="text-nowrap">{date(row.creditableDate)}</td><td className="aging-fifo-reference">{row.journalEntryId} / JV {row.journalVoucherId}</td><td className="aging-fifo-description">{row.description || '—'}</td>
             {(view === 'outstanding' ? [row.debit, row.settledDebit, row.remainingDebit] : view === 'credits'
               ? [row.credit, row.appliedCredit, row.unappliedCredit] : [row.debit, row.credit, row.runningBalance]).map((amount, i) => <td className="text-end text-nowrap" key={i}>{currency(amount)}</td>)}

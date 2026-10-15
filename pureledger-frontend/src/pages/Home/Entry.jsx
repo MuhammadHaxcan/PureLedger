@@ -40,6 +40,7 @@ const HomeEntry = () => {
     const editingApprovalId = positiveId(approvalIdParam);
     const isVoucherEditMode = editingVoucherId != null;
     const isApprovalEditMode = editingApprovalId != null;
+    const [pendingJvNumber, setPendingJvNumber] = useState(null);
     const isEditMode = isVoucherEditMode || isApprovalEditMode;
     const isBookerRequired = !isApprovalEditMode;
 
@@ -351,6 +352,7 @@ const HomeEntry = () => {
             setHasBookers(bookerRows.length > 0);
             setBookersLoaded(true);
             setSelectedProjectId(projectId);
+            setPendingJvNumber(approval.displayVoucherId ?? approval.reservedJournalVoucherId ?? null);
             setBookerId(approval.bookerId ?? null);
             setCreditDays(
                 approval.creditDays !== undefined && approval.creditDays !== null
@@ -1149,8 +1151,8 @@ const HomeEntry = () => {
             {isApprovalEditMode && (
                 <Alert variant="warning">
                     <i className="fas fa-lock me-2"></i>
-                    You are editing the complete pending voucher snapshot. Saving keeps it pending;
-                    it will not receive a JV number or enter reports until it is approved.
+                    You are editing the complete pending voucher snapshot. Saving keeps it pending
+                    {pendingJvNumber ? ` as JV-${pendingJvNumber}` : ''} and keeps its JV number; it will not enter reports until it is approved.
                 </Alert>
             )}
 

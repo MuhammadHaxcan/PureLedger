@@ -2,8 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AgingFifoModal from './AgingFifoModal';
 import apiClient from '../../services/api';
+import { exportToCsvAsync, generatePdfAsync } from '../../utils/exportUtils';
 
 vi.mock('../../services/api', () => ({ default: { get: vi.fn() } }));
+vi.mock('../../services/projectImgApi', () => ({ getProjectImageDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,logo') }));
+vi.mock('../../utils/exportUtils', () => ({ exportToCsvAsync: vi.fn(), generatePdfAsync: vi.fn() }));
 const target = {
   accountId: 100, accountName: 'Customer A', scope: 'full', totalDue: 50, dueTillDate: 25,
   filters: { projectId: 1, categoryId: 10, referenceDate: '2026-10-20', projectName: 'Main', categoryName: 'Customers' }
@@ -101,5 +104,61 @@ describe('AgingFifoModal', () => {
     expect(screen.getByText('Net credit balance')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh report' }));
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('shows days overdue from the creditable date, not the entry date', async () => {
+    apiClient.get.mockResolvedValueOnce(response({ rows: [
+      { ...row, journalEntryId: 1, description: 'Past due', entryDate: '2026-09-01', creditableDate: '2026-10-10' },
+      { ...row, journalEntryId: 2, description: 'Not yet due', entryDate: '2026-09-01', creditableDate: '2026-11-01' }
+    ] }));
+    render(<AgingFifoModal target={target} onHide={vi.fn()} />);
+    const pastDue = (await screen.findByText('Past due')).closest('tr');
+    const notDue = screen.getByText('Not yet due').closest('tr');
+    expect(screen.getByRole('columnheader', { name: 'Days overdue' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /days since bill/i })).not.toBeInTheDocument();
+    // The first cell is days overdue, counted from the creditable date.
+    expect(pastDue.cells[0]).toHaveTextContent('10');
+    expect(notDue.cells[0]).toHaveTextContent('0');
+    expect(pastDue.cells[0]).not.toHaveTextContent('49');
+  });
+
+  it('exports every page of the current view to CSV and PDF', async () => {
+    apiClient.get.mockResolvedValueOnce(response());
+    render(<AgingFifoModal target={target} onHide={vi.fn()} />);
+    await screen.findByText('Purchase A');
+    apiClient.get
+      .mockResolvedValueOnce(response({ hasMoreData: true, rows: [{ ...row, description: '=HYPERLINK("x")' }] }))
+      .mockResolvedValueOnce(response({ rows: [{ ...row, journalEntryId: 2, description: 'Second page' }] }));
+    fireEvent.click(screen.getByRole('button', { name: /Export CSV/ }));
+    await waitFor(() => expect(exportToCsvAsync).toHaveBeenCalledOnce());
+    const exportCalls = apiClient.get.mock.calls.slice(-2);
+    expect(exportCalls.map(([, config]) => config.params.page)).toEqual([0, 1]);
+    expect(exportCalls[0][1].params).toMatchObject({ pageSize: 250, view: 'outstanding', scope: 'full' });
+    const [records, filename] = exportCalls.length && exportToCsvAsync.mock.calls[0];
+    expect(records).toHaveLength(2);
+    // Same headers, MM/DD/YY dates, ID format and raw numeric amounts as the Master Report CSV.
+    expect(records[0]).toEqual({ ID: 'JV-11, Entry: 1', 'Days Overdue': 0, 'Entry Date': '10/01/26',
+      'Credit Date': '11/01/26', Description: "'=HYPERLINK(\"x\")", 'Original debit': 100, Settled: 50, Remaining: 50 });
+    expect(filename).toBe('AgingFIFO_Customer_A_full_outstanding_2026-10-20.csv');
+
+    apiClient.get.mockResolvedValueOnce(response());
+    fireEvent.click(screen.getByRole('button', { name: /Export PDF/ }));
+    await waitFor(() => expect(generatePdfAsync).toHaveBeenCalledOnce());
+    const config = generatePdfAsync.mock.calls[0][0];
+    expect(config).toMatchObject({ orientation: 'landscape', projectName: 'Main', logoDataUrl: 'data:image/png;base64,logo',
+      fontSize: 9, cellPadding: 2, filename: 'AgingFIFO_Customer_A_full_outstanding_2026-10-20.pdf' });
+    expect(config.columns.map(c => c.header)).toEqual(expect.arrayContaining(['ID', 'Days Overdue', 'Credit Date']));
+    expect(config.columns.map(c => c.header)).not.toContain('Days Since Bill');
+    expect(config.rows[0].ID).toBe('JV-11\nEntry: 1');
+    expect(config.rows.at(-1)).toMatchObject({ ID: 'TOTAL', 'Original debit': '100.00', Settled: '50.00', Remaining: '50.00' });
+  });
+
+  it('reports an export failure inside the modal', async () => {
+    render(<AgingFifoModal target={target} onHide={vi.fn()} />);
+    await screen.findByText('Purchase A');
+    apiClient.get.mockRejectedValueOnce(new Error('Export failed badly'));
+    fireEvent.click(screen.getByRole('button', { name: /Export CSV/ }));
+    await screen.findByText('Export failed badly');
+    expect(exportToCsvAsync).not.toHaveBeenCalled();
   });
 });

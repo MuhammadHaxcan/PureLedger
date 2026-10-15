@@ -241,6 +241,12 @@ namespace PureLedger.Data
                 .HasDatabaseName("UX_ApprovalVouchers_OnePendingRevision");
 
             modelBuilder.Entity<ApprovalVoucher>()
+                .HasIndex(x => x.ReservedJournalVoucherId)
+                .IsUnique()
+                .HasFilter("\"ReservedJournalVoucherId\" IS NOT NULL")
+                .HasDatabaseName("UX_ApprovalVouchers_ReservedJournalVoucherId");
+
+            modelBuilder.Entity<ApprovalVoucher>()
                 .HasIndex(x => new { x.Status, x.ProjectId, x.SubmittedDate });
 
             modelBuilder.Entity<ApprovalVoucherEntry>()
@@ -304,6 +310,11 @@ namespace PureLedger.Data
                 .ToTable(t => t.HasCheckConstraint(
                     "CK_ApprovalVoucherEntries_InstrumentFields",
                     "(\"InstrumentType\" IS NULL AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" = 'Cash' AND \"ReferenceNumber\" IS NULL AND \"NormalizedReferenceNumber\" IS NULL AND \"InstrumentDate\" IS NULL) OR (\"InstrumentType\" IN ('Cheque','BankTransfer','WireTransfer') AND \"ReferenceNumber\" IS NOT NULL AND \"NormalizedReferenceNumber\" IS NOT NULL AND length(\"ReferenceNumber\") > 0 AND \"ReferenceNumber\" = btrim(\"ReferenceNumber\") AND \"NormalizedReferenceNumber\" = upper(\"ReferenceNumber\") AND \"InstrumentDate\" IS NOT NULL)"));
+
+            modelBuilder.Entity<ApprovalVoucher>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_ApprovalVouchers_ReservedJvOnlyForNew",
+                    "\"ReservedJournalVoucherId\" IS NULL OR \"RequestKind\" = 'New'"));
 
             modelBuilder.Entity<ApprovalVoucher>()
                 .ToTable(t => t.HasCheckConstraint(

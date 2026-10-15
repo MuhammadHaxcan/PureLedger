@@ -173,6 +173,10 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
                 HadDuplicateWarningsAtSubmission = warnings.Count > 0,
                 PostedByUserId = userId
             };
+            // Admin requests are approved in this same transaction, so only requests that
+            // actually wait for a decision reserve a JV number.
+            if (!isAdmin)
+                approval.ReservedJournalVoucherId = await JournalVoucherNumbers.ReserveAsync(_context);
             _context.ApprovalVouchers.Add(approval);
             ReplaceSnapshot(approval, request.Entries);
             await _context.SaveChangesAsync();
@@ -399,6 +403,7 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
                 BookerId = null,
                 RowVersion = NewVersion()
             };
+            await JournalVoucherNumbers.ApplyReservedIdAsync(_context, approval, voucher);
             _context.JournalVouchers.Add(voucher);
             await _context.SaveChangesAsync();
             await _approvalCheckpoint.ReachedAsync(PaymentReceiptApprovalCheckpoint.VoucherSaved);
@@ -843,13 +848,17 @@ public sealed class PaymentReceiptService : IPaymentReceiptService
         approvalVoucherId = approval.ApprovalVoucherId,
         pendingApprovalId = approval.Status == ApprovalStatuses.Pending ? (int?)approval.ApprovalVoucherId : null,
         journalVoucherId = approval.JournalVoucherId,
+        reservedJournalVoucherId = approval.ReservedJournalVoucherId,
+        displayVoucherId = approval.JournalVoucherId ?? approval.ReservedJournalVoucherId,
         voucherVersion = _context.JournalVouchers.Local
             .FirstOrDefault(x => x.JournalVoucherId == approval.JournalVoucherId)?.RowVersion,
         snapshotVersion = approval.SnapshotVersion,
         duplicateWarnings = warnings,
         message = autoApproved
             ? $"Payment & Receipt {(approval.RequestKind == ApprovalRequestKinds.Revision ? "revision" : "voucher")} posted and automatically approved. JV-{approval.JournalVoucherId}"
-            : null,
+            : approval.Status == ApprovalStatuses.Pending && approval.ReservedJournalVoucherId.HasValue
+                ? $"Submitted for approval. JV-{approval.ReservedJournalVoucherId}"
+                : null,
         canPrint = approval.Status == ApprovalStatuses.Approved,
         shouldPrint = false
     };

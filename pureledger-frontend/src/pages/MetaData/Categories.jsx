@@ -316,7 +316,7 @@ const Categories = () => {
       </div>
 
       {/* Alerts */}
-      {error && (
+      {error && !showModal && !showDeleteModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           <i className="fas fa-exclamation-circle me-2"></i>{error}
         </Alert>
@@ -430,6 +430,8 @@ const Categories = () => {
       <Modal
         show={showModal}
         onHide={handleModalClose}
+        error={error}
+        onErrorDismiss={() => setError('')}
         title={editingCategory ? 'Edit Category' : 'New Category'}
         footer={
           <>
@@ -544,7 +546,10 @@ const Categories = () => {
         onHide={() => {
           setShowDeleteModal(false);
           setEditingCategory(null);
+          setError('');
         }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         onConfirm={handleConfirmDelete}
         title="Delete Category"
         message={`Are you sure you want to delete the category "${editingCategory?.categoryName}"?`}

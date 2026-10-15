@@ -9,6 +9,7 @@ public sealed class ApprovalSubmissionResult
     public bool AutoApproved { get; init; }
     public int? ApprovalVoucherId { get; init; }
     public int? JournalVoucherId { get; init; }
+    public int? ReservedJournalVoucherId { get; init; }
     public int ProjectId { get; init; }
 }
 

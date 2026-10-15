@@ -319,6 +319,7 @@ const ProcessDC = () => {
     challanRequestRef.current += 1;
     challanAbortRef.current?.abort();
     setShowDCModal(false);
+    setError('');
   };
 
   const loadExistingChallan = async (voucherId, entryId) => {
@@ -756,7 +757,7 @@ const ProcessDC = () => {
   return (
     <div className="container-fluid">
       {/* Alerts */}
-      {error && (
+      {error && !showDCModal && !showCartageModal && !showForChargesModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           <i className="fas fa-exclamation-circle me-2"></i>{error}
         </Alert>
@@ -1155,6 +1156,11 @@ const ProcessDC = () => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError('')}>
+              <i className="fas fa-exclamation-circle me-2"></i>{error}
+            </Alert>
+          )}
           {challanLoading && <p role="status">Loading saved challan details...</p>}
           {challanLookupError && <Alert variant="danger" role="alert">
             {challanLookupError}
@@ -1343,13 +1349,18 @@ const ProcessDC = () => {
       </Modal>
 
       {/* Cartage Modal */}
-      <Modal show={showCartageModal} onHide={() => setShowCartageModal(false)}>
+      <Modal show={showCartageModal} onHide={() => { setShowCartageModal(false); setError(''); }}>
         <Modal.Header closeButton className="bg-info text-white">
           <Modal.Title>
             <i className="fas fa-shipping-fast me-2"></i>Add Cartage
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError('')}>
+              <i className="fas fa-exclamation-circle me-2"></i>{error}
+            </Alert>
+          )}
           <Form>
             <input type="hidden" value={cartageForm.journalVoucherId || ''} />
             <input type="hidden" value={cartageForm.entryId || ''} />
@@ -1404,7 +1415,7 @@ const ProcessDC = () => {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowCartageModal(false)} disabled={processing}>
+          <Button variant="secondary" onClick={() => { setShowCartageModal(false); setError(''); }} disabled={processing}>
             <i className="fas fa-times me-1"></i> Cancel
           </Button>
           <Button
@@ -1486,13 +1497,18 @@ const ProcessDC = () => {
       </Modal>
 
       {/* FOR Charges Modal */}
-      <Modal show={showForChargesModal} onHide={() => setShowForChargesModal(false)}>
+      <Modal show={showForChargesModal} onHide={() => { setShowForChargesModal(false); setError(''); }}>
         <Modal.Header closeButton className="bg-success text-white">
           <Modal.Title>
             <i className="fas fa-money-bill-wave me-2"></i>Add FOR Charges
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError('')}>
+              <i className="fas fa-exclamation-circle me-2"></i>{error}
+            </Alert>
+          )}
           <Form>
             {selectedVoucherForForCharges && (
               <Alert variant="info" className="mb-3">
@@ -1567,7 +1583,7 @@ const ProcessDC = () => {
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowForChargesModal(false)} disabled={processing}>
+          <Button variant="secondary" onClick={() => { setShowForChargesModal(false); setError(''); }} disabled={processing}>
             <i className="fas fa-times me-1"></i> Cancel
           </Button>
           <Button

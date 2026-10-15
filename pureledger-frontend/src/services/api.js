@@ -253,10 +253,11 @@ apiClient.interceptors.response.use(
                 localStorage.removeItem('userAccess');
                 localStorage.removeItem('navigationMenu');
 
-                // Redirect to login after a short delay to show the toast
+                // The redirect reloads the page, which would discard this toast after ~2s, so the login page
+                // shows the session-expired message itself (see Login.jsx, ?sessionExpired=1).
                 setTimeout(() => {
                     if (window.location.pathname !== '/login') {
-                        window.location.href = '/login';
+                        window.location.href = '/login?sessionExpired=1';
                     }
                 }, 2000);
 

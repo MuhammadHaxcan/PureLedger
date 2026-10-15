@@ -117,7 +117,7 @@ const Locations = () => {
         </Button>
       </div>
 
-      {error && (
+      {error && !showModal && !showDeleteModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           {error}
         </Alert>
@@ -186,11 +186,13 @@ const Locations = () => {
 
       <Modal
         show={showModal}
-        onHide={() => setShowModal(false)}
+        onHide={() => { setShowModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         title={editingLocation ? 'Edit Location' : 'New Location'}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
+            <Button variant="secondary" onClick={() => { setShowModal(false); setError(''); }}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSubmit}>
@@ -215,7 +217,9 @@ const Locations = () => {
 
       <ConfirmModal
         show={showDeleteModal}
-        onHide={() => setShowDeleteModal(false)}
+        onHide={() => { setShowDeleteModal(false); setError(''); }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         onConfirm={handleConfirmDelete}
         title="Delete Location"
         message={`Are you sure you want to delete "${editingLocation?.locationName}"?`}

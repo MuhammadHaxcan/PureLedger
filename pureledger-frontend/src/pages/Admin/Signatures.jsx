@@ -142,6 +142,7 @@ const Signatures = () => {
   const handleCancel = () => {
     setShowModal(false);
     setEditingSignature(null);
+    setError('');
   };
 
   const getImageUrl = (base64String) => {
@@ -163,7 +164,7 @@ const Signatures = () => {
         </Button>
       </div>
 
-      {error && (
+      {error && !showModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           {error}
         </Alert>
@@ -282,6 +283,11 @@ const Signatures = () => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError('')}>
+              {error}
+            </Alert>
+          )}
           <SignatureCanvas
             onSave={handleSave}
             onCancel={handleCancel}

@@ -120,6 +120,8 @@ export default function StockTransfers() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('new');
+  const itemsTableBodyRef = useRef(null);
+  const focusNewItemRef = useRef(false);
   const [init, setInit] = useState({ projects: [], locations: [] });
   const [categories, setCategories] = useState([]);
   const [filterCategories, setFilterCategories] = useState([]);
@@ -504,6 +506,37 @@ export default function StockTransfers() {
       }
     }
   };
+
+  const addItem = useCallback(() => {
+    focusNewItemRef.current = true;
+    setForm((previous) => ({
+      ...previous,
+      items: [...previous.items, blankItem()],
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!focusNewItemRef.current) return;
+    focusNewItemRef.current = false;
+    const rows = itemsTableBodyRef.current?.querySelectorAll('tr');
+    const lastRow = rows?.[rows.length - 1];
+    if (!lastRow) return;
+    lastRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    lastRow.querySelector('input.select-search')?.focus();
+  }, [form.items.length]);
+
+  useEffect(() => {
+    if (activeTab !== 'new') return undefined;
+    const handleKeyDown = (event) => {
+      if (event.altKey && event.key.toLowerCase() === 'n' && !loading) {
+        event.preventDefault();
+        addItem();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, loading, addItem]);
 
   const updateItem = (index, field, value) => setForm((previous) => ({
     ...previous,
@@ -1057,7 +1090,8 @@ export default function StockTransfers() {
 
   return (
     <div className="stock-transfer-page container-fluid py-3">
-      {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
+      {/* A message drawn on the page behind an open dialog is invisible, so each dialog shows the error itself. */}
+      {error && !receiveTransfer && !details && !deleteTarget && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert variant="success" dismissible onClose={() => setSuccess('')}>{success}</Alert>}
 
       <Tabs
@@ -1242,13 +1276,10 @@ export default function StockTransfers() {
                 <Button
                   size="sm"
                   variant="outline-primary"
-                  onClick={() => setForm((previous) => ({
-                    ...previous,
-                    items: [...previous.items, blankItem()],
-                  }))}
+                  onClick={addItem}
                 >
                   <i className="fas fa-plus me-1" />
-                  Add product
+                  Add product (Alt+N)
                 </Button>
               </Card.Header>
               <Card.Body className="p-0">
@@ -1265,9 +1296,11 @@ export default function StockTransfers() {
                         <th />
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody ref={itemsTableBodyRef}>
+                      {/* Rows are keyed by position only: a key that includes the chosen product recreates the row when a
+                          product is selected, dropping keyboard focus so the next Tab jumps back to the top of the page. */}
                       {form.items.map((item, index) => (
-                        <tr key={`${index}-${item.productAccountId}`}>
+                        <tr key={index}>
                           <td>
                             <SearchableSelect
                               size="md"
@@ -1372,7 +1405,7 @@ export default function StockTransfers() {
 
       <Modal
         show={!!receiveTransfer}
-        onHide={() => setReceiveTransfer(null)}
+        onHide={() => { setReceiveTransfer(null); setError(''); }}
         size="xl"
         centered
         scrollable
@@ -1386,6 +1419,7 @@ export default function StockTransfers() {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
           <Alert variant="light" className="border">
             <i className="fas fa-info-circle text-primary me-2" />
             Products are atomic: selecting a line receives its complete dispatched quantity and base value.
@@ -1607,7 +1641,7 @@ export default function StockTransfers() {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setReceiveTransfer(null)}>
+          <Button variant="secondary" onClick={() => { setReceiveTransfer(null); setError(''); }}>
             <i className="fas fa-times me-1" />
             Cancel
           </Button>
@@ -1622,11 +1656,12 @@ export default function StockTransfers() {
         </Modal.Footer>
       </Modal>
 
-      <Modal show={!!details} onHide={() => setDetails(null)} size="xl" centered>
+      <Modal show={!!details} onHide={() => { setDetails(null); setError(''); }} size="xl" centered>
         <Modal.Header closeButton>
           <Modal.Title>{detailSummary?.transferNumber}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
           {detailSummary && (
             <>
               <div className="d-flex flex-wrap justify-content-between gap-2 mb-3">
@@ -1717,18 +1752,19 @@ export default function StockTransfers() {
         </Modal.Body>
         <Modal.Footer className="justify-content-between">
           {detailSummary && <TransferActions transfer={detailSummary} />}
-          <Button variant="secondary" onClick={() => setDetails(null)}>
+          <Button variant="secondary" onClick={() => { setDetails(null); setError(''); }}>
             <i className="fas fa-times me-1" />
             Close
           </Button>
         </Modal.Footer>
       </Modal>
 
-      <Modal show={!!deleteTarget} onHide={() => setDeleteTarget(null)} centered>
+      <Modal show={!!deleteTarget} onHide={() => { setDeleteTarget(null); setError(''); }} centered>
         <Modal.Header closeButton>
           <Modal.Title>Delete entire stock transfer</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
           <Alert variant="danger">
             This removes the dispatch, all receipts, all receiving-charge JVs, cancellation JV,
             delivery challans, entries, and typed references for <strong>{deleteTarget?.transferNumber}</strong>.
@@ -1744,7 +1780,7 @@ export default function StockTransfers() {
           />
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+          <Button variant="secondary" onClick={() => { setDeleteTarget(null); setError(''); }}>
             <i className="fas fa-times me-1" />
             Keep transfer
           </Button>

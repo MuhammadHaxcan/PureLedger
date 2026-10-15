@@ -1,4 +1,4 @@
-import { Modal, Button } from 'react-bootstrap';
+import { Modal, Button, Alert } from 'react-bootstrap';
 
 const ConfirmModal = ({ 
   show, 
@@ -9,7 +9,9 @@ const ConfirmModal = ({
   confirmText = 'Confirm', 
   cancelText = 'Cancel', 
   variant = 'danger',
-  loading = false
+  loading = false,
+  error = '',
+  onErrorDismiss
 }) => {
   return (
     <Modal show={show} onHide={onHide}>
@@ -17,6 +19,11 @@ const ConfirmModal = ({
         <Modal.Title>{title}</Modal.Title>
       </Modal.Header>
       <Modal.Body>
+        {error && (
+          <Alert variant="danger" dismissible={!!onErrorDismiss} onClose={onErrorDismiss}>
+            <i className="fas fa-exclamation-circle me-2"></i>{error}
+          </Alert>
+        )}
         <p>{message}</p>
       </Modal.Body>
       <Modal.Footer>

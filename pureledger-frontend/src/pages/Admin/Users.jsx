@@ -287,6 +287,29 @@ const Users = () => {
     setError('');
     setSuccess('');
 
+    const trimmedUsername = formData.username.trim();
+    const trimmedFullName = formData.fullName.trim();
+    if (!editingUser && trimmedUsername.length < 3) {
+      setError(trimmedUsername ? 'Username must be at least 3 characters.' : 'Username is required.');
+      isSubmittingRef.current = false;
+      return;
+    }
+    if (trimmedUsername.length > 50) {
+      setError('Username must not exceed 50 characters.');
+      isSubmittingRef.current = false;
+      return;
+    }
+    if (trimmedFullName.length < 2) {
+      setError(trimmedFullName ? 'Full name must be at least 2 characters.' : 'Full name is required.');
+      isSubmittingRef.current = false;
+      return;
+    }
+    if (trimmedFullName.length > 50) {
+      setError('Full name must not exceed 50 characters.');
+      isSubmittingRef.current = false;
+      return;
+    }
+
     // Validate password
     if (!editingUser && !formData.password) {
       setError('Password is required for new users.');
@@ -518,7 +541,7 @@ const Users = () => {
         </Button>
       </div>
 
-      {error && (
+      {error && !showModal && !showDeleteModal && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>
           <i className="fas fa-exclamation-circle me-2"></i>{error}
         </Alert>
@@ -674,9 +697,11 @@ const Users = () => {
         }}
         title={editingUser ? 'Edit User' : 'New User'}
         size="xl"
+        error={error}
+        onErrorDismiss={() => setError('')}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowModal(false)} disabled={loading}>
+            <Button variant="secondary" onClick={() => { setShowModal(false); setError(''); }} disabled={loading}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSubmit} disabled={loading} form="userForm">
@@ -975,7 +1000,10 @@ const Users = () => {
         onHide={() => {
           setShowDeleteModal(false);
           setEditingUser(null);
+          setError('');
         }}
+        error={error}
+        onErrorDismiss={() => setError('')}
         onConfirm={handleConfirmDelete}
         title="Delete User"
         message={`Are you sure you want to delete user "${editingUser?.username}"? This action cannot be undone.`}

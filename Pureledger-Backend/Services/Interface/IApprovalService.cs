@@ -14,6 +14,7 @@ public interface IApprovalService
     Task<bool> ContainsExpenseAsync(IEnumerable<JournalEntryRowModel> entries);
     Task<ApprovalSubmissionResult?> SubmitManualExpenseAsync(
         JournalEntryViewModel model, int? editingVoucherId, int userId);
+    Task<string?> DescribeReservedVoucherNumberAsync(int journalVoucherId);
     Task<object> GetPendingAsync(int userId, bool isAdmin);
     Task<object> GetHistoryAsync(int userId, bool isAdmin);
     Task<object?> GetAsync(int approvalVoucherId, int userId, bool isAdmin);

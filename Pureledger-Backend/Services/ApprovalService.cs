@@ -112,6 +112,10 @@ public sealed class ApprovalService : IApprovalService
                 SubmittedDate = BusinessClock.Today,
                 PostedByUserId = userId
             };
+            // Admin requests are approved in this same transaction, so only requests that
+            // actually wait for a decision reserve a JV number.
+            if (voucher == null && !isAdmin)
+                approval.ReservedJournalVoucherId = await JournalVoucherNumbers.ReserveAsync(_context);
             _context.ApprovalVouchers.Add(approval);
             await _context.SaveChangesAsync();
             ReplaceSnapshot(approval, model.Entries);
@@ -134,6 +138,7 @@ public sealed class ApprovalService : IApprovalService
                 AutoApproved = isAdmin,
                 ApprovalVoucherId = approval.ApprovalVoucherId,
                 JournalVoucherId = approval.JournalVoucherId,
+                ReservedJournalVoucherId = approval.ReservedJournalVoucherId,
                 ProjectId = approval.ProjectId
             };
         }
@@ -153,6 +158,21 @@ public sealed class ApprovalService : IApprovalService
             !voucher.JournalEntries.Any(entry => entry.InstrumentDetail != null) &&
             voucher.JournalEntries.Any(entry => entry.Account!.AccountGroupId == ExpenseGroup));
 
+    // Explains a JV number that was reserved at submission but has no voucher row (yet, or ever).
+    public async Task<string?> DescribeReservedVoucherNumberAsync(int journalVoucherId)
+    {
+        var status = await _context.ApprovalVouchers.AsNoTracking()
+            .Where(x => x.ReservedJournalVoucherId == journalVoucherId && x.JournalVoucherId == null)
+            .Select(x => x.Status)
+            .SingleOrDefaultAsync();
+        return status switch
+        {
+            ApprovalStatuses.Pending => $"JV-{journalVoucherId} is pending approval. It becomes available once it is approved.",
+            ApprovalStatuses.Rejected => $"JV-{journalVoucherId} was rejected and was never posted.",
+            _ => null
+        };
+    }
+
     public async Task<object> GetPendingAsync(int userId, bool isAdmin)
     {
         var projectIds = await AccessibleProjectsAsync(userId, isAdmin);
@@ -166,6 +186,8 @@ public sealed class ApprovalService : IApprovalService
                 approvalVoucherId = x.ApprovalVoucherId,
                 voucherType = x.VoucherType == ApprovalVoucherType.PaymentReceipt ? "PaymentReceipt" : "ManualExpense",
                 journalVoucherId = x.JournalVoucherId,
+                reservedJournalVoucherId = x.ReservedJournalVoucherId,
+                displayVoucherId = x.JournalVoucherId ?? x.ReservedJournalVoucherId,
                 requestKind = x.RequestKind,
                 projectId = x.ProjectId,
                 projectName = _context.Projects.Where(p => p.ProjectId == x.ProjectId).Select(p => p.ProjectName).FirstOrDefault(),
@@ -196,6 +218,8 @@ public sealed class ApprovalService : IApprovalService
                 approvalVoucherId = x.ApprovalVoucherId,
                 voucherType = x.VoucherType == ApprovalVoucherType.PaymentReceipt ? "PaymentReceipt" : "ManualExpense",
                 journalVoucherId = x.JournalVoucherId,
+                reservedJournalVoucherId = x.ReservedJournalVoucherId,
+                displayVoucherId = x.JournalVoucherId ?? x.ReservedJournalVoucherId,
                 requestKind = x.RequestKind,
                 status = x.Status,
                 projectId = x.ProjectId,
@@ -301,6 +325,8 @@ public sealed class ApprovalService : IApprovalService
         {
             approvalVoucherId = approval.ApprovalVoucherId,
             journalVoucherId = approval.JournalVoucherId,
+            reservedJournalVoucherId = approval.ReservedJournalVoucherId,
+            displayVoucherId = approval.JournalVoucherId ?? approval.ReservedJournalVoucherId,
             status = approval.Status,
             voucherType = approval.VoucherType.ToString(),
             requestKind = approval.RequestKind,
@@ -463,6 +489,7 @@ public sealed class ApprovalService : IApprovalService
                 IsBaseVoucher = false,
                 PendingForCharges = false
             };
+            await JournalVoucherNumbers.ApplyReservedIdAsync(_context, approval, voucher);
             _context.JournalVouchers.Add(voucher);
             await _context.SaveChangesAsync();
         }
@@ -650,6 +677,7 @@ public sealed class ApprovalService : IApprovalService
                 PendingForCharges = false,
                 IsCompleted = false
             };
+            await JournalVoucherNumbers.ApplyReservedIdAsync(_context, approval, voucher);
             _context.JournalVouchers.Add(voucher);
             await _context.SaveChangesAsync();
         }

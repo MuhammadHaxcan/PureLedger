@@ -232,4 +232,65 @@ describe('VoucherEntry aggregate editing boundaries', () => {
         expect(screen.queryByTitle('Delete Entry')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Edit Entire Voucher/i })).not.toBeInTheDocument();
     });
+
+    it('explains that a looked-up number is pending approval instead of a bare not-found warning', async () => {
+        apiClient.get.mockRejectedValue({
+            response: { status: 404, data: { success: false, message: 'JV-41 is pending approval. It becomes available once it is approved.' } },
+        });
+
+        renderEditor();
+
+        expect(await screen.findByText(/JV-41 is pending approval/i)).toBeInTheDocument();
+        expect(screen.queryByText(/No voucher found for the entered ID/i)).not.toBeInTheDocument();
+    });
+
+    it('explains that a looked-up number was rejected', async () => {
+        apiClient.get.mockRejectedValue({
+            response: { status: 404, data: { success: false, message: 'JV-41 was rejected and was never posted.' } },
+        });
+
+        renderEditor();
+
+        expect(await screen.findByText(/JV-41 was rejected and was never posted/i)).toBeInTheDocument();
+    });
+
+    it('shows why a line could not be deleted inside the confirmation dialog instead of behind it', async () => {
+        apiClient.get.mockResolvedValue(voucherResponse());
+        apiClient.delete.mockRejectedValue({
+            response: { data: { success: false, message: 'This voucher is pending approval and cannot be changed or printed.' } },
+        });
+        const user = userEvent.setup();
+
+        renderEditor();
+        await user.click((await screen.findAllByTitle('Delete Entry'))[0]);
+        const dialog = await screen.findByRole('dialog');
+        await user.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+
+        expect(await within(dialog).findByText(/pending approval and cannot be changed/i)).toBeInTheDocument();
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('shows a failed line edit inside the edit dialog instead of behind it', async () => {
+        apiClient.get.mockImplementation(async (url) => {
+            if (url.startsWith('/HomeApi/voucher/')) return voucherResponse();
+            if (url.startsWith('/HomeApi/journal-entry/')) {
+                return { data: { success: true, data: {
+                    entryId: 1, categoryId: 1, accountId: 1, projectId: 1, description: 'Debit row',
+                    quantity: 0, rate: 0, discount: 0, discountPercent: 0, debit: 100, credit: 0,
+                } } };
+            }
+            return { data: { success: true, data: [] } };
+        });
+        apiClient.put.mockRejectedValue({
+            response: { data: { success: false, message: 'Entry could not be updated.' } },
+        });
+        const user = userEvent.setup();
+
+        renderEditor();
+        await user.click((await screen.findAllByTitle('Edit Entry'))[0]);
+        const dialog = await screen.findByRole('dialog');
+        await user.click(await within(dialog).findByRole('button', { name: /Save Changes/i }));
+
+        expect(await within(dialog).findByText('Entry could not be updated.')).toBeInTheDocument();
+    });
 });

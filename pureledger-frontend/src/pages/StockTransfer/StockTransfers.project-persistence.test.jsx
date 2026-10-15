@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import StockTransfers from './StockTransfers';
@@ -260,5 +261,37 @@ describe('Stock Transfer project persistence', () => {
     fireEvent.click(screen.getByRole('tab', { name: /History/ }));
     filterCard = document.querySelector('.tab-pane.active .transfer-filter-card');
     expect(within(filterCard).getByRole('button', { name: 'Search' })).toBeDisabled();
+  });
+
+  it('keeps keyboard focus on the product field after Enter so Tab continues to the next column', async () => {
+    render(
+      <MemoryRouter>
+        <StockTransfers />
+      </MemoryRouter>
+    );
+    await waitFor(() => expect(screen.getByPlaceholderText('Search project')).toHaveValue('Main Project'));
+    fireEvent.change(screen.getByPlaceholderText('Search source').parentElement.querySelector('select'), { target: { value: '10' } });
+    fireEvent.change(screen.getByPlaceholderText('Search destination').parentElement.querySelector('select'), { target: { value: '20' } });
+    const categoryInput = screen.getByPlaceholderText('Search category');
+    await waitFor(() => expect(categoryInput.parentElement.querySelector('select option[value="100"]')).toBeInTheDocument());
+    fireEvent.change(categoryInput.parentElement.querySelector('select'), { target: { value: '100' } });
+    const productInput = screen.getByPlaceholderText('Select product');
+    await waitFor(() => expect(productInput).toBeEnabled());
+    await waitFor(() => expect(productInput.parentElement.querySelector('select option[value="500"]')).toBeInTheDocument());
+    const row = productInput.closest('tr');
+
+    const user = userEvent.setup();
+    await user.click(productInput);
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(productInput).toHaveValue('Product A'));
+    await waitFor(() => expect(row.querySelector('td:nth-child(3)')).toHaveTextContent('5'));
+    // The row must not be recreated: a recreated row loses focus and the next Tab restarts from the top of the page.
+    expect(screen.getByPlaceholderText('Select product')).toBe(productInput);
+    expect(productInput.closest('tr')).toBe(row);
+    expect(productInput).toHaveFocus();
+
+    await user.tab();
+    expect(row.querySelector('input[type="number"]')).toHaveFocus();
   });
 });

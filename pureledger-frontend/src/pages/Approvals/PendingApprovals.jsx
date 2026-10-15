@@ -55,7 +55,7 @@ const decisionUsernameOf = (row) =>
 const projectNameOf = (row) => row?.projectName ?? row?.project?.name ?? '—';
 
 const journalVoucherIdOf = (row) => {
-    const journalVoucherId = row?.journalVoucherId ?? row?.voucherId;
+    const journalVoucherId = row?.journalVoucherId ?? row?.voucherId ?? row?.displayVoucherId;
     return journalVoucherId ? `JV-${journalVoucherId}` : '—';
 };
 
@@ -223,7 +223,7 @@ const PendingApprovals = () => {
     }, [location.pathname, location.state?.approvalMessage, navigate]);
 
     const rows = activeTab === 'pending' ? pendingRows : historyRows;
-    const tableColumnCount = activeTab === 'history' ? 8 : 7;
+    const tableColumnCount = 8;
 
     const loadDetail = async (row, force = false) => {
         const approvalId = approvalIdOf(row);
@@ -332,6 +332,7 @@ const PendingApprovals = () => {
         setRejecting(null);
         setRejectionReason('');
         setRejectionTouched(false);
+        setError('');
     };
 
     const submitRejection = async () => {
@@ -395,7 +396,7 @@ const PendingApprovals = () => {
                 </Button>
             </div>
 
-            {error && (
+            {error && !approving && !rejecting && (
                 <Alert variant="danger" dismissible onClose={() => setError('')}>
                     {error}
                 </Alert>
@@ -434,7 +435,7 @@ const PendingApprovals = () => {
                                 <th>Type</th>
                                 <th>Submitted by</th>
                                 <th>Project</th>
-                                {activeTab === 'history' && <th>JV ID</th>}
+                                <th>JV ID</th>
                                 <th>Submitted date</th>
                                 <th className="text-end">Total debit</th>
                                 {activeTab === 'history' && <th>Status / decision</th>}
@@ -477,7 +478,7 @@ const PendingApprovals = () => {
                                             </td>
                                             <td>{usernameOf(row)}</td>
                                             <td>{projectNameOf(row)}</td>
-                                            {activeTab === 'history' && <td>{journalVoucherIdOf(row)}</td>}
+                                            <td>{journalVoucherIdOf(row)}</td>
                                             <td>
                                                 {formatDate(submittedDateOf(row))}
                                                 {isPaymentReceipt(row) && (
@@ -534,8 +535,8 @@ const PendingApprovals = () => {
                                                         ) : (
                                                             <span><strong>Booker:</strong> {detail.bookerName ?? detail.booker?.name ?? '—'}</span>
                                                         )}
-                                                        {detail.journalVoucherId && (
-                                                            <span><strong>Voucher:</strong> JV-{detail.journalVoucherId}</span>
+                                                        {(detail.journalVoucherId ?? detail.displayVoucherId) && (
+                                                            <span><strong>Voucher:</strong> JV-{detail.journalVoucherId ?? detail.displayVoucherId}</span>
                                                         )}
                                                         {isPaymentReceipt(detail) && activeTab === 'history' &&
                                                             String(detail.status || row.status || '').toLowerCase() === 'approved' &&
@@ -633,7 +634,7 @@ const PendingApprovals = () => {
             <Modal
                 show={Boolean(approving)}
                 onHide={() => {
-                    if (!approvalWorking) setApproving(null);
+                    if (!approvalWorking) { setApproving(null); setError(''); }
                 }}
                 backdrop={approvalWorking ? 'static' : true}
                 keyboard={!approvalWorking}
@@ -646,6 +647,11 @@ const PendingApprovals = () => {
                     </Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
+                    {error && (
+                        <Alert variant="danger" dismissible onClose={() => setError('')}>
+                            <i className="fas fa-exclamation-circle me-2"></i>{error}
+                        </Alert>
+                    )}
                     <DecisionVoucherSummary row={approving} />
                     {isPaymentReceipt(approving) && Boolean(
                         approving?.duplicateWarnings?.length ?? approving?.hasDuplicateWarnings
@@ -661,13 +667,15 @@ const PendingApprovals = () => {
                             ? `This will post the P&R ${String(approving?.requestKind || '').toLowerCase() === 'revision' ? 'revision' : 'voucher'} using the requested entry date ${formatDate(approving?.requestedEntryDate ?? approving?.entryDate)}.`
                             : String(approving?.requestKind || '').toLowerCase() === 'revision'
                             ? 'This will post the approved revision using today as the voucher date.'
+                            : approving?.reservedJournalVoucherId
+                            ? `This will post the voucher as JV-${approving.reservedJournalVoucherId} using today as the voucher date.`
                             : 'This will assign the voucher its JV number and post it using today as the voucher date.'}
                     </Alert>
                 </Modal.Body>
                 <Modal.Footer>
                     <Button
                         variant="secondary"
-                        onClick={() => setApproving(null)}
+                        onClick={() => { setApproving(null); setError(''); }}
                         disabled={approvalWorking}
                     >
                         Cancel
@@ -702,6 +710,11 @@ const PendingApprovals = () => {
                     </Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
+                    {error && (
+                        <Alert variant="danger" dismissible onClose={() => setError('')}>
+                            <i className="fas fa-exclamation-circle me-2"></i>{error}
+                        </Alert>
+                    )}
                     <DecisionVoucherSummary row={rejecting} />
                     <p className="text-muted">
                         Rejection cancels this pending request without posting its proposed voucher changes.
